@@ -1,0 +1,67 @@
+# Working in Temper
+
+Read `README.md`, `docs/SPEC.md`, and `docs/PLAN.md` before designing or
+building anything here. This repository carries the product quality bar:
+lab-grade, disposable, machine-specific code does not land here, however well
+it worked once.
+
+## Boundaries
+
+- This repository ships reviewed configuration and the minimum probe
+  environment. Labs decides and gathers evidence; Results explains it;
+  field-kit executes frozen portable tests.
+- Work arrives only two ways: an **accepted product handoff** from Labs
+  (`../labs/product-handoffs/`), or **product engineering planned in
+  `docs/PLAN.md`**. Never consume moving Labs state, raw experiment output,
+  or an unreviewed prototype.
+- Do not edit adjacent repositories unless the user explicitly asks for the
+  cross-repository step.
+- The live machine runs the legacy `local-ai-setup` stack until the M5
+  cutover gate. Never point the running service, the real manifest, or
+  launchd at this repo without the user's explicit go-ahead.
+- A recommendation is never consent: no code path may select a model, tool,
+  or harness integration the user did not explicitly choose.
+
+## Design discipline
+
+The draft craft skill set at `~/work/skills/guild/craft` governs design and
+review of product code: `code-organization` (layout; its Go reference applies
+if the Go decision lands), `unit-design`, `data-modeling` (every schema:
+manifest, lock, catalog, state), `reliable-effects` (every verb that
+mutates), `testing`. Load the matching skill before designing or reviewing;
+`docs/PLAN.md` §1 maps the set's spine onto Temper concretely.
+
+The short form of that mapping:
+
+- Every unit is a **pure computation** (render, wall-model arithmetic,
+  diffs), a **read** (hardware detection, service status, upstream
+  resolution, lease state), or a **side effect** (writing lock/configs,
+  launchctl kick, downloads) — never an undeclared mix. CLI verbs are
+  orchestrators composing the three.
+- Every mutating verb **stages, validates, then commits once**, with
+  irreversible effects ordered after the commit. A failure before the commit
+  leaves no change.
+- **Surface first**: schemas and verb contracts are designed and reviewed
+  before implementation; internals stay replaceable behind them (the bash →
+  Go oracle strategy depends on this).
+
+## Ground rules (inherited, non-negotiable)
+
+- Anything shell targets **bash 3.2** and is shellcheck-clean: no
+  associative arrays, no `${var,,}`, no `mapfile`.
+- **Never run `sudo`.** Detect the state, print a ready-to-paste command,
+  count it `[manual]`.
+- **Second-run-clean** and **`--dry-run` never mutates** are release gates,
+  not aspirations.
+- `models.yaml` is the user's file: written once by the wizard when absent,
+  never mechanically rewritten afterward. Advisory diffs only.
+- No daemon beyond llama-swap, no background updaters, no telemetry, nothing
+  phones home.
+- Tests are hermetic and offline; they never touch launchd, the live
+  service, or the network. Heavy or runtime verification is on-demand,
+  announced first, and needs explicit user authorization.
+- The tree is 0BSD and vendors no third-party file; third-party notices ride
+  release assets, never the repo.
+- Output quality outranks throughput: no model or engine claim on tok/s
+  alone; first-attempt task success is the primary metric.
+- Do not commit or push unless asked. Preserve dirty worktrees.

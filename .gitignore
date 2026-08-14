@@ -1,0 +1,4 @@
+.DS_Store
+
+# Local scratch space is never product state.
+.scratch/
