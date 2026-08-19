@@ -16,8 +16,13 @@ the name. The evidence side is `temper-sh/labs` (a fresh scaffold created
 2026-08-14 at `../labs`; the legacy `local-ai-setup` repo and its history
 remain the source of existing evidence until Labs' archive migration imports
 it). `temper-sh/results` is the human-readable evidence publication, created
-locally 2026-08-13; `temper-sh/field-kit` already exists and is absorbed as
-the probe surface (below).
+locally 2026-08-13; `temper-sh/field-kit` already exists and keeps owning
+the probes, running them over the base Temper installs (below, 2026-08-14).
+
+The manifest file is **`manifest.yaml`** with **`manifest.lock.yaml`**
+beside it (decided 2026-08-14: it carries the whole wizard selection —
+tools, harness integrations and mode bindings, not just models — so
+`models.yaml` misnamed it; the legacy repo's `models.yaml` keeps its name).
 
 ## One paragraph
 
@@ -36,8 +41,8 @@ model, tool, or harness integration.
    stack matched to their hardware without reading a lab notebook. Runs
    the wizard once, gets a manifest they own, applies updates when they
    choose.
-2. **The friend with a different Mac**: runs the probe (today's
-   field-kit), sends back one text block, gets to keep or fully remove
+2. **The friend with a different Mac**: runs the field kit, sends back
+   one text block, gets to keep or fully remove
    the result. Their machine's witnessed combination can become a catalog
    row.
 3. **The AI agent driving either of the above**: first-class. Stable
@@ -131,6 +136,20 @@ consent. In particular:
 - an **activity profile** such as inspect/change/verify/review narrows the
   active tools inside a mode and never widens them.
 
+**Harness client settings are profile derivations (2026-08-17).** A harness
+carries client-side settings that are *functions of the selected model's
+window* — the witnessed case is Pi's auto-compaction
+(`reserveTokens`/`keepRecentTokens`): its frontier-sized defaults zero the
+compaction threshold against a 16k local window, which turned the context
+ceiling into stranded sessions (legacy FINDINGS #25). Such settings belong
+to the profile that selects the model, expressed as derivations (the legacy
+stack derives `reserve = maxTokens + window/8`,
+`keep = (window − reserve)/2`), never constants. Applying or switching a
+mode re-materializes them for the tightest selected window — and because a
+client's settings surface may be global (Pi's is, per-project overrides
+aside), a mode that pairs the same harness with a frontier model re-derives
+frontier-sized values instead of inheriting a local mode's tight ones.
+
 Runtime profiles are deliberately plural for one artifact. On the same 32GB
 machine, a reranker may use `-ngl 0` and short TTL in coding mode so the large
 coder owns the GPU, then use GPU placement and a longer TTL in research or
@@ -184,10 +203,12 @@ the user's own API access; Codex or Claude Code may instead be the foreground
 harness. Temper manages selected helper services and integrations, while the
 harness owns its foreground model, authentication and provider billing.
 
-- **One manifest, per-mode overlays — never N manifests.** Entries carry a
-  selected artifact base plus `modes:` runtime-profile bindings (model role,
-  engine, placement, context/tuning flags, group, preload, TTL, presence and
-  active tool IDs). The generator renders per-mode artifacts. A render fails if
+- **One manifest, per-mode layouts — never N manifests.** (Reshaped
+  2026-08-14: mode-first, not per-entry overlays — a `modes:` section
+  where each mode lists its members and their bindings in one place, so
+  the layout reads at the mode.) A mode's bindings carry model role,
+  engine, placement, context/tuning flags, group, preload, TTL, presence
+  and active tool IDs. The generator renders per-mode artifacts. A render fails if
   a binding references an unselected item or an unqualified combination is
   presented as qualified.
 - **Roles are the stable interface; modes bind roles to models.**
@@ -222,7 +243,7 @@ harness owns its foreground model, authentication and provider billing.
 Core transforms (PLAN §10's discipline — the CLI transforms artifacts,
 it does not sequence):
 
-- `temper apply` — models.yaml + lock → rendered configs. Fills missing
+- `temper apply` — manifest.yaml + lock → rendered configs. Fills missing
   lock rows, never moves existing pins.
 - `temper update [id]` — re-resolves pins, prints old→new, resets the
   entry's witness to unverified, prints (never runs) the targeted gate.
@@ -243,14 +264,19 @@ Lifecycle:
 
 - `temper init` — the wizard described above: deterministic machine checks,
   model universe, one-by-one tool choices, harness integrations, mode bindings
-  and allowances. Writes models.yaml once.
-- `temper probe [stage]` — the field kit absorbed (**proposed**: same
-  stages, RESULT lines, runtime-profile packet/hash binding,
-  tune/deviation/conclude, AGENT.md; `probe` on
-  the owner's own box re-witnesses after an update, and on a friend's
-  box does what field-kit does today, including keep-or-restore).
-- `temper report` — print the current paste-block (probe results, or a
-  status snapshot outside a probe).
+  and allowances. Writes manifest.yaml once.
+- the probe base (**decided 2026-08-14** — supersedes the earlier
+  **proposed** absorption): probes belong to the field kit; there is no
+  `temper probe`. Temper installs the basic requirements and setup and
+  exposes the reversible base the field kit consumes — canonical machine
+  facts, provenance, llama-swap and basic dependencies, isolated profile
+  rendering, service lifecycle, artifact verification, and removal of only
+  what a probe run added. Stages, RESULT lines, packet/hash binding,
+  tune/deviation/conclude, AGENT.md and keep-or-restore stay field-kit's;
+  re-witnessing the owner's own box after an update is a field-kit run
+  against this base.
+- `temper report` — print the current status-snapshot paste-block (probe
+  reports are field-kit artifacts — 2026-08-14).
 - `temper uninstall` — the provenance-guided remover.
 
 **Harness integrations are adapters, not providers.** Temper detects supported
@@ -266,7 +292,7 @@ its local/remote data boundary.
 
 Labs packets + witnessed measurements produce one reviewed profile. Review
 publishes its human evidence to Results and compiles accepted configuration
-into the release catalog; the catalog then feeds wizard → models.yaml (user
+into the release catalog; the catalog then feeds wizard → manifest.yaml (user
 selection + mode bindings) → lock → generator → configs. Probe results remain
 separate local artifacts (`report.md`, `provenance.txt`). Results contains
 sanitized conclusions, machine tables and detailed records—not Labs' raw
@@ -323,7 +349,7 @@ Claude Code.
 Temper's config is machine-witnessed, not portable — a 32GB-witnessed
 manifest synced onto a 64GB machine is exactly the lie the witness
 system exists to prevent, and people sync `~/.config`. So: one
-machine-identity root, `~/.temper` — `models.yaml` (intent), the lock,
+machine-identity root, `~/.temper` — `manifest.yaml` (intent), the lock,
 `state/` (active mode, leases), provenance, backups. One root also
 keeps keep-or-restore and provenance-guided uninstall trivially
 auditable (`~/.pi` is precedent next door). Rendered configs stay in
@@ -341,13 +367,16 @@ quality:
 
 - **`temper-sh/temper`** — release: setup + wizard + generator + lock,
   reviewed catalog profiles, acceptance suites, machine-report, README,
-  compact applicability/evidence references, harness adapters and the probe.
+  compact applicability/evidence references, harness adapters and the probe
+  base.
   It consumes reviewed output; it does not contain exploratory harnesses,
   unresolved candidate research or the full evidence narrative.
 - **`temper-sh/field-kit`** — stays the thin public probe repo
-  (friend-facing README + curl-able machine-report), becoming a shim
-  over `temper probe` at v1 so the "send one file first, then one
-  clone" flow survives the rename.
+  (friend-facing README + curl-able machine-report) and **keeps owning the
+  probes** (2026-08-14, replacing the earlier shim-over-`temper probe`
+  idea): it orchestrates its stages, packets, consent gates and
+  keep-or-restore over the base Temper installs, and the "send one file
+  first, then one clone" flow survives unchanged.
 - **`temper-sh/extensions`** — possible common home for harness-specific
   adapters that are independently useful; whether Pi extensions share it or
   become separate projects remains open. Shared tool logic does not fork here:
@@ -404,8 +433,9 @@ evidence revisions well enough to audit a row.
 
 Release-bar: shellcheck-clean bash 3.2 (scripts), hermetic offline suite,
 second-run-clean, --dry-run purity, no launchctl/sudo from tests. The Go
-TUI/CLI (if §10's port proceeds) is diffed against the bash generator as
-oracle — byte-identical configs before any cutover.
+TUI/CLI (decided 2026-08-14: the wizard is TUI-heavy with certainty, so
+per the split-brain rule the whole CLI is Go) is diffed against the bash
+generator as oracle — byte-identical configs before any cutover.
 
 Labs-bar for a promotable packet: exact revisions and hashes; artifact-layer
 decomposition; deterministic regression fixtures; real harness/API tests;
@@ -436,15 +466,17 @@ reach the same standard before tool profiles enter the release catalog.
   workflows and define engine/tool intake.
 - **M3 — wizard TUI** over a curated model universe, individually opt-in tools,
   harness integrations and mode bindings.
-- **M4 — probe absorption** (`temper probe` = field-kit stages) plus
-  mode/harness qualification surfaces.
+- **M4 — probe base** (the reversible install/verify/remove mechanics the
+  field kit consumes; the probes themselves stay field-kit's — 2026-08-14)
+  plus mode/harness qualification surfaces.
 - **M5 — the split**: Labs/release extraction, Results publication wired into
   review, and the catalog seeded only with reviewed qualified rows.
 
 ## Open questions (owner)
 
-1. Distribution: brew formula vs curl-installer vs release-asset binary
-   (and §10's Go-scope decision folds in here).
+1. Distribution: brew formula vs curl-installer vs release-asset binary.
+   (The Go-*scope* half that used to fold in here was settled 2026-08-14 —
+   the whole CLI is Go; only distribution remains.)
 2. Which of research/docs, planning, coding and helper have enough complete
    model + tool + harness evidence to ship as qualified v1 mode profiles?
 3. Catalog contribution flow: how a friend's probe report becomes a row —
@@ -459,8 +491,11 @@ reach the same standard before tool profiles enter the release catalog.
 7. Lease semantics: is an advisory state file with expiry enough for
    cooperating harnesses (leaning yes — hostile tools are not the
    threat model), and is `--force` human-only (leaning yes)?
-8. Do mode witnesses become a first-class probe surface —
-   `temper probe --mode <name>` soaking the non-default posture?
+8. Do mode witnesses become a first-class probe surface — a field-kit
+   experiment package soaking a non-default mode posture? (Reframed
+   2026-08-14: probes are field-kit's, so this is a field-kit/Labs
+   question; Temper's part is only that the base can render and serve the
+   requested posture in isolation.)
 9. Pi `packages` as an adapter distribution channel, plugin packaging for
    Codex/Claude Code, and the standalone CI contract for a shared tool core.
 10. Catalog representation: separate typed profile documents or one normalized

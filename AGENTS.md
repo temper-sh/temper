@@ -25,8 +25,8 @@ it worked once.
 ## Design discipline
 
 The draft craft skill set at `~/work/skills/guild/craft` governs design and
-review of product code: `code-organization` (layout; its Go reference applies
-if the Go decision lands), `unit-design`, `data-modeling` (every schema:
+review of product code: `code-organization` (layout; its Go reference
+governs the CLI — the whole CLI is Go, decided 2026-08-14), `unit-design`, `data-modeling` (every schema:
 manifest, lock, catalog, state), `reliable-effects` (every verb that
 mutates), `testing`. Load the matching skill before designing or reviewing;
 `docs/PLAN.md` §1 maps the set's spine onto Temper concretely.
@@ -53,7 +53,7 @@ The short form of that mapping:
   count it `[manual]`.
 - **Second-run-clean** and **`--dry-run` never mutates** are release gates,
   not aspirations.
-- `models.yaml` is the user's file: written once by the wizard when absent,
+- `manifest.yaml` is the user's file: written once by the wizard when absent,
   never mechanically rewritten afterward. Advisory diffs only.
 - No daemon beyond llama-swap, no background updaters, no telemetry, nothing
   phones home.

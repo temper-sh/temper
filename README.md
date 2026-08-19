@@ -9,7 +9,9 @@ labeled unmeasured.
 This is `temper-sh/temper`, the release repository: it ships reviewed
 configuration and the minimum probe environment. Setup, wizard, generator,
 lock, reviewed catalog profiles, acceptance suites, machine report, harness
-adapters, and the probe live (or will live) here.
+adapters, and the probe *base* live (or will live) here — the probes
+themselves belong to field-kit, which runs its stages over the base Temper
+installs.
 
 ## Status
 
