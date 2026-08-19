@@ -2,3 +2,6 @@
 
 # Local scratch space is never product state.
 .scratch/
+
+# Built binary (go build ./cmd/temper).
+/temper
