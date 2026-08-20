@@ -25,8 +25,8 @@ review survive as the closing list, as directions rather than structure.
 ```yaml
 schema: temper-lock/v1
 entries:
-  <manifest-entry-id>:        # the entry's own `id:` from manifest.yaml
-    repo: <manifest repo value at resolve time>
+  <layout-id>:                # the key under manifest.yaml `layouts:`
+    repo: <manifest model.repo value at resolve time>
                               # kept so `check` can see the manifest moved
                               # after the pin (a snapshot, not a copy)
     revision: <hf commit sha>
@@ -35,7 +35,7 @@ entries:
         sha256: <hex>         # from HF metadata — pinning never downloads
     patches:                  # only when the manifest entry lists any
       - name: <patches/ dir name>
-        sha256: <hex of the fetched file>
+        sha256: <hex of the final transformed patch bytes>
     resolved: <date>
 ```
 
@@ -44,24 +44,34 @@ Hash *verification* of multi-GB files present on disk is on demand
 
 ## Writers
 
-- `apply` — fills missing rows; never touches existing ones.
-- `update [id]` — rewrites the whole row, prints the old→new diff and the
-  entry's targeted gate — never runs it. Once the catalog exists (M2) it
-  also says when the new pin leaves the release's tested set.
-- `check` — reads and reports: repo mismatch, missing rows, orphan rows;
-  from M2, tested-set membership per entry; `--verify` adds hash checks
-  of present files.
+- Bootstrap history: the owner initially maintained reviewed rows manually
+  beside the manually maintained manifest. `apply` remains read-only over both
+  inputs and refuses gaps or drift.
+- `temper resolve` now fills missing rows and never touches
+  existing ones. Resolution is a separate atomic lock commit; `apply` keeps
+  its one rendered-world commit and remains a strict consumer.
+- `update [id]` now rewrites the whole row when its identity moves, prints the
+  old→new diff and the entry's targeted gate — never runs it. Once the catalog
+  exists (M2) it also says when the new pin leaves the active catalog's tested
+  set.
+- `check` — now reads and reports repo/selection mismatch, missing rows,
+  orphan rows, and selected-mode artifact admission; `--verify` adds full
+  hash checks of selected files. From M2 it also reports tested-set membership
+  per entry.
 
 There is no `attest` verb and no local verified state — D13 closed
 2026-08-18: tested-status is derived by comparing pins against the
-shipped database, so nothing ever needs to write it.
+signed catalog, so nothing ever needs to write it.
 
 ## Test plan (hermetic, canned resolutions, no network)
 
-1. `apply && apply` — the second run changes nothing.
-2. One new manifest entry → exactly one row added, others byte-identical.
-3. `update <id>` → that row moves, diff and gate text printed, others
-   untouched.
+1. Bootstrap slice: `apply && apply` — the second run changes nothing; a
+   missing row or repo mismatch refuses without rewriting either input.
+2. Resolver slice (implemented): one new manifest entry → exactly one row added, existing
+   row values identical; a concurrent lock change refuses instead of losing
+   either writer.
+3. `update <id>` (implemented) → that row moves, diff and gate text printed,
+   others untouched; a clean second run retains its original resolution date.
 4. Orphan row and repo mismatch → reported, never auto-fixed.
 
 ## Deliberately absent, and when each arrives
@@ -69,14 +79,15 @@ shipped database, so nothing ever needs to write it.
 Each item lands as a reviewed `temper-lock` schema revision with its
 milestone — expand when there is something to protect.
 
-- **Tested-status in the lock** → never. Owner ruling 2026-08-18: each
-  temper release ships the database of tested versions (the M2 catalog);
+- **Tested-status in the lock** → never. Owner ruling 2026-08-18:
+  independently published signed snapshots carry the database of tested
+  versions (the M2 catalog);
   "on/off the tested set" is `check`'s comparison, not a stored field.
   This replaced the first draft's `verified:` field and the `attest` verb
   (D13, closed).
 - **Local attestation records** ("I gated this myself after moving past
   the tested set") → only if a real need appears; today an off-set pin is
-  simply reported as untested-by-release.
+  simply reported as absent from the relevant catalog's tested set.
 - **Machine identity block** → with `~/.temper` (D3), when a lock synced
   between machines first becomes possible.
 - **Profile citations** → with the catalog (M2). Agreed shape: a
@@ -86,13 +97,10 @@ milestone — expand when there is something to protect.
 - **Tool entries** → with tool profiles (M2), as their own section
   (models and tools are resolved and gated too differently for one union
   shape), ids sharing one namespace with models.
-- **Mode/tuning records** → with modes (M4). Agreed rules: tuning values
-  never enter the lock (intent is the manifest's mode-first `modes:`
-  section; advice is the catalog); the lock pins per-binding
-  rendered-config hashes and witnesses over one artifact pin. Rendered
-  artifacts include the harness-side materializations — e.g. Pi's
-  compaction sizing, derived per mode from the selected model's window
-  (legacy FINDINGS #25) — and #25 is why the values stay out: its failure
-  *was* a stored constant meeting a different window.
+- **Mode/tuning records** → never in v1. Modes landed in the native manifest
+  before lock resolution did; tuning remains intent in the manifest and
+  derived harness values remain rendered output. A later schema may pin
+  per-mode rendered-config hashes, but it still does not copy tuning values
+  into the lock.
 - **Witness detail** (gate ids, conditions, engine-version snapshots) →
   only if a real dispute ever needs it; the session log carries it today.

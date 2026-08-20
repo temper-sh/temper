@@ -20,7 +20,7 @@ The org has four working repos plus the legacy one:
 | `../labs` | decides and gathers evidence | reviewed profile packets, accepted product handoffs |
 | `../results` | explains reviewed evidence to people | nothing at runtime; shared evidence identifiers |
 | `../field-kit` | frozen portable tests on consenting machines | witness reports, via Labs review |
-| `../local-ai-setup` (legacy) | running reference implementation + evidence history | the extracted generator (M0), the byte-diff oracle, behavior reference |
+| `../local-ai-setup` (legacy) | running reference implementation + evidence history | behavior reference and optional comparison oracle; no runtime component lands here |
 | **this repo** | ships reviewed configuration + the minimum probe environment | — |
 
 Work enters this repo through exactly two doors:
@@ -32,17 +32,18 @@ Work enters this repo through exactly two doors:
 2. **Product engineering planned here**: schemas, CLI verbs, wizard, CI —
    work that was never an experiment.
 
-**Development locus (stance D12 — for owner confirmation).** The legacy
-PLAN §10 sequence predates this repo and placed its first steps "in this
-repo [legacy] before extraction." Restated now that the labs and temper
-scaffolds both exist:
+**Development locus (stance D12, revised by owner 2026-08-19).** The legacy
+extraction was completed where the live code lives, which gave us a useful
+behavior reference. It does not become a Temper runtime dependency:
 
-- **M0, the generator extraction, still happens in the legacy repo.** It is
-  a refactor of legacy's own `steps/40-configs.sh` against legacy's own
-  84-check offline suite, and the live machine runs that code today. The
-  extracted executable and its oracle harness then land here via a handoff.
-- **M1 onward is developed here**, against fixtures plus the M0 executable.
-  The legacy manifest is read-only reference material.
+- **M0's Bash executable stays in legacy.** Porting the old manifest and its
+  raw flags into this repo would build a migration layer for an interface no
+  Temper user has. It may be run externally as a comparison oracle while
+  equivalence is useful; it is neither shipped nor exec'd by `temper`.
+- **The native manifest, lock, renderer, and `apply` are developed together
+  here.** During bootstrap the owner or Labs maintains the two input files
+  manually; resolution and the wizard can automate that later without
+  changing the renderer.
 - **The live machine stays on legacy `setup.sh` until the M5 cutover gate.**
   Nothing in this repo touches the running service before then; the live box
   becomes Temper's first witness machine *at* cutover, not before.
@@ -60,9 +61,9 @@ mix; CLI verbs are orchestrators composing them.
 
 | Kind | Temper instances |
 |---|---|
-| Pure computation | manifest + lock + catalog → rendered config text; the wall model (fraction × device memory + co-tenants + OS floor ≤ wired limit); render diffs (what loads/unloads, warmup cost); lock-drift computation; packet → catalog-row compilation |
-| Read | hardware and allowance detection; upstream resolution (`update`); service status at its three levels (job loaded / process alive / answering with residency); lease state; catalog and provenance reads |
-| Side effect | writing lock rows; installing rendered configs; the launchctl kick; lazy-pull downloads; writing state (active mode, leases); uninstall |
+| Pure computation | manifest + lock + qualification catalog → rendered config text; software candidates + supply policy → exact software-lock selection; the wall model (fraction × device memory + co-tenants + OS floor ≤ wired limit); render diffs (what loads/unloads, warmup cost); lock-drift computation; packet → catalog-row compilation |
+| Read | hardware and allowance detection; provider-native upstream resolution; service status at its three levels (job loaded / process alive / answering with residency); lease state; catalog, installed-software, and provenance reads |
+| Side effect | writing lock rows; installing exact software from a software lock; installing rendered configs; the launchctl kick; lazy-pull downloads; writing state (active mode, leases); uninstall |
 
 Corollaries: `status` never repairs; `check` never writes; `update` never
 downloads or restarts. A verb that needs a new mix is a design question, not
@@ -73,27 +74,40 @@ with irreversible effects ordered after the commit. This is already law in
 the legacy generator (render to temp → parse-validate → atomic place); it
 generalizes:
 
-- `apply`: resolve gaps → stage lock rows + all renders → validate
-  everything → commit lock + configs together. A failure before the commit
-  leaves no change; a second `apply` changes nothing.
+- `resolve`: read manifest + existing lock → resolve only missing rows → stage
+  and validate the whole candidate lock → atomically replace the lock once.
+  Existing rows never move; concurrent lock change causes a refusal and rerun.
+- `apply`: read and validate the manifest and complete lock → render a complete
+  immutable generation → atomically move `rendered/current`. A refusal leaves
+  the selected world unchanged; a second identical `apply` changes nothing.
+- `fetch <layout>`: download and verify one exact layout into a sibling stage,
+  then atomically publish its content-addressed artifact-set directory once.
+  A multi-GB network effect is always explicitly scoped.
 - `mode`: render the target posture → diff → commit the config swap → kick.
   The in-flight-request behavior is measured (M4 prerequisites) before this
   ships.
 - `update`: writes pins only. Printing the acceptance gate is the design;
   running it is the human's move.
+- software resolution/update: read provider candidates → select with the
+  catalog's provider-native policy → stage and validate the complete
+  `software.lock.yaml` → atomically replace it once. It never installs.
+- software install: read a complete software lock → compute and validate the
+  whole plan and provider pre-state → perform the provider's declared effect →
+  inspect actual state and atomically publish its receipt. Isolated adapters
+  publish one staged root; shared adapters must be reconcilable after an
+  interrupted external effect and may never claim ownership they cannot prove.
 
 **Surface first.** The schemas and verb contracts (§2) are the commitment;
-implementations — bash today, possibly Go later — are replaceable behind
-them. Every schema gets a `data-modeling` design pass and owner review
-before any code consumes it: the catalog and lock will outlive every
-implementation. The Go-port oracle strategy (§4) exists only because of
-this rule.
+the native Go internals remain replaceable behind them. Every schema gets a
+`data-modeling` design pass and owner review before code consumes it: the
+catalog and lock will outlive every implementation. Legacy comparison tests
+are evidence about behavior, not authority over the new surface.
 
 **Error taxonomy** (`unit-design`'s, applied to a CLI):
 
 - **Business refusal** — lease held; a binding references an unselected
   item; an unqualified combination requested as qualified; budget exceeded
-  → a printed explanation and a distinct nonzero exit code. Callers,
+  → a printed explanation, a stable problem code, and a nonzero exit. Callers,
   including agents, branch on it; RESULT lines stay machine-parseable.
 - **Operational failure** — resolve timeout, Hugging Face unreachable,
   llama-swap not answering → propagate with context; retry only what is
@@ -108,95 +122,68 @@ follows the one-writer rule.
 
 | # | Contract | Writer | Readers | Lands |
 |---|---|---|---|---|
-| C1 | rendered configs: llama-swap YAML + Pi `local` provider fragment | the generator | llama-swap, Pi | exists; frozen by the M0 oracle |
-| C2 | `manifest.yaml` (named 2026-08-14 — it carries tools, harnesses and modes, not just models; the legacy file stays `models.yaml`). The full-layout home (owner, 2026-08-17): modes with their members, residency, engine flags/tuning, and the harness-derivation primitives per selected model | wizard once, then the user's hand | generator, `apply`, `check` | shape exists via legacy `models.yaml`; renamed when the wizard first writes it; `modes:` extension designed at M4 from the parked direction sketch (`docs/design/manifest-schema.md`, owner-reviewed 2026-08-17) |
-| C3 | `manifest.lock.yaml` | `apply`/`update` only | generator, `check` | M1 |
-| C4 | catalog profile records (six kinds) + the `WATCH/LAB/QUALIFIED/RETIRED/REJECTED` status machine | release review | wizard, `check`, render validation | M2 |
-| C5 | Labs promotion packet | Labs review | the catalog compiler | M2, co-designed with Labs |
-| C6 | state dir: active mode, leases | `mode`/`start`/`stop` | `mode`, `status`, cooperating harnesses | M4 |
-| C7 | probe base: the reversible install/verify/remove mechanics plus the packet-identity handshake the field kit consumes (probe packets themselves are written by field-kit — owner boundary, 2026-08-14) | temper's base verbs | field-kit stages; Labs imports the kit's packets | M4, designed with field-kit |
-| C8 | CLI verb surface: verbs, exit codes, RESULT lines, machine-parseable outcomes | this plan → per-verb design docs | humans and agents | grows M1 → M4 |
+| C1 | rendered configs: llama-swap YAML, Pi `local` provider, Pi compaction settings | native renderer | llama-swap, Pi | M1 first slice; exact bytes pinned by unit goldens |
+| C2 | `manifest.yaml`: layouts `(model, engine, tuning)` plus modes (members, residency, tools, harnesses) | wizard once, then the user's hand; manually maintained during bootstrap | renderer, `apply`, `check` | `temper-manifest/v1` executable in M1; see `docs/design/manifest-schema.md` |
+| C3 | `manifest.lock.yaml` | `resolve` for missing rows; future `update` for moving pins | renderer, `fetch`, `apply`, `check` | `temper-lock/v1` executable in M1 |
+| C4 | software supply records: logical package, portable installation method, target-adapter definition, adapter-native package recipe/version scheme, selection policy, constraints, and tested-version evidence | release review | software resolver, installer, `check` | M2 phase A |
+| C5 | `software.lock.yaml`: the exact method, adapter, and provider-native software closure selected for one target | explicit software resolution/update | installer, `check`, field-kit packet identity | M2 phase A |
+| C6 | installation receipt: actual method/adapter/provider, exact installed versions/revisions, artifact hashes, ownership, and pre-existing state | installer after inspecting the result | `check`, uninstall, field-kit packet identity | M2 phase B |
+| C7 | qualification profiles (model artifact, engine, model runtime, tool, mode, activity) + the `WATCH/LAB/QUALIFIED/RETIRED/REJECTED` status machine | release review | wizard, `check`, render validation | M2 phase C |
+| C8 | Labs promotion packet | Labs review | the qualification-catalog compiler | M2 phase C, co-designed with Labs |
+| C9 | state dir: active mode, leases | `mode`/`start`/`stop` | `mode`, `status`, cooperating harnesses | M4 |
+| C10 | Field Kit base: reversible install/check/remove mechanics plus the packet-identity handshake (probe packets themselves are written by field-kit — owner boundary, 2026-08-14) | temper's base verbs | field-kit stages; Labs imports the kit's packets | M2 phase B, designed with field-kit |
+| C11 | CLI verb surface: verbs, exit codes, RESULT lines, machine-parseable outcomes | this plan → per-verb design docs | humans and agents | grows M1 → M4 |
 
 ## 3. Milestones
 
-### M0 — generator extraction (in the legacy repo)
+### M0 — legacy extraction (reference completed; product landing retired)
 
-> **Status 2026-08-14: code-complete, all gates green** (work items 2–4;
-> uncommitted in the legacy worktree). `scripts/render-configs.sh` is the
-> standalone executable — contract documented in its header (canonical
-> until the executable itself moves here): args
-> `<manifest> <swap-config-out> <pi-models-out> [pi-models-base]`, no env,
-> exit 0/1/2 (rendered / usage-env error / manifest invalid), no
-> detection, no network, deterministic. `steps/40-configs.sh` (346 → 143
-> lines) keeps detection + staging + atomic place and calls it.
-> `tests/render-oracle.sh` is the permanent oracle (determinism +
-> pipeline-matches-direct on both manifests — deliberately no frozen
-> golden for the live manifest, which changes with model intake); it runs
-> as offline check 22 and the suite is 85/85. All four rendered artifacts
-> byte-identical pre/post (SHA-256-verified); `--dry-run` clean; real-run
-> gate first executed as `setup.sh --only configs && …` (scoped to avoid
-> `launchctl` under the extraction session's constraints), then the
-> **unrestricted `./setup.sh && ./setup.sh` ran on the owner's instruction
-> later the same day: both passes `ok 33 · installed 0 · patched 0 ·
-> changed 0 · skipped 4 · manual 0`, service loaded and answering — the
-> second-run-clean gate is closed without deviation.** Item 1 done later
-> the same day: Labs handoff **`config-renderer`** opened at `EXTRACTING`
-> (`../labs/product-handoffs/config-renderer/`, full lifecycle logged,
-> labs checks clean). Remaining: item 5 — the executable stays canonical
-> legacy-side until M1 consumes it; the handoff moves to `SHIPPED` when it
-> lands here. Go-port notes from the extraction (exact `, `-join spacing,
-> 6-space folded-block indentation, literal `${PORT}`, validator field
-> order, reliance on yq/jq insertion-order serialization) are in the M0
-> session report and the script comments.
+> **Disposition 2026-08-19 (owner): do not port the extracted Bash
+> renderer.** The legacy refactor and its 85/85 oracle were useful: they made
+> current behavior inspectable and proved the live installer stayed clean.
+> Temper, however, has no installed base whose old manifest must remain
+> compatible. Shipping the script here would spend a product slice preserving
+> raw flags and serialization accidents that the new manifest intentionally
+> removes.
 
-**Goal:** the render logic of `steps/40-configs.sh` (346 lines:
-`render_swap_config`, `render_pi_models`, `kind_flags`, `group_members`,
-validators) becomes one standalone executable with a documented contract;
-`setup.sh` calls the *same executable* — two render implementations is the
-two-sources-of-truth disease.
+The standalone legacy renderer and oracle remain in `../local-ai-setup` as
+read-only comparison material. They can answer “did the native output retain
+this useful behavior?” but cannot require byte identity where Temper is
+deliberately better—for example, Temper uses the lock to render an exact local
+model path with `--offline` instead of a moving `-hf` reference.
 
-Work items:
+No M0 runtime artifact lands in this repository, and M1 has no dependency on
+the Bash executable. The Labs handoff records the historical extraction and
+this disposition; it is not a package Temper waits to ship.
 
-1. *(process)* Open the product handoff in Labs (`kind:` Temper component,
-   destination: this repo's generator); fill the product bar; reach
-   `ACCEPTED`.
-2. *(build, legacy)* Extract into a standalone script taking a manifest
-   path and machine facts, emitting C1; `steps/40-configs.sh` keeps
-   detection, staging, and the atomic place around the call.
-3. *(build, legacy)* Byte-diff harness: render before/after on the live
-   manifest **and** `models.example.yaml`; assert identical. The harness is
-   kept — it is the future Go oracle.
-4. *(gate, legacy)* Offline suite green (84 checks), shellcheck,
-   second-run-clean, `--dry-run` purity. Announce before running the suite.
-5. *(build, here)* Land the executable, its contract doc (inputs, outputs,
-   exit codes, determinism guarantees), and the oracle harness; handoff →
-   `SHIPPED`.
+### M1 — native manifest + lock + `resolve` / `fetch` / `apply` / `update` / `check`
 
-**Acceptance:** byte-identical configs on both manifests; legacy suite
-green; the executable runs standalone with no repo context.
-**Dependencies:** none. **Unblocks:** M1 `apply`, M3 wizard, M4's isolated
-render trial (part of the probe base the field kit consumes).
-**Decisions needed:** D12 confirmation only.
-
-### M1 — lock + `apply` / `update` / `check`
-
-> **Status 2026-08-14: started; schema draft radically trimmed after
-> owner review.** [design/lock-schema.md](design/lock-schema.md) proposes
-> `temper-lock/v1` as a five-field flat schema: per-entry
-> `repo`(snapshot)/`revision`/`files`(+hashes)/`patches`/`resolved` —
-> pins that never download, drift always computed. Everything else
-> (machine block, `profiles:` catalogue,
-> tool sections, mode-tuning records) is **deliberately absent**, listed
-> with the milestone that adds it as a reviewed schema revision; the
-> agreed directions from the review round (profiles list their entries;
-> per-kind sections; tuning values never in the lock; mode-first
-> manifest) are preserved there as directions, not structure. D13 closed
-> 2026-08-18: no `attest` verb and no stored `verified` field — each
-> temper release ships the database of tested versions (the M2 catalog)
-> and `check` derives on/off-tested-set by comparison. The Go module is
-> scaffolded (`go.mod` `github.com/temper-sh/temper`, Go 1.26;
-> `cmd/temper` composition root; gofmt/vet/build clean; verbs refuse
-> loudly until designed). No verb consumes the schema before the review.
+> **Status 2026-08-20: M1 complete; five native vertical slices implemented.**
+> `temper-manifest/v1` and `temper-lock/v1` are strict executable schemas;
+> the pure Go renderer produces llama-swap and Pi artifacts directly; and
+> `temper apply` stages a content-addressed generation then atomically moves
+> `rendered/current`. `temper resolve` fills missing rows through one atomic
+> lock commit without moving existing pins, while `temper fetch <layout>`
+> publishes one verified content-addressed artifact set. Apply now admits a
+> selected layout only through fetch's shared receipt/shape verifier, and every
+> v1 text-only server command carries `--no-mmproj`. `temper check` reports
+> whole-lock drift plus selected-mode artifact admission, while `--verify`
+> streams every selected file against its lock SHA-256. Its wall-model slice
+> reads macOS memory facts and admitted resident model sizes, then emits a
+> labeled fit prediction without changing the wired limit. `temper update [id]`
+> re-resolves existing rows through the shared pinning boundary and a single
+> concurrency-safe lock commit, then prints (without running) the coder or
+> reranker acceptance gate. Hermetic tests pin
+> concrete manifest-field → config mappings, a full llama-swap golden,
+> JSON/YAML validity, dry-run purity, mode switching, immutable generations,
+> aggregate check findings, full-hash mismatch detection, exact budget
+> arithmetic, unavailable/not-applicable budget states, machine-read fallback,
+> interrupted-effect refusal, concurrent lock protection, and clean second
+> runs. No test uses the network or touches the live service. The manually
+> maintained 2026-08-19 coder+reranker fixture has also passed a real isolated
+> `--dry-run`, first apply, clean second apply and semantic comparison with the
+> running legacy configuration; reviewed differences are recorded in
+> `docs/acceptance/current-posture-render.md`.
 
 **Goal:** pins and drift become file state instead of memory.
 
@@ -212,7 +199,7 @@ Design first (a `data-modeling` pass, owner-reviewed, before any code):
    `docs/design/lock-schema.md` (the status note above). One home per
    fact: intent lives in the manifest, resolution in the lock, reviewed
    evidence in the catalog — the lock never restates evidence, and
-   tested-status is `check`'s comparison against the release's catalog,
+   tested-status is `check`'s comparison against the relevant signed catalog,
    never a lock field.
 2. *(design)* Placement: beside the manifest in the current layout. The
    proposed `~/.temper` home (D3) moves manifest, lock, and state together
@@ -220,96 +207,254 @@ Design first (a `data-modeling` pass, owner-reviewed, before any code):
 
 Then the verbs:
 
-3. *(build)* The Go module and `cmd/temper` skeleton per
-   `code-organization`'s Go reference (D2 resolved — §4), then `apply` —
-   manifest + lock → configs by exec-ing the M0 executable (one render
-   implementation until the native port, §4). Fills missing lock rows
-   (resolve + pin), never moves existing pins; first apply after a wizard
-   is the all-gaps case that creates the whole lock. Stage → validate →
-   commit.
-4. *(build)* Lazy-pull launcher: locking never forces downloads. Heavy
-   entries get a generated launcher that fetches the locked revision on
-   first start, replacing `-hf`-follows-a-remote-branch.
-5. *(build)* `update [id]` — re-resolves upstream, prints old→new per
+3. *(build — first slice complete)* Native `apply`: strict manifest + lock →
+   verify selected immutable sets → pure render → immutable generation → one
+   atomic pointer commit. Generated model and patch paths are exact,
+   lock-derived local paths; v1 text-only layouts explicitly disable projector
+   discovery.
+4. *(build — complete)* `resolve` fills missing lock rows and never moves
+   existing pins; `fetch <layout>` materializes one exact content-addressed
+   artifact set. These are separate commits from `apply`: the lock beside the
+   manifest and the rendered pointer under an explicit root cannot be changed
+   atomically, and hiding two commit points in one verb would violate §1.
+   Locking never forces a weight download. A later `start`/mode slice invokes
+   the same fetch effect for absent artifacts rather than growing a second
+   downloader.
+5. *(build — complete)* `update [id]` — re-resolves upstream, prints old→new per
    entry, and ends by *printing*
    the targeted gate (coder: the streaming tool-call curl plus a plain
    completion; reranker: the magnitude probe) — never running it. From
-   M2 it also warns when the new pin leaves the release's tested set. Per-entry
+   M2 it also warns when the new pin leaves the active catalog's tested set.
+   Per-entry
    is the normal move; bare `update` exists but bundles unrelated risk and
    says so.
-6. *(build)* `check`, first slice — lock drift + budget arithmetic (the
-   wall model; its output is always labeled a *prediction*). The advisory
-   wizard-diff slice waits for M3's recommendation data.
+6. *(build — complete)* `check` is a read-only,
+   offline aggregate report: whole-manifest lock drift, selected-mode artifact
+   admission, explicit `--verify` full-byte hashing, and the pure wall-model
+   calculation documented in `docs/design/wall-model.md`. The budget uses
+   read-only machine facts plus sizes from admitted receipts and always labels
+   its output a *prediction*. The advisory wizard-diff slice waits for M3's
+   recommendation data.
 
-**Acceptance:** hermetic tests with fixture manifests and canned
-resolutions (no network); `apply && apply` — the second changes nothing;
-`--dry-run` mutates nothing; `update` on a fixture moves exactly one row
-and prints the right gate text; gofmt + go vet + table tests (the CLI is
-Go — §4).
-**Dependencies:** M0. **Decisions:** D3 any time before M3.
+**Acceptance:** M1 gates are hermetic and green: concrete render units plus
+full golden, missing/malformed artifact refusal, `apply && apply` clean, and
+`--dry-run` mutation-free.
+`update` on a fixture moves exactly one row, preserves every non-target row,
+and prints the right gate text; its dry-run, all-layout atomicity, second-run
+cleanliness, and concurrent-writer refusal are hermetically covered. Budget
+tests cover exact rounding, co-tenants, CPU placement, receipt-backed model
+lower bounds, live/default wired limits, and CLI findings.
+gofmt + go vet + table tests throughout.
+**Dependencies:** none for the first slice. **Decisions:** D3 any time before
+M3.
 
-### M2 — catalog schema + promotion packet
+### M2 — software supply catalog + Field Kit installed base
 
-**Goal:** "reviewed configuration" becomes a typed, validated artifact.
+**Goal:** a consenting Mac can resolve, install, identify, verify, and remove
+the exact software base required by Field Kit; the broader reviewed
+configuration catalog follows without blocking that installed base.
 
-> Owner ruling 2026-08-18: the catalog is also **the per-release database
-> of tested versions** — every temper release ships it, `check` compares
-> the lock's pins against it for on/off-tested-set, and `update` warns
-> when a move leaves it. No verified state is ever stored locally (D13
-> closed on this).
+> **Sequence changed by owner 2026-08-20.** Build the minimum software supply
+> catalog first, immediately use it to install the Field Kit base, then expand
+> the broader qualification catalog. Field Kit does not wait for the wizard,
+> production modes, harness leases, or live-machine cutover.
 
-1. *(decide, D1)* Representation: separate typed profile documents vs one
-   normalized graph. **This plan's recommendation: separate typed documents**
-   with shared identity conventions — hand-reviewable, and it is harder to
-   make consent implicit in a document than in a graph edge. Revisit only if
-   cross-profile queries hurt in practice.
-2. *(design)* Schema per profile kind (spec: model artifact, engine, model
-   runtime, tool, mode, activity) over a common envelope: exact pins,
-   status, witness scope key (artifact revision × engine-profile revision ×
-   runtime-profile revision × machine bucket × mode × co-residents),
-   dependencies, known failures, data boundary, invalidation triggers, and
-   a "what this means for you" line. **Applicability constraints join the
-   envelope (owner, 2026-08-19):** a profile can declare the resource
-   conditions under which it is useful *at all* — the live case is the Pi
-   extensions born from the constrained-window experiments
-   (`compaction-guard`, `context-trim`), which earn their place beside a
-   16k local window and are noise beside a frontier one. Distinct from
-   witness scope: scope records where the evidence *is*, applicability
-   records where the thing has a reason to *exist*; the wizard clips its
-   offers by it (M3). Roles are part of this envelope: a
-   tool profile declares the role it consumes (`rerank`, `extract`), and a
-   mode profile binds roles to qualified runtime profiles — roles are the
-   stable interface harnesses speak; the mode decides the mapping. Runtime
-   profiles are deliberately plural per artifact; compatibility witnesses
-   may be shared, fit/stability/cache/performance witnesses may not.
-3. *(design, with Labs)* The promotion packet (C5): how a reviewed Labs
-   packet compiles into a catalog row without becoming consent.
-   `field-kit-runtime-profile/v1` maps in as the exploratory-witness
-   special case; `external-lab` packets stay inspectable but outside the
-   generic install path.
-4. *(build)* Catalog validator: well-formedness, status-machine legality,
-   witness-scope completeness, consent-neutrality (no row can mark itself
-   selected). The render-time rule is enforced from here on: a binding
-   referencing an unselected item, or an unqualified combination presented
-   as qualified, fails the render.
-5. *(build)* Seed catalog: compile the current stack's already-reviewed
-   truth (the live posture: coder + on-demand reranker, the sampling
-   adoption, the GPU-pool rules) into the first `QUALIFIED` rows —
-   witnessed only for this machine's bucket, and saying so. Also compile
-   Labs handoff `qwen38-native-mtp-profile` as the first consent-neutral
-   experimental row: Qwen3.8 is the intended intelligence target, but the
-   packet must remain `LAB`, opt-in, non-default and non-recommended, with
-   its autonomous M5/32 GiB scope retained as `REJECTED`. The packet is a
-   C5 fixture/input, not permission to read Labs at runtime or alter the
-   legacy live service.
+> The software-supply catalog is **an independently published, signed database
+> of tested software versions**; the qualification catalog separately records tested composed
+> configurations. "Minimum tested" is evidence, while "latest version
+> satisfying this floor" is update policy; neither is the exact installed
+> version. Every actual installation is frozen in `software.lock.yaml` and
+> witnessed by an installation receipt. Rolling policy is evaluated only by an
+> explicit resolve/update—there is no background updater and no floating
+> installation.
 
-**Acceptance:** a round-trip fixture (fake packet → row → wizard-readable
-record); the validator rejects each illegal fixture; seeded rows carry
-complete witness scope.
-**Dependencies:** M1 (the lock cites catalog revisions). Labs-side parity
-(`add-tool` intake) is Labs work, tracked there.
-**Decisions:** D1 blocks item 2; D7 (invalidate vs fork a witnessed row on
-engine update) is settled inside the schema design.
+#### Phase A — software supply first
+
+> **Surface approved 2026-08-20:** C4/C5, independent signed-catalog lifecycle,
+> and the adapter-family protocol are settled in
+> `docs/design/software-supply-schema.md`. The first hermetic
+> schema/target-selection/digest slice may now consume them.
+
+> **Shared resolver slice complete 2026-08-20:** strict catalog and
+> software-lock parsers/validators, normalized target selection, the compiled
+> keyed-adapter descriptor handshake, provider-neutral candidate closures,
+> SemVer/PEP 440 policy selection backed by pinned maintained parsers, exact
+> closure invariants, canonical semantic/root digests, and the
+> dry-run/concurrency-safe atomic lock-writing
+> transaction are executable and hermetically tested. Signature/channel
+> storage, real Homebrew/uv candidate readers, tested-status reporting, and the
+> public command surface remain pending in Phase A; installation remains Phase
+> B.
+
+1. *(design)* Define typed logical-package, installation-method,
+   target-adapter, and adapter-native package-recipe records (C4). Keep three
+   levels explicit:
+
+   - **method** is the portable strategy, such as `system-package`,
+     `python-environment`, `release-artifact`, or `source-revision`;
+   - **adapter** is the concrete target implementation, such as today's
+     macOS `homebrew`, `uv`, or an upstream-release client. A future target may
+     bind `system-package` to `apt`, `dnf`, `pacman`, `winget`, or another
+     reviewed adapter without teaching the install workflow that operating
+     system's commands;
+   - **package recipe** binds a logical package to the adapter-native package
+     name, version scheme, constraints, and commands/artifacts understood only
+     by that adapter.
+
+   A logical package and an installation method are different identities.
+   The method record owns portable semantics; the target binding is the one home
+   for canonical method + target → adapter selection; and the adapter record
+   owns effect class (isolated/shared), capabilities, and adapter-protocol
+   revision. Package recipes reference those records rather than repeating
+   their facts. Target selection may choose only a catalog-declared adapter for
+   that method and target, with at most one canonical adapter per method/target
+   in one catalog snapshot; alternatives are explicit variants. The exact adapter is shown
+   and locked. Changing method (`system-package` → `python-environment`) or
+   choosing an undeclared adapter is an explicit choice, never a fallback.
+   Package recipes declare the
+   provider-native version scheme (SemVer, PEP 440, Git revision, or opaque),
+   selection policy (`latest`, range, exact version, or revision), compatibility
+   floor, direct/transitive constraints, exclusions, known-bad versions,
+   recipe revision, verification gates, data/license boundary, and exact
+   tested-version evidence with its source.
+
+   Seed the schema with three policy fixtures, without inventing version
+   numbers: rolling `llama-swap` (latest, with a tested floor, using the
+   `system-package` method and the target's declared adapter), guarded-rolling
+   `llama.cpp` (latest above a floor plus gates), and constrained `rapid-mlx`
+   (the explicit `python-environment`/`uv` variant with the required MLX
+   constraint; its lagging `system-package`/`homebrew` variant is not silently
+   selected).
+2. *(design)* Define `software.lock.yaml` (C5) separately from
+   `manifest.lock.yaml`. The manifest lock owns model/patch resolution; the
+   software lock owns the exact executable environment and can exist before a
+   user manifest. It records the selected method and concrete adapter, exact
+   provider-native version/revision, resolved transitive closure, artifact
+   location and hash where available, recipe revision, target OS/distribution/
+   architecture facts used for selection, and resolution time. It does not
+   duplicate tested evidence or claim what is installed.
+3. *(design + build)* Implement resolution and installation methods as keyed
+   **adapter families**, not provider/OS switch statements in CLI verbs. The
+   family owns the adapter registry and refuses an unknown or declared-but-
+   unbuilt key. Each concrete adapter translates vendor commands and output at
+   its edge into Temper-owned plans, observations, outcomes, and receipt facts;
+   package-manager types never escape into catalog or orchestration code.
+
+   Resolution and installation remain separate functional units behind that
+   boundary: a resolver adapter reads provider-native candidates; pure policy
+   selects one; an installer adapter inspects and changes actual state. The Go
+   composition root injects host facts and external command runners once. A
+   new target adapter adds one family member plus its catalog target binding;
+   the resolve/install/check/uninstall workflows do not change.
+4. *(build)* Implement the catalog validator and provider-native resolvers.
+   Candidate reading is an explicit upstream read; selection from those
+   candidates is a pure, deterministic computation. Resolution writes the
+   complete candidate lock once and never installs. Existing locks move only
+   through an explicit update. A method or adapter change is printed as such;
+   target-based adapter selection is valid only when the catalog declares that
+   exact binding.
+5. *(build)* Add the tested-status read: compare exact software-lock pins with
+   the software-supply catalog and distinguish exact-tested,
+   policy-eligible-but-untested, known-bad, and outside-policy states without
+   storing a local verified flag.
+
+#### Phase B — Field Kit base immediately after
+
+6. *(design, with field-kit)* Freeze C10 and the Field Kit-facing parts of
+   C11: exact commands, exit codes, stable RESULT lines, dry-run output, and
+   packet identity. Probes and stage orchestration stay in Field Kit; Temper
+   provides canonical machine facts, exact software installation, isolated
+   profile rendering, scoped service lifecycle, existing model-artifact
+   verification, and provenance-guided removal.
+7. *(design + build)* Install only from an already-resolved software lock and
+   compute the complete plan plus pre-existing state before any effect.
+   Every installation runs through the adapter family; CLI orchestration never
+   invokes `brew`, `uv`, or any future package manager directly. Adapter
+   capabilities and effect semantics are explicit:
+
+   - isolated adapters (for example a `uv` environment or verified release
+     artifact under the Temper root) stage, verify, gate, then atomically
+     publish one target;
+   - shared adapters (for example a system-package adapter operating in a
+     machine-wide prefix) are enabled only with an ownership, pre-state,
+     idempotency, and interrupted-run reconciliation contract. Temper never
+     removes a pre-existing package, guesses ownership, silently changes
+     method/adapter, or invokes `sudo`. A needed privilege step is printed as a
+     ready-to-paste `[manual]` action.
+
+   A failed isolated install leaves the published base unchanged. A shared
+   adapter interruption may leave an inspectable external effect; the next
+   run reconciles observed package-manager state before proceeding and records
+   only the result it can prove.
+8. *(build)* Write C6 only from observed post-install state. The receipt binds
+   the exact method, adapter, provider/version closure, and hashes to the
+   software lock, records what Temper added versus what was already present,
+   and identifies the explicit isolated root. It is proof of actual state, not
+   desired state.
+9. *(build)* Add read-only base check/status and provenance-guided uninstall.
+   Check derives actual-vs-lock drift; uninstall removes only content the
+   receipt proves this installation added and preserves every pre-existing
+   shared dependency. Dry-run never mutates and every successful second run is
+   clean.
+10. *(build)* Bind each Field Kit packet to canonical machine facts, the exact
+   Temper binary checksum, software lock + installation receipt, manifest
+   lock, and rendered-generation identity. For this pre-release slice, Field
+   Kit may receive a checksummed darwin/arm64 Temper binary directly; choosing
+   the final public Homebrew/curl/release channel remains M5/D4. Neither this
+   root nor its services point at the live consumer home or legacy service.
+
+#### Phase C — broader qualification catalog resumes
+
+11. *(decide, D1; design)* Define C7 as separate typed profile documents over
+    a common envelope for model artifact, engine, model runtime, tool, mode,
+    and activity. The envelope carries exact pins, status, witness scope key
+    (artifact revision × engine-profile revision × runtime-profile revision ×
+    machine bucket × mode × co-residents), dependencies, known failures, data
+    boundary, invalidation triggers, applicability, roles, and a "what this
+    means for you" line. Applicability says where a profile is useful; witness
+    scope says where evidence exists. Runtime profiles remain plural per
+    artifact because fit, stability, cache, and performance evidence may vary.
+    Recommendation is a plural, consent-neutral projection over qualified and
+    applicable rows, not a status and not a ranking: zero, one or many layouts
+    may be recommended for the same machine/mode/role. Each model-runtime row
+    carries a structured performance profile covering task success/regressions,
+    time-to-solution/tool use, raw throughput, qualified context, memory and
+    cache behavior with conditions and unmeasured axes explicit. The schema
+    must distinguish catalog recommendation from the manifest's user-owned
+    selection and `preferred` member flag.
+12. *(design, with Labs)* Define the promotion packet (C8): how a reviewed
+    Labs packet compiles into a qualification row without becoming consent.
+    `field-kit-runtime-profile/v1` is the exploratory-witness special case;
+    `external-lab` packets stay inspectable but outside the generic install
+    path.
+13. *(build)* Extend validation with status-machine legality, witness-scope
+    completeness, applicability, and consent-neutrality (no row selects
+    itself). A binding to an unselected item, or an unqualified combination
+    presented as qualified, fails rendering.
+14. *(build)* Seed the reviewed current posture as narrowly scoped
+    `QUALIFIED` rows and compile Labs handoff `qwen38-native-mtp-profile` as a
+    consent-neutral `LAB` row. It remains opt-in, non-default, and
+    non-recommended, with its autonomous M5/32 GiB scope retained as
+    `REJECTED`. This accepted handoff is a C8 fixture/input, not permission to
+    read moving Labs state or alter the live legacy service.
+
+**Acceptance:** Phase A fixtures cover all three policies, provider-native and
+non-SemVer comparison, exact method/adapter/closure locking, known-bad
+exclusions, refusal of silent method fallback, deterministic target→adapter
+selection, and an unknown-adapter refusal. The same adapter-contract suite runs
+against every member; adding a fake second-OS system-package adapter requires
+no workflow change. Phase B uses hermetic fake adapters to prove dry-run
+purity, clean second runs, concurrent-run refusal, interruption reconciliation,
+preservation of pre-existing packages, exact uninstall, and packet identity. A
+real scratch Field Kit round-trip is on-demand, announced, and run only with
+explicit authorization. Phase C round-trips a fake packet into a
+wizard-readable row and rejects every illegal fixture.
+
+**Dependencies:** M1 for phases A and B. Phase C is required by M3. Labs-side
+parity (`add-tool` intake) is tracked in Labs and does not block the installed
+base. **Decisions:** D1 is needed only for Phase C; D7 is settled in that
+schema. D14 fixes the Phase A method/adapter boundary. D4 does not block a
+checksummed pre-release Field Kit binary.
 
 ### M3 — wizard
 
@@ -318,44 +463,55 @@ engine update) is settled inside the schema design.
 1. *(build)* The TUI foundation: bubbletea/huh over the catalog reader
    (D2 resolved — §4). Distribution (D4) is worth deciding by here so the
    toolchain and release shape stop being hypothetical.
-2. *(build)* The flow per spec: detect hardware/allowances → model universe
-   → tools one-by-one with backend, data-boundary, and dependency
-   consequences shown before selection, the offer list clipped by each
-   profile's applicability constraints (M2 envelope — a
-   constrained-machine extension is not offered to an unconstrained
-   machine) → harness integrations for detected
-   harnesses → mode templates clipped to selections → preview (downloads,
-   disk, memory, mode transitions, external data paths) → write
-   `manifest.yaml` once, render, probe. Tools start unselected;
-   recommendations are explanations, never checked boxes.
+2. *(build)* The flow per spec, **reordered modes-first 2026-08-19**:
+   detect hardware/allowances and choose the modes → one screen per chosen
+   mode (its models, its tools one-by-one with backend, data-boundary and
+   dependency consequences shown before selection, its harnesses, and
+   keep-loaded per model) → preview (downloads, disk, memory, mode
+   transitions, external data paths) → write `manifest.yaml` once, render,
+   probe. Tools start unselected; recommendations are explanations, never
+   checked boxes.
+
+   Build notes that follow from the reorder, all specified in SPEC's
+   "Screen 1 / Screen 2" subsections: the mode list is catalog-derived (a
+   mode is offered when the catalog can furnish it on this machine) and an
+   unfurnishable mode renders *disabled with its reason* rather than
+   hidden; the per-profile applicability envelope (M2) clips each screen's
+   offers; consent is per tool but exposure is per mode, so a tool's first
+   appearance is the full consequences question and later ones are a plain
+   checkbox; harness *detection* is global while *enabling* is per mode;
+   and the download figure is a union across modes, so per-screen totals
+   must be labelled "this mode" or the preview total will not match what a
+   user adds up. A model screen shows every applicable recommended layout in
+   its comparison group, explains the material performance-profile tradeoffs,
+   and leaves every checkbox and preferred-model radio to explicit user input;
+   it never picks a catalog “winner.”
 3. *(build)* Advisory re-run: manifest present → print divergence from the
    current bucket recommendation, stop. No interactive stage under
    `--dry-run`, no second-run mutation — "written once" buys both.
-4. *(build)* The M0 oracle gates every render path: byte-identical
-   configs or no cutover. `code-organization`'s Go reference governs layout
-   (`cmd/` composition root, `internal/` packages); wiring lives at the
-   root, families construct their own members. If the native renderer port
-   (§4) has not landed by now, the wizard's preview execs the M0
-   executable like `apply` does.
+4. *(build)* The wizard preview invokes the same native pure renderer as
+   `apply`; there is no second template path. `code-organization`'s Go
+   reference governs layout (`cmd/` composition root, `internal/` packages);
+   wiring lives at the root, families construct their own members.
 
 **Acceptance:** the wizard on a fixture machine profile produces a manifest
 that `apply` renders byte-identically to its hand-written equivalent; a
 consent audit finds no path from recommendation to selection without an
-explicit choice; re-run is advisory only.
-**Dependencies:** M2 (the catalog is what it browses), M1, M0.
+explicit choice; a fixture with two co-recommended coder layouts displays both
+tradeoff profiles, permits installing either or both, and chooses neither by
+default; re-run is advisory only.
+**Dependencies:** M2 Phase C (the qualification catalog is what it browses),
+M1.
 **Decisions:** D3 (where the wizard writes), D8 (remote providers
 render-only), D4 (latest useful point).
 
-### M4 — probe base + the mode state machine
+### M4 — production mode state machine + harness qualification
 
-**Boundary (owner, 2026-08-14).** Probes belong to the field kit; Temper
-installs the basic requirements and setup. There is no `temper probe`, and
-the field kit does not become a shim — it stays the standalone witness
-surface, orchestrating its stages, RESULT lines, packets, consent gates and
-keep-or-restore over the reversible base Temper provides (field-kit v2's
-"minimum Temper probe base": canonical machine facts, provenance, llama-swap
-and basic dependencies, isolated profile rendering, service lifecycle,
-artifact verification, and removal of only what a probe run added).
+**Boundary (reordered 2026-08-20).** The reversible Field Kit base lands in
+M2 Phase B. M4 does not create a second installer or make Field Kit wait for
+production mode machinery. Probes remain Field Kit's; this milestone adds the
+consumer-facing mode state machine, advisory leases, and qualified harness
+cooperation over the already installed and receipted base.
 
 **Labs prerequisites** *(measure — experiments run in Labs, before any mode
 binding ships as qualified)*:
@@ -369,58 +525,41 @@ binding ships as qualified)*:
 
 Work items:
 
-1. *(design + build, with field-kit)* The probe-base surface: expose the
-   reversible mechanics above as stable, machine-parseable commands —
-   scoped install of basic requirements, isolated render trial, service
-   lifecycle, artifact verification, machine facts, provenance-guided
-   removal — and design the field-kit ↔ temper interface together: which
-   commands, exit codes, and RESULT-friendly output the kit's stages
-   consume (`../labs/field-kit/README.md` is the contract). Temper's side
-   of the packet handshake stays here too: verifying and stamping
-   `field-kit-runtime-profile/v1` identity once the selected manifest is
-   active. Re-witnessing the owner's own box after an update is a
-   field-kit run against this base.
-2. *(build)* Mode machinery: `mode <name>` (render → diff → lease check →
-   commit swap → kick; reports loads/unloads and warmup cost);
+1. *(design + build)* Mode machinery: `mode <name>` (render target → compare
+   current state → lease check → commit swap → kick; reports loads/unloads and
+   warmup cost);
    `start`/`stop`/`status` as the off-mode transitions of the same state
    machine. `mode --request <name>` is the harness-facing form: it
    succeeds only lease-free and never preempts — the verb a harness calls
-   when it notices its coder idle; `--force` stays human-only (item 3).
+   when it notices its coder idle; `--force` stays human-only (item 2).
    `status` distinguishes job loaded / process alive / answering
-   with residency; `stop` prints the wired memory it freed.
-3. *(build)* Leases (C6): an advisory state file (harness, mode, expiry),
+   with residency; `stop` prints the wired memory it freed. The target render
+   remains the M1 pure function of `(manifest, mode, machine)`; no incremental
+   delta engine or second residency source of truth is introduced.
+2. *(build)* Leases (C9): an advisory state file (harness, mode, expiry),
    renewed while active; `temper mode` honors live leases; `--force` stays
    human-only. Idle detection lives in harnesses — no watcher here, the
    no-daemon rule holds. The harness side of the cooperation — renewing
    the lease while active, calling `mode --request` on idle or on a
    coder-model switch (Pi's case) — ships with each harness adapter, and
    its protocol test is part of the two-live-harnesses prerequisite above.
-4. *(build)* `report` (status-snapshot paste-block — probe reports are
-   field-kit artifacts) and `uninstall` (provenance-guided; the grammar is
-   already shared with field-kit and the legacy `scripts/uninstall.sh`).
-5. *(design + build)* Mode layouts land in the manifest schema (C2
-   extension) and the generator. **Direction (owner, 2026-08-14):
-   mode-first, not per-entry overlays** — the manifest gets a `modes:`
-   section where each mode lists its members (models, tools) and their
-   residency/tuning bindings in one place, so the layout is readable at
-   the mode, mirroring the lock's profiles-as-catalogue inversion.
-   **Scope (owner, 2026-08-17, after legacy FINDINGS #25):** the schema
-   reflects the *whole* layout — models, engine flags/tuning, tools, and
-   the harness side. Each mode's model binding carries the primitives
-   (window, generation budget) from which harness client settings derive
-   (SPEC: "Harness client settings are profile derivations"), so a mode
-   switch re-materializes e.g. Pi's compaction sizing for the tightest
-   selected window; derived values are rendered, never stored. The
-   generator renders per-mode
-   artifacts; a render fails on bindings outside the wizard set. A
-   missing required role makes the mode invalid or the tool visibly
-   unavailable — never silently substituted.
+3. *(design + build)* Ship harness adapters as clients of the mode/lease
+   protocol. Roles remain the stable harness interface and each selected mode
+   owns the role→runtime binding; a missing required role is invalid or visibly
+   unavailable, never silently substituted. Adapter packaging remains D10.
+4. *(build)* Add the consumer status snapshot (`report`) and reconcile
+   production service state without absorbing Field Kit packet/report
+   generation. Re-witnessing after a software or model update remains a Field
+   Kit run against the M2 base.
+5. *(measure + release review)* Run the prerequisite experiments and protocol
+   soaks, then add only the witnessed machine/mode/harness bindings to C7.
 
-**Acceptance:** a field-kit run on a temper-installed base reproduces the
-kit's current results end-to-end; a mode switch is witnessed under load per
-the prerequisite experiments; an uninstall round-trip on a scratch render
-removes exactly what was added; second-run-clean throughout.
-**Dependencies:** M0–M3, plus the Labs prerequisites above.
+**Acceptance:** a mode switch is witnessed under in-flight load; two live
+cooperating harnesses obey a lease without preemption; `local`, `utility`, and
+`off` transitions are second-run-clean and preserve exact active-state
+identity; unqualified bindings remain unavailable. The M2 Field Kit base tests
+remain a prerequisite suite, not duplicated here.
+**Dependencies:** M2 Phase C, M3, plus the Labs prerequisites above.
 **Decisions:** D6 (lease semantics), D10 (adapter distribution channels),
 D11 (which modes ship qualified). D5 moved to the field-kit/Labs side —
 see the register.
@@ -430,11 +569,12 @@ see the register.
 **Goal:** `temper-sh/temper` public, the live machine cut over, the org
 story complete.
 
-1. *(gate)* Cutover: Temper reaches parity for this machine's posture —
-   `apply` renders what legacy renders (oracle), a field-kit run on the
-   temper-installed base passes, the acceptance suite is green. Then the live box moves to Temper as its
-   first witness machine and legacy `setup.sh` freezes. Owner-scheduled;
-   announced; reversible until the freeze.
+1. *(gate)* Cutover: Temper reaches parity or has a reviewed improvement for
+   every part of this machine's posture — the comparison to legacy records
+   intentional differences, a Field Kit run on the Temper-installed base
+   passes, and the acceptance suite is green. Then the live box moves to
+   Temper as its first witness machine and legacy `setup.sh` freezes.
+   Owner-scheduled; announced; reversible until the freeze.
 2. *(decide, D4)* Distribution: brew formula vs curl-installer vs
    release-asset binary. Third-party notices ride the release asset; the
    tree stays 0BSD-clean either way.
@@ -459,20 +599,17 @@ building the product twice; the earlier bash-through-M1 option is dropped.
 
 What this does *not* change: **nothing gets written twice.**
 
-- **M0 stays bash and stays first.** The render logic already exists in
-  the legacy repo; M0 extracts it (a refactor, not new code), defines the
-  render interface, and becomes the byte-diff oracle — a role it was
-  needed for regardless of language.
-- **M1's Go CLI execs the M0 renderer at first.** One render
-  implementation during the transition: `apply` orchestrates in Go and
-  calls the same extracted executable legacy `setup.sh` calls. Verbs,
-  lock handling, and validation are written once, in Go.
-- **The native Go renderer is its own oracle-gated work item** — any time
-  after M1, and before the M5 release at the latest: a shipped static
-  binary should be self-contained, so a dev-phase exec of a bash script is
-  acceptable and a released one is not. The gate is byte-identity on the
-  fixture manifests and the live one; the oracle harness then stays in CI
-  as a regression fence permanently.
+- **The native Go renderer starts with M1.** It consumes the native manifest
+  and lock directly; `apply` and the renderer are one product path from the
+  first executable slice.
+- **Legacy Bash remains external evidence.** Its extraction makes comparisons
+  cheap, but it is not copied, exec'd, or supported as a compatibility layer.
+  A comparison may require the same behavior or document why native output is
+  better; byte identity is not a goal across different schemas.
+- **The lasting regression fence is native.** Small table tests pin individual
+  schema facts to output content, full goldens pin artifact shape, shared-set
+  tests pin canonical receipt and filesystem admission, and apply tests pin
+  refusal, dry-run, immutable generations, and second-run cleanliness.
 - **bash 3.2 still governs scripts** — rendered launchers, machine-report,
   anything the generator emits that llama-swap or launchd executes, and
   everything legacy-side. That ground rule was never about the CLI.
@@ -502,37 +639,51 @@ Inherited release bar, enforced from the first commit of product code:
   first-attempt task success first, tok/s second, with conditions on every
   number.
 
-Go (the CLI — §4): gofmt + go vet + table tests; the oracle harness runs
-in CI from the first native render path, diffing Go renders against the
-pinned bash generator, and stays as a regression fence after cutover.
+Go (the CLI — §4): gofmt + go vet + table tests plus native config goldens.
+Legacy comparison is an explicit cutover review aid, not a permanent runtime
+or CI dependency.
 
 ## 6. Decision register (owner)
 
 | # | Decision | Blocks | Current lean |
 |---|---|---|---|
-| D1 | Catalog representation: typed documents vs normalized graph | M2 | typed documents (§3/M2) |
-| D2 | Language | — | **resolved 2026-08-14: the whole CLI is Go** (the wizard is certainly TUI-heavy; the split-brain rule pulls the rest — §4). Open remainder: native-renderer-port timing (after M1, before M5) |
-| D3 | Adopt `~/.temper` as the machine-identity home | M3 (wizard write location); M1 schema stays location-neutral | spec proposes yes |
-| D4 | Distribution: brew vs curl-installer vs release asset (now carries the Go sub-decision: prebuilt darwin/arm64 asset vs build-at-setup) | M5; useful by M3 | open |
+| D1 | Qualification-catalog representation: typed documents vs normalized graph | M2 Phase C | typed documents (§3/M2); the smaller software-supply surface is typed regardless |
+| D2 | Language | — | **resolved 2026-08-14: the whole CLI is Go; completed 2026-08-19 for the first `apply` slice by starting native rendering in M1** (§4) |
+| D3 | Adopt `~/.temper` as the machine-identity home | M3 (wizard write location); M1 schemas stay location-neutral; M2 Field Kit work uses an explicit isolated root | spec proposes yes |
+| D4 | Final public distribution: brew vs curl-installer vs release asset (including prebuilt darwin/arm64 vs build-at-setup) | M5; does not block the checksummed pre-release Field Kit binary in M2 | open |
 | D5 | Mode-posture soaks as field-kit experiment packages (was `probe --mode`; probes are field-kit's per the 2026-08-14 boundary — temper only guarantees the base can render and serve the requested posture in isolation) | M4 qualification | open — a field-kit/Labs question (spec Q8) |
 | D6 | Advisory lease file with expiry sufficient; `--force` human-only | M4 | leaning yes on both (spec Q7) |
-| D7 | Witnessed-row versioning on engine update: invalidate vs fork | inside M2's schema design | open (spec Q5) |
+| D7 | Witnessed-row versioning on engine update: invalidate vs fork | M2 Phase C schema design | open (spec Q5) |
 | D8 | Remote-provider integration strictly render-only | M3 | leaning yes (spec Q4) |
 | D9 | Catalog contribution flow for foreign witnesses | post-M5 | hand-curated by the owner (current stance) |
 | D10 | Pi `packages` / Codex / Claude Code plugin packaging as distribution channels | M4 adapters | open (spec Q9) |
-| D11 | Which of research/docs, planning, coding, helper ship as qualified v1 modes | M4/M5 | evidence-driven, open (spec Q2) |
-| D12 | Development locus stance (§0: M0 in legacy, M1+ here, live cutover at M5) | — | confirmed in practice 2026-08-14 (owner directed M0 in legacy) |
-| D13 | Who records `witness: verified` — a small `attest` verb vs some other mechanism; `check` must stay a pure read | M1 verbs | **closed 2026-08-18**: nobody — no local verified state at all; each release ships the tested-versions database (the M2 catalog) and `check` derives it by comparison |
+| D11 | Which modes ship as qualified v1 | M4/M5 | **narrowed 2026-08-19**: the four candidates collapse to `local` + `utility` (+ `off`) — a mode is who owns the foreground model; tool narrowing is an activity, not a world. Still evidence-driven (spec Q2) |
+| D12 | Development locus stance (§0: legacy remains the live reference, native product work is here, live cutover at M5) | — | **resolved 2026-08-19:** extracted Bash stays legacy-side; no compatibility/runtime landing; M1 starts native here |
+| D13 | Who records `witness: verified` — a small `attest` verb vs some other mechanism; `check` must stay a pure read | M1 verbs | **closed 2026-08-18**: nobody — no local verified state at all; signed catalog snapshots carry tested-version evidence and `check` derives status by comparison |
+| D14 | Installation portability boundary: hard-coded providers vs portable methods with target adapters | M2 Phase A | **resolved 2026-08-20 (owner):** every method is a keyed adapter family; `system-package` is portable intent, Homebrew is only the current macOS adapter, and the exact target adapter is catalog-declared and locked |
+| D15 | Must one applicable model layout win the recommendation, or can several qualified tradeoffs be co-recommended? | M2 Phase C / M3 | **resolved 2026-08-20 (owner): recommendation is a consent-neutral set, not a ranking; several layouts may be recommended with distinct performance profiles, while selection and preference remain explicit user choices** |
 
 ## 7. Now / next
 
-1. **Owner:** review this plan and the adopted `SPEC.md`; confirm D12; say
-   when M0 may start.
-2. **M0:** open the Labs handoff record, then run the legacy-repo
-   extraction (announced before its suite runs).
-3. **In parallel, machine-free design work:** draft the lock schema (M1
-   item 1) and the catalog envelope (M2 item 2) for owner review — both are
-   pure design and block nothing by being early.
-4. **Labs:** queue the M4 prerequisite experiments (config-reload under
+1. **M2 Phase A — software supply:** design C4 and `software.lock.yaml` for
+   owner review in `docs/design/software-supply-schema.md` (**approved
+   2026-08-20**), beginning with fact ownership, method/adapter identity, the three update policies
+   (`llama-swap`, `llama.cpp`, `rapid-mlx`), and exact fixture closures before
+   implementing the adapter families.
+2. **M2 Phase B — Field Kit installed base:** freeze C10/C11, build hermetic
+   fake-provider install/check/uninstall tests, then run one explicitly
+   authorized scratch Field Kit round-trip with a checksummed Temper binary.
+3. **M2 Phase C — qualification catalog:** add the six evidence-backed profile
+   kinds, plural recommendation/performance-profile semantics, promotion
+   packet, validator extensions, and reviewed seed rows after the installed
+   base exists. The first two-layout fixture should preserve co-recommended
+   speed/context and quality-first coder layouts rather than manufacture one
+   global winner.
+4. **M1 — complete and accepted locally:** keep the dated current-posture
+   manifest/lock fixture and its field-to-config acceptance test current while
+   this path remains isolated from the running service; the wall-model contract
+   and implementation are in `docs/design/wall-model.md` and `internal/budget`.
+5. **Labs:** queue the M4 prerequisite experiments (config-reload under
    in-flight load, mode-switch latency) through the new-experiment workflow
-   when convenient — they gate mode qualification, not M0–M3.
+   when convenient — they gate production mode qualification, not the M2
+   Field Kit base.

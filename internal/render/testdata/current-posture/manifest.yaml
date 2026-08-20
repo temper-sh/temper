@@ -1,0 +1,68 @@
+schema: temper-manifest/v1
+
+defaults:
+  ttl: 1800
+  gpu_memory_utilization: 0.85
+
+# The patch source is immutable intent. resolve hashes its transformed bytes;
+# apply consumes only the resulting lock and materialized artifact set.
+patches:
+  qwen38-sharp-template:
+    source: hf://peculiar-ragdoll/Qwen-Sharp-Chat-Templates@3dc34df52c63dd22ada21f96435e069deaa8d7da/chat_template.jinja?transform=qwen38-prefix-stability-v1
+    file: chat_template.jinja
+
+layouts:
+  qwen3.8-27b-gguf-24k:
+    display_name: "Qwen3.8 27B GGUF 24k (stable window)"
+    model:
+      repo: unsloth/Qwen3.8-27B-GGUF
+      file: Qwen3.8-27B-Q4_K_M.gguf
+    engine: llama-server
+    role: coder
+    window: 24576
+    max_tokens: 4096
+    kv: q8
+    thinking: off
+    chat_template: qwen38-sharp-template
+    llama:
+      parallel: 1
+      flash_attention: on
+      batch: 512
+      ubatch: 512
+
+  rerank-qwen3-0.6b:
+    display_name: "Qwen3 reranker 0.6B"
+    model:
+      repo: Voodisss/Qwen3-Reranker-0.6B-GGUF-llama_cpp
+      file: Qwen3-Reranker-0.6B.Q8_0.gguf
+    engine: llama-server
+    role: rerank
+    window: 4096
+    llama:
+      parallel: 1
+      flash_attention: auto
+      batch: 256
+      ubatch: 256
+
+tools:
+  project-search:
+    source: legacy://local-ai-setup/pi-extensions/project-search.ts
+    needs: [rerank]
+
+modes:
+  local:
+    foreground: local
+    tools: [project-search]
+    harnesses: [pi]
+    members:
+      resident:
+        - layout: qwen3.8-27b-gguf-24k
+          ttl: 7200
+          preferred: true
+      on_demand:
+        - layout: rerank-qwen3-0.6b
+          ttl: 120
+          ngl: 0
+
+  off:
+    foreground: none
