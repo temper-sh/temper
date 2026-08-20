@@ -79,6 +79,50 @@ func TestNewRegistryRejectsDuplicateKeys(t *testing.T) {
 	}
 }
 
+func TestValidateCatalogChecksEveryDeclaredAdapterAndBinding(t *testing.T) {
+	supply := validCatalog(t)
+
+	t.Run("all capabilities present", func(t *testing.T) {
+		registry, err := adapter.NewRegistry(
+			descriptor("homebrew", "system-package", "shared", software.Target{OS: "darwin", Arch: "arm64"}),
+			descriptor("uv", "python-environment", "isolated", software.Target{OS: "darwin", Arch: "arm64"}),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := registry.ValidateCatalog(supply); err != nil {
+			t.Fatalf("ValidateCatalog() error = %v", err)
+		}
+	})
+
+	t.Run("declared adapter is not built", func(t *testing.T) {
+		registry, err := adapter.NewRegistry(
+			descriptor("homebrew", "system-package", "shared", software.Target{OS: "darwin", Arch: "arm64"}),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = registry.ValidateCatalog(supply)
+		if err == nil || !strings.Contains(err.Error(), `adapter "uv" is not compiled`) {
+			t.Fatalf("ValidateCatalog() error = %v, want complete capability refusal", err)
+		}
+	})
+
+	t.Run("binding target is unsupported", func(t *testing.T) {
+		registry, err := adapter.NewRegistry(
+			descriptor("homebrew", "system-package", "shared", software.Target{OS: "linux", Arch: "arm64"}),
+			descriptor("uv", "python-environment", "isolated", software.Target{OS: "darwin", Arch: "arm64"}),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = registry.ValidateCatalog(supply)
+		if err == nil || !strings.Contains(err.Error(), "does not support declared target") {
+			t.Fatalf("ValidateCatalog() error = %v, want target capability refusal", err)
+		}
+	})
+}
+
 func descriptor(id, method, effectModel string, target software.Target) adapter.Descriptor {
 	return adapter.Descriptor{
 		ID:          id,

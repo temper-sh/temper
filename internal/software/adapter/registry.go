@@ -6,6 +6,7 @@ package adapter
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/temper-sh/temper/internal/software"
@@ -88,11 +89,56 @@ func (r Registry) Resolve(supply catalog.Document, method string, target softwar
 	if err != nil {
 		return Descriptor{}, err
 	}
+	declared := supply.Adapters[adapterID]
+	descriptor, mismatches, err := r.compareDeclared(adapterID, declared)
+	if err != nil {
+		return Descriptor{}, err
+	}
+	if !descriptor.Supports(target) {
+		mismatches = append(mismatches, "compiled target support does not include the selected target")
+	}
+	if len(mismatches) > 0 {
+		return Descriptor{}, fmt.Errorf("adapter %q descriptor mismatch: %s", adapterID, strings.Join(mismatches, "; "))
+	}
+	descriptor.Targets = append([]software.Target(nil), descriptor.Targets...)
+	return descriptor, nil
+}
+
+// ValidateCatalog proves that every adapter contract and target binding in a
+// catalog can be honored by this binary. Catalog updates use it before making
+// a snapshot active, rather than discovering an unsupported key at resolve.
+func (r Registry) ValidateCatalog(supply catalog.Document) error {
+	if err := supply.Validate(); err != nil {
+		return err
+	}
+	ids := make([]string, 0, len(supply.Adapters))
+	for id := range supply.Adapters {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		_, mismatches, err := r.compareDeclared(id, supply.Adapters[id])
+		if err != nil {
+			return fmt.Errorf("catalog adapter capability mismatch: %w", err)
+		}
+		if len(mismatches) > 0 {
+			return fmt.Errorf("catalog adapter capability mismatch: adapter %q descriptor mismatch: %s", id, strings.Join(mismatches, "; "))
+		}
+	}
+	for index, binding := range supply.TargetBindings {
+		descriptor := r.descriptors[binding.Adapter]
+		if !descriptor.Supports(binding.Target) {
+			return fmt.Errorf("catalog adapter capability mismatch: target_bindings[%d] adapter %q does not support declared target", index, binding.Adapter)
+		}
+	}
+	return nil
+}
+
+func (r Registry) compareDeclared(adapterID string, declared catalog.Adapter) (Descriptor, []string, error) {
 	descriptor, ok := r.descriptors[adapterID]
 	if !ok {
-		return Descriptor{}, fmt.Errorf("catalog-selected adapter %q is not compiled into this binary", adapterID)
+		return Descriptor{}, nil, fmt.Errorf("catalog-selected adapter %q is not compiled into this binary", adapterID)
 	}
-	declared := supply.Adapters[adapterID]
 	var mismatches []string
 	if descriptor.Method != declared.Method {
 		mismatches = append(mismatches, fmt.Sprintf("method compiled=%q catalog=%q", descriptor.Method, declared.Method))
@@ -103,12 +149,5 @@ func (r Registry) Resolve(supply catalog.Document, method string, target softwar
 	if descriptor.EffectModel != declared.EffectModel {
 		mismatches = append(mismatches, fmt.Sprintf("effect_model compiled=%q catalog=%q", descriptor.EffectModel, declared.EffectModel))
 	}
-	if !descriptor.Supports(target) {
-		mismatches = append(mismatches, "compiled target support does not include the selected target")
-	}
-	if len(mismatches) > 0 {
-		return Descriptor{}, fmt.Errorf("adapter %q descriptor mismatch: %s", adapterID, strings.Join(mismatches, "; "))
-	}
-	descriptor.Targets = append([]software.Target(nil), descriptor.Targets...)
-	return descriptor, nil
+	return descriptor, mismatches, nil
 }

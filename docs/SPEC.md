@@ -361,10 +361,13 @@ package recipe references that definition and owns package names and version
 rules. Each catalog snapshot names at most one canonical adapter for a method/target;
 alternatives are explicit variants rather than environment-driven guesses.
 Choosing the declared target adapter inside the same method is deterministic
-target resolution; changing methods—most importantly `system-package` →
-`python-environment` for `rapid-mlx`—is explicit and never a fallback. v1
-qualifies only Apple Silicon, but this schema and the installation workflow do
-not make Homebrew or macOS the domain abstraction.
+target resolution; changing methods is explicit and never a fallback. The
+current primary runtime is `llama.cpp` through its declared target system
+package adapter. Supported, non-default `rapid-mlx` is the important
+counterexample: selecting its `python-environment`/`uv` recipe instead of a
+lagging `system-package` recipe requires an explicit request and preserves its
+reviewed MLX constraint. v1 qualifies only Apple Silicon, but this schema and
+the installation workflow do not make Homebrew or macOS the domain abstraction.
 
 **Profile** has one precise catalog meaning: a versioned, evidence-backed
 configuration record. Profiles may exist for model artifacts and runtimes,

@@ -25,7 +25,7 @@ the local Mac's memory allowances and emits a labeled resident-wall
 prediction, renders llama-swap and Pi configuration in Go, and commits each
 effect through one atomic target.
 
-**Next is M2 in three deliberate phases:** build the minimum independently
+**M2 is underway in three deliberate phases:** build the minimum independently
 published software-supply catalog and exact `software.lock.yaml`; use
 adapter-backed installation methods to install, check, and remove a receipted
 base for Field Kit; then expand the broader qualification catalog used by the
@@ -47,10 +47,17 @@ The M2 Phase A shared resolver core is executable: strict software-catalog and
 software-lock parsing, deterministic target-to-adapter selection, compiled
 adapter descriptor checks, provider-neutral candidate closures, SemVer/PEP 440
 policy selection backed by pinned maintained parsers, exact closure validation,
-canonical digests, and a dry-run/concurrency-safe atomic lock transaction.
-Catalog signature/channel updates, real Homebrew/uv candidate readers,
-tested-status reporting, the public command surface, and installation remain
-next; no real package manager is invoked by this slice.
+canonical digests, and a dry-run/concurrency-safe atomic lock transaction. The
+internal catalog-update slice also verifies separately signed Ed25519 channel
+and catalog artifacts, refuses rollback/equivocation and unsupported compiled
+capabilities, stores immutable snapshots, and atomically moves a regular-file
+active pointer. The Homebrew resolver edge now translates an exact target's
+recursive formula closure and `brew info --json=v1` bottle metadata behind an
+injected command runner, with one timeout and strict closure/hash refusals.
+Production trust/bootstrap inputs, catalog transport and process binding, the
+uv resolver's Python-interpreter surface, tested-status reporting, the public
+command surface, and installation remain next; no network or real package
+manager is invoked by these slices.
 
 The legacy `local-ai-setup` repo remains the installer of record for the one
 machine currently running the stack until M5. These commands therefore require

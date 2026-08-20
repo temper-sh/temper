@@ -281,10 +281,17 @@ configuration catalog follows without blocking that installed base.
 > SemVer/PEP 440 policy selection backed by pinned maintained parsers, exact
 > closure invariants, canonical semantic/root digests, and the
 > dry-run/concurrency-safe atomic lock-writing
-> transaction are executable and hermetically tested. Signature/channel
-> storage, real Homebrew/uv candidate readers, tested-status reporting, and the
-> public command surface remain pending in Phase A; installation remains Phase
-> B.
+> transaction are executable and hermetically tested. The internal signed
+> catalog-update slice now strictly verifies detached Ed25519 channel/catalog
+> artifacts, their digest/schema/sequence join, complete compiled capabilities,
+> rollback/equivocation policy, immutable storage, and the concurrency-safe
+> active-pointer commit. The Homebrew candidate edge now translates its
+> recursive formula closure and JSON v1 bottle metadata through an injected,
+> total-budget command runner, refusing incomplete graphs, wrong target tags,
+> and unhashed artifacts; all tests remain hermetic. Production trust/bootstrap
+> inputs, catalog transport and process binding, the uv interpreter-selection
+> surface and resolver, tested-status reporting, and the public command surface
+> remain pending in Phase A; installation remains Phase B.
 
 1. *(design)* Define typed logical-package, installation-method,
    target-adapter, and adapter-native package-recipe records (C4). Keep three
@@ -321,10 +328,10 @@ configuration catalog follows without blocking that installed base.
    Seed the schema with three policy fixtures, without inventing version
    numbers: rolling `llama-swap` (latest, with a tested floor, using the
    `system-package` method and the target's declared adapter), guarded-rolling
-   `llama.cpp` (latest above a floor plus gates), and constrained `rapid-mlx`
-   (the explicit `python-environment`/`uv` variant with the required MLX
-   constraint; its lagging `system-package`/`homebrew` variant is not silently
-   selected).
+   `llama.cpp` (the current primary runtime, latest above a floor plus gates),
+   and constrained `rapid-mlx` (supported but non-default; the explicit
+   `python-environment`/`uv` variant with the required MLX constraint; its
+   lagging `system-package`/`homebrew` variant is not silently selected).
 2. *(design)* Define `software.lock.yaml` (C5) separately from
    `manifest.lock.yaml`. The manifest lock owns model/patch resolution; the
    software lock owns the exact executable environment and can exist before a
@@ -352,7 +359,12 @@ configuration catalog follows without blocking that installed base.
    complete candidate lock once and never installs. Existing locks move only
    through an explicit update. A method or adapter change is printed as such;
    target-based adapter selection is valid only when the catalog declares that
-   exact binding.
+   exact binding. The strict validator, signed activation lifecycle, and
+   provider-neutral resolution transaction are complete. The Homebrew
+   candidate reader protocol and strict translator are complete behind an
+   injected runner; production process binding is deliberately not wired. The
+   uv reader waits on D16 so its lock includes an exact Python execution target
+   rather than an OS-only approximation.
 5. *(build)* Add the tested-status read: compare exact software-lock pins with
    the software-supply catalog and distinguish exact-tested,
    policy-eligible-but-untested, known-bad, and outside-policy states without
@@ -662,14 +674,19 @@ or CI dependency.
 | D13 | Who records `witness: verified` — a small `attest` verb vs some other mechanism; `check` must stay a pure read | M1 verbs | **closed 2026-08-18**: nobody — no local verified state at all; signed catalog snapshots carry tested-version evidence and `check` derives status by comparison |
 | D14 | Installation portability boundary: hard-coded providers vs portable methods with target adapters | M2 Phase A | **resolved 2026-08-20 (owner):** every method is a keyed adapter family; `system-package` is portable intent, Homebrew is only the current macOS adapter, and the exact target adapter is catalog-declared and locked |
 | D15 | Must one applicable model layout win the recommendation, or can several qualified tradeoffs be co-recommended? | M2 Phase C / M3 | **resolved 2026-08-20 (owner): recommendation is a consent-neutral set, not a ranking; several layouts may be recommended with distinct performance profiles, while selection and preference remain explicit user choices** |
+| D16 | Where the uv adapter's Python implementation/version/ABI selection lives | M2 Phase A uv resolver; non-default `rapid-mlx` | open — current lean: the uv recipe declares the compatible Python policy, resolution chooses an exact uv-managed interpreter and records it as a closure unit; do not overload machine target facts or depend on ambient Python |
 
 ## 7. Now / next
 
-1. **M2 Phase A — software supply:** design C4 and `software.lock.yaml` for
-   owner review in `docs/design/software-supply-schema.md` (**approved
-   2026-08-20**), beginning with fact ownership, method/adapter identity, the three update policies
-   (`llama-swap`, `llama.cpp`, `rapid-mlx`), and exact fixture closures before
-   implementing the adapter families.
+1. **M2 Phase A — software supply:** C4, `software.lock.yaml`, and the signed
+   catalog lifecycle are approved; the shared resolver and authenticated
+   catalog-store transactions are hermetically executable, as is the Homebrew
+   candidate protocol behind a recording runner. Next wire reviewed
+   trust/bootstrap, transport and process inputs into the public Homebrew
+   resolve path and add tested-status reporting for the primary Field Kit
+   runtime. D16 and the uv reader remain required for supported, explicitly
+   requested `rapid-mlx`, but do not block beginning the fake-provider Phase B
+   install/receipt design for the Homebrew `llama.cpp` base.
 2. **M2 Phase B — Field Kit installed base:** freeze C10/C11, build hermetic
    fake-provider install/check/uninstall tests, then run one explicitly
    authorized scratch Field Kit round-trip with a checksummed Temper binary.
