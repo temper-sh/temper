@@ -323,9 +323,11 @@ configuration catalog follows without blocking that installed base.
 > either the active snapshot or an injected embedded fallback, and resolution
 > returns the four derived tested-status states, including transitive
 > exclusions. The bounded HTTPS catalog source now implements the signed
-> publication transport convention. Actual release trust/bootstrap bytes, its
-> channel root and public command wiring, and the uv resolver implementation
-> remain pending in Phase A. The selected release-artifact source, deterministic
+> publication transport convention. Bootstrap bytes, the channel root, public
+> command wiring, and the uv resolver implementation remain pending in Phase A.
+> The first production signing key's public trust root is now a compiled release
+> input pinned by a known-signature regression vector; no private signing
+> material enters the tree. The selected release-artifact source, deterministic
 > resolver, production HTTPS reader, and isolated install/inspect/remove member
 > are now executable with hermetic archive/effect coverage. Exact macOS
 > host-target detection and the frozen public install/check/remove commands are
