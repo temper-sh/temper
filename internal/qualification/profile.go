@@ -126,6 +126,9 @@ type ProfileEvidenceScope struct {
 	ArtifactProfile *ScopeReference           `yaml:"artifact_profile,omitempty"`
 	EngineProfile   *ScopeReference           `yaml:"engine_profile,omitempty"`
 	RuntimeProfile  *ScopeReference           `yaml:"runtime_profile,omitempty"`
+	ToolProfile     *ScopeReference           `yaml:"tool_profile,omitempty"`
+	ModeProfile     *ScopeReference           `yaml:"mode_profile,omitempty"`
+	ActivityProfile *ScopeReference           `yaml:"activity_profile,omitempty"`
 	MachineBucket   *Reference                `yaml:"machine_bucket,omitempty"`
 	Mode            string                    `yaml:"mode,omitempty"`
 	CoResidents     []ProfileCoResident       `yaml:"co_residents"`
@@ -337,7 +340,7 @@ func validateDataBoundary(boundary ProfileDataBoundary, problem func(string, ...
 	previousNetwork := ""
 	for index, use := range boundary.Network {
 		location := fmt.Sprintf("data_boundary.network[%d]", index)
-		if use.Purpose != "artifact-download" && use.Purpose != "evidence-export" && use.Purpose != "provider-inference" {
+		if use.Purpose != "artifact-download" && use.Purpose != "evidence-export" && use.Purpose != "provider-inference" && use.Purpose != "tool-request" {
 			problem("%s.purpose %q is not supported", location, use.Purpose)
 		}
 		validateLine(location+".destination", use.Destination, problem)

@@ -1,0 +1,69 @@
+applicability:
+  explanation: Fake search tool available through the fake Pi integration
+  foregrounds:
+    - local
+  harnesses:
+    - pi
+  machine_buckets: []
+data_boundary:
+  credentials: none
+  evidence_export: explicit-user-action
+  inference: local
+  network: []
+  reads:
+    - project-files
+  telemetry: none
+  writes: []
+dependencies: []
+evidence: []
+id: example-project-search
+invalidation_triggers:
+  - condition: The tool core, model-visible transport, permission, or backend contract changes
+    consequence: return-to-lab
+    id: tool-contract-changes
+known_failures: []
+promotion:
+  id: example-tool-promotion
+  revision: 1
+  schema: temper-labs-product-promotion/v1
+  sha256: ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+revision: 1
+roles:
+  - coder
+schema: temper-qualification-tool/v1
+spec:
+  backend:
+    optional_roles: []
+    required_roles:
+      - rerank
+  core:
+    interface_revision: project-search/v1
+    source:
+      kind: github
+      repository: example/project-search
+      revision: eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+      sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  failure_semantics:
+    backend_unavailable: propagate-error
+    invalid_input: refuse
+    partial_effect: not-applicable
+    permission_denied: refuse
+  permissions:
+    executes: []
+    network: []
+    reads:
+      - project-files
+    writes: []
+  transports:
+    - affordance_deviations: []
+      description_sha256: cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+      harness: pi
+      integration_revision: temper-pi-tools/v1
+      protocol: mcp/v1
+      request_schema: example-search-request/v1
+      result_schema: example-search-result/v1
+status: LAB
+status_reason: Fake tool material is exact while qualification evidence remains absent
+summary: Fake search core and Pi transport for exercising the C7 tool boundary
+title: Example project search
+what_this_means: This fake tool is inspectable but is not enabled or qualified

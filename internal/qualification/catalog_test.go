@@ -338,6 +338,29 @@ func TestLoadCatalogRefusesUnsupportedDrafterComposition(t *testing.T) {
 	}
 }
 
+func TestLoadCatalogVerifiesExactToolProfile(t *testing.T) {
+	index := parseCatalogFixture(t)
+	toolData := readToolFixture(t)
+	index.Profiles = []qualification.IndexedDocument{{
+		Document: qualification.Reference{
+			Schema: qualification.ToolSchemaV1, ID: "example-project-search", Revision: 1, SHA256: qualification.Digest(toolData),
+		},
+		Path: "profiles/tool/example-project-search/1.yaml",
+	}}
+	files := map[string][]byte{
+		exampleBucketPath:      readMachineBucketFixture(t),
+		index.Profiles[0].Path: toolData,
+	}
+
+	catalog, err := qualification.LoadCatalog(marshalCatalogIndex(t, index), files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(catalog.Tools) != 1 || catalog.Tools[0].ID != "example-project-search" {
+		t.Fatalf("tools = %#v", catalog.Tools)
+	}
+}
+
 func TestLoadCatalogRefusesProfileBucketAbsentFromIndex(t *testing.T) {
 	artifact := parseModelArtifactFixture(t)
 	artifact.Applicability.MachineBuckets = []qualification.Reference{{
@@ -413,12 +436,12 @@ func TestLoadCatalogRefusesMissingOrMismatchedBucketBytes(t *testing.T) {
 func TestLoadCatalogRefusesUnimplementedProfileDocuments(t *testing.T) {
 	index := parseCatalogFixture(t)
 	index.Profiles = []qualification.IndexedDocument{{
-		Document: qualification.Reference{Schema: qualification.ToolSchemaV1, ID: "example-tool", Revision: 1, SHA256: strings.Repeat("a", 64)},
-		Path:     "profiles/tool/example-tool/1.yaml",
+		Document: qualification.Reference{Schema: qualification.ModeSchemaV1, ID: "example-mode", Revision: 1, SHA256: strings.Repeat("a", 64)},
+		Path:     "profiles/mode/example-mode/1.yaml",
 	}}
 
 	_, err := qualification.LoadCatalog(marshalCatalogIndex(t, index), map[string][]byte{exampleBucketPath: readMachineBucketFixture(t)})
-	if err == nil || !strings.Contains(err.Error(), "profile schema \"temper-qualification-tool/v1\" is not implemented") {
+	if err == nil || !strings.Contains(err.Error(), "profile schema \"temper-qualification-mode/v1\" is not implemented") {
 		t.Fatalf("LoadCatalog() error = %v, want profile refusal", err)
 	}
 }

@@ -90,6 +90,7 @@ type Catalog struct {
 	ModelArtifacts []ModelArtifactProfile
 	Engines        []EngineProfile
 	ModelRuntimes  []ModelRuntimeProfile
+	Tools          []ToolProfile
 }
 
 // ParseCatalogIndex accepts only the canonical YAML bytes produced by
@@ -179,6 +180,7 @@ func LoadCatalog(indexData []byte, files map[string][]byte) (Catalog, error) {
 	modelArtifacts := make([]ModelArtifactProfile, 0, len(index.Profiles))
 	engines := make([]EngineProfile, 0, len(index.Profiles))
 	modelRuntimes := make([]ModelRuntimeProfile, 0, len(index.Profiles))
+	toolProfiles := make([]ToolProfile, 0, len(index.Profiles))
 	modelArtifactsByReference := map[string]ModelArtifactProfile{}
 	enginesByReference := map[string]EngineProfile{}
 	type indexedRuntime struct {
@@ -187,7 +189,7 @@ func LoadCatalog(indexData []byte, files map[string][]byte) (Catalog, error) {
 	}
 	indexedRuntimes := make([]indexedRuntime, 0, len(index.Profiles))
 	for _, indexed := range index.Profiles {
-		if indexed.Document.Schema != ModelArtifactSchemaV1 && indexed.Document.Schema != EngineSchemaV1 && indexed.Document.Schema != ModelRuntimeSchemaV1 {
+		if indexed.Document.Schema != ModelArtifactSchemaV1 && indexed.Document.Schema != EngineSchemaV1 && indexed.Document.Schema != ModelRuntimeSchemaV1 && indexed.Document.Schema != ToolSchemaV1 {
 			return Catalog{}, fmt.Errorf("load qualification catalog: profile schema %q is not implemented", indexed.Document.Schema)
 		}
 		data, ok := files[indexed.Path]
@@ -229,6 +231,15 @@ func LoadCatalog(indexData []byte, files map[string][]byte) (Catalog, error) {
 			}
 			modelRuntimes = append(modelRuntimes, profile)
 			indexedRuntimes = append(indexedRuntimes, indexedRuntime{indexed: indexed, profile: profile})
+		case ToolSchemaV1:
+			profile, err := ParseToolProfile(data)
+			if err != nil {
+				return Catalog{}, fmt.Errorf("load qualification catalog: indexed document %q: %w", indexed.Path, err)
+			}
+			if err := verifyIndexedProfile(indexed, profile.ProfileEnvelope, bucketReferences); err != nil {
+				return Catalog{}, err
+			}
+			toolProfiles = append(toolProfiles, profile)
 		}
 	}
 
@@ -247,7 +258,7 @@ func LoadCatalog(indexData []byte, files map[string][]byte) (Catalog, error) {
 	}
 
 	return Catalog{
-		Index: index, MachineBuckets: buckets, ModelArtifacts: modelArtifacts, Engines: engines, ModelRuntimes: modelRuntimes,
+		Index: index, MachineBuckets: buckets, ModelArtifacts: modelArtifacts, Engines: engines, ModelRuntimes: modelRuntimes, Tools: toolProfiles,
 	}, nil
 }
 

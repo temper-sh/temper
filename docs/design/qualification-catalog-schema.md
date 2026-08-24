@@ -8,16 +8,16 @@ claim that a current configuration is qualified, or authorize the wizard to
 select anything.
 
 Current Temper implementation boundary: `internal/qualification` strictly
-parses canonical machine-bucket, model-artifact, engine, model-runtime, and
-catalog-index documents. The shared profile envelope, two dependency-root
-profile bodies, and their composed runtime are typed; the loader verifies
-their derived release paths, canonical bytes, digests, identities, exact
-bucket applicability, dependency presence, and compatible role, template, and
+parses canonical machine-bucket, model-artifact, engine, model-runtime, tool,
+and catalog-index documents. The shared profile envelope, dependency-root
+profiles, and composed runtime are typed; the loader verifies their derived
+release paths, canonical bytes, digests, identities, exact bucket
+applicability, dependency presence, and compatible role, template, and
 speculation surfaces from a supplied in-memory bundle. The index
 representation already types every other profile reference and recommendation
 set so neither can become an untyped escape hatch. Public evidence inventories
 and versioned canonical scope keys are validated for the implemented profile
-kinds. `QUALIFIED` profiles, the other three profile document kinds, and
+kinds. `QUALIFIED` profiles, the other two profile document kinds, and
 nonempty recommendation sets remain explicit refusals until their gate,
 dependency-status, and cross-document rules exist. All current catalog
 fixtures are fake and hermetic.
@@ -205,7 +205,7 @@ data_boundary:
   inference: local | harness-owned-remote | not-applicable
   credentials: none | harness-owned
   network:
-    - purpose: <artifact-download, provider-inference, or another closed purpose>
+    - purpose: artifact-download | evidence-export | provider-inference | tool-request
       destination: <named owner or exact source class>
       timing: install-only | request-time | explicit-export
   reads: [<data classes>]
@@ -241,6 +241,9 @@ evidence:
         schema: temper-qualification-model-runtime/v1
         id: <self or dependency id>
         revision: <exact revision>
+      tool_profile: <self or exact dependency reference when material>
+      mode_profile: <self or exact dependency reference when material>
+      activity_profile: <self reference when material>
       machine_bucket: <exact bucket reference when machine-dependent>
       mode: <exact semantic mode id when mode-dependent>
       co_residents: [<exact runtime references plus placement>]
@@ -608,15 +611,24 @@ explicitly unmeasured. A recommendation may cite only measured observations.
 ```yaml
 spec:
   core:
-    source: <exact repository/revision/hash identity>
+    source:
+      kind: github | upstream-release
+      repository: <owner/name>
+      revision: <exact 40-character commit>
+      sha256: <exact reviewed source material>
     interface_revision: <exact tool-core contract>
   transports:
     - harness: <supported harness id>
       integration_revision: <Temper-owned render/adapter revision>
-      protocol: <MCP, Pi extension, or another exact surface>
-      schema: <exact request/result schema identity>
+      protocol: <exact transport revision>
+      request_schema: <exact versioned schema>
+      result_schema: <exact versioned schema>
       description_sha256: <exact model-visible description bytes>
-      affordance_deviations: [<measured harness/model-specific deviations>]
+      affordance_deviations:
+        - id: <stable deviation id>
+          summary: <observed mismatch>
+          effect: <user/model-visible result>
+          evidence: [<document-local evidence ids>]
   permissions:
     reads: [<allowed data classes>]
     writes: [<allowed data classes>]
@@ -625,11 +637,26 @@ spec:
   backend:
     required_roles: [<roles the mode must furnish>]
     optional_roles: [<roles whose absence only narrows behavior>]
-  failure_semantics: <typed loud/refusal/error-propagation contract>
+  failure_semantics:
+    invalid_input: refuse
+    permission_denied: refuse
+    backend_unavailable: propagate-error | refuse
+    partial_effect: report-partial | not-applicable
 ```
 
-Selecting a tool later is consent to its displayed consequences. Qualification
-merely makes the tool eligible to be offered.
+Tool transports are nonempty, unique by harness, and sorted by harness plus
+exact integration revision. Their harness set exactly equals
+`applicability.harnesses`. Permission read/write sets exactly equal the common
+data-boundary sets, and network permission IDs exactly equal its declared
+network purposes; execution permission remains a separate explicit command
+surface. Required and optional backend roles are disjoint. A tool has no C7
+dependency because a mode—not the tool—binds the exact runtimes that furnish
+those roles.
+
+Affordance deviations are evidence-bearing facts, not prose exceptions. The
+four failure fields have no silent-success value. Selecting a tool later is
+consent to its displayed consequences. Qualification merely makes the exact
+core/transport/permission combination eligible to be offered.
 
 ### Mode
 

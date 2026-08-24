@@ -9,8 +9,8 @@ import (
 )
 
 var (
-	artifactRepositoryPattern = regexp.MustCompile(`^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$`)
-	artifactRevisionPattern   = regexp.MustCompile(`^[0-9a-f]{40}$`)
+	repositoryPattern = regexp.MustCompile(`^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$`)
+	commitSHA1Pattern = regexp.MustCompile(`^[0-9a-f]{40}$`)
 )
 
 // ModelArtifactProfile pins every selected model byte and the metadata needed
@@ -319,13 +319,13 @@ func validateArtifactLicense(license ModelArtifactLicense, problem func(string, 
 }
 
 func validateArtifactRepository(location, repository string, problem func(string, ...any)) {
-	if !artifactRepositoryPattern.MatchString(repository) {
+	if !repositoryPattern.MatchString(repository) {
 		problem("%s %q must be owner/name", location, repository)
 	}
 }
 
 func validateArtifactRevision(location, revision string, problem func(string, ...any)) {
-	if !artifactRevisionPattern.MatchString(revision) {
+	if !commitSHA1Pattern.MatchString(revision) {
 		problem("%s must be a 40-character lowercase commit hash", location)
 	}
 }

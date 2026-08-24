@@ -9,6 +9,9 @@ type evidenceScopeMaterial struct {
 	ArtifactProfile *ScopeReference           `yaml:"artifact_profile,omitempty"`
 	EngineProfile   *ScopeReference           `yaml:"engine_profile,omitempty"`
 	RuntimeProfile  *ScopeReference           `yaml:"runtime_profile,omitempty"`
+	ToolProfile     *ScopeReference           `yaml:"tool_profile,omitempty"`
+	ModeProfile     *ScopeReference           `yaml:"mode_profile,omitempty"`
+	ActivityProfile *ScopeReference           `yaml:"activity_profile,omitempty"`
 	MachineBucket   *Reference                `yaml:"machine_bucket,omitempty"`
 	Mode            string                    `yaml:"mode,omitempty"`
 	CoResidents     []ProfileCoResident       `yaml:"co_residents"`
@@ -22,6 +25,7 @@ func EvidenceScopeKey(scope ProfileEvidenceScope) (string, error) {
 	material := evidenceScopeMaterial{
 		Schema: EvidenceScopeSchemaV1, ArtifactProfile: scope.ArtifactProfile,
 		EngineProfile: scope.EngineProfile, RuntimeProfile: scope.RuntimeProfile,
+		ToolProfile: scope.ToolProfile, ModeProfile: scope.ModeProfile, ActivityProfile: scope.ActivityProfile,
 		MachineBucket: scope.MachineBucket, Mode: scope.Mode,
 		CoResidents: scope.CoResidents, Harnesses: scope.Harnesses, Conditions: scope.Conditions,
 	}
@@ -73,6 +77,9 @@ func validateEvidenceScope(location string, scope ProfileEvidenceScope, envelope
 	validateOptionalScopeReference(location+".artifact_profile", scope.ArtifactProfile, envelope, problem)
 	validateOptionalScopeReference(location+".engine_profile", scope.EngineProfile, envelope, problem)
 	validateOptionalScopeReference(location+".runtime_profile", scope.RuntimeProfile, envelope, problem)
+	validateOptionalScopeReference(location+".tool_profile", scope.ToolProfile, envelope, problem)
+	validateOptionalScopeReference(location+".mode_profile", scope.ModeProfile, envelope, problem)
+	validateOptionalScopeReference(location+".activity_profile", scope.ActivityProfile, envelope, problem)
 	if scope.MachineBucket != nil {
 		validateReference(location+".machine_bucket", *scope.MachineBucket, problem)
 		if scope.MachineBucket.Schema != MachineBucketSchemaV1 {
@@ -207,7 +214,7 @@ func validateScopeShape(location string, scope ProfileEvidenceScope, envelope Pr
 	switch envelope.Schema {
 	case ModelArtifactSchemaV1:
 		requireSelfScopeReference(location+".artifact_profile", scope.ArtifactProfile, envelope, problem)
-		if scope.EngineProfile != nil || scope.RuntimeProfile != nil || scope.MachineBucket != nil || scope.Mode != "" || len(scope.CoResidents) != 0 || len(scope.Harnesses) != 0 {
+		if scope.EngineProfile != nil || scope.RuntimeProfile != nil || scope.ToolProfile != nil || scope.ModeProfile != nil || scope.ActivityProfile != nil || scope.MachineBucket != nil || scope.Mode != "" || len(scope.CoResidents) != 0 || len(scope.Harnesses) != 0 {
 			problem("%s model-artifact scope must contain only its artifact identity and not-applicable conditions", location)
 		}
 		if !conditionsAreNotApplicable(scope.Conditions) {
@@ -215,7 +222,7 @@ func validateScopeShape(location string, scope ProfileEvidenceScope, envelope Pr
 		}
 	case EngineSchemaV1:
 		requireSelfScopeReference(location+".engine_profile", scope.EngineProfile, envelope, problem)
-		if scope.ArtifactProfile != nil || scope.RuntimeProfile != nil || scope.Mode != "" || len(scope.CoResidents) != 0 || len(scope.Harnesses) != 0 {
+		if scope.ArtifactProfile != nil || scope.RuntimeProfile != nil || scope.ToolProfile != nil || scope.ModeProfile != nil || scope.ActivityProfile != nil || scope.Mode != "" || len(scope.CoResidents) != 0 || len(scope.Harnesses) != 0 {
 			problem("%s engine scope cannot contain artifact, runtime, mode, co-resident, or harness dimensions", location)
 		}
 	case ModelRuntimeSchemaV1:
@@ -240,6 +247,8 @@ func validateScopeShape(location string, scope ProfileEvidenceScope, envelope Pr
 				problem("%s.co_residents[%d] cannot name the containing runtime", location, index)
 			}
 		}
+	case ToolSchemaV1:
+		requireSelfScopeReference(location+".tool_profile", scope.ToolProfile, envelope, problem)
 	}
 }
 

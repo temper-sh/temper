@@ -590,18 +590,20 @@ base.
     changed material returns through `LAB`, while deliberately parallel
     supported combinations use separate profile IDs.
     Temper refinement currently implements the exact-reference and index
-    surface plus strict machine-bucket, model-artifact, engine, and
-    model-runtime documents. The pure loader verifies canonical bytes, derived
-    paths, hashes, identities, exact bucket applicability, dependency
-    presence, and runtime role/template/speculation compatibility from a
-    supplied in-memory bundle. The common profile envelope, artifact
+    surface plus strict machine-bucket, model-artifact, engine, model-runtime,
+    and tool documents. The pure loader verifies canonical bytes, derived
+    paths, hashes, identities, exact bucket applicability, dependency presence,
+    and runtime role/template/speculation compatibility from a supplied
+    in-memory bundle. The common profile envelope, artifact
     byte/quantization/component/license identity, exact C4-tested engine plus
     serving/process contract, output-affecting runtime layout, and explicit
     structured performance axes are typed. Public evidence inventories and
     canonical witness-scope keys are validated, and a pure immutable-lineage
-    validator enforces exact supersession and legal status transitions.
-    `QUALIFIED` profiles, the other three profile kinds, and recommendation
-    content remain explicit refusals pending gate and dependency-status rules.
+    validator enforces exact supersession and legal status transitions. Tool
+    core/transport/permission/backend/failure identity is closed and
+    consent-neutral. `QUALIFIED` profiles, the other two profile kinds, and
+    recommendation content remain explicit refusals pending gate and
+    dependency-status rules.
     The fixtures remain fake and do not seed a qualification row.
 13. *(design, with Labs — Temper side provisionally approved by owner
     2026-08-25; Labs adoption still requires explicit authorization)* Define
@@ -954,8 +956,10 @@ or CI dependency.
    recomputed runtime witness scopes are accepted for non-qualified rows;
    `QUALIFIED` profiles plus unimplemented profile kinds and recommendations
    fail closed. Exact immutable status edges are also validated without a
-   moving-history lookup. Continue C7 with qualification gate and
-   dependency-status validation, then the tool/mode/activity dependency chain.
+   moving-history lookup. The tool dependency root is typed and loaded with
+   exact permission/data-boundary agreement. Continue C7 with the mode/activity
+   dependency chain; qualification gate and dependency-status validation still
+   follows the authorized C8 writer adoption.
    Co-design/adopt the C8 writer side in Labs only under explicit
    cross-repository authorization; its pure packet compiler follows that gate.
    Then add the plural recommendation/performance projection and reviewed seed

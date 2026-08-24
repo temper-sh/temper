@@ -161,6 +161,9 @@ evidence:
         schema: temper-qualification-model-runtime/v1
         id: <target or dependency id>
         revision: <exact revision>
+      tool_profile: <target or dependency identity when material>
+      mode_profile: <target or dependency identity when material>
+      activity_profile: <target identity when material>
       machine_bucket: <exact C7 bucket reference when machine-dependent>
       mode: <exact semantic mode id when mode-dependent>
       co_residents: [<exact runtime references plus placement>]
