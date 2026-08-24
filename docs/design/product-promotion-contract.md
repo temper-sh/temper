@@ -1,9 +1,10 @@
 # Labs product promotion — C8
 
-Status: **proposed Temper-side M2 Phase C contract**, 2026-08-24. Labs must
-adopt the writer side in its own repository before this surface is approved or
-implemented. This document changes no adjacent repository and promotes no real
-profile.
+Status: **Temper side provisionally approved by owner for refinement**,
+2026-08-25. This approval does not authorize an adjacent-repository change:
+Labs must still adopt the writer side in its own repository before the C8
+compiler is implemented or a real packet is accepted. This document changes no
+adjacent repository and promotes no real profile.
 
 ## Decision
 
@@ -403,7 +404,8 @@ Temper product-promotion packet.
 
 ## Cross-repository adoption gate
 
-Approval of C8 requires an explicitly authorized Labs-side step that:
+Adoption and final approval of C8 require an explicitly authorized Labs-side
+step that:
 
 1. adopts the exact writer schema and canonicalization rules;
 2. maps Labs review gates and retained evidence to the claim-level fields;

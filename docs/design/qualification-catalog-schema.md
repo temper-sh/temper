@@ -1,9 +1,11 @@
 # Qualification catalog and profiles — C7
 
-Status: **proposed M2 Phase C surface**, 2026-08-24. This design settles D1
-as separate typed documents over one common envelope. It does not seed a
-catalog row, claim that a current configuration is qualified, or authorize
-the wizard to select anything.
+Status: **provisionally approved by owner for Temper-only refinement and fake
+fixture implementation**, 2026-08-25. This design settles D1 as separate typed
+documents over one common envelope, but remains open to evidence-driven
+refinement before the v1 surface freezes. It does not seed a catalog row,
+claim that a current configuration is qualified, or authorize the wizard to
+select anything.
 
 ## Decision
 
@@ -631,8 +633,9 @@ The Phase C validator must reject at least:
 
 ## Hermetic acceptance fixtures
 
-Implementation begins only after review of this surface. The first offline
-fixture set will:
+Provisional approval permits Temper-only implementation against fake offline
+fixtures. Freezing the v1 surface and consuming real product evidence still
+require a later review. The first fixture set will:
 
 1. round-trip one document of every profile kind plus two machine buckets
    through canonical bytes and an exact index;

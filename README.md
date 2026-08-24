@@ -65,14 +65,16 @@ an evidence-backed performance profile and visible tradeoffs. Recommendation
 never selects or prefers one: the user may install any subset and explicitly
 chooses which layout starts.
 
-The proposed M2 Phase C surfaces now make that boundary concrete. C7 uses six
-content-addressed typed profile documents with immutable status history,
-versioned machine buckets, structured performance evidence, and unordered
-plural recommendation sets. C8 is a separate one-packet/one-profile Labs
-product-promotion contract whose pure compiler excludes raw/private evidence
-and cannot add recommendation, consent, or selection. Both designs await owner
-review, and C8 still requires an explicitly authorized Labs-side adoption;
-there are no seeded qualification rows yet.
+The provisionally approved M2 Phase C surfaces now make that boundary concrete.
+C7 uses six content-addressed typed profile documents with immutable status
+history, versioned machine buckets, structured performance evidence, and
+unordered plural recommendation sets. C8 is a separate one-packet/one-profile
+Labs product-promotion contract whose pure compiler excludes raw/private
+evidence and cannot add recommendation, consent, or selection. The owner
+approved both Temper-side designs provisionally on 2026-08-25 so refinement and
+fake-fixture C7 implementation can proceed. C8 still requires an explicitly
+authorized Labs-side adoption before its compiler is built; there are no
+seeded qualification rows yet.
 
 The M2 Phase A shared resolver core is executable: strict software-catalog and
 software-lock parsing, deterministic target-to-adapter selection, compiled
@@ -249,7 +251,7 @@ never downloads weights, runs those commands, or touches the service. Bare
 - Retained release tool: [software catalog signing and verification](docs/contracts/catalog-signing.md).
 - Approved M2 surface: [software supply, independent catalog lifecycle, lock,
   and adapter-family design](docs/design/software-supply-schema.md).
-- Proposed M2 Phase C surface: [typed qualification catalog and profiles](docs/design/qualification-catalog-schema.md)
+- Provisionally approved M2 Phase C surface: [typed qualification catalog and profiles](docs/design/qualification-catalog-schema.md)
   plus the separate [Labs product-promotion contract](docs/design/product-promotion-contract.md).
 - [Current-posture render acceptance](docs/acceptance/current-posture-render.md)
   — the concrete legacy-to-native comparison and reviewed differences.

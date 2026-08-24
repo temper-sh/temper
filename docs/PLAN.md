@@ -157,8 +157,8 @@ follows the one-writer rule.
 | C4 | software supply records for Temper-managed packages: logical package, portable installation method, target-adapter definition, adapter-native package recipe/version scheme, selection policy, constraints, and tested-version evidence | release review | software resolver, installer, `check` | M2 phase A |
 | C5 | `software.lock.yaml`: exact target/method/adapter/provider closure, immutable catalog and/or experiment provenance, and required base-lock identities | explicit catalog resolution/update or explicit experiment-lock generation | installer, `check`, Field Kit Temper-material binding | M2 phase A |
 | C6 | named installation receipt plus root-wide software state: observed closure/base receipts and current prepared operations/shared claims | installer around inspected effects and receipt commit | `check`, uninstall, Field Kit Temper-material binding | M2 phase B |
-| C7 | qualification profiles (model artifact, engine, model runtime, tool, mode, activity) + the `WATCH/LAB/QUALIFIED/RETIRED/REJECTED` status machine | release review | wizard, `check`, render validation | M2 phase C; proposed surface in `docs/design/qualification-catalog-schema.md` |
-| C8 | Labs product-promotion packet | Labs review | the qualification-catalog compiler | M2 phase C; proposed Temper-side contract in `docs/design/product-promotion-contract.md`, Labs adoption pending |
+| C7 | qualification profiles (model artifact, engine, model runtime, tool, mode, activity) + the `WATCH/LAB/QUALIFIED/RETIRED/REJECTED` status machine | release review | wizard, `check`, render validation | M2 phase C; Temper-only surface provisionally approved 2026-08-25 in `docs/design/qualification-catalog-schema.md` |
+| C8 | Labs product-promotion packet | Labs review | the qualification-catalog compiler | M2 phase C; Temper side provisionally approved 2026-08-25 in `docs/design/product-promotion-contract.md`, Labs adoption pending |
 | C9 | state dir: active mode, leases | `mode`/`start`/`stop` | `mode`, `status`, cooperating harnesses | M4 |
 | C10 | Field Kit execution base: reversible install/check/remove mechanics plus canonical machine facts and the ordered installation-set binding (experiment packages and sessions remain Field Kit-owned) | Temper's software and machine verbs | Field Kit experiment prompts; Labs imports reviewed run packets | M2 phase B, designed with Field Kit |
 | C11 | CLI verb surface: verbs, exit codes, RESULT lines, machine-parseable outcomes | this plan → per-verb design docs | humans and agents | grows M1 → M4 |
@@ -563,8 +563,9 @@ base.
 
 #### Phase C — broader qualification catalog resumes
 
-12. *(decide, D1; design — proposed surface drafted 2026-08-24; owner review
-    pending)* Define C7 as separate typed profile documents over
+12. *(decide, D1; design — provisionally approved by owner 2026-08-25;
+    refinement remains open before v1 freeze)* Define C7 as separate typed
+    profile documents over
     a common envelope for model artifact, engine, model runtime, tool, mode,
     and activity. The envelope carries exact pins, status, witness scope key
     (artifact revision × engine-profile revision × runtime-profile revision ×
@@ -581,17 +582,18 @@ base.
     cache behavior with conditions and unmeasured axes explicit. The schema
     must distinguish catalog recommendation from the manifest's user-owned
     selection and `preferred` member flag.
-    The proposed contract is
+    The provisionally approved contract is
     [`docs/design/qualification-catalog-schema.md`](design/qualification-catalog-schema.md):
     six content-addressed typed profile documents, immutable supersession and
     status history, separately versioned machine-bucket vocabulary, and
     unordered catalog-level recommendation sets. It proposes the D7 rule that
     changed material returns through `LAB`, while deliberately parallel
     supported combinations use separate profile IDs.
-13. *(design, with Labs — Temper-side proposal drafted 2026-08-24; Labs
-    adoption and owner review pending)* Define the product-promotion packet
+13. *(design, with Labs — Temper side provisionally approved by owner
+    2026-08-25; Labs adoption still requires explicit authorization)* Define
+    the product-promotion packet
     (C8): how a reviewed Labs packet compiles into a qualification row without
-    becoming consent. The proposed contract is
+    becoming consent. The provisionally approved Temper-side contract is
     [`docs/design/product-promotion-contract.md`](design/product-promotion-contract.md):
     one canonical packet targets one C7 revision, private/raw provenance stays
     in Labs, and a pure compiler emits only public-safe claim-level evidence
@@ -634,9 +636,10 @@ wizard-readable row and rejects every illegal fixture.
 
 **Dependencies:** M1 for phases A and B. Phase C is required by M3. Labs-side
 parity (`add-tool` intake) is tracked in Labs and does not block the installed
-base. **Decisions:** D1 and D7 have proposed C7 answers that require owner
-review before Phase C build. D14 fixes the Phase A method/adapter boundary. D4
-does not block a checksummed pre-release Field Kit binary.
+base. **Decisions:** D1 and D7 are provisionally accepted for Temper-only
+fake-fixture implementation and remain refinable before v1 freezes. D14 fixes
+the Phase A method/adapter boundary. D4 does not block a checksummed pre-release
+Field Kit binary.
 
 ### M3 — wizard
 
@@ -832,13 +835,13 @@ or CI dependency.
 
 | # | Decision | Blocks | Current lean |
 |---|---|---|---|
-| D1 | Qualification-catalog representation: typed documents vs normalized graph | M2 Phase C | **proposed 2026-08-24:** six content-addressed typed documents plus catalog-level bucket/recommendation vocabulary; owner review pending (`docs/design/qualification-catalog-schema.md`) |
+| D1 | Qualification-catalog representation: typed documents vs normalized graph | M2 Phase C | **provisionally approved 2026-08-25:** six content-addressed typed documents plus catalog-level bucket/recommendation vocabulary; refine before v1 freeze (`docs/design/qualification-catalog-schema.md`) |
 | D2 | Language | — | **resolved 2026-08-14: the whole CLI is Go; completed 2026-08-19 for the first `apply` slice by starting native rendering in M1** (§4) |
 | D3 | Adopt `~/.temper` as the machine-identity home | M3 (wizard write location); M1 schemas stay location-neutral; M2 Field Kit work uses an explicit isolated root | spec proposes yes |
 | D4 | Final public distribution: brew vs curl-installer vs release asset (including prebuilt darwin/arm64 vs build-at-setup) | M5; does not block the checksummed pre-release Field Kit binary in M2 | open |
 | D5 | Mode-posture soaks as Labs-promoted Field Kit experiment packages (Temper only guarantees the base can render and serve the requested posture in isolation) | M4 qualification | open — a Field Kit/Labs question (spec Q8) |
 | D6 | Advisory lease file with expiry sufficient; `--force` human-only | M4 | leaning yes on both (spec Q7) |
-| D7 | Witnessed-row versioning on engine update: invalidate vs fork | M2 Phase C schema design | **proposed 2026-08-24:** immutable old witness; same product lineage supersedes through a new `LAB` revision, while deliberately parallel support gets a new profile ID; owner review pending (`docs/design/qualification-catalog-schema.md`) |
+| D7 | Witnessed-row versioning on engine update: invalidate vs fork | M2 Phase C schema design | **provisionally approved 2026-08-25:** immutable old witness; same product lineage supersedes through a new `LAB` revision, while deliberately parallel support gets a new profile ID; refine before v1 freeze (`docs/design/qualification-catalog-schema.md`) |
 | D8 | Remote-provider integration strictly render-only | M3 | leaning yes (spec Q4) |
 | D9 | Qualification-catalog contribution flow for Field Kit witnesses | post-M5 | Labs review and explicit product promotion; submission transport remains open |
 | D10 | Pi `packages` / Codex / Claude Code plugin packaging as distribution channels | M4 adapters | open (spec Q9) |
@@ -920,14 +923,16 @@ or CI dependency.
    immutable experiment packages, the new Field Kit discovery/consent prompt
    and session envelope, followed by the parity and scratch gates. Temper must
    not integrate the old Field Kit merely to declare Phase B complete.
-3. **M2 Phase C — qualification catalog:** the proposed C7 typed-document and
-   C8 product-promotion surfaces are drafted. Review them, co-design/adopt the
-   C8 writer side in Labs under explicit cross-repository authorization, then
-   build the six profile validators, pure packet compiler, plural
-   recommendation/performance projection, and reviewed seed rows. The first
-   two-layout fixture should preserve co-recommended speed/context and
-   quality-first coder layouts rather than manufacture one global winner. No
-   real native-MTP row exists until Labs supplies an accepted C8 packet.
+3. **M2 Phase C — qualification catalog:** the C7 typed-document and
+   Temper-side C8 product-promotion surfaces are provisionally approved.
+   Build C7 first against fake hermetic fixtures while refining the surface.
+   Co-design/adopt the C8 writer side in Labs only under explicit
+   cross-repository authorization; its pure packet compiler follows that gate.
+   Then add the plural recommendation/performance projection and reviewed seed
+   rows. The first two-layout fixture should preserve co-recommended
+   speed/context and quality-first coder layouts rather than manufacture one
+   global winner. No real native-MTP row exists until Labs supplies an accepted
+   C8 packet.
 4. **M1 — complete and accepted locally:** keep the dated current-posture
    manifest/lock fixture and its field-to-config acceptance test current while
    this path remains isolated from the running service; the wall-model contract

@@ -402,11 +402,11 @@ qualifies only Apple Silicon, but this schema and workflow do not make Homebrew
 or macOS the domain abstraction.
 
 **Profile** has one precise catalog meaning: a versioned, evidence-backed
-configuration record. The proposed C7 v1 uses six typed documents: model
-artifact, engine, model runtime, tool, mode, and activity. Harness executables
-remain user-managed; exact integration revisions and deviations live on the
-engine, tool, and mode records that consume them unless a later witnessed need
-earns a standalone kind. A profile declares
+configuration record. The provisionally approved C7 v1 direction uses six
+typed documents: model artifact, engine, model runtime, tool, mode, and
+activity. Harness executables remain user-managed; exact integration revisions
+and deviations live on the engine, tool, and mode records that consume them
+unless a later witnessed need earns a standalone kind. A profile declares
 compatibility, defaults, dependencies, data boundaries, resource placement,
 known failures, regression suite,
 evidence status and witness scope. A profile is advice and configuration, not
@@ -738,13 +738,13 @@ boundary is specified in
 
 **Product promotion** happens only after Labs reviews evidence. Labs keeps
 decisions reproducible without turning exploratory code into product code.
-The proposed C8 contract is one canonical Labs packet per exact C7 profile
-revision; Temper's pure compiler retains only public-safe claim-level evidence
-and exact packet identity. It does not read a Field Kit session or legacy
-runtime-profile packet directly, and it cannot create recommendation, consent,
-or selection. See
+The provisionally approved Temper-side C8 contract is one canonical Labs
+packet per exact C7 profile revision; Temper's pure compiler retains only
+public-safe claim-level evidence and exact packet identity. It does not read a
+Field Kit session or legacy runtime-profile packet directly, and it cannot
+create recommendation, consent, or selection. See
 [`design/product-promotion-contract.md`](design/product-promotion-contract.md)
-and the proposed typed C7 surface in
+and the provisionally approved typed C7 surface in
 [`design/qualification-catalog-schema.md`](design/qualification-catalog-schema.md).
 Model, tool, harness and mode candidates follow the same state machine and
 evidence discipline:
@@ -949,10 +949,11 @@ reach the same standard before tool profiles enter the qualification catalog.
    directly.
 4. Is remote-provider integration strictly render-only (current direction),
    with credential and foreground-model ownership left to each harness?
-5. Versioning of witnessed rows when engines move: the proposed C7 answer keeps
-   the old witness immutable, supersedes the same product lineage through a
-   new `LAB` revision, and uses a new profile ID when both combinations remain
-   deliberately supported. Owner review is still pending.
+5. Versioning of witnessed rows when engines move: the provisionally approved
+   C7 answer keeps the old witness immutable, supersedes the same product
+   lineage through a new `LAB` revision, and uses a new profile ID when both
+   combinations remain deliberately supported. Refine this before the v1
+   surface freezes.
 6. llama-swap mechanics the modes design leans on: role aliases
    (checkable), and config-reload behavior under in-flight requests
    (witnessable — a mode-switch-under-load probe measurement).
@@ -966,7 +967,7 @@ reach the same standard before tool profiles enter the qualification catalog.
    requested posture in isolation.)
 9. Pi `packages` as an adapter distribution channel, plugin packaging for
    Codex/Claude Code, and the standalone CI contract for a shared tool core.
-10. Catalog representation: the proposed C7 answer is six separate
-    content-addressed typed profile documents plus versioned machine-bucket and
-    unordered recommendation-set vocabulary, with no standalone harness kind
-    in v1. Owner review is still pending.
+10. Catalog representation: the provisionally approved C7 answer is six
+    separate content-addressed typed profile documents plus versioned
+    machine-bucket and unordered recommendation-set vocabulary, with no
+    standalone harness kind in v1. Refine this before the v1 surface freezes.
