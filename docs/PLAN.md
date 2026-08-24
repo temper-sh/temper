@@ -925,7 +925,10 @@ or CI dependency.
    not integrate the old Field Kit merely to declare Phase B complete.
 3. **M2 Phase C — qualification catalog:** the C7 typed-document and
    Temper-side C8 product-promotion surfaces are provisionally approved.
-   Build C7 first against fake hermetic fixtures while refining the surface.
+   The first C7 executable slice now strictly parses, canonically encodes,
+   hashes, validates, and matches immutable machine-bucket documents against
+   canonical Temper machine facts using a fake hermetic fixture. Continue C7
+   against fake profile and index fixtures while refining the surface.
    Co-design/adopt the C8 writer side in Labs only under explicit
    cross-repository authorization; its pure packet compiler follows that gate.
    Then add the plural recommendation/performance projection and reviewed seed

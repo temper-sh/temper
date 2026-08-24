@@ -307,6 +307,13 @@ direct bandwidth measurement, a reviewed hardware-model set is the hard match
 and `axis_labels.memory_bandwidth` explains the bucket axis. A new mapping
 creates a new bucket revision; consumers never reinterpret an old name.
 
+For v1, `predicate.target` is exactly unversioned `darwin` / `arm64` /
+`macos`. The hardware-model and chip sets are nonempty, unique, and sorted;
+the inclusive memory bounds are positive and `maximum >= minimum`. Evidence
+references and invalidation triggers are likewise explicit nonempty canonical
+sets. These constraints keep a partial or open-ended predicate from silently
+matching a machine it was not reviewed to describe.
+
 Field Kit's C12 bucket definitions are independently owned and versioned. A
 same-looking name in the experiment catalog is not a C7 reference and never
 joins by string accident.

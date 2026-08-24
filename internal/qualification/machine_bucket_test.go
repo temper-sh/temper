@@ -112,6 +112,11 @@ func TestParseMachineBucketRefusesNoncanonicalOrAmbiguousYAML(t *testing.T) {
 			want:  "not canonical",
 		},
 		{
+			name:  "noncanonical mapping order",
+			input: "schema: temper-qualification-machine-bucket/v1\n" + strings.Replace(canonical, "schema: temper-qualification-machine-bucket/v1\n", "", 1),
+			want:  "not canonical",
+		},
+		{
 			name:  "noncanonical integer",
 			input: strings.Replace(canonical, "revision: 1", "revision: 01", 1),
 			want:  "not canonical",
@@ -148,6 +153,14 @@ func TestMachineBucketValidationRefusesInvalidDomainFacts(t *testing.T) {
 		{name: "empty axis label", mutate: func(bucket *qualification.MachineBucket) { bucket.AxisLabels.MemoryBandwidth = "" }, want: "memory_bandwidth must be"},
 		{name: "unknown evidence kind", mutate: func(bucket *qualification.MachineBucket) { bucket.Evidence[0].Kind = "raw-labs-run" }, want: "kind \"raw-labs-run\" is not supported"},
 		{name: "invalid evidence digest", mutate: func(bucket *qualification.MachineBucket) { bucket.Evidence[0].SHA256 = "nope" }, want: "sha256 must be"},
+		{name: "unsorted evidence", mutate: func(bucket *qualification.MachineBucket) {
+			bucket.Evidence[0], bucket.Evidence[1] = bucket.Evidence[1], bucket.Evidence[0]
+		}, want: "evidence must be unique and sorted"},
+		{name: "duplicate evidence identity", mutate: func(bucket *qualification.MachineBucket) {
+			duplicate := bucket.Evidence[0]
+			duplicate.SHA256 = strings.Repeat("c", 64)
+			bucket.Evidence = append(bucket.Evidence, duplicate)
+		}, want: "evidence repeats identity"},
 		{name: "empty evidence", mutate: func(bucket *qualification.MachineBucket) { bucket.Evidence = nil }, want: "evidence must not be empty"},
 		{name: "empty invalidation triggers", mutate: func(bucket *qualification.MachineBucket) { bucket.InvalidationTriggers = nil }, want: "invalidation_triggers must not be empty"},
 	}
