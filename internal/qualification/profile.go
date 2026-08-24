@@ -21,7 +21,10 @@ const (
 	ProfileStatusRetired   = "RETIRED"
 )
 
-var schemaIDPattern = regexp.MustCompile(`^[a-z0-9]+(?:[.-][a-z0-9]+)*/v[1-9][0-9]*$`)
+var (
+	schemaIDPattern        = regexp.MustCompile(`^[a-z0-9]+(?:[.-][a-z0-9]+)*/v[1-9][0-9]*$`)
+	exactRevisionIDPattern = regexp.MustCompile(`^[a-z0-9]+(?:[._/-][a-z0-9]+)*$`)
+)
 
 // ProfileEnvelope is the common immutable history and evidence boundary shared
 // by all six C7 profile documents.

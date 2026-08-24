@@ -262,6 +262,34 @@ func TestLoadCatalogVerifiesExactModelArtifactAndBucketReferences(t *testing.T) 
 	}
 }
 
+func TestLoadCatalogVerifiesExactEngineAndBucketReferences(t *testing.T) {
+	index := parseCatalogFixture(t)
+	engine := parseEngineFixture(t)
+	engine.Applicability.MachineBuckets = []qualification.Reference{index.MachineBuckets[0].Document}
+	engineData, err := qualification.MarshalEngineProfile(engine)
+	if err != nil {
+		t.Fatal(err)
+	}
+	index.Profiles = []qualification.IndexedDocument{{
+		Document: qualification.Reference{
+			Schema: qualification.EngineSchemaV1, ID: engine.ID, Revision: engine.Revision, SHA256: qualification.Digest(engineData),
+		},
+		Path: "profiles/engine/example-local-engine/1.yaml",
+	}}
+	files := map[string][]byte{
+		exampleBucketPath:      readMachineBucketFixture(t),
+		index.Profiles[0].Path: engineData,
+	}
+
+	catalog, err := qualification.LoadCatalog(marshalCatalogIndex(t, index), files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(catalog.Engines) != 1 || catalog.Engines[0].ID != "example-local-engine" {
+		t.Fatalf("engines = %#v", catalog.Engines)
+	}
+}
+
 func TestLoadCatalogRefusesProfileBucketAbsentFromIndex(t *testing.T) {
 	artifact := parseModelArtifactFixture(t)
 	artifact.Applicability.MachineBuckets = []qualification.Reference{{
@@ -337,12 +365,12 @@ func TestLoadCatalogRefusesMissingOrMismatchedBucketBytes(t *testing.T) {
 func TestLoadCatalogRefusesUnimplementedProfileDocuments(t *testing.T) {
 	index := parseCatalogFixture(t)
 	index.Profiles = []qualification.IndexedDocument{{
-		Document: qualification.Reference{Schema: qualification.EngineSchemaV1, ID: "example-engine", Revision: 1, SHA256: strings.Repeat("a", 64)},
-		Path:     "profiles/engine/example-engine/1.yaml",
+		Document: qualification.Reference{Schema: qualification.ModelRuntimeSchemaV1, ID: "example-runtime", Revision: 1, SHA256: strings.Repeat("a", 64)},
+		Path:     "profiles/model-runtime/example-runtime/1.yaml",
 	}}
 
 	_, err := qualification.LoadCatalog(marshalCatalogIndex(t, index), map[string][]byte{exampleBucketPath: readMachineBucketFixture(t)})
-	if err == nil || !strings.Contains(err.Error(), "profile schema \"temper-qualification-engine/v1\" is not implemented") {
+	if err == nil || !strings.Contains(err.Error(), "profile schema \"temper-qualification-model-runtime/v1\" is not implemented") {
 		t.Fatalf("LoadCatalog() error = %v, want profile refusal", err)
 	}
 }

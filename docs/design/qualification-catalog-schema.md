@@ -8,16 +8,16 @@ claim that a current configuration is qualified, or authorize the wizard to
 select anything.
 
 Current Temper implementation boundary: `internal/qualification` strictly
-parses canonical machine-bucket, model-artifact, and catalog-index documents.
-The shared profile envelope and model-artifact body are typed; the loader
-verifies their derived release paths, canonical bytes, digests, identities,
-and exact bucket applicability from a supplied in-memory bundle. The index
-representation already types every other profile reference and recommendation
-set so neither can become an untyped escape hatch. Evidence-bearing or
-`QUALIFIED` profiles, the other five profile document kinds, and nonempty
-recommendation sets remain explicit refusals until their validators and
-cross-document rules exist. All current catalog fixtures are fake and
-hermetic.
+parses canonical machine-bucket, model-artifact, engine, and catalog-index
+documents. The shared profile envelope plus the two dependency-root profile
+bodies are typed; the loader verifies their derived release paths, canonical
+bytes, digests, identities, and exact bucket applicability from a supplied
+in-memory bundle. The index representation already types every other profile
+reference and recommendation set so neither can become an untyped escape
+hatch. Evidence-bearing or `QUALIFIED` profiles, the other four profile
+document kinds, and nonempty recommendation sets remain explicit refusals
+until their validators and cross-document rules exist. All current catalog
+fixtures are fake and hermetic.
 
 ## Decision
 
@@ -410,19 +410,38 @@ spec:
     root_version: <exact tested version>
     closure_digest: <exact tested closure digest>
   api:
-    protocol: <OpenAI-compatible or another exact protocol revision>
-    streaming: <declared support>
-    tool_calls: <declared parser/serialization surface>
+    protocol: <exact protocol revision>
+    streaming: <boolean>
+    tool_calls:
+      state: supported | unsupported
+      request_schema: <exact revision when supported>
+      response_schema: <exact revision when supported>
+      parser_revision: <exact revision when supported>
   capabilities: [<closed capability ids>]
-  process_isolation: <foreground child, isolated service, or another exact model>
+  process_isolation: foreground-child | isolated-service
   service_contract:
-    readiness: <typed readiness condition>
-    shutdown: <typed shutdown condition>
-    offline_after_install: <boolean>
+    readiness:
+      protocol: http
+      path: <canonical absolute path>
+      expected_status: <exact HTTP status>
+    shutdown:
+      mechanism: signal
+      signal: SIGINT | SIGTERM
+      grace_period_millis: <positive integer>
+    offline_after_install: true
 ```
 
 The C4 reference establishes tested software identity; C7 adds composed
-serving evidence. It never copies a C5 closure or claims that a local receipt
+serving evidence. The catalog schema, positive sequence, and catalog-byte
+digest identify the exact C4 snapshot. Package, method, target adapter,
+unversioned `darwin/arm64` target, root version, and closure digest then select
+one exact tested row from that snapshot. Engine capabilities are a closed,
+sorted subset of `chat-completions`, `embeddings`, `rerank`, `streaming`, and
+`tool-calls`; the streaming and tool-call declarations must agree with that
+set. Supported tool calls bind exact request, response, and parser revisions.
+The readiness and shutdown conditions are executable contracts, not prose,
+and v1 engines must remain offline after installation. An engine has no C7
+profile dependency: it never copies a C5 lock or claims that a local C6 receipt
 exists.
 
 ### Model runtime and performance profile

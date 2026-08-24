@@ -1,0 +1,75 @@
+applicability:
+  explanation: Fake local engine available for serving-contract investigation
+  foregrounds:
+    - local
+  harnesses: []
+  machine_buckets: []
+data_boundary:
+  credentials: none
+  evidence_export: explicit-user-action
+  inference: local
+  network: []
+  reads:
+    - local-request
+  telemetry: none
+  writes:
+    - local-response
+dependencies: []
+evidence: []
+id: example-local-engine
+invalidation_triggers:
+  - condition: The software catalog identity, tested closure, API, or process contract changes
+    consequence: return-to-lab
+    id: engine-contract-changes
+known_failures: []
+promotion:
+  id: example-engine-promotion
+  revision: 1
+  schema: temper-labs-product-promotion/v1
+  sha256: eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+revision: 1
+roles:
+  - coder
+schema: temper-qualification-engine/v1
+spec:
+  api:
+    protocol: openai-chat-completions/v1
+    streaming: true
+    tool_calls:
+      parser_revision: openai-tool-calls/v1
+      request_schema: openai-chat-tools-request/v1
+      response_schema: openai-chat-tools-response/v1
+      state: supported
+  capabilities:
+    - chat-completions
+    - streaming
+    - tool-calls
+  process_isolation: foreground-child
+  service_contract:
+    offline_after_install: true
+    readiness:
+      expected_status: 200
+      path: /health
+      protocol: http
+    shutdown:
+      grace_period_millis: 5000
+      mechanism: signal
+      signal: SIGTERM
+  software:
+    adapter: example-release-adapter
+    catalog:
+      schema: temper-software-supply/v1
+      sequence: 7
+      sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    closure_digest: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    method: release-artifact
+    package: example-engine
+    root_version: b1234
+    target:
+      arch: arm64
+      os: darwin
+status: LAB
+status_reason: Fake serving identity is pinned while qualification evidence remains absent
+summary: Fake tested software and serving identity for exercising the C7 engine boundary
+title: Example local engine
+what_this_means: This fake engine is inspectable but not qualified or recommended

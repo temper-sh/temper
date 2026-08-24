@@ -88,6 +88,7 @@ type Catalog struct {
 	Index          CatalogIndex
 	MachineBuckets []MachineBucket
 	ModelArtifacts []ModelArtifactProfile
+	Engines        []EngineProfile
 }
 
 // ParseCatalogIndex accepts only the canonical YAML bytes produced by
@@ -175,8 +176,9 @@ func LoadCatalog(indexData []byte, files map[string][]byte) (Catalog, error) {
 	}
 
 	modelArtifacts := make([]ModelArtifactProfile, 0, len(index.Profiles))
+	engines := make([]EngineProfile, 0, len(index.Profiles))
 	for _, indexed := range index.Profiles {
-		if indexed.Document.Schema != ModelArtifactSchemaV1 {
+		if indexed.Document.Schema != ModelArtifactSchemaV1 && indexed.Document.Schema != EngineSchemaV1 {
 			return Catalog{}, fmt.Errorf("load qualification catalog: profile schema %q is not implemented", indexed.Document.Schema)
 		}
 		data, ok := files[indexed.Path]
@@ -187,22 +189,41 @@ func LoadCatalog(indexData []byte, files map[string][]byte) (Catalog, error) {
 			return Catalog{}, fmt.Errorf("load qualification catalog: indexed document %q sha256 is %s, want %s", indexed.Path, digest, indexed.Document.SHA256)
 		}
 
-		profile, err := ParseModelArtifactProfile(data)
-		if err != nil {
-			return Catalog{}, fmt.Errorf("load qualification catalog: indexed document %q: %w", indexed.Path, err)
-		}
-		if profile.ID != indexed.Document.ID || profile.Revision != indexed.Document.Revision {
-			return Catalog{}, fmt.Errorf("load qualification catalog: indexed document %q identity is %s/%s@%d, want %s/%s@%d", indexed.Path, profile.Schema, profile.ID, profile.Revision, indexed.Document.Schema, indexed.Document.ID, indexed.Document.Revision)
-		}
-		for _, bucket := range profile.Applicability.MachineBuckets {
-			if !bucketReferences[referenceExactIdentity(bucket)] {
-				return Catalog{}, fmt.Errorf("load qualification catalog: indexed document %q references machine bucket %s/%s@%d absent from the index", indexed.Path, bucket.Schema, bucket.ID, bucket.Revision)
+		switch indexed.Document.Schema {
+		case ModelArtifactSchemaV1:
+			profile, err := ParseModelArtifactProfile(data)
+			if err != nil {
+				return Catalog{}, fmt.Errorf("load qualification catalog: indexed document %q: %w", indexed.Path, err)
 			}
+			if err := verifyIndexedProfile(indexed, profile.ProfileEnvelope, bucketReferences); err != nil {
+				return Catalog{}, err
+			}
+			modelArtifacts = append(modelArtifacts, profile)
+		case EngineSchemaV1:
+			profile, err := ParseEngineProfile(data)
+			if err != nil {
+				return Catalog{}, fmt.Errorf("load qualification catalog: indexed document %q: %w", indexed.Path, err)
+			}
+			if err := verifyIndexedProfile(indexed, profile.ProfileEnvelope, bucketReferences); err != nil {
+				return Catalog{}, err
+			}
+			engines = append(engines, profile)
 		}
-		modelArtifacts = append(modelArtifacts, profile)
 	}
 
-	return Catalog{Index: index, MachineBuckets: buckets, ModelArtifacts: modelArtifacts}, nil
+	return Catalog{Index: index, MachineBuckets: buckets, ModelArtifacts: modelArtifacts, Engines: engines}, nil
+}
+
+func verifyIndexedProfile(indexed IndexedDocument, envelope ProfileEnvelope, bucketReferences map[string]bool) error {
+	if envelope.Schema != indexed.Document.Schema || envelope.ID != indexed.Document.ID || envelope.Revision != indexed.Document.Revision {
+		return fmt.Errorf("load qualification catalog: indexed document %q identity is %s/%s@%d, want %s/%s@%d", indexed.Path, envelope.Schema, envelope.ID, envelope.Revision, indexed.Document.Schema, indexed.Document.ID, indexed.Document.Revision)
+	}
+	for _, bucket := range envelope.Applicability.MachineBuckets {
+		if !bucketReferences[referenceExactIdentity(bucket)] {
+			return fmt.Errorf("load qualification catalog: indexed document %q references machine bucket %s/%s@%d absent from the index", indexed.Path, bucket.Schema, bucket.ID, bucket.Revision)
+		}
+	}
+	return nil
 }
 
 // Validate enforces exact reference identity without resolving a document.

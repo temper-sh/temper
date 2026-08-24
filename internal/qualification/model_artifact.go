@@ -11,7 +11,6 @@ import (
 var (
 	artifactRepositoryPattern = regexp.MustCompile(`^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$`)
 	artifactRevisionPattern   = regexp.MustCompile(`^[0-9a-f]{40}$`)
-	artifactRecipePattern     = regexp.MustCompile(`^[a-z0-9]+(?:[._/-][a-z0-9]+)*$`)
 )
 
 // ModelArtifactProfile pins every selected model byte and the metadata needed
@@ -183,7 +182,7 @@ func validateQuantization(quantization ModelArtifactQuantization, problem func(s
 	if !stableIDPattern.MatchString(quantization.Family) {
 		problem("spec.quantization.family %q is not a lowercase stable id", quantization.Family)
 	}
-	if !artifactRecipePattern.MatchString(quantization.RecipeRevision) {
+	if !exactRevisionIDPattern.MatchString(quantization.RecipeRevision) {
 		problem("spec.quantization.recipe_revision %q is not an exact recipe id", quantization.RecipeRevision)
 	}
 	if len(quantization.TensorAllocation) == 0 {
