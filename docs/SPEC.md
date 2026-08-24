@@ -402,8 +402,11 @@ qualifies only Apple Silicon, but this schema and workflow do not make Homebrew
 or macOS the domain abstraction.
 
 **Profile** has one precise catalog meaning: a versioned, evidence-backed
-configuration record. Profiles may exist for model artifacts and runtimes,
-engines, tools, harness adapters or complete modes. A profile declares
+configuration record. The proposed C7 v1 uses six typed documents: model
+artifact, engine, model runtime, tool, mode, and activity. Harness executables
+remain user-managed; exact integration revisions and deviations live on the
+engine, tool, and mode records that consume them unless a later witnessed need
+earns a standalone kind. A profile declares
 compatibility, defaults, dependencies, data boundaries, resource placement,
 known failures, regression suite,
 evidence status and witness scope. A profile is advice and configuration, not
@@ -417,12 +420,14 @@ consent. In particular:
   known engine-wide failures; the install recipe and resolved dependency
   closure have one home in the software supply catalog and software lock;
 - a **model runtime profile** references an artifact and engine profile and pins
-  placement, context/KV settings, sampling/thinking, batching, speculation,
-  residency, preload and TTL for a machine bucket and mode;
+  output-affecting layout identity—context/KV settings, sampling/thinking,
+  batching and speculation—while exact witness scope records the machine,
+  mode and co-residents;
 - a **tool profile** pins the tool core, transport, schema/description,
   backend role, permissions and harness/model affordance deviations;
-- a **mode profile** composes qualified artifact/runtime and tool profiles for
-  a job, and may override runtime configuration per selected model;
+- a **mode profile** composes qualified runtime and tool profiles for a job and
+  owns placement, residency, preload, TTL, role bindings, and exact harness
+  integration revisions without overriding output-affecting layout identity;
 - an **activity profile** such as inspect/change/verify/review narrows the
   active tools inside a mode and never widens them.
 
@@ -692,8 +697,9 @@ Software and configuration have separate fact chains:
   `software.lock.yaml` → the selected adapter installs, inspects, and writes the
   actual installation receipt;
 - Labs packets + witnessed measurements produce reviewed qualification
-  profiles → release review publishes human evidence to Results and compiles
-  accepted configuration into the qualification catalog → the wizard writes
+  product-promotion packets → release review publishes human evidence to
+  Results and compiles accepted configuration into the qualification catalog
+  → the wizard writes
   `manifest.yaml` (user selection + mode bindings) → `manifest.lock.yaml` →
   generator → configs.
 
@@ -732,6 +738,14 @@ boundary is specified in
 
 **Product promotion** happens only after Labs reviews evidence. Labs keeps
 decisions reproducible without turning exploratory code into product code.
+The proposed C8 contract is one canonical Labs packet per exact C7 profile
+revision; Temper's pure compiler retains only public-safe claim-level evidence
+and exact packet identity. It does not read a Field Kit session or legacy
+runtime-profile packet directly, and it cannot create recommendation, consent,
+or selection. See
+[`design/product-promotion-contract.md`](design/product-promotion-contract.md)
+and the proposed typed C7 surface in
+[`design/qualification-catalog-schema.md`](design/qualification-catalog-schema.md).
 Model, tool, harness and mode candidates follow the same state machine and
 evidence discipline:
 
@@ -906,9 +920,9 @@ reach the same standard before tool profiles enter the qualification catalog.
   qualification catalog**. First model rolling/guarded/constrained package
   policy and exact software locking; next install/check/remove the receipted
   reversible base Labs-promoted Field Kit experiments consume and freeze the
-  cross-repository experiment-promotion boundary; then add model, engine, tool,
-  harness, activity and mode qualification profiles plus the separate Labs
-  product-promotion packet.
+  cross-repository experiment-promotion boundary; then add the six typed model
+  artifact, engine, model-runtime, tool, mode, and activity qualification
+  profiles plus the separate Labs product-promotion packet.
 - **M3 — wizard TUI** over a curated model universe, individually opt-in tools,
   harness integrations and mode bindings.
 - **M4 — production mode state machine + harness qualification** over the
@@ -935,8 +949,10 @@ reach the same standard before tool profiles enter the qualification catalog.
    directly.
 4. Is remote-provider integration strictly render-only (current direction),
    with credential and foreground-model ownership left to each harness?
-5. Versioning of witnessed rows when engines move: a row's witness pins
-   engine versions — does `update` invalidate the row or fork it?
+5. Versioning of witnessed rows when engines move: the proposed C7 answer keeps
+   the old witness immutable, supersedes the same product lineage through a
+   new `LAB` revision, and uses a new profile ID when both combinations remain
+   deliberately supported. Owner review is still pending.
 6. llama-swap mechanics the modes design leans on: role aliases
    (checkable), and config-reload behavior under in-flight requests
    (witnessable — a mode-switch-under-load probe measurement).
@@ -950,6 +966,7 @@ reach the same standard before tool profiles enter the qualification catalog.
    requested posture in isolation.)
 9. Pi `packages` as an adapter distribution channel, plugin packaging for
    Codex/Claude Code, and the standalone CI contract for a shared tool core.
-10. Catalog representation: separate typed profile documents or one normalized
-    graph whose rows can express model, engine, tool, harness and mode evidence
-    without making user consent implicit.
+10. Catalog representation: the proposed C7 answer is six separate
+    content-addressed typed profile documents plus versioned machine-bucket and
+    unordered recommendation-set vocabulary, with no standalone harness kind
+    in v1. Owner review is still pending.

@@ -65,6 +65,15 @@ an evidence-backed performance profile and visible tradeoffs. Recommendation
 never selects or prefers one: the user may install any subset and explicitly
 chooses which layout starts.
 
+The proposed M2 Phase C surfaces now make that boundary concrete. C7 uses six
+content-addressed typed profile documents with immutable status history,
+versioned machine buckets, structured performance evidence, and unordered
+plural recommendation sets. C8 is a separate one-packet/one-profile Labs
+product-promotion contract whose pure compiler excludes raw/private evidence
+and cannot add recommendation, consent, or selection. Both designs await owner
+review, and C8 still requires an explicitly authorized Labs-side adoption;
+there are no seeded qualification rows yet.
+
 The M2 Phase A shared resolver core is executable: strict software-catalog and
 software-lock parsing, deterministic target-to-adapter selection, compiled
 adapter descriptor checks, provider-neutral candidate closures, SemVer/PEP 440
@@ -240,6 +249,8 @@ never downloads weights, runs those commands, or touches the service. Bare
 - Retained release tool: [software catalog signing and verification](docs/contracts/catalog-signing.md).
 - Approved M2 surface: [software supply, independent catalog lifecycle, lock,
   and adapter-family design](docs/design/software-supply-schema.md).
+- Proposed M2 Phase C surface: [typed qualification catalog and profiles](docs/design/qualification-catalog-schema.md)
+  plus the separate [Labs product-promotion contract](docs/design/product-promotion-contract.md).
 - [Current-posture render acceptance](docs/acceptance/current-posture-render.md)
   — the concrete legacy-to-native comparison and reviewed differences.
 - [Working rules](AGENTS.md) — boundaries and the product quality bar.
@@ -248,9 +259,9 @@ never downloads weights, runs those commands, or touches the service. Bare
 
 | Repo | Role |
 |---|---|
-| `temper-sh/labs` | decides and gathers evidence; owns experiments, dossiers, and product handoffs |
+| `temper-sh/labs` | authors experiments, promotes bounded experiment packages, reviews evidence, and produces product-promotion packets |
 | `temper-sh/results` | explains reviewed evidence to people |
-| `temper-sh/field-kit` | executes frozen portable tests on consenting machines |
+| `temper-sh/field-kit` | offers immutable Labs-promoted experiments to consenting users and executes them over Temper |
 | **`temper-sh/temper`** | **ships reviewed configuration and the minimum probe environment** |
 
 Temper consumes reviewed packets and accepted product handoffs, never a
