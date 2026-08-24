@@ -1,0 +1,12 @@
+machine_buckets:
+  - document:
+      id: example-gen5-32g-standard
+      revision: 1
+      schema: temper-qualification-machine-bucket/v1
+      sha256: db86b7d33a866fe37b7663a3b0a8f6edfdecce2b4eee913ae5622582bf901dd8
+    path: machine-buckets/example-gen5-32g-standard/1.yaml
+profiles: []
+published_at: "2026-08-25T12:00:00Z"
+recommendation_sets: []
+revision: 1
+schema: temper-qualification-catalog/v1

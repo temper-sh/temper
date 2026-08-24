@@ -589,6 +589,12 @@ base.
     unordered catalog-level recommendation sets. It proposes the D7 rule that
     changed material returns through `LAB`, while deliberately parallel
     supported combinations use separate profile IDs.
+    Temper refinement currently implements the exact-reference and index
+    surface plus strict bucket-only bundle loading: canonical index bytes,
+    derived paths, hashes, and bucket identities are verified from a supplied
+    in-memory bundle. Nonempty profile and recommendation content is explicitly
+    refused until its typed validators exist. The fixtures remain fake and do
+    not seed a qualification row.
 13. *(design, with Labs — Temper side provisionally approved by owner
     2026-08-25; Labs adoption still requires explicit authorization)* Define
     the product-promotion packet
@@ -930,8 +936,11 @@ or CI dependency.
    Temper-side C8 product-promotion surfaces are provisionally approved.
    The first C7 executable slice now strictly parses, canonically encodes,
    hashes, validates, and matches immutable machine-bucket documents against
-   canonical Temper machine facts using a fake hermetic fixture. Continue C7
-   against fake profile and index fixtures while refining the surface.
+   canonical Temper machine facts using a fake hermetic fixture. Its exact
+   catalog index now canonically validates references and release paths, then
+   verifies bucket bytes, hashes, and identities through a pure bundle loader;
+   profile and recommendation loading fails closed. Continue C7 with the first
+   typed profile document and its fake fixture while refining the surface.
    Co-design/adopt the C8 writer side in Labs only under explicit
    cross-repository authorization; its pure packet compiler follows that gate.
    Then add the plural recommendation/performance projection and reviewed seed

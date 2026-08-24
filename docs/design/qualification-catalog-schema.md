@@ -7,6 +7,16 @@ refinement before the v1 surface freezes. It does not seed a catalog row,
 claim that a current configuration is qualified, or authorize the wizard to
 select anything.
 
+Current Temper implementation boundary: `internal/qualification` strictly
+parses canonical machine-bucket documents and the canonical catalog index,
+validates exact references and derived release paths, and loads a supplied
+bucket-only bundle while verifying every indexed digest and document identity.
+The index representation already types profile references and recommendation
+sets so neither can become an untyped escape hatch. The bundle loader refuses
+nonempty `profiles` or `recommendation_sets` until the referenced profile
+document validators and their cross-document rules exist. All current catalog
+fixtures are fake and hermetic.
+
 ## Decision
 
 C7 is a content-addressed catalog index plus six immutable profile document
@@ -582,6 +592,11 @@ The catalog index is release-reviewed Temper data. C7 v1 does not inherit the
 software catalog's independent update channel, signature files, or active
 pointer. Changing qualification-catalog distribution is a separate surface
 decision; readers still verify every indexed document hash.
+
+The current pure loader accepts the index bytes and a path-to-bytes bundle; it
+does not read a directory, resolve a moving revision, or fetch content. Files
+absent from the index may remain in the supplied bundle as immutable history,
+but they have no currentness semantics and are not loaded.
 
 ## Projection to C2 and read rules
 

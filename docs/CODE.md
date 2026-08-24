@@ -79,7 +79,7 @@ check, removal, or catalog policy.
 | `temper software check` | `software/check` through `softwarecmd` | `software/lockfile`, `checkplan`, `receipt`, `rootstate` | stores and provider inspection; no writes | `docs/contracts/software-install.md` |
 | `temper software remove` | `software/remove` through `softwarecmd` | `software/lockfile`, `removeplan`, `receipt`, `rootstate` | prepared authority, compiled adapter removal, receipt/state commits | `docs/contracts/software-install.md` |
 | Field Kit material binding | `internal/fieldkitbinding` | manifest/software locks, receipts, canonical machine facts | none; callers supply already-read bytes and documents | `docs/design/field-kit-experiment-boundary.md` |
-| Qualification documents | `internal/qualification` | C7 typed schemas; machine buckets are the first executable slice | none; parsing, canonicalization, hashing, validation, and matching are pure | `docs/design/qualification-catalog-schema.md` |
+| Qualification documents | `internal/qualification` | C7 exact references and catalog index; machine-bucket documents and bucket-only bundle loading | none; callers supply index/document bytes and canonical facts, and all parsing, hashing, validation, loading, and matching are pure | `docs/design/qualification-catalog-schema.md` |
 
 An internal package not listed as a public operation is usually a decision or
 boundary collaborator. It does not become a user-facing surface merely because
@@ -245,8 +245,9 @@ M5 cutover gate.
    bytes and strict refusals.
 3. Keep selection, consent, install authorization, Labs state, and Field Kit
    session data out of the package.
-4. Add cross-document/index validation only after the referenced document
-   surfaces exist.
+4. Extend the index loader only after each referenced typed document surface
+   exists. It currently verifies machine buckets and explicitly refuses
+   profile/recommendation content.
 5. Do not build the C8 compiler until Labs adopts the writer contract under
    explicit cross-repository authorization.
 
