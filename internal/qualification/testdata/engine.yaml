@@ -33,6 +33,7 @@ roles:
 schema: temper-qualification-engine/v1
 spec:
   api:
+    layout_contract: temper-runtime-layout/v1
     protocol: openai-chat-completions/v1
     streaming: true
     tool_calls:

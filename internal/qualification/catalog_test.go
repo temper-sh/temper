@@ -290,6 +290,54 @@ func TestLoadCatalogVerifiesExactEngineAndBucketReferences(t *testing.T) {
 	}
 }
 
+func TestLoadCatalogVerifiesExactModelRuntimeComposition(t *testing.T) {
+	index, files := catalogWithModelRuntime(t, readModelRuntimeFixture(t))
+
+	catalog, err := qualification.LoadCatalog(marshalCatalogIndex(t, index), files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(catalog.ModelArtifacts) != 1 || len(catalog.Engines) != 1 || len(catalog.ModelRuntimes) != 1 {
+		t.Fatalf("loaded profile counts = artifacts %d, engines %d, runtimes %d", len(catalog.ModelArtifacts), len(catalog.Engines), len(catalog.ModelRuntimes))
+	}
+	if catalog.ModelRuntimes[0].ID != "example-coder-runtime" {
+		t.Fatalf("model runtimes = %#v", catalog.ModelRuntimes)
+	}
+}
+
+func TestLoadCatalogRefusesModelRuntimeDependencyAbsentFromIndex(t *testing.T) {
+	runtime := parseModelRuntimeFixture(t)
+	runtime.Spec.ArtifactProfile.SHA256 = strings.Repeat("f", 64)
+	runtime.Dependencies[0].Profile = runtime.Spec.ArtifactProfile
+	runtimeData, err := qualification.MarshalModelRuntimeProfile(runtime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	index, files := catalogWithModelRuntime(t, runtimeData)
+
+	_, err = qualification.LoadCatalog(marshalCatalogIndex(t, index), files)
+	if err == nil || !strings.Contains(err.Error(), "references model artifact") || !strings.Contains(err.Error(), "absent from the index") {
+		t.Fatalf("LoadCatalog() error = %v, want missing-artifact refusal", err)
+	}
+}
+
+func TestLoadCatalogRefusesUnsupportedDrafterComposition(t *testing.T) {
+	runtime := parseModelRuntimeFixture(t)
+	runtime.Spec.Layout.Speculation = qualification.RuntimeSpeculation{
+		State: "drafter", MethodRevision: "draft/v1", Sidecar: "sidecars/drafter.gguf", DraftTokens: 4,
+	}
+	runtimeData, err := qualification.MarshalModelRuntimeProfile(runtime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	index, files := catalogWithModelRuntime(t, runtimeData)
+
+	_, err = qualification.LoadCatalog(marshalCatalogIndex(t, index), files)
+	if err == nil || !strings.Contains(err.Error(), "requires engine capability \"drafter-speculation\"") {
+		t.Fatalf("LoadCatalog() error = %v, want unsupported-drafter refusal", err)
+	}
+}
+
 func TestLoadCatalogRefusesProfileBucketAbsentFromIndex(t *testing.T) {
 	artifact := parseModelArtifactFixture(t)
 	artifact.Applicability.MachineBuckets = []qualification.Reference{{
@@ -365,12 +413,12 @@ func TestLoadCatalogRefusesMissingOrMismatchedBucketBytes(t *testing.T) {
 func TestLoadCatalogRefusesUnimplementedProfileDocuments(t *testing.T) {
 	index := parseCatalogFixture(t)
 	index.Profiles = []qualification.IndexedDocument{{
-		Document: qualification.Reference{Schema: qualification.ModelRuntimeSchemaV1, ID: "example-runtime", Revision: 1, SHA256: strings.Repeat("a", 64)},
-		Path:     "profiles/model-runtime/example-runtime/1.yaml",
+		Document: qualification.Reference{Schema: qualification.ToolSchemaV1, ID: "example-tool", Revision: 1, SHA256: strings.Repeat("a", 64)},
+		Path:     "profiles/tool/example-tool/1.yaml",
 	}}
 
 	_, err := qualification.LoadCatalog(marshalCatalogIndex(t, index), map[string][]byte{exampleBucketPath: readMachineBucketFixture(t)})
-	if err == nil || !strings.Contains(err.Error(), "profile schema \"temper-qualification-model-runtime/v1\" is not implemented") {
+	if err == nil || !strings.Contains(err.Error(), "profile schema \"temper-qualification-tool/v1\" is not implemented") {
 		t.Fatalf("LoadCatalog() error = %v, want profile refusal", err)
 	}
 }
@@ -433,4 +481,33 @@ func marshalCatalogIndex(t *testing.T, index qualification.CatalogIndex) []byte 
 		t.Fatal(err)
 	}
 	return data
+}
+
+func catalogWithModelRuntime(t *testing.T, runtimeData []byte) (qualification.CatalogIndex, map[string][]byte) {
+	t.Helper()
+	index := parseCatalogFixture(t)
+	artifactData := readModelArtifactFixture(t)
+	engineData := readEngineFixture(t)
+	profiles := []qualification.IndexedDocument{
+		{
+			Document: qualification.Reference{Schema: qualification.EngineSchemaV1, ID: "example-local-engine", Revision: 1, SHA256: qualification.Digest(engineData)},
+			Path:     "profiles/engine/example-local-engine/1.yaml",
+		},
+		{
+			Document: qualification.Reference{Schema: qualification.ModelArtifactSchemaV1, ID: "example-coder-artifact", Revision: 1, SHA256: qualification.Digest(artifactData)},
+			Path:     "profiles/model-artifact/example-coder-artifact/1.yaml",
+		},
+		{
+			Document: qualification.Reference{Schema: qualification.ModelRuntimeSchemaV1, ID: "example-coder-runtime", Revision: 1, SHA256: qualification.Digest(runtimeData)},
+			Path:     "profiles/model-runtime/example-coder-runtime/1.yaml",
+		},
+	}
+	index.Profiles = profiles
+	files := map[string][]byte{
+		exampleBucketPath: readMachineBucketFixture(t),
+		profiles[0].Path:  engineData,
+		profiles[1].Path:  artifactData,
+		profiles[2].Path:  runtimeData,
+	}
+	return index, files
 }

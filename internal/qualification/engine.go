@@ -42,9 +42,10 @@ type SoftwareCatalogReference struct {
 }
 
 type EngineAPI struct {
-	Protocol  string                `yaml:"protocol"`
-	Streaming bool                  `yaml:"streaming"`
-	ToolCalls EngineToolCallSurface `yaml:"tool_calls"`
+	LayoutContract string                `yaml:"layout_contract"`
+	Protocol       string                `yaml:"protocol"`
+	Streaming      bool                  `yaml:"streaming"`
+	ToolCalls      EngineToolCallSurface `yaml:"tool_calls"`
 }
 
 type EngineToolCallSurface struct {
@@ -126,6 +127,9 @@ func validateEngineSpec(spec EngineSpec, problem func(string, ...any)) {
 		problem("spec.software.closure_digest must be 64 lowercase hexadecimal characters")
 	}
 
+	if spec.API.LayoutContract != RuntimeLayoutContractV1 {
+		problem("spec.api.layout_contract is %q, want %q", spec.API.LayoutContract, RuntimeLayoutContractV1)
+	}
 	if !exactRevisionIDPattern.MatchString(spec.API.Protocol) {
 		problem("spec.api.protocol %q is not an exact protocol revision", spec.API.Protocol)
 	}
@@ -166,7 +170,7 @@ func validateEngineCapabilities(spec EngineSpec, problem func(string, ...any)) {
 	for index, capability := range spec.Capabilities {
 		location := fmt.Sprintf("spec.capabilities[%d]", index)
 		switch capability {
-		case "chat-completions", "embeddings", "rerank", "streaming", "tool-calls":
+		case "chat-completions", "drafter-speculation", "embeddings", "mtp-speculation", "rerank", "streaming", "tool-calls":
 		default:
 			problem("%s %q is not supported", location, capability)
 		}

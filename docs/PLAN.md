@@ -590,13 +590,15 @@ base.
     changed material returns through `LAB`, while deliberately parallel
     supported combinations use separate profile IDs.
     Temper refinement currently implements the exact-reference and index
-    surface plus strict machine-bucket, model-artifact, and engine documents.
-    The pure loader verifies canonical bytes, derived paths, hashes,
-    identities, and exact bucket applicability from a supplied in-memory
-    bundle. The common profile envelope, artifact
-    byte/quantization/component/license identity, and exact C4-tested engine
-    plus serving/process contract are typed. Evidence-bearing or `QUALIFIED`
-    profiles, the other four profile kinds, and recommendation content remain
+    surface plus strict machine-bucket, model-artifact, engine, and
+    model-runtime documents. The pure loader verifies canonical bytes, derived
+    paths, hashes, identities, exact bucket applicability, dependency
+    presence, and runtime role/template/speculation compatibility from a
+    supplied in-memory bundle. The common profile envelope, artifact
+    byte/quantization/component/license identity, exact C4-tested engine plus
+    serving/process contract, output-affecting runtime layout, and explicit
+    structured performance axes are typed. Evidence-bearing or `QUALIFIED`
+    profiles, the other three profile kinds, and recommendation content remain
     explicit refusals. The fixtures remain fake and do not seed a
     qualification row.
 13. *(design, with Labs — Temper side provisionally approved by owner
@@ -942,13 +944,14 @@ or CI dependency.
    hashes, validates, and matches immutable machine-bucket documents against
    canonical Temper machine facts using a fake hermetic fixture. Its exact
    catalog index now canonically validates references and release paths, then
-   verifies bucket, model-artifact, and engine bytes, hashes, identities, and
-   exact bucket applicability through a pure bundle loader. The reusable
-   profile envelope and both dependency-root profiles are typed;
-   evidence-bearing and `QUALIFIED` profiles plus unimplemented profile kinds
-   and recommendations fail closed. Continue C7 with artifact+engine runtime
-   composition and its structured performance surface, then the witness-scope
-   validator.
+   verifies bucket, model-artifact, engine, and model-runtime bytes, hashes,
+   identities, dependencies, compatibility, and exact bucket applicability
+   through a pure bundle loader. The reusable profile envelope, both
+   dependency-root profiles, output-affecting runtime layout, and explicit
+   performance axes are typed; evidence-bearing and `QUALIFIED` profiles plus
+   unimplemented profile kinds and recommendations fail closed. Continue C7
+   with the witness-scope and immutable status-history validators, then the
+   tool/mode/activity dependency chain.
    Co-design/adopt the C8 writer side in Labs only under explicit
    cross-repository authorization; its pure packet compiler follows that gate.
    Then add the plural recommendation/performance projection and reviewed seed

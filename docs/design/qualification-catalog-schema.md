@@ -8,16 +8,18 @@ claim that a current configuration is qualified, or authorize the wizard to
 select anything.
 
 Current Temper implementation boundary: `internal/qualification` strictly
-parses canonical machine-bucket, model-artifact, engine, and catalog-index
-documents. The shared profile envelope plus the two dependency-root profile
-bodies are typed; the loader verifies their derived release paths, canonical
-bytes, digests, identities, and exact bucket applicability from a supplied
-in-memory bundle. The index representation already types every other profile
-reference and recommendation set so neither can become an untyped escape
-hatch. Evidence-bearing or `QUALIFIED` profiles, the other four profile
-document kinds, and nonempty recommendation sets remain explicit refusals
-until their validators and cross-document rules exist. All current catalog
-fixtures are fake and hermetic.
+parses canonical machine-bucket, model-artifact, engine, model-runtime, and
+catalog-index documents. The shared profile envelope, two dependency-root
+profile bodies, and their composed runtime are typed; the loader verifies
+their derived release paths, canonical bytes, digests, identities, exact
+bucket applicability, dependency presence, and compatible role, template, and
+speculation surfaces from a supplied in-memory bundle. The index
+representation already types every other profile reference and recommendation
+set so neither can become an untyped escape hatch. Evidence-bearing or
+`QUALIFIED` profiles, the other three profile document kinds, and nonempty
+recommendation sets remain explicit refusals until their validators and
+cross-document rules exist. All current catalog fixtures are fake and
+hermetic.
 
 ## Decision
 
@@ -410,6 +412,7 @@ spec:
     root_version: <exact tested version>
     closure_digest: <exact tested closure digest>
   api:
+    layout_contract: temper-runtime-layout/v1
     protocol: <exact protocol revision>
     streaming: <boolean>
     tool_calls:
@@ -436,13 +439,13 @@ serving evidence. The catalog schema, positive sequence, and catalog-byte
 digest identify the exact C4 snapshot. Package, method, target adapter,
 unversioned `darwin/arm64` target, root version, and closure digest then select
 one exact tested row from that snapshot. Engine capabilities are a closed,
-sorted subset of `chat-completions`, `embeddings`, `rerank`, `streaming`, and
-`tool-calls`; the streaming and tool-call declarations must agree with that
-set. Supported tool calls bind exact request, response, and parser revisions.
-The readiness and shutdown conditions are executable contracts, not prose,
-and v1 engines must remain offline after installation. An engine has no C7
-profile dependency: it never copies a C5 lock or claims that a local C6 receipt
-exists.
+sorted subset of `chat-completions`, `drafter-speculation`, `embeddings`,
+`mtp-speculation`, `rerank`, `streaming`, and `tool-calls`; the streaming and
+tool-call declarations must agree with that set. Supported tool calls bind
+exact request, response, and parser revisions. The readiness and shutdown
+conditions are executable contracts, not prose, and v1 engines must remain
+offline after installation. An engine has no C7 profile dependency: it never
+copies a C5 lock or claims that a local C6 receipt exists.
 
 ### Model runtime and performance profile
 
@@ -456,15 +459,30 @@ spec:
   artifact_profile: <exact model-artifact reference>
   engine_profile: <exact engine reference>
   layout:
-    role: <stable role id>
-    window: <raw model window>
-    max_tokens: <generation cap>
-    kv: <exact KV policy>
-    thinking: <exact policy>
-    chat_template: <artifact-owned template reference>
-    batching: <typed engine settings that affect output/service behavior>
-    speculation: <exact drafter/MTP settings or disabled>
-    sampling: <exact qualification sampling policy>
+    role: coder | rerank
+    window: <positive raw model window>
+    max_tokens: <positive generation cap below window; coder only>
+    kv: q8 | f16                         # coder only
+    thinking: on | off                   # coder only
+    chat_template: artifact | not-applicable
+    batching:
+      parallel: <positive integer>
+      flash_attention: auto | off | on
+      batch: <positive integer>
+      ubatch: <positive integer no larger than batch>
+    speculation:
+      state: disabled | drafter | mtp
+      method_revision: <exact revision when enabled>
+      sidecar: <artifact sidecar path for drafter only>
+      draft_tokens: <positive integer when enabled>
+    sampling:
+      state: configured | not-applicable
+      temperature: <canonical nonnegative decimal string when configured>
+      top_p: <canonical decimal string greater than zero and at most one>
+      top_k: <explicit nonnegative integer>
+      min_p: <canonical decimal string from zero through one>
+      seed: <explicit integer, including zero>
+      unspecified_parameters: engine-defaults
   performance:
     task_success: <performance axis>
     regressions: <performance axis>
@@ -491,10 +509,29 @@ reason: <why the axis cannot apply>
 state: measured
 observations:
   - metric: <closed metric id>
-    value: <typed integer, decimal string, duration, or success fraction>
+    value:
+      kind: <integer | decimal | duration-millis | success-fraction>
+      <matching value arm>: <typed value>
     definition: <precise denominator/unit/window>
     witness: <document-local evidence id>
 ```
+
+The model-runtime envelope contains exactly two sorted dependencies named
+`artifact` and `engine`; they exactly repeat the body references. The loader
+resolves both by full material identity. A coder runtime requires the artifact
+and engine to claim the coder role, an artifact-owned template file, and the
+engine's `chat-completions` capability. A reranker requires the rerank role and
+engine capability. Drafter speculation additionally names an exact artifact
+sidecar and requires `drafter-speculation`; MTP requires `mtp-speculation`.
+None of these checks selects or installs the referenced material.
+
+The v1 runtime layout is deliberately the strict C2 coder/rerank surface, but
+it owns its own immutable types. Its `temper-runtime-layout/v1` contract must
+match the engine declaration, so engine package names never stand in for
+tuning compatibility. A later projection translates a user-chosen qualified
+row into C2; C7 does not import manifest structs or write the user's manifest.
+Placement, residency, preload, TTL, `ngl`, and `preferred` remain mode or
+user-selection facts and cannot appear here.
 
 `task_success` records attempts and first-attempt successes before any token or
 throughput metric. `regressions` records the retained known-good/known-bad task
@@ -505,6 +542,32 @@ threshold under one catalog-wide definition. `memory` distinguishes resident,
 full-slot, and peak values. `cache_and_replay` names exact history and cache
 conditions. Every number obtains wall, swap, tune, thermal, power, and load
 conditions through its witness.
+
+Metric IDs and value kinds are closed per axis. Observations sort by metric and
+witness, carry a one-line definition, and cite a document-local evidence ID.
+Decimal values are strings to keep exact canonical bytes rather than inherit a
+floating-point encoder's representation. Explicit zero is valid where the
+metric or sampling policy permits it; absence is not another spelling of zero.
+The sampling fields are the v1 request overrides. Every other sampling knob is
+explicitly inherited from the exact engine version's defaults; it is never an
+implicit client choice.
+
+The closed v1 metric vocabulary is:
+
+| Axis | Metrics and required value kinds |
+|---|---|
+| `task_success` | `first-attempt-task-success`, `overall-task-success`: success fraction |
+| `regressions` | `known-bad-tasks`, `new-regressions`, `retained-good-tasks`: integer |
+| `task_time_and_tool_use` | `completed-task-wall-time`: duration milliseconds; `recovery-count`, `successful-tool-calls`, `unnecessary-tool-calls`: integer |
+| `throughput` | `decode-tokens-per-second`, `prefill-tokens-per-second`: decimal |
+| `context` | `qualified-task-context-tokens`, `raw-window-tokens`: integer |
+| `memory` | `full-slot-mib`, `peak-mib`, `resident-mib`: integer |
+| `cache_and_replay` | `cache-hit-fraction`: success fraction; `history-tokens`, `replayed-prompt-tokens`: integer |
+
+An integer or duration arm is a nonnegative integer. A decimal arm is a
+canonical nonnegative decimal string. A success-fraction arm contains
+`successes` and positive `attempts`, with successes no greater than attempts.
+Exactly one arm must match the declared kind.
 
 A `QUALIFIED` runtime requires measured first-attempt task success and a
 complete regression disposition for its claimed role. Other axes may remain

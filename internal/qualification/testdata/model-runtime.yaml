@@ -1,0 +1,105 @@
+applicability:
+  explanation: Fake coder runtime available for local composed investigation
+  foregrounds:
+    - local
+  harnesses: []
+  machine_buckets: []
+data_boundary:
+  credentials: none
+  evidence_export: explicit-user-action
+  inference: local
+  network: []
+  reads:
+    - local-request
+  telemetry: none
+  writes:
+    - local-response
+dependencies:
+  - profile:
+      id: example-coder-artifact
+      revision: 1
+      schema: temper-qualification-model-artifact/v1
+      sha256: 4b9163c761905b2b6adbdcee890a97735f40f15ac3f81b9d1fe068aa68bf27b5
+    relationship: artifact
+  - profile:
+      id: example-local-engine
+      revision: 1
+      schema: temper-qualification-engine/v1
+      sha256: 8b85e82911816ad8c55f3fe0b34462759b980a74f4492c90ec33935409c8ec06
+    relationship: engine
+evidence: []
+id: example-coder-runtime
+invalidation_triggers:
+  - condition: Any artifact, engine, output-affecting layout, or performance fact changes
+    consequence: return-to-lab
+    id: runtime-identity-changes
+known_failures: []
+promotion:
+  id: example-runtime-promotion
+  revision: 1
+  schema: temper-labs-product-promotion/v1
+  sha256: dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+revision: 1
+roles:
+  - coder
+schema: temper-qualification-model-runtime/v1
+spec:
+  artifact_profile:
+    id: example-coder-artifact
+    revision: 1
+    schema: temper-qualification-model-artifact/v1
+    sha256: 4b9163c761905b2b6adbdcee890a97735f40f15ac3f81b9d1fe068aa68bf27b5
+  engine_profile:
+    id: example-local-engine
+    revision: 1
+    schema: temper-qualification-engine/v1
+    sha256: 8b85e82911816ad8c55f3fe0b34462759b980a74f4492c90ec33935409c8ec06
+  layout:
+    batching:
+      batch: 512
+      flash_attention: "on"
+      parallel: 1
+      ubatch: 512
+    chat_template: artifact
+    kv: q8
+    max_tokens: 1024
+    role: coder
+    sampling:
+      min_p: "0"
+      seed: 42
+      state: configured
+      temperature: "0"
+      top_k: 40
+      top_p: "1"
+      unspecified_parameters: engine-defaults
+    speculation:
+      state: disabled
+    thinking: "off"
+    window: 8192
+  performance:
+    cache_and_replay:
+      reason: Fake fixture has no cache or replay witness
+      state: unmeasured
+    context:
+      reason: Fake fixture has no qualified-context witness
+      state: unmeasured
+    memory:
+      reason: Fake fixture has no memory witness
+      state: unmeasured
+    regressions:
+      reason: Fake fixture has no regression witness
+      state: unmeasured
+    task_success:
+      reason: Fake fixture has no task-success witness
+      state: unmeasured
+    task_time_and_tool_use:
+      reason: Fake fixture has no time or tool-use witness
+      state: unmeasured
+    throughput:
+      reason: Fake fixture has no throughput witness
+      state: unmeasured
+status: LAB
+status_reason: Fake composition is exact while qualification evidence remains absent
+summary: Fake artifact and engine composition for exercising the C7 runtime boundary
+title: Example coder runtime
+what_this_means: This fake runtime is inspectable but not qualified or recommended

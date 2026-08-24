@@ -19,7 +19,7 @@ func TestParseEngineProfileRoundTripsCanonicalFixture(t *testing.T) {
 	if profile.Schema != qualification.EngineSchemaV1 || profile.ID != "example-local-engine" || profile.Revision != 1 || profile.Status != qualification.ProfileStatusLab {
 		t.Fatalf("profile identity = %#v", profile.ProfileEnvelope)
 	}
-	if profile.Spec.Software.RootVersion != "b1234" || profile.Spec.API.Protocol != "openai-chat-completions/v1" || profile.Spec.ServiceContract.Shutdown.Signal != "SIGTERM" {
+	if profile.Spec.Software.RootVersion != "b1234" || profile.Spec.API.LayoutContract != qualification.RuntimeLayoutContractV1 || profile.Spec.API.Protocol != "openai-chat-completions/v1" || profile.Spec.ServiceContract.Shutdown.Signal != "SIGTERM" {
 		t.Fatalf("engine spec = %#v", profile.Spec)
 	}
 
@@ -75,6 +75,7 @@ func TestEngineProfileValidationRefusesOpenServingContract(t *testing.T) {
 		want   string
 	}{
 		{name: "moving protocol", mutate: func(profile *qualification.EngineProfile) { profile.Spec.API.Protocol = "OpenAI latest" }, want: "exact protocol revision"},
+		{name: "unknown layout contract", mutate: func(profile *qualification.EngineProfile) { profile.Spec.API.LayoutContract = "engine-defaults/v1" }, want: "api.layout_contract"},
 		{name: "supported tool calls without request schema", mutate: func(profile *qualification.EngineProfile) { profile.Spec.API.ToolCalls.RequestSchema = "" }, want: "request_schema"},
 		{name: "supported tool calls without response schema", mutate: func(profile *qualification.EngineProfile) { profile.Spec.API.ToolCalls.ResponseSchema = "" }, want: "response_schema"},
 		{name: "supported tool calls without parser revision", mutate: func(profile *qualification.EngineProfile) { profile.Spec.API.ToolCalls.ParserRevision = "" }, want: "parser_revision"},

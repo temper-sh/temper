@@ -89,6 +89,7 @@ type Catalog struct {
 	MachineBuckets []MachineBucket
 	ModelArtifacts []ModelArtifactProfile
 	Engines        []EngineProfile
+	ModelRuntimes  []ModelRuntimeProfile
 }
 
 // ParseCatalogIndex accepts only the canonical YAML bytes produced by
@@ -177,8 +178,16 @@ func LoadCatalog(indexData []byte, files map[string][]byte) (Catalog, error) {
 
 	modelArtifacts := make([]ModelArtifactProfile, 0, len(index.Profiles))
 	engines := make([]EngineProfile, 0, len(index.Profiles))
+	modelRuntimes := make([]ModelRuntimeProfile, 0, len(index.Profiles))
+	modelArtifactsByReference := map[string]ModelArtifactProfile{}
+	enginesByReference := map[string]EngineProfile{}
+	type indexedRuntime struct {
+		indexed IndexedDocument
+		profile ModelRuntimeProfile
+	}
+	indexedRuntimes := make([]indexedRuntime, 0, len(index.Profiles))
 	for _, indexed := range index.Profiles {
-		if indexed.Document.Schema != ModelArtifactSchemaV1 && indexed.Document.Schema != EngineSchemaV1 {
+		if indexed.Document.Schema != ModelArtifactSchemaV1 && indexed.Document.Schema != EngineSchemaV1 && indexed.Document.Schema != ModelRuntimeSchemaV1 {
 			return Catalog{}, fmt.Errorf("load qualification catalog: profile schema %q is not implemented", indexed.Document.Schema)
 		}
 		data, ok := files[indexed.Path]
@@ -199,6 +208,7 @@ func LoadCatalog(indexData []byte, files map[string][]byte) (Catalog, error) {
 				return Catalog{}, err
 			}
 			modelArtifacts = append(modelArtifacts, profile)
+			modelArtifactsByReference[referenceExactIdentity(indexed.Document)] = profile
 		case EngineSchemaV1:
 			profile, err := ParseEngineProfile(data)
 			if err != nil {
@@ -208,10 +218,37 @@ func LoadCatalog(indexData []byte, files map[string][]byte) (Catalog, error) {
 				return Catalog{}, err
 			}
 			engines = append(engines, profile)
+			enginesByReference[referenceExactIdentity(indexed.Document)] = profile
+		case ModelRuntimeSchemaV1:
+			profile, err := ParseModelRuntimeProfile(data)
+			if err != nil {
+				return Catalog{}, fmt.Errorf("load qualification catalog: indexed document %q: %w", indexed.Path, err)
+			}
+			if err := verifyIndexedProfile(indexed, profile.ProfileEnvelope, bucketReferences); err != nil {
+				return Catalog{}, err
+			}
+			modelRuntimes = append(modelRuntimes, profile)
+			indexedRuntimes = append(indexedRuntimes, indexedRuntime{indexed: indexed, profile: profile})
 		}
 	}
 
-	return Catalog{Index: index, MachineBuckets: buckets, ModelArtifacts: modelArtifacts, Engines: engines}, nil
+	for _, runtime := range indexedRuntimes {
+		artifact, ok := modelArtifactsByReference[referenceExactIdentity(runtime.profile.Spec.ArtifactProfile)]
+		if !ok {
+			return Catalog{}, fmt.Errorf("load qualification catalog: indexed document %q references model artifact %s/%s@%d absent from the index", runtime.indexed.Path, runtime.profile.Spec.ArtifactProfile.Schema, runtime.profile.Spec.ArtifactProfile.ID, runtime.profile.Spec.ArtifactProfile.Revision)
+		}
+		engine, ok := enginesByReference[referenceExactIdentity(runtime.profile.Spec.EngineProfile)]
+		if !ok {
+			return Catalog{}, fmt.Errorf("load qualification catalog: indexed document %q references engine %s/%s@%d absent from the index", runtime.indexed.Path, runtime.profile.Spec.EngineProfile.Schema, runtime.profile.Spec.EngineProfile.ID, runtime.profile.Spec.EngineProfile.Revision)
+		}
+		if err := verifyRuntimeComposition(runtime.indexed.Path, runtime.profile, artifact, engine); err != nil {
+			return Catalog{}, err
+		}
+	}
+
+	return Catalog{
+		Index: index, MachineBuckets: buckets, ModelArtifacts: modelArtifacts, Engines: engines, ModelRuntimes: modelRuntimes,
+	}, nil
 }
 
 func verifyIndexedProfile(indexed IndexedDocument, envelope ProfileEnvelope, bucketReferences map[string]bool) error {
@@ -221,6 +258,42 @@ func verifyIndexedProfile(indexed IndexedDocument, envelope ProfileEnvelope, buc
 	for _, bucket := range envelope.Applicability.MachineBuckets {
 		if !bucketReferences[referenceExactIdentity(bucket)] {
 			return fmt.Errorf("load qualification catalog: indexed document %q references machine bucket %s/%s@%d absent from the index", indexed.Path, bucket.Schema, bucket.ID, bucket.Revision)
+		}
+	}
+	return nil
+}
+
+func verifyRuntimeComposition(path string, runtime ModelRuntimeProfile, artifact ModelArtifactProfile, engine EngineProfile) error {
+	role := runtime.Spec.Layout.Role
+	if !contains(artifact.Roles, role) {
+		return fmt.Errorf("load qualification catalog: indexed document %q role %q is absent from model artifact %s@%d", path, role, artifact.ID, artifact.Revision)
+	}
+	if !contains(engine.Roles, role) {
+		return fmt.Errorf("load qualification catalog: indexed document %q role %q is absent from engine %s@%d", path, role, engine.ID, engine.Revision)
+	}
+
+	wantCapability := "chat-completions"
+	if role == "rerank" {
+		wantCapability = "rerank"
+	}
+	if !contains(engine.Spec.Capabilities, wantCapability) {
+		return fmt.Errorf("load qualification catalog: indexed document %q role %q requires engine capability %q", path, role, wantCapability)
+	}
+	if role == "coder" && artifact.Spec.Template.State != "file" {
+		return fmt.Errorf("load qualification catalog: indexed document %q coder layout requires an artifact-owned template file", path)
+	}
+
+	switch runtime.Spec.Layout.Speculation.State {
+	case "drafter":
+		if !contains(artifact.Spec.Sidecars, runtime.Spec.Layout.Speculation.Sidecar) {
+			return fmt.Errorf("load qualification catalog: indexed document %q drafter sidecar %q is absent from the model artifact", path, runtime.Spec.Layout.Speculation.Sidecar)
+		}
+		if !contains(engine.Spec.Capabilities, "drafter-speculation") {
+			return fmt.Errorf("load qualification catalog: indexed document %q drafter layout requires engine capability %q", path, "drafter-speculation")
+		}
+	case "mtp":
+		if !contains(engine.Spec.Capabilities, "mtp-speculation") {
+			return fmt.Errorf("load qualification catalog: indexed document %q mtp layout requires engine capability %q", path, "mtp-speculation")
 		}
 	}
 	return nil
