@@ -69,10 +69,11 @@ analytics, prompts, and incidental GitHub API access off. A read-only catalog
 selector verifies either the active snapshot or an injected embedded fallback,
 and resolution derives exact-tested, policy-eligible-untested, known-bad, or
 outside-policy status without writing that status anywhere. A bounded HTTPS
-catalog source now implements the signed publication transport convention.
-Actual release trust/bootstrap bytes, its channel root and public command
-wiring, the uv resolver implementation, and remaining production adapters
-remain next. The selected `release-artifact`
+catalog source now implements the signed publication transport convention. The
+production Ed25519 public trust root, signed sequence-1 bootstrap, GitHub Pages
+channel root, and bounded `temper software catalog update` command are compiled
+and hermetically verified; no private signing material enters the tree. The uv
+resolver implementation remains next in Phase A. The selected `release-artifact`
 method now has a
 deterministic `upstream-release` resolver, a bounded HTTPS download edge, and an
 isolated install/inspect/remove implementation. Hermetic tests prove exact
@@ -157,6 +158,12 @@ An already-resolved release-artifact software lock uses the separate installed
 base surface:
 
 ```sh
+# Explicitly read, authenticate, and preview the stable software catalog.
+# Remove --dry-run to atomically activate a changed snapshot under this root.
+go run ./cmd/temper software catalog update \
+  --root /path/to/isolated/temper-root \
+  --dry-run
+
 # Preview the complete provider/receipt plan without creating the root.
 go run ./cmd/temper software install \
   --lock /path/to/software.lock.yaml \
@@ -210,6 +217,7 @@ never downloads weights, runs those commands, or touches the service. Bare
   [update](docs/contracts/update.md), and [check](docs/contracts/check.md).
 - Approved M2 installed-base contract: [software install, prepared recovery,
   and installation receipt](docs/contracts/software-install.md).
+- Approved M2 catalog command: [software catalog update](docs/contracts/software-catalog-update.md).
 - Approved M2 surface: [software supply, independent catalog lifecycle, lock,
   and adapter-family design](docs/design/software-supply-schema.md).
 - [Current-posture render acceptance](docs/acceptance/current-posture-render.md)

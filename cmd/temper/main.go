@@ -25,6 +25,9 @@ import (
 	resolveverb "github.com/temper-sh/temper/internal/resolve"
 	"github.com/temper-sh/temper/internal/software/adapter"
 	"github.com/temper-sh/temper/internal/software/adapter/upstreamrelease"
+	"github.com/temper-sh/temper/internal/software/catalogsource"
+	"github.com/temper-sh/temper/internal/software/catalogtrust"
+	"github.com/temper-sh/temper/internal/software/catalogupdate"
 	"github.com/temper-sh/temper/internal/softwarecmd"
 	updateverb "github.com/temper-sh/temper/internal/update"
 	"github.com/temper-sh/temper/internal/upstream"
@@ -338,7 +341,22 @@ func newSoftwareCommand() (softwarecmd.Command, error) {
 	if err != nil {
 		return softwarecmd.Command{}, err
 	}
-	return softwarecmd.New(family, machine.DetectTarget, newSoftwareInvocationID)
+	trust, err := catalogtrust.Production()
+	if err != nil {
+		return softwarecmd.Command{}, err
+	}
+	source, err := catalogsource.NewProductionHTTPS(&http.Client{})
+	if err != nil {
+		return softwarecmd.Command{}, err
+	}
+	capabilities, err := adapter.NewRegistry(upstreamrelease.Descriptor())
+	if err != nil {
+		return softwarecmd.Command{}, err
+	}
+	updateCatalog := func(ctx context.Context, options catalogupdate.Options) (catalogupdate.Result, error) {
+		return catalogupdate.Run(ctx, options, trust, source, capabilities)
+	}
+	return softwarecmd.New(family, machine.DetectTarget, newSoftwareInvocationID, updateCatalog)
 }
 
 func newSoftwareInvocationID() (string, error) {

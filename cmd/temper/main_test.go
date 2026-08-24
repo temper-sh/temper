@@ -13,6 +13,7 @@ import (
 	"github.com/temper-sh/temper/internal/budget"
 	"github.com/temper-sh/temper/internal/software"
 	"github.com/temper-sh/temper/internal/software/adapter"
+	"github.com/temper-sh/temper/internal/software/catalogupdate"
 	"github.com/temper-sh/temper/internal/softwarecmd"
 	"github.com/temper-sh/temper/internal/testfixture"
 	"github.com/temper-sh/temper/internal/upstream"
@@ -27,6 +28,8 @@ func TestRunDispatchesTheSoftwareCommand(t *testing.T) {
 		return software.Target{}, errors.New("software help must not detect the host")
 	}, func() (string, error) {
 		return "software-help", nil
+	}, func(context.Context, catalogupdate.Options) (catalogupdate.Result, error) {
+		return catalogupdate.Result{}, errors.New("software help must not update the catalog")
 	})
 	if err != nil {
 		t.Fatal(err)

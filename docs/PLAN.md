@@ -328,8 +328,11 @@ configuration catalog follows without blocking that installed base.
 > the bootstrap contains only the reviewed llama-swap v251 and llama.cpp b10566
 > release recipes and correctly carries no tested-version evidence. A pinned
 > signature vector covers the trust root, and no private signing material enters
-> the tree. The channel root, public command wiring, and uv resolver remain
-> pending in Phase A. The selected release-artifact source, deterministic
+> the tree. The reviewed GitHub Pages channel root and the bounded public
+> `temper software catalog update` command are now wired through the production
+> trust/source/capability composition, with a 30-second deadline and hermetic
+> command coverage. The uv resolver remains pending in Phase A. The selected
+> release-artifact source, deterministic
 > resolver, production HTTPS reader, and isolated install/inspect/remove member
 > are now executable with hermetic archive/effect coverage. Exact macOS
 > host-target detection and the frozen public install/check/remove commands are
@@ -790,9 +793,11 @@ or CI dependency.
    catalog-store transactions are hermetically executable. Homebrew candidate
    translation, its controlled production process runner, authenticated
    active-or-bootstrap catalog reading, four-way tested-status reporting, and
-   the bounded HTTPS publication source are complete behind explicit inputs.
-   Next supply the reviewed release trust key/bootstrap bytes, channel root,
-   and public catalog-command wiring. The 2026-08-24
+   the bounded HTTPS publication source are complete. The production public
+   trust root, signed two-package bootstrap, reviewed GitHub Pages channel root,
+   and bounded public catalog-update command are wired and hermetically covered.
+   Next implement the uv reader/resolver for the explicitly non-default Python
+   packages. The 2026-08-24
    method review rejects both Homebrew application variants at the
    exact-install gate. The isolated `llama-swap` v251 and `llama.cpp` b10566
    artifacts passed the bounded model-backed runtime/router screen, selecting

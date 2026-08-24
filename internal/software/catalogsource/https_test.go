@@ -59,6 +59,30 @@ func TestHTTPSReadsExactChannelAndCatalogArtifacts(t *testing.T) {
 	}
 }
 
+func TestProductionHTTPSUsesTheReviewedChannelRoot(t *testing.T) {
+	t.Parallel()
+
+	var requests []string
+	client := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		requests = append(requests, request.URL.String())
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader("publication\n")), Header: make(http.Header)}, nil
+	})}
+	source, err := catalogsource.NewProductionHTTPS(client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := source.Channel(context.Background(), "stable"); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"https://temper-sh.github.io/temper/catalog/channels/stable/channel.yaml",
+		"https://temper-sh.github.io/temper/catalog/channels/stable/channel.signature.yaml",
+	}
+	if strings.Join(requests, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("requests = %q, want %q", requests, want)
+	}
+}
+
 func TestHTTPSRefusesInvalidRootsChannelsAndCatalogLocatorsBeforeReads(t *testing.T) {
 	t.Parallel()
 

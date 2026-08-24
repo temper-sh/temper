@@ -17,10 +17,20 @@ import (
 )
 
 const (
+	// ProductionChannelRoot is the reviewed public namespace for signed channel
+	// publications. Changing it is a Temper release decision.
+	ProductionChannelRoot = "https://temper-sh.github.io/temper/catalog/channels/"
+
 	MaxChannelBytes   = 64 * 1024
 	MaxCatalogBytes   = 8 * 1024 * 1024
 	MaxSignatureBytes = 4 * 1024
 )
+
+// NewProductionHTTPS binds the reviewed public channel namespace. Callers may
+// inject the HTTP client but cannot change the production source root.
+func NewProductionHTTPS(client *http.Client) (*HTTPS, error) {
+	return NewHTTPS(client, ProductionChannelRoot)
+}
 
 // HTTPS reads one configured channel namespace and immutable catalog
 // publication directories. It owns no retry, cache, credentials, trust, or

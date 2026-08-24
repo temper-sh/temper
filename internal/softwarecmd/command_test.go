@@ -13,10 +13,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/temper-sh/temper/internal/software"
 	"github.com/temper-sh/temper/internal/software/adapter"
 	"github.com/temper-sh/temper/internal/software/adapter/upstreamrelease"
+	"github.com/temper-sh/temper/internal/software/catalogupdate"
 	softwarelock "github.com/temper-sh/temper/internal/software/lockfile"
 	"github.com/temper-sh/temper/internal/softwarecmd"
 )
@@ -187,7 +189,7 @@ func TestCommandRefusesUsageBeforeReadingTheHost(t *testing.T) {
 	command, err := softwarecmd.New(family, func(context.Context) (software.Target, error) {
 		detectCalls++
 		return software.Target{}, errors.New("unexpected detection")
-	}, func() (string, error) { return "test-run", nil })
+	}, func() (string, error) { return "test-run", nil }, unexpectedCatalogUpdate)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,6 +201,78 @@ func TestCommandRefusesUsageBeforeReadingTheHost(t *testing.T) {
 	}
 	if detectCalls != 0 {
 		t.Fatalf("invalid usage read the host %d times", detectCalls)
+	}
+}
+
+func TestCommandRunsTheBoundedCatalogUpdateSurface(t *testing.T) {
+	family, err := adapter.NewInstallationFamily()
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(t.TempDir(), "temper-root")
+	var gotOptions catalogupdate.Options
+	command, err := softwarecmd.New(
+		family,
+		func(context.Context) (software.Target, error) {
+			return software.Target{}, errors.New("catalog update must not detect the host")
+		},
+		func() (string, error) { return "unused", errors.New("catalog update must not create an invocation id") },
+		func(ctx context.Context, options catalogupdate.Options) (catalogupdate.Result, error) {
+			deadline, ok := ctx.Deadline()
+			if !ok || time.Until(deadline) <= 0 || time.Until(deadline) > 31*time.Second {
+				t.Fatalf("catalog update deadline = %v, present %v", deadline, ok)
+			}
+			gotOptions = options
+			return catalogupdate.Result{
+				Changed: true, DryRun: options.DryRun, Channel: options.Channel, Sequence: 7,
+				SHA256: strings.Repeat("a", 64), ChannelKeyID: "temper-catalog-2026-01", CatalogKeyID: "temper-catalog-2026-01",
+			}, nil
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	exit := command.Run(context.Background(), []string{
+		"catalog", "update", "--root", root, "--dry-run",
+	}, &stdout, &stderr)
+	if exit != 0 || stderr.Len() != 0 {
+		t.Fatalf("exit = %d, stderr = %q", exit, stderr.String())
+	}
+	if gotOptions != (catalogupdate.Options{Root: root, Channel: "stable", DryRun: true}) {
+		t.Fatalf("catalog options = %#v", gotOptions)
+	}
+	want := "RESULT software-catalog-update would-change channel=stable sequence=7 sha256=" + strings.Repeat("a", 64) + " channel-key=temper-catalog-2026-01 catalog-key=temper-catalog-2026-01\n"
+	if stdout.String() != want {
+		t.Fatalf("stdout = %q, want %q", stdout.String(), want)
+	}
+}
+
+func TestCommandRefusesCatalogUsageBeforeCallingTheUpdater(t *testing.T) {
+	family, err := adapter.NewInstallationFamily()
+	if err != nil {
+		t.Fatal(err)
+	}
+	updateCalls := 0
+	command, err := softwarecmd.New(
+		family,
+		func(context.Context) (software.Target, error) { return software.Target{}, errors.New("unused") },
+		func() (string, error) { return "unused", errors.New("unused") },
+		func(context.Context, catalogupdate.Options) (catalogupdate.Result, error) {
+			updateCalls++
+			return catalogupdate.Result{}, errors.New("unexpected catalog update")
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	exit := command.Run(context.Background(), []string{"catalog", "update", "--dry-run"}, &stdout, &stderr)
+	if exit != 2 || stdout.Len() != 0 || !strings.Contains(stderr.String(), "--root is required") {
+		t.Fatalf("exit = %d, stdout = %q, stderr = %q", exit, stdout.String(), stderr.String())
+	}
+	if updateCalls != 0 {
+		t.Fatalf("invalid usage called updater %d times", updateCalls)
 	}
 }
 
@@ -218,11 +292,15 @@ func releaseCommand(t *testing.T, reader *memoryReader, target software.Target) 
 	}, func() (string, error) {
 		invocation++
 		return fmtInvocation(invocation), nil
-	})
+	}, unexpectedCatalogUpdate)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return command
+}
+
+func unexpectedCatalogUpdate(context.Context, catalogupdate.Options) (catalogupdate.Result, error) {
+	return catalogupdate.Result{}, errors.New("unexpected catalog update")
 }
 
 func fmtInvocation(index int) string {

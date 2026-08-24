@@ -9,9 +9,11 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/temper-sh/temper/internal/software"
 	"github.com/temper-sh/temper/internal/software/adapter"
+	"github.com/temper-sh/temper/internal/software/catalogupdate"
 	checkverb "github.com/temper-sh/temper/internal/software/check"
 	installverb "github.com/temper-sh/temper/internal/software/install"
 	"github.com/temper-sh/temper/internal/software/installplan"
@@ -20,21 +22,28 @@ import (
 
 type TargetDetector func(context.Context) (software.Target, error)
 type InvocationIDSource func() (string, error)
+type CatalogUpdater func(context.Context, catalogupdate.Options) (catalogupdate.Result, error)
+
+const catalogUpdateTimeout = 30 * time.Second
 
 type Command struct {
 	adapters        adapter.InstallationFamily
 	detectTarget    TargetDetector
 	newInvocationID InvocationIDSource
+	updateCatalog   CatalogUpdater
 }
 
-func New(adapters adapter.InstallationFamily, detectTarget TargetDetector, newInvocationID InvocationIDSource) (Command, error) {
+func New(adapters adapter.InstallationFamily, detectTarget TargetDetector, newInvocationID InvocationIDSource, updateCatalog CatalogUpdater) (Command, error) {
 	if detectTarget == nil {
 		return Command{}, errors.New("software command target detector is required")
 	}
 	if newInvocationID == nil {
 		return Command{}, errors.New("software command invocation id source is required")
 	}
-	return Command{adapters: adapters, detectTarget: detectTarget, newInvocationID: newInvocationID}, nil
+	if updateCatalog == nil {
+		return Command{}, errors.New("software command catalog updater is required")
+	}
+	return Command{adapters: adapters, detectTarget: detectTarget, newInvocationID: newInvocationID, updateCatalog: updateCatalog}, nil
 }
 
 func (c Command) Run(ctx context.Context, arguments []string, stdout, stderr io.Writer) int {
@@ -52,11 +61,67 @@ func (c Command) Run(ctx context.Context, arguments []string, stdout, stderr io.
 		return c.runCheck(ctx, arguments[1:], stdout, stderr)
 	case "remove":
 		return c.runRemove(ctx, arguments[1:], stdout, stderr)
+	case "catalog":
+		return c.runCatalog(ctx, arguments[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "temper software: unknown verb %q\n\n", arguments[0])
 		usage(stderr)
 		return 2
 	}
+}
+
+func (c Command) runCatalog(ctx context.Context, arguments []string, stdout, stderr io.Writer) int {
+	if len(arguments) == 0 {
+		catalogUsage(stderr)
+		return 2
+	}
+	switch arguments[0] {
+	case "help", "--help", "-h":
+		catalogUsage(stdout)
+		return 0
+	case "update":
+		return c.runCatalogUpdate(ctx, arguments[1:], stdout, stderr)
+	default:
+		fmt.Fprintf(stderr, "temper software catalog: unknown verb %q\n\n", arguments[0])
+		catalogUsage(stderr)
+		return 2
+	}
+}
+
+func (c Command) runCatalogUpdate(ctx context.Context, arguments []string, stdout, stderr io.Writer) int {
+	flags := flag.NewFlagSet("temper software catalog update", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	root := flags.String("root", "", "Temper data root (required; never inferred from the live stack)")
+	channel := flags.String("channel", "stable", "signed software catalog channel")
+	dryRun := flags.Bool("dry-run", false, "read and verify without activating a snapshot")
+	flags.Usage = func() { catalogUpdateUsage(stderr) }
+	if err := flags.Parse(arguments); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
+	}
+	if flags.NArg() != 0 || *root == "" {
+		if flags.NArg() != 0 {
+			fmt.Fprintf(stderr, "temper software catalog update: unexpected arguments: %s\n\n", strings.Join(flags.Args(), " "))
+		} else {
+			fmt.Fprintln(stderr, "temper software catalog update: --root is required")
+		}
+		catalogUpdateUsage(stderr)
+		return 2
+	}
+
+	updateContext, cancel := context.WithTimeout(ctx, catalogUpdateTimeout)
+	defer cancel()
+	result, err := c.updateCatalog(updateContext, catalogupdate.Options{
+		Root: *root, Channel: *channel, DryRun: *dryRun,
+	})
+	if err != nil {
+		fmt.Fprintf(stderr, "temper software catalog update: %v\n", err)
+		return 1
+	}
+	renderCatalogUpdate(stdout, result)
+	return 0
 }
 
 func (c Command) runInstall(ctx context.Context, arguments []string, stdout, stderr io.Writer) int {
@@ -270,6 +335,12 @@ func renderRemove(writer io.Writer, result removeverb.Result) {
 	}
 }
 
+func renderCatalogUpdate(writer io.Writer, result catalogupdate.Result) {
+	status := changeStatus(result.Changed, result.DryRun)
+	fmt.Fprintf(writer, "RESULT software-catalog-update %s channel=%s sequence=%d sha256=%s channel-key=%s catalog-key=%s\n",
+		status, result.Channel, result.Sequence, result.SHA256, result.ChannelKeyID, result.CatalogKeyID)
+}
+
 func changeStatus(changed, dryRun bool) string {
 	if !changed {
 		return "unchanged"
@@ -304,6 +375,16 @@ func usage(writer io.Writer) {
 	fmt.Fprintln(writer, "  temper software install --root PATH --installation ID [options]")
 	fmt.Fprintln(writer, "  temper software check --root PATH --installation ID [options]")
 	fmt.Fprintln(writer, "  temper software remove --root PATH --installation ID [options]")
+	fmt.Fprintln(writer, "  temper software catalog update --root PATH [options]")
+}
+
+func catalogUsage(writer io.Writer) {
+	fmt.Fprintln(writer, "usage:")
+	fmt.Fprintln(writer, "  temper software catalog update --root PATH [--channel NAME] [--dry-run]")
+}
+
+func catalogUpdateUsage(writer io.Writer) {
+	fmt.Fprintln(writer, "usage: temper software catalog update --root PATH [--channel NAME] [--dry-run]")
 }
 
 func installUsage(writer io.Writer) {
