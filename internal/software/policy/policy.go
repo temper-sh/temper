@@ -28,15 +28,61 @@ func ClosureEligible(supply catalog.Document, adapterID, packageID, rootUnit str
 	return dependenciesEligible(supply, adapterID, packageID, rootUnit, units)
 }
 
+// ClosureExcluded reports whether the selected root or any catalog-declared
+// dependency in its reachable closure is explicitly excluded by the recipe
+// that owns that unit. A closure that no longer has the shape described by the
+// current catalog is not called excluded; tested-status reporting classifies
+// that separately as outside policy.
+func ClosureExcluded(supply catalog.Document, adapterID, packageID, rootUnit string, units map[string]software.ResolvedUnit) (bool, error) {
+	root, ok := units[rootUnit]
+	if !ok {
+		return false, fmt.Errorf("root unit %q is missing", rootUnit)
+	}
+	recipe := supply.Packages[packageID].Recipes[adapterID]
+	excluded, err := Excluded(recipe, root.Version, root.Revision)
+	if err != nil || excluded {
+		return excluded, err
+	}
+	return dependenciesExcluded(supply, adapterID, packageID, rootUnit, units)
+}
+
+// Excluded applies only a recipe's explicit exclusion list. It intentionally
+// does not answer whether the version satisfies the rest of the recipe policy.
+func Excluded(recipe catalog.Recipe, candidateVersion, candidateRevision string) (bool, error) {
+	switch recipe.VersionScheme {
+	case "opaque":
+		return stringExcluded(candidateVersion, recipe.Exclude), nil
+	case "git-revision":
+		return stringExcluded(candidateVersion, recipe.Exclude) || stringExcluded(candidateRevision, recipe.Exclude), nil
+	case "semver", "pep440":
+		if err := version.Validate(recipe.VersionScheme, candidateVersion); err != nil {
+			return false, err
+		}
+		for _, excluded := range recipe.Exclude {
+			order, err := version.Compare(recipe.VersionScheme, candidateVersion, excluded)
+			if err != nil {
+				return false, fmt.Errorf("excluded version %q: %w", excluded, err)
+			}
+			if order == 0 {
+				return true, nil
+			}
+		}
+		return false, nil
+	default:
+		return false, fmt.Errorf("unsupported version scheme %q", recipe.VersionScheme)
+	}
+}
+
 // Matches applies one recipe's root policy to an exact version identity.
 func Matches(recipe catalog.Recipe, candidateVersion, candidateRevision string, current *bool) (bool, error) {
 	scheme := recipe.VersionScheme
 	selection := recipe.Selection
+	excluded, err := Excluded(recipe, candidateVersion, candidateRevision)
+	if err != nil || excluded {
+		return false, err
+	}
 	switch scheme {
 	case "opaque":
-		if stringExcluded(candidateVersion, recipe.Exclude) {
-			return false, nil
-		}
 		switch selection.Policy {
 		case "exact":
 			return candidateVersion == selection.Exact, nil
@@ -47,23 +93,8 @@ func Matches(recipe catalog.Recipe, candidateVersion, candidateRevision string, 
 			return *current, nil
 		}
 	case "git-revision":
-		if stringExcluded(candidateVersion, recipe.Exclude) || stringExcluded(candidateRevision, recipe.Exclude) {
-			return false, nil
-		}
 		return candidateRevision == selection.Revision, nil
 	case "semver", "pep440":
-		if err := version.Validate(scheme, candidateVersion); err != nil {
-			return false, err
-		}
-		for _, excluded := range recipe.Exclude {
-			order, err := version.Compare(scheme, candidateVersion, excluded)
-			if err != nil {
-				return false, fmt.Errorf("excluded version %q: %w", excluded, err)
-			}
-			if order == 0 {
-				return false, nil
-			}
-		}
 		allowPrerelease := selection.Policy == "exact"
 		if !allowPrerelease && selection.MinimumCompatible != "" {
 			minimumIsPrerelease, err := version.IsPrerelease(scheme, selection.MinimumCompatible)
@@ -105,6 +136,33 @@ func Matches(recipe catalog.Recipe, candidateVersion, candidateRevision string, 
 		}
 	}
 	return false, fmt.Errorf("unsupported %s/%s selection", scheme, selection.Policy)
+}
+
+func dependenciesExcluded(supply catalog.Document, adapterID, packageID, unitID string, units map[string]software.ResolvedUnit) (bool, error) {
+	recipe := supply.Packages[packageID].Recipes[adapterID]
+	for _, dependency := range recipe.Dependencies {
+		dependencyRecipe := supply.Packages[dependency.Package].Recipes[adapterID]
+		descendants := reachableFrom(units, units[unitID].Dependencies)
+		var matchingIDs []string
+		for descendantID := range descendants {
+			if units[descendantID].NativeName == dependencyRecipe.Source.NativeName() {
+				matchingIDs = append(matchingIDs, descendantID)
+			}
+		}
+		if len(matchingIDs) != 1 {
+			continue
+		}
+		dependencyUnit := units[matchingIDs[0]]
+		excluded, err := Excluded(dependencyRecipe, dependencyUnit.Version, dependencyUnit.Revision)
+		if err != nil || excluded {
+			return excluded, err
+		}
+		excluded, err = dependenciesExcluded(supply, adapterID, dependency.Package, matchingIDs[0], units)
+		if err != nil || excluded {
+			return excluded, err
+		}
+	}
+	return false, nil
 }
 
 func dependenciesEligible(supply catalog.Document, adapterID, packageID, unitID string, units map[string]software.ResolvedUnit) (bool, error) {

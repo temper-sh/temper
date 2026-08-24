@@ -91,11 +91,13 @@ generalizes:
 - software resolution/update: read provider candidates → select with the
   catalog's provider-native policy → stage and validate the complete
   `software.lock.yaml` → atomically replace it once. It never installs.
-- software install: read a complete software lock → compute and validate the
-  whole plan and provider pre-state → perform the provider's declared effect →
-  inspect actual state and atomically publish its receipt. Isolated adapters
-  publish one staged root; shared adapters must be reconcilable after an
-  interrupted external effect and may never claim ownership they cannot prove.
+- software install: read a complete software lock plus its required base
+  receipts → compute the whole named-installation/provider/claim plan →
+  atomically prepare root-wide intent and claims → perform declared adapter
+  effects → inspect actual state → publish the per-installation receipt →
+  atomically finalize claims. Isolated adapters publish below one named root;
+  shared adapters reconcile through one root-wide authority and may never
+  claim ownership they cannot prove.
 
 **Surface first.** The schemas and verb contracts (§2) are the commitment;
 the native Go internals remain replaceable behind them. Every schema gets a
@@ -115,6 +117,33 @@ are evidence about behavior, not authority over the new surface.
 - **Programming defect** — a render failing its own validation, a lock row
   without a hash → abort loudly. Never repair silently.
 
+### Secondary objective through 1.0 — field-test the craft skills
+
+Temper is the craft set's first sustained real-product test. Product delivery
+and safety remain the primary objective; through the M5/1.0 release, the
+secondary objective is to evaluate the skills against the work they actually
+helped shape and propose narrowly evidenced improvements where warranted.
+
+The closeout points are the M1 retrospective baseline, M2 phases A/B/C, M3,
+M4, and M5/1.0. Before one of those phases is called complete, add a short
+entry to `docs/craft-skill-field-notes.md` that records:
+
+- which skills materially influenced the phase and the concrete decisions or
+  artifacts where that influence appears;
+- what guidance was useful, missing, misleading, over-specific, or costly to
+  apply;
+- any defect or near miss the guidance exposed or failed to expose; and
+- a narrow proposed improvement, its owning skill/seam, and its evidence — or
+  an explicit conclusion that no change is warranted.
+
+This is a field note, not a model eval. It adds no synthetic implementation
+work, model call, network access, or heavy test run to a Temper phase. One
+Temper incident may support a regression scenario or proposal but does not by
+itself become a universal craft rule. Skill edits, routing-description changes,
+and new-skill liveness remain separate work under the skills repository's own
+review and user gates. The M5 note closes the objective by recommending
+whether this practice should continue after 1.0.
+
 ## 2. Interface contracts (the surfaces, in dependency order)
 
 Each contract is designed and reviewed before code consumes it. "Writer"
@@ -125,13 +154,13 @@ follows the one-writer rule.
 | C1 | rendered configs: llama-swap YAML, Pi `local` provider, Pi compaction settings | native renderer | llama-swap, Pi | M1 first slice; exact bytes pinned by unit goldens |
 | C2 | `manifest.yaml`: layouts `(model, engine, tuning)` plus modes (members, residency, tools, harnesses) | wizard once, then the user's hand; manually maintained during bootstrap | renderer, `apply`, `check` | `temper-manifest/v1` executable in M1; see `docs/design/manifest-schema.md` |
 | C3 | `manifest.lock.yaml` | `resolve` for missing rows; future `update` for moving pins | renderer, `fetch`, `apply`, `check` | `temper-lock/v1` executable in M1 |
-| C4 | software supply records: logical package, portable installation method, target-adapter definition, adapter-native package recipe/version scheme, selection policy, constraints, and tested-version evidence | release review | software resolver, installer, `check` | M2 phase A |
-| C5 | `software.lock.yaml`: the exact method, adapter, and provider-native software closure selected for one target | explicit software resolution/update | installer, `check`, field-kit packet identity | M2 phase A |
-| C6 | installation receipt: actual method/adapter/provider, exact installed versions/revisions, artifact hashes, ownership, and pre-existing state | installer after inspecting the result | `check`, uninstall, field-kit packet identity | M2 phase B |
+| C4 | software supply records for Temper-managed packages: logical package, portable installation method, target-adapter definition, adapter-native package recipe/version scheme, selection policy, constraints, and tested-version evidence | release review | software resolver, installer, `check` | M2 phase A |
+| C5 | `software.lock.yaml`: exact target/method/adapter/provider closure, immutable catalog and/or experiment provenance, and required base-lock identities | explicit catalog resolution/update or explicit experiment-lock generation | installer, `check`, field-kit packet identity | M2 phase A |
+| C6 | named installation receipt plus root-wide software state: observed closure/base receipts and current prepared operations/shared claims | installer around inspected effects and receipt commit | `check`, uninstall, field-kit packet identity | M2 phase B |
 | C7 | qualification profiles (model artifact, engine, model runtime, tool, mode, activity) + the `WATCH/LAB/QUALIFIED/RETIRED/REJECTED` status machine | release review | wizard, `check`, render validation | M2 phase C |
 | C8 | Labs promotion packet | Labs review | the qualification-catalog compiler | M2 phase C, co-designed with Labs |
 | C9 | state dir: active mode, leases | `mode`/`start`/`stop` | `mode`, `status`, cooperating harnesses | M4 |
-| C10 | Field Kit base: reversible install/check/remove mechanics plus the packet-identity handshake (probe packets themselves are written by field-kit — owner boundary, 2026-08-14) | temper's base verbs | field-kit stages; Labs imports the kit's packets | M2 phase B, designed with field-kit |
+| C10 | Field Kit base and experiment installations: reversible install/check/remove mechanics plus the ordered installation-set packet handshake (probe packets remain field-kit-owned) | temper's software verbs | field-kit stages; Labs imports the kit's packets | M2 phase B, designed with field-kit |
 | C11 | CLI verb surface: verbs, exit codes, RESULT lines, machine-parseable outcomes | this plan → per-verb design docs | humans and agents | grows M1 → M4 |
 
 ## 3. Milestones
@@ -288,10 +317,21 @@ configuration catalog follows without blocking that installed base.
 > active-pointer commit. The Homebrew candidate edge now translates its
 > recursive formula closure and JSON v1 bottle metadata through an injected,
 > total-budget command runner, refusing incomplete graphs, wrong target tags,
-> and unhashed artifacts; all tests remain hermetic. Production trust/bootstrap
-> inputs, catalog transport and process binding, the uv interpreter-selection
-> surface and resolver, tested-status reporting, and the public command surface
-> remain pending in Phase A; installation remains Phase B.
+> and unhashed artifacts; all tests remain hermetic. Its production process
+> edge now invokes no shell and forces Homebrew auto-update, analytics, prompts,
+> and incidental GitHub API access off. The read-only catalog selector verifies
+> either the active snapshot or an injected embedded fallback, and resolution
+> returns the four derived tested-status states, including transitive
+> exclusions. Actual release trust/bootstrap bytes, catalog transport, and the
+> uv resolver implementation remain
+> pending in Phase A. The selected release-artifact source, deterministic
+> resolver, production HTTPS reader, and isolated install/inspect/remove member
+> are now executable with hermetic archive/effect coverage. Exact macOS
+> host-target detection and the frozen public install/check/remove commands are
+> wired to that compiled member with a hermetic command-level round-trip; the
+> separately authorized real scratch gate remains Phase B. The Homebrew edge
+> is an available shared adapter, not a default application-installation
+> method anywhere in Temper.
 
 1. *(design)* Define typed logical-package, installation-method,
    target-adapter, and adapter-native package-recipe records (C4). Keep three
@@ -325,13 +365,36 @@ configuration catalog follows without blocking that installed base.
    recipe revision, verification gates, data/license boundary, and exact
    tested-version evidence with its source.
 
-   Seed the schema with three policy fixtures, without inventing version
-   numbers: rolling `llama-swap` (latest, with a tested floor, using the
-   `system-package` method and the target's declared adapter), guarded-rolling
-   `llama.cpp` (the current primary runtime, latest above a floor plus gates),
-   and constrained `rapid-mlx` (supported but non-default; the explicit
-   `python-environment`/`uv` variant with the required MLX constraint; its
-   lagging `system-package`/`homebrew` variant is not silently selected).
+   Catalog publication applies a Temper-wide package-specific curation rule
+   before any recipe ships: prefer an isolated verified release artifact for a
+   native application and an isolated exact environment for a language
+   application;
+   admit `system-package` only for bootstrap/environment managers, genuine
+   global dependencies, software available only there, or a demonstrably more
+   maintainable distribution; build from source only as a last resort. This is
+   release-review policy, not a resolver fallback chain.
+
+   Keep the first product inventory finite and explicit. On macOS, Homebrew may
+   own the shared bootstrap executables `uv` and `hf`; their exact desired and
+   observed identities remain software-lock and receipt facts, and the `hf` CLI
+   must not be confused with llama.cpp's forbidden moving `-hf` selector.
+   `llama-swap` and `llama.cpp` are Temper-managed Field Kit base packages;
+   the 2026-08-24 review selected isolated `release-artifact` installation for
+   both on macOS Apple Silicon after static and bounded runtime gates.
+   The concrete `upstream-release` adapter is hermetically executable; recipe
+   publication still requires its real scratch round-trip.
+   `rapid-mlx` and `mlx-dspark` are supported non-default
+   `python-environment`/`uv` packages whose recipes constrain exact interpreter
+   and MLX closure units under resolved D16. Pi is a user-managed harness,
+   absent from the software-supply catalog. Manifest selection permits only
+   integration rendering and
+   compatibility reporting; it never authorizes installing, updating, or
+   removing Pi, Node, or a JavaScript package manager.
+
+   Existing schema tests may retain rolling, guarded-rolling, and constrained
+   product-shaped fixtures to exercise policy and adapter behavior without
+   inventing release versions. A fixture's method is not a reviewed seed-catalog
+   decision.
 2. *(design)* Define `software.lock.yaml` (C5) separately from
    `manifest.lock.yaml`. The manifest lock owns model/patch resolution; the
    software lock owns the exact executable environment and can exist before a
@@ -362,13 +425,17 @@ configuration catalog follows without blocking that installed base.
    exact binding. The strict validator, signed activation lifecycle, and
    provider-neutral resolution transaction are complete. The Homebrew
    candidate reader protocol and strict translator are complete behind an
-   injected runner; production process binding is deliberately not wired. The
-   uv reader waits on D16 so its lock includes an exact Python execution target
-   rather than an OS-only approximation.
-5. *(build)* Add the tested-status read: compare exact software-lock pins with
+   injected runner; its production non-shell process binding is complete. The
+   uv surface now models `cpython` as a typed adapter-native runtime dependency:
+   each Python application recipe constrains it and the resolved lock records
+   the exact uv-managed interpreter artifact as a closure unit. The uv
+   provider reader/translator remains to be implemented against that surface.
+5. *(build — complete)* Add the tested-status read: compare exact software-lock pins with
    the software-supply catalog and distinguish exact-tested,
    policy-eligible-but-untested, known-bad, and outside-policy states without
-   storing a local verified flag.
+   storing a local verified flag. The pure comparison covers root and transitive
+   exclusions, and software resolution returns the derived status for every
+   requested package.
 
 #### Phase B — Field Kit base immediately after
 
@@ -378,6 +445,18 @@ configuration catalog follows without blocking that installed base.
    provides canonical machine facts, exact software installation, isolated
    profile rendering, scoped service lifecycle, existing model-artifact
    verification, and provenance-guided removal.
+
+   The Temper-side surface is approved and concrete in
+   `docs/contracts/software-install.md`: the `temper software install`
+   invocation and output, named base/experiment installations, C5 experiment
+   provenance and base requirements, C6 receipt/root state, prepared recovery,
+   shared claims, and ordered packet identity are specified. C5 validation and
+   the pure planner are executable. Strict canonical C6 documents and stores,
+   plus internal keyed-adapter orchestration through prepared intent, observed
+   receipt, and finalized claims, are now hermetically executable. The frozen
+   read-only check surface is implemented as a pure drift analyzer plus a thin
+   lock/store/adapter reader. Field Kit repository coordination remains a
+   separate authorized cross-repository step.
 7. *(design + build)* Install only from an already-resolved software lock and
    compute the complete plan plus pre-existing state before any effect.
    Every installation runs through the adapter family; CLI orchestration never
@@ -394,26 +473,36 @@ configuration catalog follows without blocking that installed base.
      method/adapter, or invokes `sudo`. A needed privilege step is printed as a
      ready-to-paste `[manual]` action.
 
-   A failed isolated install leaves the published base unchanged. A shared
-   adapter interruption may leave an inspectable external effect; the next
-   run reconciles observed package-manager state before proceeding and records
-   only the result it can prove.
-8. *(build)* Write C6 only from observed post-install state. The receipt binds
-   the exact method, adapter, provider/version closure, and hashes to the
-   software lock, records what Temper added versus what was already present,
-   and identifies the explicit isolated root. It is proof of actual state, not
-   desired state.
+   A failed isolated install leaves that named installation's published scope
+   unchanged. One root-wide state commit records immutable operation intent and
+   provisional shared claims before effects. A shared-adapter interruption may
+   leave an inspectable external effect; the next run reconciles provider,
+   receipt, and claim state before proceeding and records only what it proves.
+8. *(build)* Write C6 only from observed post-install state. Each receipt binds
+   installation ID, exact method/adapter/provider closure, hashes, verified
+   base receipts, and locations to its software lock. Root state separately
+   owns current shared acquisition/claims and prepared operations. Receipt is
+   history; root state is removal/concurrency authority; neither is desired
+   policy.
 9. *(build)* Add read-only base check/status and provenance-guided uninstall.
-   Check derives actual-vs-lock drift; uninstall removes only content the
-   receipt proves this installation added and preserves every pre-existing
-   shared dependency. Dry-run never mutates and every successful second run is
-   clean.
-10. *(build)* Bind each Field Kit packet to canonical machine facts, the exact
-   Temper binary checksum, software lock + installation receipt, manifest
-   lock, and rendered-generation identity. For this pre-release slice, Field
-   Kit may receive a checksummed darwin/arm64 Temper binary directly; choosing
-   the final public Homebrew/curl/release channel remains M5/D4. Neither this
-   root nor its services point at the live consumer home or legacy service.
+   Check derives provider/lock/receipt/claim drift. Uninstall releases only the
+   named installation's claims, removes a shared unit only after its last claim
+   and only when state proves Temper acquired it, and preserves every
+   pre-existing shared dependency. Isolated removal stays below that
+   installation directory. Dry-run never mutates and every successful second
+   run is clean.
+10. *(build — complete)* Bind each Field Kit packet to canonical machine facts,
+   the exact Temper binary checksum, an ordered set of named base/experiment
+   software lock + receipt identities, manifest lock, and rendered-generation identity.
+   Required base receipt identities are recursively explicit. The pure
+   `temper-field-kit-binding/v1` builder now validates exact darwin/arm64 macOS
+   machine facts, binary and manifest-lock byte identities, rendered-generation
+   identity, and the caller-ordered lock/receipt set. Every requirement must
+   identify an earlier supplied receipt and copies that receipt's complete
+   recursive identity. For this pre-release slice, Field Kit may receive a
+   checksummed darwin/arm64 Temper binary directly; choosing the final public
+   Homebrew/curl/release channel remains M5/D4. Neither this root nor its
+   services point at the live consumer home or legacy service.
 
 #### Phase C — broader qualification catalog resumes
 
@@ -455,9 +544,14 @@ non-SemVer comparison, exact method/adapter/closure locking, known-bad
 exclusions, refusal of silent method fallback, deterministic target→adapter
 selection, and an unknown-adapter refusal. The same adapter-contract suite runs
 against every member; adding a fake second-OS system-package adapter requires
-no workflow change. Phase B uses hermetic fake adapters to prove dry-run
-purity, clean second runs, concurrent-run refusal, interruption reconciliation,
-preservation of pre-existing packages, exact uninstall, and packet identity. A
+no workflow change. The reviewed initial inventory contains no Pi/Node recipe,
+and an explicitly selected harness remains render/check-only. C5 fixtures also
+cover direct experiment provenance, combined catalog/experiment provenance,
+and canonical required-base digests. Phase B uses hermetic fake adapters to
+prove dry-run purity, clean second runs, concurrent-run refusal, interruption
+reconciliation, named-root isolation, two experiments claiming one exact
+shared package without reinstall/removal races, base-receipt drift refusal,
+preservation of pre-existing packages, exact uninstall, and ordered packet identity. A
 real scratch Field Kit round-trip is on-demand, announced, and run only with
 explicit authorization. Phase C round-trips a fake packet into a
 wizard-readable row and rejects every illegal fixture.
@@ -650,6 +744,9 @@ Inherited release bar, enforced from the first commit of product code:
 - quality outranks throughput: any model/engine claim measures
   first-attempt task success first, tok/s second, with conditions on every
   number.
+- each named phase/milestone closeout through M5/1.0 includes its brief
+  real-work craft field note; the note may correctly propose no change and
+  never authorizes an eval or product-side scope expansion.
 
 Go (the CLI — §4): gofmt + go vet + table tests plus native config goldens.
 Legacy comparison is an explicit cutover review aid, not a permanent runtime
@@ -674,22 +771,62 @@ or CI dependency.
 | D13 | Who records `witness: verified` — a small `attest` verb vs some other mechanism; `check` must stay a pure read | M1 verbs | **closed 2026-08-18**: nobody — no local verified state at all; signed catalog snapshots carry tested-version evidence and `check` derives status by comparison |
 | D14 | Installation portability boundary: hard-coded providers vs portable methods with target adapters | M2 Phase A | **resolved 2026-08-20 (owner):** every method is a keyed adapter family; `system-package` is portable intent, Homebrew is only the current macOS adapter, and the exact target adapter is catalog-declared and locked |
 | D15 | Must one applicable model layout win the recommendation, or can several qualified tradeoffs be co-recommended? | M2 Phase C / M3 | **resolved 2026-08-20 (owner): recommendation is a consent-neutral set, not a ranking; several layouts may be recommended with distinct performance profiles, while selection and preference remain explicit user choices** |
-| D16 | Where the uv adapter's Python implementation/version/ABI selection lives | M2 Phase A uv resolver; non-default `rapid-mlx` | open — current lean: the uv recipe declares the compatible Python policy, resolution chooses an exact uv-managed interpreter and records it as a closure unit; do not overload machine target facts or depend on ambient Python |
+| D16 | Where the uv adapter's Python implementation/version/ABI selection lives | M2 Phase A uv resolver; non-default `rapid-mlx` and `mlx-dspark` | **resolved 2026-08-20 (owner): Python is an adapter-native logical dependency (`python-runtime`/`cpython`) constrained by each application recipe; uv selects an exact managed interpreter and records its version, build revision, immutable artifact, and target-bound closure identity in the software lock. Ambient Python and machine target facts never supply it** |
+| D17 | Whether Temper owns Node and harness executables | future Node-based managed package only | **resolved for current scope 2026-08-20 (owner): no Node adapter or runtime now; Pi and other harness executables are user-managed, while Temper may render/check an explicitly selected integration. Preserve the generic adapter boundary and revisit only for a concrete Temper-managed Node package** |
+| D18 | Ownership of shared environment/model-source tools | M2 Phase A/Phase B bootstrap and receipt | **resolved 2026-08-20 (owner): on macOS, Homebrew may install and own the shared `uv` and `hf` executables. uv owns exact isolated Python runtimes and application closures below that layer. Artifact downloads through `hf` must use locked revisions; llama.cpp's moving `-hf` selector remains forbidden. The catalog supplies policy, the software lock supplies exact desired tool identities, and the receipt supplies observed installed identities instead of Temper accepting ambient PATH state** |
+| D19 | Experiment-specific and run-time-generated software locks; ownership when installations share provider packages | M2 Phase A/B, Field Kit/Labs consumers | **resolved 2026-08-21 (owner): a lock records independent immutable catalog and experiment provenance and may require exact base-lock receipts; installation consumes the frozen lock without a catalog read. One explicit root holds many named base/experiment installations. Per-installation receipts are history; one root-wide state document atomically owns prepared intent and reference-aware shared claims, so one experiment cannot remove a package another still uses. Field Kit packet identity binds the ordered installation lock/receipt set** |
+| D20 | Use Temper as the craft skills' first real-work canary through 1.0 | no product milestone; phase closeout documentation only | **resolved 2026-08-21 (owner): record an evidence-linked skill field note after M1 and each M2 phase/M3/M4/M5; propose narrow improvements or no change; never turn the secondary objective into synthetic product work or an ungated model eval** |
 
 ## 7. Now / next
 
 1. **M2 Phase A — software supply:** C4, `software.lock.yaml`, and the signed
    catalog lifecycle are approved; the shared resolver and authenticated
-   catalog-store transactions are hermetically executable, as is the Homebrew
-   candidate protocol behind a recording runner. Next wire reviewed
-   trust/bootstrap, transport and process inputs into the public Homebrew
-   resolve path and add tested-status reporting for the primary Field Kit
-   runtime. D16 and the uv reader remain required for supported, explicitly
-   requested `rapid-mlx`, but do not block beginning the fake-provider Phase B
-   install/receipt design for the Homebrew `llama.cpp` base.
+   catalog-store transactions are hermetically executable. Homebrew candidate
+   translation, its controlled production process runner, authenticated
+   active-or-bootstrap catalog reading, and four-way tested-status reporting
+   are complete behind injected inputs. Next supply the reviewed release trust
+   key/bootstrap bytes and publication transport contract. The 2026-08-24
+   method review rejects both Homebrew application variants at the
+   exact-install gate. The isolated `llama-swap` v251 and `llama.cpp` b10566
+   artifacts passed the bounded model-backed runtime/router screen, selecting
+   `release-artifact` with exact catalog-reviewed releases. Its strict
+   `release-archive` source, deterministic `upstream-release` resolver,
+   bounded HTTPS edge, and isolated install/inspect/remove implementation
+   are complete with hermetic failure-boundary and round-trip coverage. The
+   frozen C11 software verbs and exact host-target check are now wired to this
+   compiled member and refuse any uncompiled locked adapter without fallback.
+   Next run the separately authorized real scratch install/check/remove/
+   second-run gate through that complete workflow; no concrete recipe or
+   tested row is published yet. The Field Kit-facing C10/C11 install surface
+   is frozen. The uv reader remains required for explicitly requested
+   `rapid-mlx` and `mlx-dspark`, but does not block beginning provider-neutral
+   Phase B install/receipt design with hermetic fake adapters.
 2. **M2 Phase B — Field Kit installed base:** freeze C10/C11, build hermetic
    fake-provider install/check/uninstall tests, then run one explicitly
    authorized scratch Field Kit round-trip with a checksummed Temper binary.
+   The Temper-side C5/C6/C10/C11 surface is approved. Generic lock validation
+   and the pure planner now cover direct/catalog-backed experiment provenance,
+   base-receipt requirements, named isolated roots, prepared recovery, and
+   root-wide shared claims. Canonical receipt/root-state stores and keyed
+   fake-adapter install orchestration now prove dry-run purity, clean second
+   runs, live/expired operation recovery, base-receipt drift refusal,
+   pre-existing preservation, and shared claims without reinstall. The
+   read-only check/status path is now
+   executable and reports missing/drifted provider state, missing/drifted
+   receipts, required-base drift, unclaimed/shared-claim drift, and prepared
+   operations without mutation. Provenance-guided uninstall is now executable
+   behind keyed fake adapters: it conditionally releases receipts and claims,
+   serializes the final Temper-added generation through `retiring`, preserves
+   pre-existing and still-claimed units, refuses drift, and recovers explicit
+   reruns without repeating a completed provider effect. Canonical
+   `temper-machine-facts/v1` detection and the pure
+   `temper-field-kit-binding/v1` schema/builder now bind exact binary,
+   manifest-lock, generation, and ordered recursively explicit installation
+   identities without reading or writing Field Kit state. The selected
+   release-artifact effect member and frozen C11 public software verbs are now
+   integrated through exact host detection and hermetic command-level
+   install/check/remove/second-run coverage. Next run the real adapter scratch
+   round-trip; it remains separately announced and explicitly authorized.
 3. **M2 Phase C — qualification catalog:** add the six evidence-backed profile
    kinds, plural recommendation/performance-profile semantics, promotion
    packet, validator extensions, and reviewed seed rows after the installed
@@ -704,3 +841,6 @@ or CI dependency.
    in-flight load, mode-switch latency) through the new-experiment workflow
    when convenient — they gate production mode qualification, not the M2
    Field Kit base.
+6. **Craft field evidence:** keep `docs/craft-skill-field-notes.md` current at
+   each named phase closeout. The M1/current-M2 baseline is recorded; the next
+   formal note closes M2 Phase A.

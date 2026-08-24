@@ -31,11 +31,21 @@ adapter-backed installation methods to install, check, and remove a receipted
 base for Field Kit; then expand the broader qualification catalog used by the
 wizard. `system-package` is the portable strategy—Homebrew is only its current
 macOS adapter—and the exact adapter is always target-selected, displayed, and
-locked. Catalog snapshots can move without rebuilding the binary, while every
-resolved installation stays pinned to one immutable snapshot. This puts an
-installed test base ahead of the wizard and production mode machinery.
-Consumer-home installation, production service control, and the wizard remain
-later work.
+locked. Catalog curation is package-specific: prefer an isolated verified
+release or language environment when upstream supplies a maintainable one, and
+use shared system packages only for genuine system dependencies, bootstrap
+tools, or a demonstrably better-maintained distribution. This is a review
+policy for every Temper installation, never a Field Kit exception or runtime
+fallback. On the current macOS target, Homebrew may own the small shared tool
+layer, including `uv` and `hf`; uv then owns each exact Python runtime and
+application environment under a Temper root. The `hf` executable is distinct
+from llama.cpp's forbidden moving `-hf` model selector. Catalog snapshots can
+move without rebuilding the binary, while every resolved installation stays
+pinned to one immutable snapshot. Pi remains a user-managed harness: Temper
+renders its selected integration but does not install Pi, Node, or a JavaScript
+package manager. This puts an installed test base ahead of the wizard and
+production mode machinery. Consumer-home installation, production service
+control, and the wizard remain later work.
 
 The planned wizard does not force one global “best model.” The qualification
 catalog may recommend several layouts for the same machine and mode, each with
@@ -53,11 +63,50 @@ and catalog artifacts, refuses rollback/equivocation and unsupported compiled
 capabilities, stores immutable snapshots, and atomically moves a regular-file
 active pointer. The Homebrew resolver edge now translates an exact target's
 recursive formula closure and `brew info --json=v1` bottle metadata behind an
-injected command runner, with one timeout and strict closure/hash refusals.
-Production trust/bootstrap inputs, catalog transport and process binding, the
-uv resolver's Python-interpreter surface, tested-status reporting, the public
-command surface, and installation remain next; no network or real package
-manager is invoked by these slices.
+injected command runner, with one timeout and strict closure/hash refusals. Its
+production process edge now invokes no shell and forces Homebrew auto-update,
+analytics, prompts, and incidental GitHub API access off. A read-only catalog
+selector verifies either the active snapshot or an injected embedded fallback,
+and resolution derives exact-tested, policy-eligible-untested, known-bad, or
+outside-policy status without writing that status anywhere. Actual release
+trust/bootstrap bytes, catalog transport, the uv resolver implementation, and
+remaining production adapters remain next. The selected `release-artifact`
+method now has a
+deterministic `upstream-release` resolver, a bounded HTTPS download edge, and an
+isolated install/inspect/remove implementation. Hermetic tests prove exact
+size/hash/archive/tree verification, atomic pointer publication, repair,
+second-run cleanliness, and scope-only removal; no network or real package
+manager is invoked by the suite. Python interpreter identity is no longer
+ambient: a uv recipe constrains a `cpython` dependency and the exact uv-managed
+interpreter is an ordinary hashed unit in the locked isolated closure. The
+compiled Homebrew edge is an available shared adapter, not Temper's default
+application-installation method. The first Phase B pure install planner is also
+executable: it groups the complete lock by adapter/scope, orders dependencies,
+isolates each named base or experiment installation, verifies required base
+receipts, consumes direct or catalog-backed experiment locks without catalog
+reads, shares exact global packages through root-wide claims, converges on
+receipt/prepared state, and atomically republishes only wholly Temper-owned
+isolated groups. Strict canonical C6 receipt and root-state documents,
+derived-path conditional atomic stores, and the prepare/effect/inspect/
+receipt/finalize orchestration are now
+executable behind keyed injected adapters. Hermetic fake adapters prove dry-run
+purity, clean second runs, live-operation refusal and expired recovery,
+required-base drift refusal, pre-existing preservation, and shared claims
+without reinstall. The read-only software check core is also executable: a
+pure analyzer and thin reader classify provider, receipt, requirement, claim,
+and prepared-operation state without creating or changing the root.
+Provenance-guided removal is executable behind keyed adapters, including
+serialized final-claim retirement, dry-run purity, pre-existing preservation,
+conditional receipt release, and interrupted-run recovery. Canonical machine
+facts and the pure ordered Field Kit identity binding are now executable too:
+the binding hashes exact Temper/manifest-lock bytes, names the rendered
+generation, and carries recursively explicit software lock/receipt identities.
+The frozen public `temper software install`, `check`, and `remove` surface is
+now wired to exact macOS host-target detection and the compiled
+`upstream-release` member. A hermetic command-level round-trip proves dry-run
+purity, clean second runs, stable C11 output, and refusal of target mismatch or
+an uncompiled locked adapter. The real release-adapter scratch round-trip is
+still a separately authorized gate and has not run.
 
 The legacy `local-ai-setup` repo remains the installer of record for the one
 machine currently running the stack until M5. These commands therefore require
@@ -99,6 +148,35 @@ go run ./cmd/temper check \
   --root /path/to/isolated/temper-root
 ```
 
+An already-resolved release-artifact software lock uses the separate installed
+base surface:
+
+```sh
+# Preview the complete provider/receipt plan without creating the root.
+go run ./cmd/temper software install \
+  --lock /path/to/software.lock.yaml \
+  --installation field-kit-base \
+  --root /path/to/isolated/temper-root \
+  --dry-run
+
+# Audit the exact provider, receipt, requirement, and claim state.
+go run ./cmd/temper software check \
+  --lock /path/to/software.lock.yaml \
+  --installation field-kit-base \
+  --root /path/to/isolated/temper-root
+
+# Preview provenance-guided release; remove --dry-run only when intended.
+go run ./cmd/temper software remove \
+  --lock /path/to/software.lock.yaml \
+  --installation field-kit-base \
+  --root /path/to/isolated/temper-root \
+  --dry-run
+```
+
+The public binary currently compiles only the reviewed `upstream-release`
+installation member. A lock naming Homebrew, uv, or another unbuilt installer
+is refused; Temper never falls back to a different method or adapter.
+
 Remove `--dry-run` from `apply` to create an immutable generation under that
 root. Its dry-run still requires the selected artifact sets because Temper
 will not preview a configuration backed by absent or unadmitted artifacts. A
@@ -120,9 +198,13 @@ never downloads weights, runs those commands, or touches the service. Bare
 - [Execution plan](docs/PLAN.md) — milestones M0–M5 with acceptance gates,
   interface contracts, the design discipline, and the owner decision
   register.
+- [Craft field notes](docs/craft-skill-field-notes.md) — the secondary
+  through-1.0 record of how the design skills performed in real product work.
 - Native verb contracts: [apply](docs/contracts/apply.md),
   [resolve](docs/contracts/resolve.md), [fetch](docs/contracts/fetch.md),
   [update](docs/contracts/update.md), and [check](docs/contracts/check.md).
+- Approved M2 installed-base contract: [software install, prepared recovery,
+  and installation receipt](docs/contracts/software-install.md).
 - Approved M2 surface: [software supply, independent catalog lifecycle, lock,
   and adapter-family design](docs/design/software-supply-schema.md).
 - [Current-posture render acceptance](docs/acceptance/current-posture-render.md)

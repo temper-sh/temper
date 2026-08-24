@@ -104,6 +104,24 @@ func (r Registry) Resolve(supply catalog.Document, method string, target softwar
 	return descriptor, nil
 }
 
+// Require returns one compiled adapter by exact key for an already-resolved
+// software lock. Installation never consults catalog policy or falls back to
+// another adapter.
+func (r Registry) Require(adapterID string, target software.Target) (Descriptor, error) {
+	if err := target.Validate(); err != nil {
+		return Descriptor{}, fmt.Errorf("software target: %w", err)
+	}
+	descriptor, ok := r.descriptors[adapterID]
+	if !ok {
+		return Descriptor{}, fmt.Errorf("software lock adapter %q is not compiled into this binary", adapterID)
+	}
+	if !descriptor.Supports(target) {
+		return Descriptor{}, fmt.Errorf("software lock adapter %q does not support target %s/%s", adapterID, target.OS, target.Arch)
+	}
+	descriptor.Targets = append([]software.Target(nil), descriptor.Targets...)
+	return descriptor, nil
+}
+
 // ValidateCatalog proves that every adapter contract and target binding in a
 // catalog can be honored by this binary. Catalog updates use it before making
 // a snapshot active, rather than discovering an unsupported key at resolve.

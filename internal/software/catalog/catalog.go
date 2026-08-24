@@ -9,6 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
+	"path"
 	"regexp"
 	"sort"
 	"strings"
@@ -74,11 +76,29 @@ type Recipe struct {
 }
 
 type Source struct {
-	Kind         string `yaml:"kind"`
-	Tap          string `yaml:"tap,omitempty"`
-	Formula      string `yaml:"formula,omitempty"`
-	Index        string `yaml:"index,omitempty"`
-	Distribution string `yaml:"distribution,omitempty"`
+	Kind           string            `yaml:"kind"`
+	Tap            string            `yaml:"tap,omitempty"`
+	Formula        string            `yaml:"formula,omitempty"`
+	Index          string            `yaml:"index,omitempty"`
+	Distribution   string            `yaml:"distribution,omitempty"`
+	Implementation string            `yaml:"implementation,omitempty"`
+	Name           string            `yaml:"name,omitempty"`
+	Repository     string            `yaml:"repository,omitempty"`
+	Revision       string            `yaml:"revision,omitempty"`
+	Artifacts      []ReleaseArtifact `yaml:"artifacts,omitempty"`
+}
+
+// ReleaseArtifact binds one reviewed target selector to one immutable archive.
+// It is catalog policy input; resolution performs no moving release lookup.
+type ReleaseArtifact struct {
+	Target           software.Target `yaml:"target"`
+	Locator          string          `yaml:"locator"`
+	SHA256           string          `yaml:"sha256"`
+	Size             int64           `yaml:"size"`
+	UnpackedSize     int64           `yaml:"unpacked_size"`
+	InstalledEntries int             `yaml:"installed_entries"`
+	Format           string          `yaml:"format"`
+	ArchiveRoot      string          `yaml:"archive_root"`
 }
 
 func (s Source) NativeName() string {
@@ -87,6 +107,10 @@ func (s Source) NativeName() string {
 		return s.Formula
 	case "python-index":
 		return s.Distribution
+	case "python-runtime":
+		return s.Implementation
+	case "release-archive":
+		return s.Name
 	default:
 		return ""
 	}
@@ -271,7 +295,21 @@ func (d Document) Validate() error {
 				problem("%s recipe_revision %q is not a stable revision", location, recipe.RecipeRevision)
 			}
 			validateSource(location, adapterID, recipe.Source, problem)
+			if recipe.Source.Kind == "release-archive" {
+				for index, artifact := range recipe.Source.Artifacts {
+					assetLocation := fmt.Sprintf("%s source.artifacts[%d]", location, index)
+					selectedAdapter, err := d.AdapterFor(recipe.Method, artifact.Target)
+					if err != nil {
+						problem("%s target adapter: %v", assetLocation, err)
+					} else if selectedAdapter != adapterID {
+						problem("%s target selects adapter %q, not recipe adapter %q", assetLocation, selectedAdapter, adapterID)
+					}
+				}
+			}
 			validateSelection(location, recipe.VersionScheme, recipe.Selection, problem)
+			if recipe.Source.Kind == "release-archive" && recipe.Selection.Policy != "exact" {
+				problem("%s release archive selection must be exact", location)
+			}
 			validatePolicyVersions(location, recipe, problem)
 			if duplicate := firstDuplicate(recipe.Exclude); duplicate != "" {
 				problem("%s repeats excluded version %q", location, duplicate)
@@ -306,6 +344,10 @@ func (d Document) Validate() error {
 					problem("%s target adapter: %v", testedLocation, err)
 				} else if testedAdapter != adapterID {
 					problem("%s target selects adapter %q, not recipe adapter %q", testedLocation, testedAdapter, adapterID)
+				} else if recipe.Source.Kind == "release-archive" {
+					if _, err := recipe.Source.ReleaseArtifactFor(tested.Target); err != nil {
+						problem("%s release artifact: %v", testedLocation, err)
+					}
 				}
 				if strings.TrimSpace(tested.Evidence) == "" {
 					problem("%s evidence is required", testedLocation)
@@ -375,8 +417,8 @@ func validateSource(location, adapterID string, source Source, problem func(stri
 		if source.Tap == "" || source.Formula == "" {
 			problem("%s homebrew source requires tap and formula", location)
 		}
-		if source.Index != "" || source.Distribution != "" {
-			problem("%s homebrew source cannot declare Python index fields", location)
+		if source.Index != "" || source.Distribution != "" || source.Implementation != "" || hasReleaseFields(source) {
+			problem("%s homebrew source cannot declare Python fields", location)
 		}
 	case "python-index":
 		if adapterID != "uv" {
@@ -385,12 +427,108 @@ func validateSource(location, adapterID string, source Source, problem func(stri
 		if source.Index == "" || source.Distribution == "" {
 			problem("%s Python source requires index and distribution", location)
 		}
-		if source.Tap != "" || source.Formula != "" {
-			problem("%s Python source cannot declare Homebrew fields", location)
+		if source.Tap != "" || source.Formula != "" || source.Implementation != "" || hasReleaseFields(source) {
+			problem("%s Python source cannot declare Homebrew fields or runtime implementation", location)
+		}
+	case "python-runtime":
+		if adapterID != "uv" {
+			problem("%s source kind %q requires adapter uv", location, source.Kind)
+		}
+		if source.Implementation != "cpython" {
+			problem("%s Python runtime implementation %q is not supported", location, source.Implementation)
+		}
+		if source.Tap != "" || source.Formula != "" || source.Index != "" || source.Distribution != "" || hasReleaseFields(source) {
+			problem("%s Python runtime source cannot declare package-source fields", location)
+		}
+	case "release-archive":
+		if adapterID != "upstream-release" {
+			problem("%s source kind %q requires adapter upstream-release", location, source.Kind)
+		}
+		if source.Tap != "" || source.Formula != "" || source.Index != "" || source.Distribution != "" || source.Implementation != "" {
+			problem("%s release archive source cannot declare package-manager fields", location)
+		}
+		if !idPattern.MatchString(source.Name) {
+			problem("%s release archive name %q is not a lowercase stable id", location, source.Name)
+		}
+		if strings.TrimSpace(source.Repository) == "" {
+			problem("%s release archive repository is required", location)
+		}
+		if !revisionPattern.MatchString(source.Revision) {
+			problem("%s release archive revision %q is not a stable revision", location, source.Revision)
+		}
+		if len(source.Artifacts) == 0 {
+			problem("%s release archive artifacts must not be empty", location)
+		}
+		for index, artifact := range source.Artifacts {
+			assetLocation := fmt.Sprintf("%s source.artifacts[%d]", location, index)
+			validateReleaseArtifact(assetLocation, artifact, problem)
+			for prior := 0; prior < index; prior++ {
+				if artifact.Target.Overlaps(source.Artifacts[prior].Target) {
+					problem("%s target overlaps source.artifacts[%d]", assetLocation, prior)
+				}
+			}
 		}
 	default:
 		problem("%s source kind %q is not supported", location, source.Kind)
 	}
+}
+
+func hasReleaseFields(source Source) bool {
+	return source.Name != "" || source.Repository != "" || source.Revision != "" || len(source.Artifacts) != 0
+}
+
+func validateReleaseArtifact(location string, artifact ReleaseArtifact, problem func(string, ...any)) {
+	if err := artifact.Target.Validate(); err != nil {
+		problem("%s target: %v", location, err)
+	}
+	parsed, err := url.Parse(artifact.Locator)
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.Fragment != "" {
+		problem("%s locator must be an absolute https URL without credentials or fragment", location)
+	}
+	if !sha256Pattern.MatchString(artifact.SHA256) {
+		problem("%s sha256 must be 64 lowercase hexadecimal characters", location)
+	}
+	if artifact.Size <= 0 {
+		problem("%s size must be greater than zero", location)
+	}
+	if artifact.UnpackedSize <= 0 {
+		problem("%s unpacked_size must be greater than zero", location)
+	}
+	if artifact.InstalledEntries <= 0 {
+		problem("%s installed_entries must be greater than zero", location)
+	}
+	if artifact.Format != "tar.gz" {
+		problem("%s format %q is not supported", location, artifact.Format)
+	}
+	if !safeArchiveRoot(artifact.ArchiveRoot) {
+		problem("%s archive_root %q must be a clean relative archive path or .", location, artifact.ArchiveRoot)
+	}
+}
+
+func safeArchiveRoot(value string) bool {
+	return value != "" && !strings.HasPrefix(value, "/") && !strings.Contains(value, "\\") && path.Clean(value) == value && value != ".." && !strings.HasPrefix(value, "../")
+}
+
+// ReleaseArtifactFor returns the one reviewed archive matching an exact target.
+func (s Source) ReleaseArtifactFor(target software.Target) (ReleaseArtifact, error) {
+	if err := target.Validate(); err != nil {
+		return ReleaseArtifact{}, err
+	}
+	var match *ReleaseArtifact
+	for index := range s.Artifacts {
+		artifact := s.Artifacts[index]
+		if !artifact.Target.Matches(target) {
+			continue
+		}
+		if match != nil {
+			return ReleaseArtifact{}, errors.New("more than one release artifact matches target")
+		}
+		match = &artifact
+	}
+	if match == nil {
+		return ReleaseArtifact{}, errors.New("no release artifact matches target")
+	}
+	return *match, nil
 }
 
 func validateSelection(location, scheme string, selection Selection, problem func(string, ...any)) {

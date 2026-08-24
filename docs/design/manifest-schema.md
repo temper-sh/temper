@@ -138,13 +138,13 @@ How those reach the client depends on what the client can express:
 - **Otherwise, the renderer elects** the narrowest resident window, because
   one global setting has to be survivable by the smallest window in the mode.
   Legacy implements exactly this today.
-- **Local patch as a middle option** (owner, 2026-08-19): patch Pi to resolve
-  per model. Costed rather than adopted — Pi is a pnpm-installed Node CLI, so
-  a patch there is heavier than this stack's existing patch targets (a
-  template file, a venv module) and re-applies on every Pi update. Weigh
-  against how long the upstream issue sits.
+- **A local Pi patch is outside Temper's ownership boundary** (owner,
+  2026-08-20). Pi is a user-managed harness, and Temper does not choose its
+  Node runtime, package manager, or installation layout. Until upstream offers
+  per-model compaction, the renderer uses the global-slot election above;
+  Temper does not patch or replace the user's Pi executable.
 
-**The manifest is byte-identical in all three cases.** The compromise is a
+**The manifest is byte-identical in either supported case.** The compromise is a
 rendering concern, a property of the target client's capability, not a fact
 about the model — which is why it must not appear in the schema.
 

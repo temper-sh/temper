@@ -11,9 +11,34 @@ import (
 	"testing"
 
 	"github.com/temper-sh/temper/internal/budget"
+	"github.com/temper-sh/temper/internal/software"
+	"github.com/temper-sh/temper/internal/software/adapter"
+	"github.com/temper-sh/temper/internal/softwarecmd"
 	"github.com/temper-sh/temper/internal/testfixture"
 	"github.com/temper-sh/temper/internal/upstream"
 )
+
+func TestRunDispatchesTheSoftwareCommand(t *testing.T) {
+	family, err := adapter.NewInstallationFamily()
+	if err != nil {
+		t.Fatal(err)
+	}
+	command, err := softwarecmd.New(family, func(context.Context) (software.Target, error) {
+		return software.Target{}, errors.New("software help must not detect the host")
+	}, func() (string, error) {
+		return "software-help", nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	exit := runWithDependencies(context.Background(), []string{"software", "help"}, &stdout, &stderr, dependencies{
+		newSoftware: func() (softwarecmd.Command, error) { return command, nil },
+	})
+	if exit != 0 || stderr.Len() != 0 || !strings.Contains(stdout.String(), "temper software install") {
+		t.Fatalf("exit = %d, stdout = %q, stderr = %q", exit, stdout.String(), stderr.String())
+	}
+}
 
 func TestRunApplyReportsDryRunWithoutWriting(t *testing.T) {
 	workspace := t.TempDir()

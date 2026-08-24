@@ -23,6 +23,11 @@ import (
 
 const SchemaV1 = "temper-software-lock/v1"
 
+const (
+	ProvenanceCatalog    = "catalog"
+	ProvenanceExperiment = "experiment"
+)
+
 var (
 	idPattern       = regexp.MustCompile(`^[a-z0-9]+(?:[.-][a-z0-9]+)*$`)
 	unitIDPattern   = regexp.MustCompile(`^[a-z0-9]+(?:[._:-][a-z0-9]+)*$`)
@@ -31,12 +36,21 @@ var (
 )
 
 type Document struct {
-	Schema     string               `yaml:"schema"`
-	Catalog    CatalogIdentity      `yaml:"catalog"`
-	Target     software.Target      `yaml:"target"`
-	Resolved   string               `yaml:"resolved"`
-	Selections map[string]Selection `yaml:"selections"`
-	Units      map[string]Unit      `yaml:"units"`
+	Schema     string                    `yaml:"schema"`
+	Provenance Provenance                `yaml:"provenance"`
+	Requires   []InstallationRequirement `yaml:"requires"`
+	Target     software.Target           `yaml:"target"`
+	Resolved   string                    `yaml:"resolved"`
+	Selections map[string]Selection      `yaml:"selections"`
+	Units      map[string]Unit           `yaml:"units"`
+}
+
+// Provenance records immutable inputs that authorized resolution. Catalog and
+// experiment are independent: a reviewed experiment may use a catalog and add
+// fresh software, while a direct experiment lock may have no catalog at all.
+type Provenance struct {
+	Catalog    *CatalogIdentity    `yaml:"catalog,omitempty" json:"catalog,omitempty"`
+	Experiment *ExperimentIdentity `yaml:"experiment,omitempty" json:"experiment,omitempty"`
 }
 
 type CatalogIdentity struct {
@@ -45,7 +59,18 @@ type CatalogIdentity struct {
 	SHA256   string `yaml:"sha256" json:"sha256"`
 }
 
+type ExperimentIdentity struct {
+	Schema           string `yaml:"schema" json:"schema"`
+	ID               string `yaml:"id" json:"id"`
+	DefinitionSHA256 string `yaml:"definition_sha256" json:"definition_sha256"`
+}
+
+type InstallationRequirement struct {
+	SoftwareLockDigest string `yaml:"software_lock_digest" json:"software_lock_digest"`
+}
+
 type Selection struct {
+	Provenance     string `yaml:"provenance" json:"provenance"`
 	Method         string `yaml:"method" json:"method"`
 	Adapter        string `yaml:"adapter" json:"adapter"`
 	RecipeRevision string `yaml:"recipe_revision" json:"recipe_revision"`
@@ -118,14 +143,40 @@ func (d Document) Validate() error {
 	if d.Schema != SchemaV1 {
 		problem("schema is %q, want %q", d.Schema, SchemaV1)
 	}
-	if d.Catalog.Schema != catalog.SchemaV1 {
-		problem("catalog.schema is %q, want %q", d.Catalog.Schema, catalog.SchemaV1)
+	if d.Provenance.Catalog == nil && d.Provenance.Experiment == nil {
+		problem("provenance must contain catalog, experiment, or both")
 	}
-	if d.Catalog.Sequence == 0 {
-		problem("catalog.sequence must be greater than zero")
+	if identity := d.Provenance.Catalog; identity != nil {
+		if identity.Schema != catalog.SchemaV1 {
+			problem("provenance.catalog.schema is %q, want %q", identity.Schema, catalog.SchemaV1)
+		}
+		if identity.Sequence == 0 {
+			problem("provenance.catalog.sequence must be greater than zero")
+		}
+		if !sha256Pattern.MatchString(identity.SHA256) {
+			problem("provenance.catalog.sha256 must be 64 lowercase hexadecimal characters")
+		}
 	}
-	if !sha256Pattern.MatchString(d.Catalog.SHA256) {
-		problem("catalog.sha256 must be 64 lowercase hexadecimal characters")
+	if identity := d.Provenance.Experiment; identity != nil {
+		if !revisionPattern.MatchString(identity.Schema) {
+			problem("provenance.experiment.schema %q is not a stable schema id", identity.Schema)
+		}
+		if !idPattern.MatchString(identity.ID) {
+			problem("provenance.experiment.id %q is not a lowercase stable id", identity.ID)
+		}
+		if !sha256Pattern.MatchString(identity.DefinitionSHA256) {
+			problem("provenance.experiment.definition_sha256 must be 64 lowercase hexadecimal characters")
+		}
+	}
+	seenRequirements := map[string]bool{}
+	for index, requirement := range d.Requires {
+		if !sha256Pattern.MatchString(requirement.SoftwareLockDigest) {
+			problem("requires[%d].software_lock_digest must be 64 lowercase hexadecimal characters", index)
+		}
+		if seenRequirements[requirement.SoftwareLockDigest] {
+			problem("requires repeats software lock digest %q", requirement.SoftwareLockDigest)
+		}
+		seenRequirements[requirement.SoftwareLockDigest] = true
 	}
 	if err := d.Target.Validate(); err != nil {
 		problem("target: %v", err)
@@ -144,6 +195,18 @@ func (d Document) Validate() error {
 		selection := d.Selections[id]
 		if !idPattern.MatchString(id) {
 			problem("selection id %q is not a lowercase stable id", id)
+		}
+		switch selection.Provenance {
+		case ProvenanceCatalog:
+			if d.Provenance.Catalog == nil {
+				problem("selection %q has catalog provenance but the lock has no catalog identity", id)
+			}
+		case ProvenanceExperiment:
+			if d.Provenance.Experiment == nil {
+				problem("selection %q has experiment provenance but the lock has no experiment identity", id)
+			}
+		default:
+			problem("selection %q provenance %q must be catalog or experiment", id, selection.Provenance)
 		}
 		if !idPattern.MatchString(selection.Method) {
 			problem("selection %q method %q is not a lowercase stable id", id, selection.Method)
@@ -211,6 +274,21 @@ func (d Document) Validate() error {
 			seenArtifacts[artifact.Locator] = true
 			if !sha256Pattern.MatchString(artifact.SHA256) {
 				problem("%s sha256 must be 64 lowercase hexadecimal characters", location)
+			}
+			if artifact.Size < 0 {
+				problem("%s size must not be negative", location)
+			}
+			if artifact.UnpackedSize < 0 {
+				problem("%s unpacked_size must not be negative", location)
+			}
+			if artifact.InstalledEntries < 0 {
+				problem("%s installed_entries must not be negative", location)
+			}
+			if (artifact.Format == "") != (artifact.ArchiveRoot == "") {
+				problem("%s format and archive_root must be declared together", location)
+			}
+			if artifact.Format == "" && (artifact.UnpackedSize != 0 || artifact.InstalledEntries != 0) {
+				problem("%s unpacked_size and installed_entries require an archive format", location)
 			}
 		}
 	}
@@ -293,14 +371,18 @@ func (d Document) ValidateAgainst(supply catalog.Document, snapshotDigest string
 	problem := func(format string, args ...any) {
 		problems = append(problems, fmt.Sprintf(format, args...))
 	}
-	if d.Catalog.Schema != supply.Schema {
-		problem("catalog schema mismatch: lock has %q, snapshot has %q", d.Catalog.Schema, supply.Schema)
+	identity := d.Provenance.Catalog
+	if identity == nil {
+		return errors.New("software lock has no catalog provenance to validate against")
 	}
-	if d.Catalog.Sequence != supply.Sequence {
-		problem("catalog sequence mismatch: lock has %d, snapshot has %d", d.Catalog.Sequence, supply.Sequence)
+	if identity.Schema != supply.Schema {
+		problem("catalog schema mismatch: lock has %q, snapshot has %q", identity.Schema, supply.Schema)
 	}
-	if d.Catalog.SHA256 != snapshotDigest {
-		problem("catalog digest mismatch: lock has %q, snapshot has %q", d.Catalog.SHA256, snapshotDigest)
+	if identity.Sequence != supply.Sequence {
+		problem("catalog sequence mismatch: lock has %d, snapshot has %d", identity.Sequence, supply.Sequence)
+	}
+	if identity.SHA256 != snapshotDigest {
+		problem("catalog digest mismatch: lock has %q, snapshot has %q", identity.SHA256, snapshotDigest)
 	}
 	resolvedUnits := make(map[string]software.ResolvedUnit, len(d.Units))
 	for unitID, unit := range d.Units {
@@ -311,6 +393,9 @@ func (d Document) ValidateAgainst(supply catalog.Document, snapshotDigest string
 	}
 	for _, packageID := range sortedKeys(d.Selections) {
 		selection := d.Selections[packageID]
+		if selection.Provenance == ProvenanceExperiment {
+			continue
+		}
 		adapterID, err := supply.AdapterFor(selection.Method, d.Target)
 		if err != nil {
 			problem("selection %q target adapter: %v", packageID, err)
@@ -355,7 +440,8 @@ func (d Document) SemanticDigest() (string, error) {
 	}
 	projection := digestDocument{
 		Schema:     d.Schema,
-		Catalog:    d.Catalog,
+		Provenance: d.Provenance,
+		Requires:   canonicalRequirements(d.Requires),
 		Target:     d.Target,
 		Selections: cloneSelections(d.Selections),
 		Units:      canonicalUnits(d.Units),
@@ -396,11 +482,12 @@ func (d Document) ClosureDigest(selectionID string) (string, error) {
 }
 
 type digestDocument struct {
-	Schema     string               `json:"schema"`
-	Catalog    CatalogIdentity      `json:"catalog"`
-	Target     software.Target      `json:"target"`
-	Selections map[string]Selection `json:"selections"`
-	Units      map[string]Unit      `json:"units"`
+	Schema     string                    `json:"schema"`
+	Provenance Provenance                `json:"provenance"`
+	Requires   []InstallationRequirement `json:"requires"`
+	Target     software.Target           `json:"target"`
+	Selections map[string]Selection      `json:"selections"`
+	Units      map[string]Unit           `json:"units"`
 }
 
 type closureDigestDocument struct {
@@ -440,6 +527,15 @@ func canonicalUnits(values map[string]Unit) map[string]Unit {
 		})
 		cloned[id] = unit
 	}
+	return cloned
+}
+
+func canonicalRequirements(values []InstallationRequirement) []InstallationRequirement {
+	cloned := make([]InstallationRequirement, len(values))
+	copy(cloned, values)
+	sort.Slice(cloned, func(i, j int) bool {
+		return cloned[i].SoftwareLockDigest < cloned[j].SoftwareLockDigest
+	})
 	return cloned
 }
 

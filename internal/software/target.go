@@ -5,6 +5,7 @@ package software
 import (
 	"fmt"
 	"regexp"
+	"strings"
 )
 
 var targetTokenPattern = regexp.MustCompile(`^[a-z0-9]+(?:[._+-][a-z0-9]+)*$`)
@@ -16,6 +17,17 @@ type Target struct {
 	Arch                string `yaml:"arch" json:"arch"`
 	Distribution        string `yaml:"distribution,omitempty" json:"distribution,omitempty"`
 	DistributionVersion string `yaml:"distribution_version,omitempty" json:"distribution_version,omitempty"`
+}
+
+func (t Target) String() string {
+	parts := []string{t.OS, t.Arch}
+	if t.Distribution != "" {
+		parts = append(parts, t.Distribution)
+	}
+	if t.DistributionVersion != "" {
+		parts = append(parts, t.DistributionVersion)
+	}
+	return strings.Join(parts, "/")
 }
 
 func (t Target) Validate() error {

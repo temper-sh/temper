@@ -107,6 +107,43 @@ func TestValidateReportsRecipeBoundaryProblemsTogether(t *testing.T) {
 	}
 }
 
+func TestPythonRuntimeSourceIsAnExplicitUvClosureUnit(t *testing.T) {
+	document, err := catalog.Parse(validCatalog())
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtimeRecipe := document.Packages["cpython"].Recipes["uv"]
+	if runtimeRecipe.Source.NativeName() != "cpython" {
+		t.Fatalf("runtime native name = %q, want cpython", runtimeRecipe.Source.NativeName())
+	}
+
+	runtimeRecipe.Source.Index = "pypi"
+	cpython := document.Packages["cpython"]
+	cpython.Recipes["uv"] = runtimeRecipe
+	document.Packages["cpython"] = cpython
+	err = document.Validate()
+	if err == nil || !strings.Contains(err.Error(), "Python runtime source cannot declare package-source fields") {
+		t.Fatalf("Validate() error = %v, want mixed runtime/package source refusal", err)
+	}
+}
+
+func TestValidateRejectsUnsupportedPythonRuntimeImplementation(t *testing.T) {
+	document, err := catalog.Parse(validCatalog())
+	if err != nil {
+		t.Fatal(err)
+	}
+	cpython := document.Packages["cpython"]
+	recipe := cpython.Recipes["uv"]
+	recipe.Source.Implementation = "pypy"
+	cpython.Recipes["uv"] = recipe
+	document.Packages["cpython"] = cpython
+
+	err = document.Validate()
+	if err == nil || !strings.Contains(err.Error(), `Python runtime implementation "pypy" is not supported`) {
+		t.Fatalf("Validate() error = %v, want unsupported runtime refusal", err)
+	}
+}
+
 func TestValidateRejectsPolicyShapesThatInventVersionSemantics(t *testing.T) {
 	document, err := catalog.Parse(validCatalog())
 	if err != nil {
@@ -294,6 +331,23 @@ packages:
             closure_digest: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
             target: {os: darwin, arch: arm64}
             evidence: results/software/llama-swap-1.3.0
+  cpython:
+    description: uv-managed CPython runtime
+    recipes:
+      uv:
+        method: python-environment
+        recipe_revision: cpython-uv/v1
+        source: {kind: python-runtime, implementation: cpython}
+        version_scheme: pep440
+        selection: {policy: range, constraint: ">=3.12,<3.13"}
+        dependencies: []
+        exclude: []
+        gates: [python-smoke.v1]
+        tested:
+          - root_version: 3.12.11
+            closure_digest: dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+            target: {os: darwin, arch: arm64}
+            evidence: results/software/cpython-3.12.11
   mlx:
     description: MLX framework
     recipes:
@@ -303,7 +357,7 @@ packages:
         source: {kind: python-index, index: pypi, distribution: mlx}
         version_scheme: pep440
         selection: {policy: range, constraint: ">=1,<2"}
-        dependencies: []
+        dependencies: [{package: cpython, constraint: ">=3.12,<3.13"}]
         exclude: []
         gates: [import-smoke.v1]
         tested:
@@ -321,6 +375,7 @@ packages:
         version_scheme: pep440
         selection: {policy: range, constraint: ">=0.1,<0.2"}
         dependencies:
+          - {package: cpython, constraint: ">=3.12,<3.13"}
           - {package: mlx, constraint: ">=1.2,<1.3"}
         exclude: []
         gates: [runtime-smoke.v1]

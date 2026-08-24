@@ -34,8 +34,10 @@ func Resolve(supply catalog.Snapshot, target software.Target, resolved time.Time
 	}
 	document := softwarelock.Document{
 		Schema: softwarelock.SchemaV1,
-		Catalog: softwarelock.CatalogIdentity{
-			Schema: supply.Document.Schema, Sequence: supply.Document.Sequence, SHA256: supply.SHA256,
+		Provenance: softwarelock.Provenance{
+			Catalog: &softwarelock.CatalogIdentity{
+				Schema: supply.Document.Schema, Sequence: supply.Document.Sequence, SHA256: supply.SHA256,
+			},
 		},
 		Target: target, Resolved: resolved.Format("2006-01-02"),
 		Selections: map[string]softwarelock.Selection{}, Units: map[string]softwarelock.Unit{},
@@ -79,7 +81,8 @@ func Resolve(supply catalog.Snapshot, target software.Target, resolved time.Time
 			return softwarelock.Document{}, err
 		}
 		selection := softwarelock.Selection{
-			Method: request.Method, Adapter: adapterID, RecipeRevision: recipe.RecipeRevision, RootUnit: candidate.RootUnit,
+			Provenance: softwarelock.ProvenanceCatalog,
+			Method:     request.Method, Adapter: adapterID, RecipeRevision: recipe.RecipeRevision, RootUnit: candidate.RootUnit,
 		}
 		document.Selections[request.Package] = selection
 		for unitID, resolvedUnit := range candidate.Units {
@@ -146,11 +149,13 @@ func validateCandidate(supply catalog.Document, target software.Target, packageI
 		return false, fmt.Errorf("root native name is %q, recipe requires %q", root.NativeName, recipe.Source.NativeName())
 	}
 	probe := softwarelock.Document{
-		Schema:  softwarelock.SchemaV1,
-		Catalog: softwarelock.CatalogIdentity{Schema: supply.Schema, Sequence: supply.Sequence, SHA256: strings.Repeat("0", 64)},
-		Target:  target, Resolved: "2000-01-01",
+		Schema: softwarelock.SchemaV1,
+		Provenance: softwarelock.Provenance{Catalog: &softwarelock.CatalogIdentity{
+			Schema: supply.Schema, Sequence: supply.Sequence, SHA256: strings.Repeat("0", 64),
+		}},
+		Target: target, Resolved: "2000-01-01",
 		Selections: map[string]softwarelock.Selection{
-			packageID: {Method: recipe.Method, Adapter: adapterID, RecipeRevision: recipe.RecipeRevision, RootUnit: candidate.RootUnit},
+			packageID: {Provenance: softwarelock.ProvenanceCatalog, Method: recipe.Method, Adapter: adapterID, RecipeRevision: recipe.RecipeRevision, RootUnit: candidate.RootUnit},
 		},
 		Units: make(map[string]softwarelock.Unit, len(candidate.Units)),
 	}

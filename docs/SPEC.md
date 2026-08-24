@@ -361,13 +361,41 @@ package recipe references that definition and owns package names and version
 rules. Each catalog snapshot names at most one canonical adapter for a method/target;
 alternatives are explicit variants rather than environment-driven guesses.
 Choosing the declared target adapter inside the same method is deterministic
-target resolution; changing methods is explicit and never a fallback. The
-current primary runtime is `llama.cpp` through its declared target system
-package adapter. Supported, non-default `rapid-mlx` is the important
-counterexample: selecting its `python-environment`/`uv` recipe instead of a
-lagging `system-package` recipe requires an explicit request and preserves its
-reviewed MLX constraint. v1 qualifies only Apple Silicon, but this schema and
-the installation workflow do not make Homebrew or macOS the domain abstraction.
+target resolution; changing methods is explicit and never a fallback.
+
+**Catalog curation starts from the concrete package, not a preferred package
+manager (owner, 2026-08-20).** This is the Temper-wide rule, including but not
+limited to the Field Kit base. For a Temper-managed application, release review
+first considers a verified isolated upstream artifact; Python applications use
+an exact Temper-owned `uv` environment when their dependency closure is part of
+the qualification; `system-package` is reserved for bootstrap tools, genuine
+system-wide dependencies, packages available only there, or a distribution
+shown to be materially more maintainable. `source-revision` is the last resort.
+This order chooses which reviewed recipes the catalog offers; it is never an
+automatic fallback chain at resolution or installation time.
+
+On the current macOS target, Homebrew is an acceptable owner for the shared
+bootstrap tools `uv` and `hf`. It does not own the Python applications that uv
+installs: uv selects and materializes each exact interpreter and package closure
+inside a Temper-owned environment. The Hugging Face CLI is likewise a tool, not
+model identity. Temper may use only revision-pinned `hf` operations; rendered
+llama-server commands still use an exact local `-m` path with `--offline` and
+never the moving llama.cpp `-hf` shortcut. Homebrew, uv, hf, and every package
+they install remain visible catalog/lock/receipt facts rather than ambient
+commands discovered from `PATH`.
+
+The initial managed inventory is deliberately finite. `uv` and `hf` are the
+shared Homebrew-managed bootstrap tools. `llama-swap` and `llama.cpp` form the
+Field Kit serving base. The 2026-08-24 static and bounded runtime comparison
+selected isolated `release-artifact` installation through the compiled
+`upstream-release` adapter; recipe publication still waits for its real
+scratch install/check/remove/second-run gate. Supported,
+non-default `rapid-mlx` and `mlx-dspark` use explicit
+`python-environment`/`uv` recipes so their Python and MLX closures are isolated
+and locked. Pi is not in this inventory: it is a user-managed harness whose
+selected integration authorizes configuration rendering, not installation. v1
+qualifies only Apple Silicon, but this schema and workflow do not make Homebrew
+or macOS the domain abstraction.
 
 **Profile** has one precise catalog meaning: a versioned, evidence-backed
 configuration record. Profiles may exist for model artifacts and runtimes,
@@ -598,13 +626,17 @@ Lifecycle:
 
 - the software-supply lifecycle (**sequenced first 2026-08-20**) — resolve a
   provider-native policy through the target's declared adapter into an exact
-  `software.lock.yaml`, then explicitly install/check/remove that closure and
-  record observed state in an installation receipt. "Latest" and "minimum
+  `software.lock.yaml`, or accept an exact lock generated for an explicit
+  experiment, then install/check/remove that closure as one named installation
+  and record observed state in its receipt. Experiment and catalog provenance
+  may coexist; installation never needs the active catalog. "Latest" and "minimum
   tested" are inputs to explicit resolution, never floating installed state.
   Every effect runs through the adapter family; changing installation method,
   such as `system-package`/Homebrew → `python-environment`/`uv`, is explicit,
-  and shared package-manager state is touched only through an ownership and
-  reconciliation contract;
+  and shared package-manager state is touched only through a root-wide claim,
+  acquisition, and reconciliation contract. Experiment locks may require exact
+  verified base-lock receipts and keep isolated software below their own named
+  installation directories;
 - `temper init` — the wizard described above: deterministic machine checks,
   model universe, one-by-one tool choices, harness integrations, mode bindings
   and allowances. Writes manifest.yaml once.
@@ -614,10 +646,13 @@ Lifecycle:
   exposes the reversible base the field kit consumes — canonical machine
   facts, provenance, llama-swap and basic dependencies, isolated profile
   rendering, scoped service lifecycle, artifact verification, and removal of
-  only what its receipt proves the run added. Stages, RESULT lines,
+  only what its receipt and the root-wide claim state permit. A stable base and
+  multiple experiment locks/receipts may coexist below one explicit root.
+  Stages, RESULT lines,
   tune/deviation/conclude, AGENT.md and keep-or-restore stay field-kit's;
-  packet identity binds the Temper binary, software lock/receipt, manifest
-  lock, generation, and machine facts. Re-witnessing after an update is a
+  packet identity binds the Temper binary, the ordered base/experiment
+  installation-lock-receipt set, manifest lock, generation, and machine facts.
+  Re-witnessing after an update is a
   field-kit run against this base.
 - `temper report` — print the current status-snapshot paste-block (probe
   reports are field-kit artifacts — 2026-08-14).
@@ -627,10 +662,14 @@ Lifecycle:
 harnesses and offers each integration separately. Pi may receive native
 extensions/config; Codex and Claude Code receive MCP/plugin configuration; a
 generic MCP adapter is possible. Shared helper tools have one core with thin
-transport adapters. Installing a harness itself is outside Temper's default
-scope, and Temper neither acquires nor validates provider credentials. The
-harness owns auth; Temper renders only the selected integration and displays
-its local/remote data boundary.
+transport adapters. Harness executables are external user-managed tools; Pi is
+the first concrete case. Selecting a harness in the manifest permits Temper to
+render and check that integration only. It never permits Temper to install,
+upgrade, remove, or choose the harness, its language runtime, or its package
+manager. Temper neither acquires nor validates provider credentials. The
+harness owns its executable, auth, foreground model, and provider billing;
+Temper renders only the selected integration and displays its local/remote data
+boundary.
 
 ## Artifacts (one writer each)
 

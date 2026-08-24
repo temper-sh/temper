@@ -1,13 +1,17 @@
-// Command temper resolves immutable artifact identities, materializes explicit
-// layout sets, and renders managed config generations. It does not sequence an
-// install or touch the live service.
+// Command temper resolves immutable artifact identities, manages exact
+// software installations, materializes explicit layout sets, and renders
+// managed config generations. It never infers or touches the live legacy
+// service root.
 package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -19,6 +23,9 @@ import (
 	"github.com/temper-sh/temper/internal/huggingface"
 	"github.com/temper-sh/temper/internal/machine"
 	resolveverb "github.com/temper-sh/temper/internal/resolve"
+	"github.com/temper-sh/temper/internal/software/adapter"
+	"github.com/temper-sh/temper/internal/software/adapter/upstreamrelease"
+	"github.com/temper-sh/temper/internal/softwarecmd"
 	updateverb "github.com/temper-sh/temper/internal/update"
 	"github.com/temper-sh/temper/internal/upstream"
 )
@@ -33,21 +40,25 @@ func run(ctx context.Context, arguments []string, stdout, stderr io.Writer) int 
 	return runWithDependencies(ctx, arguments, stdout, stderr, dependencies{
 		newUpstream:   newUpstreamReader,
 		detectMachine: machine.Detect,
+		newSoftware:   newSoftwareCommand,
 	})
 }
 
 type upstreamFactory func() (upstream.Reader, error)
 type machineDetector func(context.Context) (budget.Machine, error)
+type softwareCommandFactory func() (softwarecmd.Command, error)
 
 type dependencies struct {
 	newUpstream   upstreamFactory
 	detectMachine machineDetector
+	newSoftware   softwareCommandFactory
 }
 
 func runWithUpstream(ctx context.Context, arguments []string, stdout, stderr io.Writer, newSource upstreamFactory) int {
 	return runWithDependencies(ctx, arguments, stdout, stderr, dependencies{
 		newUpstream:   newSource,
 		detectMachine: machine.Detect,
+		newSoftware:   newSoftwareCommand,
 	})
 }
 
@@ -73,6 +84,17 @@ func runWithDependencies(ctx context.Context, arguments []string, stdout, stderr
 		return runCheck(ctx, arguments[1:], stdout, stderr, deps.detectMachine)
 	case "update":
 		return runUpdate(ctx, arguments[1:], stdout, stderr, deps.newUpstream)
+	case "software":
+		if deps.newSoftware == nil {
+			fmt.Fprintln(stderr, "temper software: command dependencies are unavailable")
+			return 1
+		}
+		command, err := deps.newSoftware()
+		if err != nil {
+			fmt.Fprintf(stderr, "temper software: construct command: %v\n", err)
+			return 1
+		}
+		return command.Run(ctx, arguments[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "temper: unknown verb %q\n\n", arguments[0])
 		usage(stderr)
@@ -303,6 +325,30 @@ func newUpstreamReader() (upstream.Reader, error) {
 	return huggingface.New(huggingface.Config{Token: os.Getenv("HF_TOKEN")})
 }
 
+func newSoftwareCommand() (softwarecmd.Command, error) {
+	reader, err := upstreamrelease.NewHTTPReader(&http.Client{})
+	if err != nil {
+		return softwarecmd.Command{}, err
+	}
+	member, err := upstreamrelease.NewInstallationAdapter(reader)
+	if err != nil {
+		return softwarecmd.Command{}, err
+	}
+	family, err := adapter.NewInstallationFamily(member)
+	if err != nil {
+		return softwarecmd.Command{}, err
+	}
+	return softwarecmd.New(family, machine.DetectTarget, newSoftwareInvocationID)
+}
+
+func newSoftwareInvocationID() (string, error) {
+	var identity [16]byte
+	if _, err := rand.Read(identity[:]); err != nil {
+		return "", err
+	}
+	return "software-" + hex.EncodeToString(identity[:]), nil
+}
+
 func changeStatus(changed, dryRun bool) string {
 	if !changed {
 		return "unchanged"
@@ -366,6 +412,7 @@ func usage(writer io.Writer) {
 	fmt.Fprintln(writer, "  temper fetch <layout-id> --root PATH [options]")
 	fmt.Fprintln(writer, "  temper check --root PATH [options]")
 	fmt.Fprintln(writer, "  temper update [layout-id] [options]")
+	fmt.Fprintln(writer, "  temper software <install|check|remove> [options]")
 	fmt.Fprintln(writer, "  temper version")
 	fmt.Fprintln(writer, "  temper help")
 }

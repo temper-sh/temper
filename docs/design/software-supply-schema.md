@@ -1,24 +1,37 @@
 # Software supply + lock — C4/C5 design
 
-Status: **approved by owner**, 2026-08-20. The executable M2 Phase A shared
+Status: **approved by owner**, extended 2026-08-21 for experiment locks and
+layered installations. The executable M2 Phase A shared
 resolver now consumes this surface: strict catalog/lock parsing and validation,
 normalized target selection, compiled adapter descriptor matching,
 provider-neutral candidate closures, SemVer/PEP 440 policy selection, closure
 invariants, canonical digests, and the dry-run/concurrency-safe atomic lock
 transaction. The Homebrew candidate protocol and strict JSON translator are
-now executable behind an injected runner. The uv reader, tested-status
-reporting, and the public command surface remain pending. The internal signed
+now executable behind an injected runner, including a controlled production
+non-shell process edge. Four-way tested-status derivation is executable and is
+returned by software resolution without being persisted. The deterministic
+`upstream-release` resolver and its production HTTPS reader plus isolated
+installer/inspector/remover are executable; their archive and effect contracts
+are covered hermetically. The uv reader and public command surface remain
+pending. The internal signed
 channel/catalog verification, immutable store, rollback and equivocation
 policy, capability gate, dry-run, and active-pointer transaction are now
-executable and hermetically tested. Production trust/bootstrap and transport
-inputs remain release work. Later schema changes still require review.
+executable and hermetically tested; a read-only consumer verifies the active
+snapshot or an injected embedded bootstrap before use. Actual production
+trust/bootstrap bytes and transport inputs remain release work. Later schema
+changes still require review.
 
-The current Field Kit runtime path is `llama-cpp`. `rapid-mlx` remains a
-supported, non-default package and a useful supply-chain fixture: it exercises
-an explicit `python-environment`/`uv` method, PEP 440, and a constrained MLX
-dependency whose newer releases may regress performance. Nothing selects or
-installs `rapid-mlx` unless the user or a reviewed packet explicitly requests
-it.
+The isolation-first curation policy applies to every Temper installation, not
+only the Field Kit base. On macOS, the deliberately small shared bootstrap
+layer may use Homebrew for `uv` and `hf`; uv then owns exact Python runtimes and
+application environments below that layer. The Field Kit serving base needs
+`llama-swap` and `llama-cpp`; the 2026-08-24 method review selects isolated
+`release-artifact` installation for both on macOS Apple Silicon. The concrete
+source/adapter is implemented; its explicitly authorized scratch round-trip
+still precedes recipe publication. `rapid-mlx` and `mlx-dspark` remain supported, non-default
+Python packages. Their explicit `python-environment`/`uv` recipes exercise PEP
+440 and exact Python/MLX closure control. Nothing selects or installs either
+package unless the user or a reviewed packet explicitly requests it.
 
 The Phase A resolver answers one narrow question:
 
@@ -27,7 +40,19 @@ The Phase A resolver answers one narrow question:
 
 It does not install that closure. Resolution is a read plus pure selection and
 one lock-file commit. Installation and its receipt are the following M2 Phase B
-slice.
+slice. Its schema-independent pure planner now handles named installations,
+verified base requirements, direct or catalog-backed experiment provenance,
+prepared recovery, and root-wide shared claims. The approved C6 receipt,
+root-state, CLI output, and packet-identity surface are in
+`../contracts/software-install.md`. Strict canonical receipt/root-state
+documents, derived-path conditional atomic stores, and internal keyed-adapter
+install orchestration are now executable. The read-only check analyzer and
+lock/store/adapter reader are executable as well. Provenance-guided removal now
+has a pure planner, a serialized active-to-retiring final-release transition,
+conditional receipt deletion, keyed adapter orchestration, and explicit-rerun
+recovery. The public commands, remaining concrete adapters, and packet binding
+remain Phase B work. The first concrete isolated member is the
+`upstream-release` adapter; public composition and its real scratch gate remain.
 
 ## Facts and their owners
 
@@ -40,13 +65,73 @@ slice.
 | adapter-native package name and source | supply catalog recipe | provider-specific knowledge stops at the adapter edge |
 | version policy, constraints, exclusions | supply catalog recipe | update policy, not a resolved or installed fact |
 | exact tested evidence | supply catalog recipe evidence | signed catalog knowledge; local files never claim verification |
-| exact desired closure | `software.lock.yaml` | resolution snapshot; says nothing about actual installation |
-| actual installed closure and ownership | Phase B installation receipt | observed proof; never inferred from the desired lock |
+| exact desired closure, resolution provenance, required base lock identities | `software.lock.yaml` | portable resolution snapshot; says nothing about actual installation |
+| per-installation observed closure and relation | Phase B installation receipt | historical proof; never inferred from desired state |
+| current shared acquisition, lifecycle, claims, and prepared operations | root-wide Phase B software state | one concurrency/removal authority across base and experiment receipts |
 
-The lock snapshots catalog identity and target facts used by resolution because
-it must remain interpretable after the active catalog changes. That is history,
-not a second live source of policy. The receipt will bind the lock's semantic
+The lock snapshots every immutable resolution input that applies. Catalog
+provenance records a catalog snapshot when one participated; experiment
+provenance records the exact experiment definition when one authorized fresh
+software. They are independent because an experiment may use both. That is
+history, not a second live source of policy. Receipts bind the lock's semantic
 digest rather than copying its selection rules.
+
+## Management boundary and recipe curation
+
+Presence in this catalog has one strong meaning: Temper is permitted to resolve,
+install, check, and receipt that logical package after an explicit request. A
+user-managed executable therefore has no placeholder package, `external`
+method, or empty recipe here. Its detection and compatibility belong to the
+later qualification/harness profile; its selected integration belongs to the
+manifest. This keeps permission to render configuration separate from
+permission to mutate someone else's tool installation.
+
+The initial inventory is finite:
+
+| Package | Ownership | Candidate recipe status |
+|---|---|---|
+| `uv` | Temper-managed shared bootstrap tool | `system-package`/Homebrew on macOS; lock and receipt the exact formula closure |
+| `hf` | Temper-managed shared model-source tool | `system-package`/Homebrew on macOS; only revision-pinned operations are eligible |
+| `llama-swap` | Temper-managed Field Kit base | isolated `release-artifact` selected on macOS Apple Silicon; concrete recipe and scratch round-trip pending |
+| `llama-cpp` | Temper-managed Field Kit base | isolated `release-artifact` selected on macOS Apple Silicon after Metal/runtime and compatibility screening; concrete recipe and scratch round-trip pending |
+| `rapid-mlx` | Temper-managed, optional and non-default | isolated `python-environment`/`uv`; lock the exact interpreter and MLX closure |
+| `mlx-dspark` | Temper-managed, optional and non-default | isolated `python-environment`/`uv`; lock the exact interpreter and Python/MLX closure |
+| Pi | user-managed harness | absent from this catalog; render selected config and report observed compatibility only |
+
+The dated [Field Kit base method
+review](../qualification/field-kit-base-method-review-2026-08-24.md) rejects
+both Homebrew application variants at the exact-install gate. The two isolated
+release artifacts passed the bounded model-backed runtime/router gate, so the
+review selects `release-artifact` with exact catalog-reviewed releases. It does
+not yet publish the concrete recipes or add tested evidence: the release
+adapter is hermetically executable; its real scratch
+install/check/remove/second-run gate remains.
+
+Recipe curation prefers an isolated verified upstream artifact for a native
+application and an isolated exact environment for a language application.
+`system-package` is admitted for a bootstrap/environment manager, a genuine
+system-wide dependency, software available only through that channel, or a
+distribution shown by review to be materially more maintainable. Building an
+exact source revision is the last resort. This is publication policy: the
+resolver never walks the list, discovers whatever happens to be installed, or
+changes method automatically.
+
+`hf` the executable and llama.cpp's `-hf` flag are unrelated ownership
+surfaces. The former is an acceptable cataloged Homebrew tool; when Temper uses
+it to fetch artifacts, it may act only on an exact revision already owned by
+`manifest.lock.yaml`. The latter asks llama-server to resolve a moving
+repository/quant shortcut at runtime and is forbidden. The native M1
+resolver/fetcher currently uses Temper's Go Hugging Face client, so it does not
+discover or require an ambient `hf` command. Any later workflow that invokes
+the cataloged CLI must pass its absolute observed path, suppress update and
+telemetry behavior, and preserve the existing exact-revision and artifact-hash
+checks.
+
+The common adapter values and lock graph are intentionally language-neutral.
+If a future concrete Temper-managed Node application appears, its reviewed
+method can model Node and every package-manager artifact as ordinary exact
+closure units behind a new adapter. No Node-specific fields, manager, or
+ambient-runtime assumptions are added until that package exists.
 
 ## Independent catalog lifecycle
 
@@ -140,8 +225,9 @@ a refusal before resolution or installation.
 
 ## Three identities, not one provider string
 
-1. **Package** — the thing Temper needs (`llama-swap`, `llama-cpp`,
-   `rapid-mlx`).
+1. **Package** — the Temper-managed thing (`uv`, `hf`, `llama-swap`,
+   `llama-cpp`, `rapid-mlx`, `mlx-dspark`). User-managed harnesses such as Pi
+   are outside this identity set.
 2. **Method** — the portable strategy (`system-package`,
    `python-environment`, `release-artifact`, `source-revision`).
 3. **Adapter** — the concrete implementation for a target (`homebrew`, `uv`,
@@ -157,14 +243,14 @@ fallback. Changing `rapid-mlx` from `system-package` to
 `python-environment`/`uv` *is* a method change and always requires an explicit
 selection. Discovery of an installed package manager never changes either.
 That example demonstrates method safety; it does not make `rapid-mlx` the
-primary runtime. The current primary runtime package is `llama-cpp` through
-the declared target system-package adapter.
+primary runtime or choose a shipping method for `llama.cpp`.
 
 ## `temper-software-supply/v1`
 
 Catalog snapshots are published independently of Temper binaries. The notation
 below is schematic: angle-bracket values are not seed data and do not invent
-unreviewed versions.
+unreviewed versions. Its Homebrew records demonstrate the shared-adapter shape;
+they are candidate variants, not selected Temper application recipes.
 
 ```yaml
 schema: temper-software-supply/v1
@@ -190,6 +276,10 @@ adapters:
     method: python-environment
     protocol: temper-installer-adapter/v1
     effect_model: isolated
+  upstream-release:
+    method: release-artifact
+    protocol: temper-installer-adapter/v1
+    effect_model: isolated
 
 target_bindings:
   - method: system-package
@@ -197,25 +287,95 @@ target_bindings:
       os: darwin
       arch: arm64
     adapter: homebrew
+  - method: python-environment
+    target:
+      os: darwin
+      arch: arm64
+    adapter: uv
+  - method: release-artifact
+    target:
+      os: darwin
+      arch: arm64
+    adapter: upstream-release
 
 packages:
-  llama-swap:
-    description: local model router
+  uv:
+    description: shared Python environment manager
     recipes:
       homebrew:
         method: system-package
         recipe_revision: <recipe revision>
         source:
           kind: homebrew-formula
-          tap: <tap>
-          formula: <formula>
+          tap: homebrew/core
+          formula: uv
         version_scheme: semver
         selection:
           policy: latest
           minimum_compatible: <reviewed lower bound>
         dependencies: []
+        exclude: [<reviewed known-bad version, when any>]
+        gates: [<bootstrap-tool gate id>]
+        tested:
+          - root_version: <exact version>
+            closure_digest: <sha256>
+            target:
+              os: darwin
+              arch: arm64
+            evidence: <stable Results or release evidence id>
+
+  hf:
+    description: shared Hugging Face source CLI
+    recipes:
+      homebrew:
+        method: system-package
+        recipe_revision: <recipe revision>
+        source:
+          kind: homebrew-formula
+          tap: homebrew/core
+          formula: hf
+        version_scheme: semver
+        selection:
+          policy: latest
+          minimum_compatible: <reviewed lower bound>
+        dependencies: []
+        exclude: [<reviewed known-bad version, when any>]
+        gates: [<revision-pinned-download gate id>]
+        tested:
+          - root_version: <exact version>
+            closure_digest: <sha256>
+            target:
+              os: darwin
+              arch: arm64
+            evidence: <stable Results or release evidence id>
+
+  llama-swap:
+    description: local model router
+    recipes:
+      upstream-release:
+        method: release-artifact
+        recipe_revision: <reviewed release recipe revision>
+        source:
+          kind: release-archive
+          name: llama-swap
+          repository: <stable upstream repository identity>
+          revision: <exact source commit>
+          artifacts:
+            - target: {os: darwin, arch: arm64}
+              locator: <exact HTTPS release asset locator>
+              sha256: <sha256>
+              size: <exact compressed bytes>
+              unpacked_size: <sum of regular-file bytes>
+              installed_entries: <exact file/directory/symlink count>
+              format: tar.gz
+              archive_root: .
+        version_scheme: opaque
+        selection:
+          policy: exact
+          exact: <catalog-reviewed release tag>
+        dependencies: []
         exclude: []
-        gates: [<gate id>]
+        gates: [<router gate id>]
         tested:
           - root_version: <exact version>
             closure_digest: <sha256>
@@ -227,22 +387,83 @@ packages:
   llama-cpp:
     description: primary llama.cpp runtime
     recipes:
-      homebrew:
-        method: system-package
-        recipe_revision: <recipe revision>
+      upstream-release:
+        method: release-artifact
+        recipe_revision: <reviewed release recipe revision>
         source:
-          kind: homebrew-formula
-          tap: <tap>
-          formula: <formula>
-        version_scheme: semver
+          kind: release-archive
+          name: llama-cpp
+          repository: <stable upstream repository identity>
+          revision: <exact source commit>
+          artifacts:
+            - target: {os: darwin, arch: arm64}
+              locator: <exact HTTPS release asset locator>
+              sha256: <sha256>
+              size: <exact compressed bytes>
+              unpacked_size: <sum of regular-file bytes>
+              installed_entries: <exact file/directory/symlink count>
+              format: tar.gz
+              archive_root: <exact top-level archive directory>
+        version_scheme: opaque
         selection:
-          policy: latest
-          minimum_compatible: <reviewed lower bound>
+          policy: exact
+          exact: <catalog-reviewed build tag>
         dependencies: []
-        exclude: [<reviewed known-bad version, when any>]
+        exclude: []
         gates: [<runtime qualification gate id>]
         tested:
           - root_version: <exact version>
+            closure_digest: <sha256>
+            target:
+              os: darwin
+              arch: arm64
+            evidence: <stable Results or release evidence id>
+
+  mlx:
+    description: MLX runtime dependency shared by reviewed Python packages
+    recipes:
+      uv:
+        method: python-environment
+        recipe_revision: <recipe revision>
+        source:
+          kind: python-index
+          index: <index identity>
+          distribution: mlx
+        version_scheme: pep440
+        selection:
+          policy: range
+          constraint: <reviewed MLX constraint>
+        dependencies:
+          - package: cpython
+            constraint: <reviewed compatible CPython constraint>
+        exclude: [<reviewed known-bad version, when any>]
+        gates: [<dependency gate id>]
+        tested:
+          - root_version: <exact version>
+            closure_digest: <sha256>
+            target:
+              os: darwin
+              arch: arm64
+            evidence: <stable Results or release evidence id>
+
+  cpython:
+    description: uv-managed Python execution runtime
+    recipes:
+      uv:
+        method: python-environment
+        recipe_revision: <recipe revision>
+        source:
+          kind: python-runtime
+          implementation: cpython
+        version_scheme: pep440
+        selection:
+          policy: range
+          constraint: <reviewed globally supported CPython range>
+        dependencies: []
+        exclude: [<reviewed known-bad interpreter build, when any>]
+        gates: [<interpreter gate id>]
+        tested:
+          - root_version: <exact CPython version>
             closure_digest: <sha256>
             target:
               os: darwin
@@ -264,6 +485,37 @@ packages:
           policy: range
           constraint: <reviewed rapid-mlx constraint>
         dependencies:
+          - package: cpython
+            constraint: <reviewed compatible CPython constraint>
+          - package: mlx
+            constraint: <reviewed MLX constraint>
+        exclude: []
+        gates: [<gate id>]
+        tested:
+          - root_version: <exact version>
+            closure_digest: <sha256>
+            target:
+              os: darwin
+              arch: arm64
+            evidence: <stable Results or release evidence id>
+
+  mlx-dspark:
+    description: supported non-default MLX speculative runtime
+    recipes:
+      uv:
+        method: python-environment
+        recipe_revision: <recipe revision>
+        source:
+          kind: python-index
+          index: <index identity>
+          distribution: <distribution name>
+        version_scheme: pep440
+        selection:
+          policy: range
+          constraint: <reviewed mlx-dspark constraint>
+        dependencies:
+          - package: cpython
+            constraint: <reviewed compatible CPython constraint>
           - package: mlx
             constraint: <reviewed MLX constraint>
         exclude: []
@@ -293,6 +545,20 @@ packages:
   binding, but the schema does not make `darwin` or Homebrew universal.
 - A recipe's `source` is a strict adapter-owned tagged shape. There is no shell
   command field, generic option bag, or executable catalog hook.
+- A `release-archive` source belongs only to the compiled `upstream-release`
+  adapter. It records the native name, repository identity, exact source
+  revision, and a non-overlapping set of target assets. Each asset freezes an
+  HTTPS locator, compressed and unpacked sizes, installed-entry count,
+  lowercase SHA-256, `tar.gz` format, and the exact safe archive root. Its
+  version policy is always `exact`: catalog publication adopts a newer release
+  after review; installation never asks an upstream service what is latest.
+- A `python-runtime` source is an adapter-owned logical dependency, not a
+  package-index distribution. v1 accepts only `implementation: cpython` behind
+  `uv`. Each Python application recipe constrains that logical dependency just
+  like `mlx`; provider resolution must return one exact reachable interpreter
+  unit with its immutable artifact and build revision. Interpreter ABI/wheel
+  compatibility is verified while constructing that exact closure, not inferred
+  later from ambient Python.
 - `version_scheme` determines parsing and comparison. SemVer is never assumed:
   v1 recognizes `semver`, `pep440`, `git-revision`, and `opaque`; an adapter
   must implement the declared scheme or refuse the recipe. `opaque` supports
@@ -344,7 +610,8 @@ The family provides narrow roles so reads and effects do not become one opaque
 | reconciliation inspector | read | after interruption/unknown outcome, observe provider state before any retry |
 | reconciliation decision | pure | desired + before/after observations → complete/continue/refuse classification |
 | verifier | read | observed post-state → provider-neutral receipt evidence |
-| remover | side effect | remove only units whose receipt proves Temper added |
+| removal planner | pure | receipt + exact observation + shared authority → preserve/release/retire plan or refusal |
+| remover | side effect | execute only prepared absolute removals; never infer ownership or resolution |
 
 The adapter translates vendor output at the edge into Temper-owned values:
 `Candidate`, `ResolvedUnit`, `ObservedUnit`, `InstallPlan`, `EffectOutcome`, and
@@ -378,27 +645,50 @@ The Homebrew resolver implements one narrow read protocol for
    provider candidate.
 
 Both provider commands share one injected timeout budget and have no inner
-retry. Process execution is not yet bound in the production composition root;
-black-box tests use a recording runner and never invoke Homebrew or the
-network. The provider's `all` bottle is the only fallback to an exact macOS
-bottle tag because it is an explicit provider claim of portability.
+retry. The production process edge invokes Homebrew directly without a shell
+and disables its automatic update, analytics, prompts, and incidental GitHub
+API use; the public command composition root is not wired yet. Black-box tests
+use a recording runner and never invoke Homebrew or the network. The provider's
+`all` bottle is the only fallback to an exact macOS bottle tag because it is an
+explicit provider claim of portability.
 
-The uv edge is deliberately gated on one remaining surface decision. An exact
-Python resolution depends on interpreter implementation, version and ABI as
-well as platform markers, while v1 currently gives the recipe only an index
-and distribution and gives machine `target` only OS/distribution/architecture
-facts. Ambient Python cannot fill that gap: it would make identical inputs
-resolve differently. uv's rich workspace-metadata JSON is also explicitly a
-preview schema, so parsing it cannot silently become the long-lived adapter
-contract.
+The `upstream-release` resolver performs no network read. For `darwin/arm64`
+it requires an exact `release-artifact`/`release-archive` recipe, selects the
+one reviewed target asset, and copies its version, revision, locator, hash,
+sizes, format, archive root, and installed-entry count into one dependency-free
+isolated lock unit. The production transport performs one context-bound
+download for that locked locator, permits at most five HTTPS-only redirects,
+and owns no retry, cache, credentials, or release discovery. Hermetic tests
+inject the archive bytes and never use the network.
 
-Before implementing uv, D16 must choose and test where interpreter policy and
-identity live. The current lean is for a uv recipe to declare a compatible
-Python policy, for resolution to select an exact uv-managed interpreter, and
-for the lock to record that interpreter as a unit in the isolated closure.
-The alternative is adding Python implementation/version/ABI to the resolution
-target. Until reviewed, the adapter refuses to exist rather than emitting an
-OS-only lock that looks exact but is not.
+Its effect member publishes
+`<installation>/upstream-release/<scope>/current/payload`. It downloads into a
+private stage, verifies compressed size and SHA-256 before parsing, and then
+validates the complete tar manifest before extraction. Absolute/traversing or
+duplicate paths, privileged modes, hard links and special files, escaping or
+dangling symlinks, content outside the declared archive root, and size/entry
+count drift all refuse. Files are extracted into a new immutable generation;
+an adapter-private canonical marker and the verified source archive retain the
+evidence needed to re-derive and re-hash the exact installed tree. One atomic
+relative `current` symlink rename is the publish commit, so a failed add or
+repair leaves the prior generation selected. Inspection refuses symlinked
+ancestors and checks the pointer, group layout, marker, retained archive, every
+payload path, type, normalized mode, size, hash, and safe link target. Removal
+deletes only the exact prepared scope directory and refuses a symlink ancestor.
+
+The uv interpreter surface is settled. A Python application recipe declares a
+normal catalog dependency on the adapter-native `python-runtime`/`cpython`
+package with its compatible PEP 440 constraint. Provider resolution selects an
+exact uv-managed interpreter and returns it as a reachable closure unit with
+version, build revision, immutable artifact locator/hash, and the application's
+isolated scope. Exact wheel artifacts plus that interpreter unit and the lock's
+target bind the ABI decision; ambient Python never participates.
+
+The remaining uv work is an adapter reader/translator contract. uv's rich
+workspace-metadata JSON is explicitly a preview schema, so it cannot silently
+become the long-lived boundary. The implementation must use a reviewed stable
+command/output surface or a deliberately owned narrow protocol, and it must
+refuse when it cannot prove the complete interpreter-and-package closure.
 
 Each installer must meet the same semantic contract:
 
@@ -416,17 +706,28 @@ unpinned package-manager command satisfied the lock.
 
 ## `temper-software-lock/v1`
 
-The lock is mechanically written by explicit software resolution/update. It is
-separate from `manifest.lock.yaml`: Field Kit needs executable software before
-a user manifest exists, and model/patch resolution has a different writer and
-lifecycle.
+The lock is mechanically written by explicit software resolution/update or by
+an explicit Labs/Field Kit experiment-lock generator. It is separate from
+`manifest.lock.yaml`: executable experiment software can exist before a user
+manifest, and model/patch resolution has a different writer and lifecycle.
+Installation consumes the exact lock without reading a catalog. The example
+below intentionally demonstrates catalog-backed experiment provenance plus
+shared and isolated variants; it is not a chosen Temper package set or method
+decision.
 
 ```yaml
 schema: temper-software-lock/v1
-catalog:
-  schema: temper-software-supply/v1
-  sequence: <catalog sequence>
-  sha256: <catalog file sha256>
+provenance:
+  catalog:                         # optional when experiment is present
+    schema: temper-software-supply/v1
+    sequence: <catalog sequence>
+    sha256: <catalog file sha256>
+  experiment:                      # optional for an ordinary catalog lock
+    schema: <exact experiment-definition schema>
+    id: <stable experiment id>
+    definition_sha256: <canonical experiment-definition sha256>
+requires:
+  - software_lock_digest: <required base software-lock semantic sha256>
 target:
   os: darwin
   arch: arm64
@@ -435,58 +736,113 @@ target:
 resolved: <date>
 
 selections:
+  uv:
+    provenance: catalog
+    method: system-package
+    adapter: homebrew
+    recipe_revision: <recipe revision>
+    root_unit: homebrew:system:uv
+  hf:
+    provenance: catalog
+    method: system-package
+    adapter: homebrew
+    recipe_revision: <recipe revision>
+    root_unit: homebrew:system:hf
   llama-swap:
-    method: system-package
-    adapter: homebrew
+    provenance: catalog
+    method: release-artifact
+    adapter: upstream-release
     recipe_revision: <recipe revision>
-    root_unit: homebrew:system:llama-swap
+    root_unit: upstream-release:llama-swap
   llama-cpp:
-    method: system-package
-    adapter: homebrew
+    provenance: catalog
+    method: release-artifact
+    adapter: upstream-release
     recipe_revision: <recipe revision>
-    root_unit: homebrew:system:llama-cpp
+    root_unit: upstream-release:llama-cpp
   rapid-mlx:
+    provenance: experiment
     method: python-environment
     adapter: uv
     recipe_revision: <recipe revision>
     root_unit: uv:rapid-mlx:rapid-mlx
 
 units:
-  homebrew:system:llama-swap:
+  homebrew:system:uv:
     adapter: homebrew
     scope: system
-    native_name: <formula name>
+    native_name: uv
     version: <exact provider-native version>
     revision: <exact provider metadata revision>
-    dependencies: []
+    dependencies: [<exact Homebrew closure unit ids>]
     artifacts:
       - locator: <immutable bottle/artifact locator>
         sha256: <sha256>
-  homebrew:system:llama-cpp:
+  homebrew:system:hf:
     adapter: homebrew
     scope: system
-    native_name: <formula name>
+    native_name: hf
     version: <exact provider-native version>
     revision: <exact provider metadata revision>
-    dependencies: []
+    dependencies: [<exact Homebrew closure unit ids>]
     artifacts:
       - locator: <immutable bottle/artifact locator>
         sha256: <sha256>
+  upstream-release:llama-swap:
+    adapter: upstream-release
+    scope: llama-swap
+    native_name: llama-swap
+    version: <exact catalog-reviewed release tag>
+    revision: <exact source commit>
+    dependencies: []
+    artifacts:
+      - locator: <exact HTTPS release asset locator>
+        sha256: <sha256>
+        size: <exact compressed bytes>
+        unpacked_size: <sum of regular-file bytes>
+        installed_entries: <exact file/directory/symlink count>
+        format: tar.gz
+        archive_root: .
+  upstream-release:llama-cpp:
+    adapter: upstream-release
+    scope: llama-cpp
+    native_name: llama-cpp
+    version: <exact catalog-reviewed build tag>
+    revision: <exact source commit>
+    dependencies: []
+    artifacts:
+      - locator: <exact HTTPS release asset locator>
+        sha256: <sha256>
+        size: <exact compressed bytes>
+        unpacked_size: <sum of regular-file bytes>
+        installed_entries: <exact file/directory/symlink count>
+        format: tar.gz
+        archive_root: <exact top-level archive directory>
   uv:rapid-mlx:rapid-mlx:
     adapter: uv
     scope: rapid-mlx
     native_name: <distribution name>
     version: <exact PEP 440 version>
-    dependencies: [uv:rapid-mlx:mlx]
+    dependencies: [uv:rapid-mlx:cpython, uv:rapid-mlx:mlx]
     artifacts:
       - locator: <immutable wheel/sdist locator>
+        sha256: <sha256>
+  uv:rapid-mlx:cpython:
+    adapter: uv
+    scope: rapid-mlx
+    native_name: cpython
+    version: <exact PEP 440 interpreter version>
+    revision: <exact uv-managed Python build revision>
+    dependencies: []
+    artifacts:
+      - locator: <immutable interpreter artifact locator>
         sha256: <sha256>
   uv:rapid-mlx:mlx:
     adapter: uv
     scope: rapid-mlx
     native_name: mlx
     version: <exact PEP 440 version>
-    dependencies: []
+    dependencies: [uv:rapid-mlx:cpython]
     artifacts:
       - locator: <immutable wheel/sdist locator>
         sha256: <sha256>
@@ -494,11 +850,27 @@ units:
 
 ### Lock invariants
 
+- `provenance` contains catalog, experiment, or both. Catalog identity is
+  required only when catalog policy participated. Experiment identity binds a
+  stable ID, exact definition schema, and canonical definition SHA-256; an
+  unreviewed experiment lock never impersonates a production catalog lock.
+- Every selection declares `provenance: catalog|experiment`, and the matching
+  top-level identity must exist. This makes a mixed lock unambiguous: catalog
+  validation applies only to catalog selections, while fresh experimental
+  selections are bound to the exact experiment definition. If an experiment
+  changes any part of a catalog package's closure, that whole logical
+  selection is experimental rather than partially impersonating the catalog.
+- `requires` is a duplicate-free set of base software-lock semantic digests.
+  It contains desired portable identities, never machine-specific paths or
+  receipt hashes. Installation supplies and verifies those observed receipts.
 - `target` is the exact normalized fact set used to choose adapter bindings.
   The resolver refuses an unsupported target; it never falls back to the host's
   first installed package manager.
-- Each selected logical package exists in the catalog, and its method, adapter,
-  and recipe revision match the chosen catalog path.
+- For catalog-backed resolution, each selected logical package exists in that
+  exact catalog and its method, adapter, recipe revision, closure, and policy
+  match. A direct experiment lock instead traces those selections to its exact
+  experiment definition and remains explicitly experimental; generic lock
+  validation still enforces the same adapter/scope/closure/hash invariants.
 - `units` is the one home for the exact resolved closure. Selection rows point
   to roots; dependency edges point to units. Every unit is reachable, every
   reference resolves, and the graph is acyclic.
@@ -510,15 +882,17 @@ units:
   constraint.
 - `version` is provider-native text validated by the recipe's scheme.
   `revision` is present when provider metadata itself is revisioned.
-- Every installable artifact has an immutable locator plus SHA-256. A source
-  build may instead pin an exact source revision, but its receipt must hash the
-  produced files. If an adapter can prove neither immutable input nor exact
-  installed output, resolution refuses it.
+- Every installable artifact has an immutable locator plus SHA-256. An archive
+  additionally carries the exact compressed/unpacked sizes, installed-entry
+  count, format, and extraction root required by an installer that consumes
+  only the lock. A source build may instead pin an exact source revision, but
+  its receipt must hash the produced files. If an adapter can prove neither
+  immutable input nor exact installed output, resolution refuses it.
 - The lock stores no selection policy, tested flag, installed path, ownership,
   or pre-existing state. Those belong to catalog comparison or the receipt.
-- The semantic digest covers `schema`, catalog identity, target, selections,
-  and units in canonical key order. It excludes `resolved`. Phase B receipts
-  and Field Kit packets bind this digest.
+- The semantic digest covers `schema`, all provenance, sorted base
+  requirements, target, selections, and units in canonical key order. It
+  excludes `resolved`. Phase B receipts and Field Kit packets bind this digest.
 - A root closure digest covers its selection identity, root unit id, and the
   complete reachable unit subgraph serialized as canonical JSON with sorted
   map keys and dependency lists. It excludes `resolved`. This is the digest
@@ -526,7 +900,9 @@ units:
 
 ## Resolution transaction
 
-1. Parse and validate catalog, optional existing lock, requested logical
+The shipping catalog resolver follows this transaction:
+
+1. Parse and validate catalog, optional existing catalog-backed lock, requested logical
    packages/methods, and normalized target facts.
 2. Resolve the one catalog-declared adapter binding per requested method and
    target. Refuse ambiguity, missing bindings, unknown adapter implementations,
@@ -550,6 +926,14 @@ from two catalog policies or machines would make the lock uninterpretable.
 Resolution never installs, activates a service, downloads large model weights,
 or touches the live legacy stack.
 
+An experiment generator is a separate composition over the same compiled
+adapter readers and generic lock validator. It may resolve catalog packages,
+fresh exact provider revisions, or both. It marks each selection with the
+identity that authorized it and records the immutable experiment definition
+and every catalog snapshot that participated. It writes one complete lock
+before installation; it cannot ask the installer to resolve or fill missing
+units.
+
 ## Tested status is derived
 
 For each selected root, compare `(recipe revision, target, root version,
@@ -560,6 +944,11 @@ closure digest)` against the recipe's signed catalog evidence:
 - **known-bad** — excluded by the relevant catalog snapshot;
 - **outside-policy** — does not satisfy the current recipe.
 
+The evidence target is a selector and must match the lock's exact normalized
+target; the exact closure digest still binds target-specific artifacts and
+dependencies. An explicit exclusion wins over retained historical tested
+evidence, allowing a later catalog to mark a formerly tested closure known-bad.
+
 No status is written into either lock or receipt. A later signed catalog may
 classify the same frozen lock differently because reviewed knowledge changed;
 the exact lock itself remains unchanged and auditable. `check` eventually
@@ -568,13 +957,15 @@ under the explicitly active snapshot.
 
 ## First executable acceptance fixtures
 
-The approved first offline slice uses synthetic packages and fake adapters to
-prove:
+The approved first offline slice uses synthetic catalog metadata and fake
+adapters to prove behavior. Product-shaped IDs in a fixture are test data, not
+reviewed package-method selections:
 
 1. `latest` + compatibility floor selects the newest eligible candidate.
 2. guarded rolling excludes a newer known-bad candidate.
-3. PEP 440 resolution pins the explicitly requested, non-default `rapid-mlx`
-   and its constrained exact `mlx` unit.
+3. PEP 440 resolution pins the explicitly requested, non-default `rapid-mlx`,
+   its constrained exact `mlx` unit, and its exact uv-managed `cpython`
+   interpreter artifact; an ambient or incompatible interpreter is never used.
 4. opaque and Git revisions are never compared as SemVer.
 5. `darwin/arm64 + system-package` selects the catalog's Homebrew adapter;
    a fake second-OS target selects its system adapter with no workflow change.
@@ -596,6 +987,9 @@ declared-but-unbuilt and descriptor mismatch refusals, candidate/version
 selection, structural closure/hash validation, canonical digests, and the
 resolution transaction from fixtures 1–10. The signed channel and catalog
 store transaction is also executable with injected hermetic keys and sources.
-The Homebrew provider protocol/translator is executable with an injected
-recording runner; production trust/bootstrap, transport/process bindings, and
-the reviewed uv surface remain deliberate release-facing steps.
+The Homebrew provider protocol/translator and controlled non-shell process edge
+are executable. The selected `upstream-release` resolver, production HTTPS
+reader, and isolated effect member are executable and hermetically exercised.
+Production trust/bootstrap, catalog transport/public-command wiring, the real
+release-adapter scratch gate, and the reviewed uv surface remain deliberate
+release-facing steps.

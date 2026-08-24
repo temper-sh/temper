@@ -285,14 +285,15 @@ func assertLockValid(t *testing.T, candidate software.Candidate) {
 	}
 	document := softwarelock.Document{
 		Schema: softwarelock.SchemaV1,
-		Catalog: softwarelock.CatalogIdentity{
+		Provenance: softwarelock.Provenance{Catalog: &softwarelock.CatalogIdentity{
 			Schema: catalog.SchemaV1, Sequence: 1, SHA256: strings.Repeat("f", 64),
-		},
+		}},
 		Target:   validRequest().Target,
 		Resolved: "2026-08-20",
 		Selections: map[string]softwarelock.Selection{
 			"llama-cpp": {
-				Method: "system-package", Adapter: "homebrew", RecipeRevision: "llama-cpp/v1", RootUnit: candidate.RootUnit,
+				Provenance: softwarelock.ProvenanceCatalog,
+				Method:     "system-package", Adapter: "homebrew", RecipeRevision: "llama-cpp/v1", RootUnit: candidate.RootUnit,
 			},
 		},
 		Units: units,

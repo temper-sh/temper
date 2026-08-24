@@ -15,6 +15,7 @@ import (
 	"github.com/temper-sh/temper/internal/software/catalog"
 	softwarelock "github.com/temper-sh/temper/internal/software/lockfile"
 	softwareresolve "github.com/temper-sh/temper/internal/software/resolve"
+	"github.com/temper-sh/temper/internal/software/testedstatus"
 )
 
 var target = software.Target{OS: "darwin", Arch: "arm64", Distribution: "macos", DistributionVersion: "15.6"}
@@ -63,6 +64,9 @@ func TestRunWritesLockAndSecondRunPreservesExactBytes(t *testing.T) {
 	if !result.Changed || len(result.Entries) != 1 || result.Entries[0].Version != "1.3.0" {
 		t.Fatalf("result = %#v", result)
 	}
+	if len(result.Statuses) != 1 || result.Statuses[0].Package != "llama-swap" || result.Statuses[0].Status != testedstatus.PolicyEligibleUntested {
+		t.Fatalf("tested statuses = %#v", result.Statuses)
+	}
 	before, err := os.ReadFile(lockPath)
 	if err != nil {
 		t.Fatal(err)
@@ -82,6 +86,9 @@ func TestRunWritesLockAndSecondRunPreservesExactBytes(t *testing.T) {
 	}
 	if second.Changed {
 		t.Fatalf("second result = %#v", second)
+	}
+	if !reflect.DeepEqual(second.Statuses, result.Statuses) {
+		t.Fatalf("second tested statuses = %#v, want %#v", second.Statuses, result.Statuses)
 	}
 	after, err := os.ReadFile(lockPath)
 	if err != nil {
@@ -311,11 +318,12 @@ func singlePackageCandidate(unitID, nativeName, version, revision string) softwa
 
 func lockDocument(snapshot catalog.Snapshot, version, revision string) softwarelock.Document {
 	return softwarelock.Document{
-		Schema:  softwarelock.SchemaV1,
-		Catalog: softwarelock.CatalogIdentity{Schema: snapshot.Document.Schema, Sequence: snapshot.Document.Sequence, SHA256: snapshot.SHA256},
-		Target:  target, Resolved: "2026-08-19",
+		Schema:     softwarelock.SchemaV1,
+		Provenance: softwarelock.Provenance{Catalog: &softwarelock.CatalogIdentity{Schema: snapshot.Document.Schema, Sequence: snapshot.Document.Sequence, SHA256: snapshot.SHA256}},
+		Target:     target, Resolved: "2026-08-19",
 		Selections: map[string]softwarelock.Selection{"llama-swap": {
-			Method: "system-package", Adapter: "homebrew", RecipeRevision: "llama/v1", RootUnit: "homebrew:system:llama-swap",
+			Provenance: softwarelock.ProvenanceCatalog,
+			Method:     "system-package", Adapter: "homebrew", RecipeRevision: "llama/v1", RootUnit: "homebrew:system:llama-swap",
 		}},
 		Units: map[string]softwarelock.Unit{"homebrew:system:llama-swap": {
 			Adapter: "homebrew", Scope: "system", NativeName: "llama-swap", Version: version, Revision: revision,

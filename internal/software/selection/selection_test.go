@@ -33,7 +33,12 @@ func TestLatestSelectsNewestStableAboveFloorAndExcludesKnownBad(t *testing.T) {
 
 func TestPEP440ExactRootSelectsClosureWithConstrainedDependency(t *testing.T) {
 	supply := selectionCatalog(t)
+	wrongPython := rapidCandidate("0.1.5", "0.24.2")
+	python := wrongPython.Units["uv:rapid-mlx:cpython"]
+	python.Version = "3.13.0"
+	wrongPython.Units["uv:rapid-mlx:cpython"] = python
 	request := selection.Request{Package: "rapid-mlx", Method: "python-environment", Candidates: []software.Candidate{
+		wrongPython,
 		rapidCandidate("0.1.5", "0.25.0"),
 		rapidCandidate("0.1.5", "0.24.2"),
 	}}
@@ -44,6 +49,10 @@ func TestPEP440ExactRootSelectsClosureWithConstrainedDependency(t *testing.T) {
 	}
 	if got := locked.Units["uv:rapid-mlx:mlx"].Version; got != "0.24.2" {
 		t.Errorf("selected mlx version = %q, want 0.24.2", got)
+	}
+	lockedPython := locked.Units["uv:rapid-mlx:cpython"]
+	if lockedPython.NativeName != "cpython" || lockedPython.Version != "3.12.11" || len(lockedPython.Artifacts) != 1 {
+		t.Errorf("selected Python runtime = %#v, want exact uv-managed CPython closure unit", lockedPython)
 	}
 }
 
@@ -82,7 +91,8 @@ func TestSelectionAppliesTransitiveCatalogConstraints(t *testing.T) {
 		Recipes: map[string]catalog.Recipe{"uv": {
 			Method: "python-environment", RecipeRevision: "typing/v1",
 			Source:        catalog.Source{Kind: "python-index", Index: "https://example.invalid/simple", Distribution: "typing-extensions"},
-			VersionScheme: "pep440", Selection: catalog.Selection{Policy: "range", Constraint: ">=4,<5"}, Tested: tested,
+			VersionScheme: "pep440", Selection: catalog.Selection{Policy: "range", Constraint: ">=4,<5"},
+			Dependencies: []catalog.Dependency{{Package: "cpython", Constraint: ">=3.12,<3.13"}}, Tested: tested,
 		}},
 	}
 	mlx := supply.Document.Packages["mlx"]
@@ -229,19 +239,31 @@ func selectionCatalog(t *testing.T) catalog.Snapshot {
 					Exclude: []string{"1.4.0"}, Tested: tested(),
 				},
 			}},
+			"cpython": {Description: "interpreter", Recipes: map[string]catalog.Recipe{
+				"uv": {
+					Method: "python-environment", RecipeRevision: "cpython/v1",
+					Source:        catalog.Source{Kind: "python-runtime", Implementation: "cpython"},
+					VersionScheme: "pep440", Selection: catalog.Selection{Policy: "range", Constraint: ">=3.12,<3.13"},
+					Tested: []catalog.Tested{{RootVersion: "3.12.11", ClosureDigest: strings.Repeat("7", 64), Target: testTarget, Evidence: "fixture"}},
+				},
+			}},
 			"rapid-mlx": {Description: "server", Recipes: map[string]catalog.Recipe{
 				"uv": {
 					Method: "python-environment", RecipeRevision: "rapid/v1",
 					Source:        catalog.Source{Kind: "python-index", Index: "https://example.invalid/simple", Distribution: "rapid-mlx"},
 					VersionScheme: "pep440", Selection: catalog.Selection{Policy: "exact", Exact: "0.1.5"},
-					Dependencies: []catalog.Dependency{{Package: "mlx", Constraint: ">=0.24,<0.25"}}, Tested: tested(),
+					Dependencies: []catalog.Dependency{
+						{Package: "cpython", Constraint: ">=3.12,<3.13"},
+						{Package: "mlx", Constraint: ">=0.24,<0.25"},
+					}, Tested: tested(),
 				},
 			}},
 			"mlx": {Description: "runtime", Recipes: map[string]catalog.Recipe{
 				"uv": {
 					Method: "python-environment", RecipeRevision: "mlx/v1",
 					Source:        catalog.Source{Kind: "python-index", Index: "https://example.invalid/simple", Distribution: "mlx"},
-					VersionScheme: "pep440", Selection: catalog.Selection{Policy: "range", Constraint: ">=0.24,<0.25"}, Tested: tested(),
+					VersionScheme: "pep440", Selection: catalog.Selection{Policy: "range", Constraint: ">=0.24,<0.25"},
+					Dependencies: []catalog.Dependency{{Package: "cpython", Constraint: ">=3.12,<3.13"}}, Tested: tested(),
 				},
 			}},
 		},
@@ -265,23 +287,29 @@ func rapidCandidate(rapidVersion, mlxVersion string) software.Candidate {
 	return software.Candidate{RootUnit: "uv:rapid-mlx:rapid-mlx", Units: map[string]software.ResolvedUnit{
 		"uv:rapid-mlx:rapid-mlx": {
 			Scope: "rapid-mlx", NativeName: "rapid-mlx", Version: rapidVersion,
-			Dependencies: []string{"uv:rapid-mlx:mlx"},
+			Dependencies: []string{"uv:rapid-mlx:cpython", "uv:rapid-mlx:mlx"},
 			Artifacts:    []software.Artifact{{Locator: "https://example.invalid/rapid.whl", SHA256: strings.Repeat("e", 64)}},
+		},
+		"uv:rapid-mlx:cpython": {
+			Scope: "rapid-mlx", NativeName: "cpython", Version: "3.12.11", Revision: "python-build/20260820",
+			Artifacts: []software.Artifact{{Locator: "https://example.invalid/cpython.tar.zst", SHA256: strings.Repeat("7", 64)}},
 		},
 		"uv:rapid-mlx:mlx": {
 			Scope: "rapid-mlx", NativeName: "mlx", Version: mlxVersion,
-			Artifacts: []software.Artifact{{Locator: "https://example.invalid/mlx.whl", SHA256: strings.Repeat("f", 64)}},
+			Dependencies: []string{"uv:rapid-mlx:cpython"},
+			Artifacts:    []software.Artifact{{Locator: "https://example.invalid/mlx.whl", SHA256: strings.Repeat("f", 64)}},
 		},
 	}}
 }
 
 func withTypingDependency(candidate software.Candidate, typingVersion string) software.Candidate {
 	mlx := candidate.Units["uv:rapid-mlx:mlx"]
-	mlx.Dependencies = []string{"uv:rapid-mlx:typing-extensions"}
+	mlx.Dependencies = append(mlx.Dependencies, "uv:rapid-mlx:typing-extensions")
 	candidate.Units["uv:rapid-mlx:mlx"] = mlx
 	candidate.Units["uv:rapid-mlx:typing-extensions"] = software.ResolvedUnit{
 		Scope: "rapid-mlx", NativeName: "typing-extensions", Version: typingVersion,
-		Artifacts: []software.Artifact{{Locator: "https://example.invalid/typing.whl", SHA256: strings.Repeat("8", 64)}},
+		Dependencies: []string{"uv:rapid-mlx:cpython"},
+		Artifacts:    []software.Artifact{{Locator: "https://example.invalid/typing.whl", SHA256: strings.Repeat("8", 64)}},
 	}
 	return candidate
 }

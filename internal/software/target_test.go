@@ -31,6 +31,21 @@ func TestTargetSelectorMatchingAndOverlap(t *testing.T) {
 	}
 }
 
+func TestTargetStringNamesTheAvailableIdentity(t *testing.T) {
+	tests := []struct {
+		target software.Target
+		want   string
+	}{
+		{target: software.Target{OS: "darwin", Arch: "arm64"}, want: "darwin/arm64"},
+		{target: software.Target{OS: "darwin", Arch: "arm64", Distribution: "macos", DistributionVersion: "15.6"}, want: "darwin/arm64/macos/15.6"},
+	}
+	for _, test := range tests {
+		if got := test.target.String(); got != test.want {
+			t.Errorf("Target.String() = %q, want %q", got, test.want)
+		}
+	}
+}
+
 func TestTargetValidationRequiresNormalizedFacts(t *testing.T) {
 	tests := []struct {
 		name   string

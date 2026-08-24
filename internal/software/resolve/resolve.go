@@ -15,6 +15,7 @@ import (
 	softwarelock "github.com/temper-sh/temper/internal/software/lockfile"
 	"github.com/temper-sh/temper/internal/software/lockstore"
 	"github.com/temper-sh/temper/internal/software/selection"
+	"github.com/temper-sh/temper/internal/software/testedstatus"
 )
 
 type Request struct {
@@ -38,9 +39,10 @@ type Entry struct {
 }
 
 type Result struct {
-	Changed bool
-	DryRun  bool
-	Entries []Entry
+	Changed  bool
+	DryRun   bool
+	Entries  []Entry
+	Statuses []testedstatus.Entry
 }
 
 func Run(ctx context.Context, options Options, supply catalog.Snapshot, resolvers adapter.ResolverFamily) (Result, error) {
@@ -91,6 +93,11 @@ func Run(ctx context.Context, options Options, supply catalog.Snapshot, resolver
 	}
 	result := Result{DryRun: options.DryRun}
 	if len(missing) == 0 {
+		statuses, err := testedstatus.Compare(snapshot.Document, supply)
+		if err != nil {
+			return Result{}, err
+		}
+		result.Statuses = requestedStatuses(statuses, requests)
 		return result, nil
 	}
 	if err := ctx.Err(); err != nil {
@@ -148,6 +155,11 @@ func Run(ctx context.Context, options Options, supply catalog.Snapshot, resolver
 	if err != nil {
 		return Result{}, err
 	}
+	statuses, err := testedstatus.Compare(candidate, supply)
+	if err != nil {
+		return Result{}, err
+	}
+	result.Statuses = requestedStatuses(statuses, requests)
 	for _, request := range missing {
 		selected := candidate.Selections[request.Package]
 		root := candidate.Units[selected.RootUnit]
@@ -163,4 +175,18 @@ func Run(ctx context.Context, options Options, supply catalog.Snapshot, resolver
 		return Result{}, err
 	}
 	return result, nil
+}
+
+func requestedStatuses(statuses []testedstatus.Entry, requests []Request) []testedstatus.Entry {
+	requested := make(map[string]bool, len(requests))
+	for _, request := range requests {
+		requested[request.Package] = true
+	}
+	result := make([]testedstatus.Entry, 0, len(requests))
+	for _, status := range statuses {
+		if requested[status.Package] {
+			result = append(result, status)
+		}
+	}
+	return result
 }
