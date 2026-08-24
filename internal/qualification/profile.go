@@ -245,10 +245,11 @@ func validateProfileEnvelope(envelope ProfileEnvelope, schema string, problem fu
 		}
 	}
 
-	switch envelope.Status {
-	case ProfileStatusWatch, ProfileStatusLab, ProfileStatusQualified, ProfileStatusRejected, ProfileStatusRetired:
-	default:
+	if !isProfileStatus(envelope.Status) {
 		problem("status %q is not supported", envelope.Status)
+	}
+	if envelope.Revision == 1 && envelope.Status == ProfileStatusRetired {
+		problem("initial revision cannot be RETIRED")
 	}
 	validateLine("status_reason", envelope.StatusReason, problem)
 	validateLine("title", envelope.Title, problem)

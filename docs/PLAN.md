@@ -598,10 +598,11 @@ base.
     byte/quantization/component/license identity, exact C4-tested engine plus
     serving/process contract, output-affecting runtime layout, and explicit
     structured performance axes are typed. Public evidence inventories and
-    canonical witness-scope keys are validated; `QUALIFIED` profiles, the
-    other three profile kinds, and recommendation content remain explicit
-    refusals pending gate and dependency-status rules. The fixtures remain
-    fake and do not seed a qualification row.
+    canonical witness-scope keys are validated, and a pure immutable-lineage
+    validator enforces exact supersession and legal status transitions.
+    `QUALIFIED` profiles, the other three profile kinds, and recommendation
+    content remain explicit refusals pending gate and dependency-status rules.
+    The fixtures remain fake and do not seed a qualification row.
 13. *(design, with Labs — Temper side provisionally approved by owner
     2026-08-25; Labs adoption still requires explicit authorization)* Define
     the product-promotion packet
@@ -952,9 +953,9 @@ or CI dependency.
    performance axes are typed. Public evidence inventories and complete,
    recomputed runtime witness scopes are accepted for non-qualified rows;
    `QUALIFIED` profiles plus unimplemented profile kinds and recommendations
-   fail closed. Continue C7 with immutable status history and qualification
-   gate/dependency-status validation, then the tool/mode/activity dependency
-   chain.
+   fail closed. Exact immutable status edges are also validated without a
+   moving-history lookup. Continue C7 with qualification gate and
+   dependency-status validation, then the tool/mode/activity dependency chain.
    Co-design/adopt the C8 writer side in Labs only under explicit
    cross-repository authorization; its pure packet compiler follows that gate.
    Then add the plural recommendation/performance projection and reviewed seed

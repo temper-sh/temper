@@ -130,14 +130,24 @@ The status values remain:
 - `RETIRED`: the exact record remains history but is no longer offered or
   supported.
 
-Initial revisions may be `WATCH`, `LAB`, `QUALIFIED`, or `REJECTED`; a seed
-`QUALIFIED` revision therefore still needs a complete accepted C8 packet.
-Later revisions may move `WATCH → LAB`, `LAB → QUALIFIED`, and any active
-status to `REJECTED` or `RETIRED`. A correction may move `REJECTED` or
-`RETIRED` back to `LAB`, never directly to `QUALIFIED`. A previously qualified
-profile returns through `LAB` when its evidence or material identity changes.
-Every transition carries a nonempty `status_reason` and exact C8 promotion
-provenance.
+Initial revisions may be `WATCH`, `LAB`, `QUALIFIED`, or `REJECTED`; an initial
+`RETIRED` record is meaningless and refused. A seed `QUALIFIED` revision
+therefore still needs a complete accepted C8 packet. Later revisions may keep
+the same status for an immutable correction, move `WATCH → LAB`, move
+`LAB → QUALIFIED`, and move any active status to `REJECTED` or `RETIRED`. A
+previously qualified profile returns through `LAB` when its evidence or
+material identity changes. A correction may move `REJECTED` or `RETIRED` back
+to `LAB`, never directly to `QUALIFIED`; those terminal statuses otherwise
+remain in place and do not cross directly into each other. Every transition
+carries a nonempty `status_reason` and a distinct exact C8 promotion identity.
+
+The pure transition validator receives the previous and current envelopes plus
+the already-verified SHA-256 of the previous canonical bytes. It requires one
+schema/ID lineage, the immediately following revision, and an exact
+`supersedes` reference before applying the status table. It performs no
+filesystem discovery or “latest” lookup. The future C8 compiler supplies that
+prior material explicitly; the catalog index remains a current projection and
+does not infer history from revision numbers.
 
 An old exact witness does not become false because an engine releases a new
 version. D7 is therefore settled as follows:

@@ -76,6 +76,7 @@ func TestModelArtifactProfileValidationRefusesInvalidEnvelope(t *testing.T) {
 			profile.Supersedes = &qualification.Reference{Schema: profile.Schema, ID: profile.ID, Revision: 1, SHA256: strings.Repeat("a", 64)}
 		}, want: "immediately precede"},
 		{name: "unknown status", mutate: func(profile *qualification.ModelArtifactProfile) { profile.Status = "CURRENT" }, want: "status \"CURRENT\" is not supported"},
+		{name: "initial retirement", mutate: func(profile *qualification.ModelArtifactProfile) { profile.Status = qualification.ProfileStatusRetired }, want: "initial revision cannot be RETIRED"},
 		{name: "qualified without evidence", mutate: func(profile *qualification.ModelArtifactProfile) {
 			profile.Status = qualification.ProfileStatusQualified
 		}, want: "require implemented qualification-gate"},
