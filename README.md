@@ -240,6 +240,8 @@ never downloads weights, runs those commands, or touches the service. Bare
 - [Execution plan](docs/PLAN.md) — milestones M0–M5 with acceptance gates,
   interface contracts, the design discipline, and the owner decision
   register.
+- [Maintainer code map](docs/CODE.md) — where each operation, decision,
+  effect boundary, durable state path, and common edit lives in the Go tree.
 - [Craft field notes](docs/craft-skill-field-notes.md) — the secondary
   through-1.0 record of how the design skills performed in real product work.
 - Native verb contracts: [apply](docs/contracts/apply.md),

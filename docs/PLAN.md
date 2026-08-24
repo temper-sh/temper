@@ -823,6 +823,9 @@ Inherited release bar, enforced from the first commit of product code:
 - quality outranks throughput: any model/engine claim measures
   first-attempt task success first, tok/s second, with conditions on every
   number.
+- package moves, public operation paths, decision/effect ownership, and
+  durable state layout update `docs/CODE.md` in the same change; narrow
+  implementation details stay in package comments and black-box tests.
 - each named phase/milestone closeout through M5/1.0 includes its brief
   real-work craft field note; the note may correctly propose no change and
   never authorizes an eval or product-side scope expansion.
