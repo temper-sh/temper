@@ -329,7 +329,7 @@ configuration catalog follows without blocking that installed base.
 > are now executable with hermetic archive/effect coverage. Exact macOS
 > host-target detection and the frozen public install/check/remove commands are
 > wired to that compiled member with a hermetic command-level round-trip; the
-> separately authorized real scratch gate remains Phase B. The Homebrew edge
+> real adapter scratch lifecycle also passes. The Homebrew edge
 > is an available shared adapter, not a default application-installation
 > method anywhere in Temper.
 
@@ -381,8 +381,9 @@ configuration catalog follows without blocking that installed base.
    `llama-swap` and `llama.cpp` are Temper-managed Field Kit base packages;
    the 2026-08-24 review selected isolated `release-artifact` installation for
    both on macOS Apple Silicon after static and bounded runtime gates.
-   The concrete `upstream-release` adapter is hermetically executable; recipe
-   publication still requires its real scratch round-trip.
+   The concrete `upstream-release` adapter is hermetically executable and its
+   real scratch lifecycle now passes; stable Results or Field Kit evidence is
+   still required before either recipe can claim `exact-tested`.
    `rapid-mlx` and `mlx-dspark` are supported non-default
    `python-environment`/`uv` packages whose recipes constrain exact interpreter
    and MLX closure units under resolved D16. Pi is a user-managed harness,
@@ -795,10 +796,10 @@ or CI dependency.
    are complete with hermetic failure-boundary and round-trip coverage. The
    frozen C11 software verbs and exact host-target check are now wired to this
    compiled member and refuse any uncompiled locked adapter without fallback.
-   Next run the separately authorized real scratch install/check/remove/
-   second-run gate through that complete workflow; no concrete recipe or
-   tested row is published yet. The Field Kit-facing C10/C11 install surface
-   is frozen. The uv reader remains required for explicitly requested
+   The separately authorized real scratch install/check/remove/second-run gate
+   now passes through that complete workflow, including both dry-run
+   boundaries. No `exact-tested` row is published yet. The Field Kit-facing
+   C10/C11 install surface is frozen. The uv reader remains required for explicitly requested
    `rapid-mlx` and `mlx-dspark`, but does not block beginning provider-neutral
    Phase B install/receipt design with hermetic fake adapters.
 2. **M2 Phase B — Field Kit installed base:** freeze C10/C11, build hermetic
@@ -825,8 +826,10 @@ or CI dependency.
    identities without reading or writing Field Kit state. The selected
    release-artifact effect member and frozen C11 public software verbs are now
    integrated through exact host detection and hermetic command-level
-   install/check/remove/second-run coverage. Next run the real adapter scratch
-   round-trip; it remains separately announced and explicitly authorized.
+   install/check/remove/second-run coverage. The announced and authorized real
+   adapter scratch round-trip now passes with the exact reviewed v251 and
+   b10566 assets; the remaining end-to-end gate is Field Kit-side packet and
+   stage integration with a checksummed Temper binary.
 3. **M2 Phase C — qualification catalog:** add the six evidence-backed profile
    kinds, plural recommendation/performance-profile semantics, promotion
    packet, validator extensions, and reviewed seed rows after the installed

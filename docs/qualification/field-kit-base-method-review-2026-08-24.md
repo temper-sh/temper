@@ -1,13 +1,13 @@
 # Field Kit base installation-method review — 2026-08-24
 
 Status: **`release-artifact` selected after static and runtime review; concrete
-adapter implemented and hermetically qualified; real scratch round-trip
-pending**.
+adapter qualified hermetically and through the real isolated scratch
+lifecycle**.
 
 This review selects the macOS Apple Silicon installation method for the Field
-Kit serving base. It does not yet publish a catalog recipe, create
-tested-version evidence, or authorize installation into a Temper root. The
-runtime pass used scratch processes and did not change the legacy live service.
+Kit serving base. It does not create tested-version evidence or authorize
+installation into a consumer Temper root. Both runtime passes used scratch
+roots and processes and did not change the legacy live service.
 
 ## Decision boundary
 
@@ -22,8 +22,8 @@ The static disposition is:
 
 | Package | `release-artifact` | `system-package` / Homebrew |
 |---|---|---|
-| `llama-swap` | **selected; adapter implementation complete, scratch gate pending** | **reject for the Field Kit base** — the formula installs the same upstream archive and adds a shared tap/update boundary without changing the binary |
-| `llama-cpp` | **selected; adapter implementation complete, scratch gate pending** | **reject for the Field Kit base** — the formula is a different shared build whose install command cannot be bound to the complete exact closure in `software.lock.yaml` |
+| `llama-swap` | **selected; adapter and real isolated lifecycle passed** | **reject for the Field Kit base** — the formula installs the same upstream archive and adds a shared tap/update boundary without changing the binary |
+| `llama-cpp` | **selected; adapter and real isolated lifecycle passed** | **reject for the Field Kit base** — the formula is a different shared build whose install command cannot be bound to the complete exact closure in `software.lock.yaml` |
 
 The first recipe policy is an exact release reviewed into each catalog
 snapshot, not an installer-time `latest` lookup. A later catalog update may
@@ -31,8 +31,9 @@ adopt a newer upstream release only after refreshing the artifact identity and
 re-running the applicable smoke gates. The lock then carries the exact release
 tag, source revision, target asset locator, compressed/unpacked sizes,
 installed-entry count, archive root, and SHA-256. The concrete schema and
-adapter are implemented; their real scratch gate remains before these method
-decisions become shipping recipes.
+adapter are implemented, and their real scratch gate passed. A shipping recipe
+may now use these exact release identities; calling one `exact-tested` still
+requires the separate reviewed-evidence join.
 
 ## Exact upstream snapshot reviewed
 
@@ -162,17 +163,36 @@ router then shut down cleanly. Peak RSS was 44,048 KiB for the router and
 2,521,600 KiB for its CPU child. Socket inspection found only the declared
 loopback listeners and no external connection.
 
-## Remaining adapter gate
+## Real isolated adapter lifecycle — 2026-08-24
 
-The concrete `upstream-release` reader/installer now proves archive path and
-symlink safety, pre-publication size/hash/manifest refusal, one atomic current
-pointer commit, full installed-tree re-verification, clean repeated effects,
-repair, and scope-only removal in hermetic temporary roots. Before publishing
-the two `release-artifact` recipes, perform the separately authorized isolated
-scratch install/check/remove/second-run cycle through the complete workflow,
-including its dry-run boundary.
+Immediately before the run, the official release APIs still named v251 and
+stable v0.2.0 / build b10566 as current. Fresh downloads reproduced both
+published SHA-256 digests. The exact archive manifests used by the lock were:
 
-The completed runtime pass selects the method and exact-review version policy;
-it does not manufacture an `exact-tested` catalog row. The adapter round-trip
-plus stable Results or Field Kit evidence supplies the installed-base proof
-needed before shipping such a row.
+| Unit | Compressed bytes | Regular-file bytes | Installed entries | Archive root |
+|---|---:|---:|---:|---|
+| `upstream-release:llama-swap` | 12,871,496 | 23,027,581 | 3 | `.` |
+| `upstream-release:llama-cpp` | 11,095,544 | 27,555,366 | 61 | `llama-b10566` |
+
+The complete public command edge then consumed one direct-experiment
+`temper-software-lock/v1` in a new root on exact target
+`darwin/arm64/macos/26.6.1`:
+
+1. `software install --dry-run` reported two isolated publishes and left the
+   root absent.
+2. The first install downloaded, hashed, bounded, extracted, inspected, and
+   published both scopes. The installed executables reported v251 commit
+   `4ec3175` and llama.cpp build 10566 commit `bb4caa754`.
+3. `software check` reported both units exact. The second install reported
+   `unchanged`; receipt and root-state bytes were unchanged.
+4. `software remove --dry-run` left receipt and root-state bytes unchanged.
+   The first removal released both Temper-added scopes, the second reported
+   `unchanged`, and a final read-only check reported the two expected
+   `provider-missing` findings.
+
+The concrete `upstream-release` reader/installer therefore has hermetic
+archive-path, symlink, bounds, atomic-publication, repair, and scope-removal
+coverage plus a real network-backed lifecycle through C11. This gate selects
+the method and permits exact recipes for these artifacts. It does not
+manufacture an `exact-tested` catalog row; stable Results or Field Kit evidence
+must still supply the reviewed installed-base proof for that status.

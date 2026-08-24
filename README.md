@@ -105,8 +105,11 @@ The frozen public `temper software install`, `check`, and `remove` surface is
 now wired to exact macOS host-target detection and the compiled
 `upstream-release` member. A hermetic command-level round-trip proves dry-run
 purity, clean second runs, stable C11 output, and refusal of target mismatch or
-an uncompiled locked adapter. The real release-adapter scratch round-trip is
-still a separately authorized gate and has not run.
+an uncompiled locked adapter. The real release-adapter scratch round-trip has
+now passed in a disposable root: dry-run left the root absent, fresh exact
+assets installed and checked, the second install was byte-clean, removal
+preview was pure, and removal was second-run-clean. This proves the
+installation lifecycle, not an `exact-tested` catalog claim.
 
 The legacy `local-ai-setup` repo remains the installer of record for the one
 machine currently running the stack until M5. These commands therefore require
