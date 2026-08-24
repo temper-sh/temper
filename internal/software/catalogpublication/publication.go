@@ -150,6 +150,22 @@ func (c Channel) Validate() error {
 	return nil
 }
 
+// ValidateChannel parses and validates exact channel document bytes before a
+// release tool signs them. Signature verification remains VerifyChannel's job.
+func ValidateChannel(expected string, data []byte) error {
+	if err := ValidateChannelName(expected); err != nil {
+		return err
+	}
+	document, err := parseChannel(data)
+	if err != nil {
+		return err
+	}
+	if document.Channel != expected {
+		return fmt.Errorf("catalog channel is %q, requested %q", document.Channel, expected)
+	}
+	return nil
+}
+
 func VerifyChannel(expected string, data, signature []byte, trust TrustRoot) (VerifiedChannel, error) {
 	if err := ValidateChannelName(expected); err != nil {
 		return VerifiedChannel{}, err

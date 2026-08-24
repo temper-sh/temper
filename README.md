@@ -72,8 +72,12 @@ outside-policy status without writing that status anywhere. A bounded HTTPS
 catalog source now implements the signed publication transport convention. The
 production Ed25519 public trust root, signed sequence-1 bootstrap, GitHub Pages
 channel root, and bounded `temper software catalog update` command are compiled
-and hermetically verified; no private signing material enters the tree. The uv
-resolver implementation remains next in Phase A. The selected `release-artifact`
+and hermetically verified; the signed stable channel and immutable snapshot tree
+are staged under `docs/catalog` but are not yet deployed. The retained,
+release-only `temper-catalog` command validates, signs, atomically writes, and
+verifies those exact publication bytes while accepting the private seed only on
+stdin; no private signing material enters the tree. The uv resolver
+implementation remains next in Phase A. The selected `release-artifact`
 method now has a
 deterministic `upstream-release` resolver, a bounded HTTPS download edge, and an
 isolated install/inspect/remove implementation. Hermetic tests prove exact
@@ -218,6 +222,7 @@ never downloads weights, runs those commands, or touches the service. Bare
 - Approved M2 installed-base contract: [software install, prepared recovery,
   and installation receipt](docs/contracts/software-install.md).
 - Approved M2 catalog command: [software catalog update](docs/contracts/software-catalog-update.md).
+- Retained release tool: [software catalog signing and verification](docs/contracts/catalog-signing.md).
 - Approved M2 surface: [software supply, independent catalog lifecycle, lock,
   and adapter-family design](docs/design/software-supply-schema.md).
 - [Current-posture render acceptance](docs/acceptance/current-posture-render.md)

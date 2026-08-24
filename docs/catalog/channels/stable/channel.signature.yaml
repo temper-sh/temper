@@ -1,0 +1,4 @@
+schema: temper-signature/v1
+key_id: temper-catalog-2026-01
+algorithm: ed25519
+signature: gXQ+zl9D6/7dr/9N5D2wl5gLXlZE9hE5BbGaTm8BOpwE+J+rENpmwiGRKcOMbzSeu6QT6iVY249mKqOx6vvYCg==

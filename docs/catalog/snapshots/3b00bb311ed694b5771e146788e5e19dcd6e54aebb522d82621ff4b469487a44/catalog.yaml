@@ -1,0 +1,80 @@
+schema: temper-software-supply/v1
+sequence: 1
+published_at: 2026-08-24T17:36:04Z
+methods:
+  release-artifact:
+    description: Verified isolated upstream release archive
+adapters:
+  upstream-release:
+    method: release-artifact
+    protocol: temper-installer-adapter/v1
+    effect_model: isolated
+target_bindings:
+  - method: release-artifact
+    target:
+      os: darwin
+      arch: arm64
+    adapter: upstream-release
+packages:
+  llama-cpp:
+    description: Field Kit llama.cpp inference runtime
+    recipes:
+      upstream-release:
+        method: release-artifact
+        recipe_revision: llama-cpp-upstream-release/v1
+        source:
+          kind: release-archive
+          name: llama-cpp
+          repository: ggml-org/llama.cpp
+          revision: bb4caa7540188872173c44d161602d9271386413
+          artifacts:
+            - target:
+                os: darwin
+                arch: arm64
+              locator: https://github.com/ggml-org/llama.cpp/releases/download/b10566/llama-b10566-bin-macos-arm64.tar.gz
+              sha256: 533f546dab2ce2f8e29ce3070f26acc55acc59528e177f2cd0d52b7f69b44f50
+              size: 11095544
+              unpacked_size: 27555366
+              installed_entries: 61
+              format: tar.gz
+              archive_root: llama-b10566
+        version_scheme: opaque
+        selection:
+          policy: exact
+          exact: b10566
+        dependencies: []
+        exclude: []
+        gates:
+          - runtime-smoke.v1
+        tested: []
+  llama-swap:
+    description: Field Kit local model router
+    recipes:
+      upstream-release:
+        method: release-artifact
+        recipe_revision: llama-swap-upstream-release/v1
+        source:
+          kind: release-archive
+          name: llama-swap
+          repository: mostlygeek/llama-swap
+          revision: 4ec317589b21f58b64802c2b3371a179b9fdaa53
+          artifacts:
+            - target:
+                os: darwin
+                arch: arm64
+              locator: https://github.com/mostlygeek/llama-swap/releases/download/v251/llama-swap_251_darwin_arm64.tar.gz
+              sha256: b438acbfbe588b4a2e9ffe11f08eb22c5d7955b9b304cab0e668a8686edfccdc
+              size: 12871496
+              unpacked_size: 23027581
+              installed_entries: 3
+              format: tar.gz
+              archive_root: .
+        version_scheme: opaque
+        selection:
+          policy: exact
+          exact: v251
+        dependencies: []
+        exclude: []
+        gates:
+          - router-smoke.v1
+        tested: []

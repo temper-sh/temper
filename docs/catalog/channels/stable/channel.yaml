@@ -1,0 +1,7 @@
+schema: temper-software-channel/v1
+channel: stable
+catalog:
+  schema: temper-software-supply/v1
+  sequence: 1
+  sha256: 3b00bb311ed694b5771e146788e5e19dcd6e54aebb522d82621ff4b469487a44
+  locator: https://temper-sh.github.io/temper/catalog/snapshots/3b00bb311ed694b5771e146788e5e19dcd6e54aebb522d82621ff4b469487a44/

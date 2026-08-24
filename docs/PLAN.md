@@ -331,7 +331,13 @@ configuration catalog follows without blocking that installed base.
 > the tree. The reviewed GitHub Pages channel root and the bounded public
 > `temper software catalog update` command are now wired through the production
 > trust/source/capability composition, with a 30-second deadline and hermetic
-> command coverage. The uv resolver remains pending in Phase A. The selected
+> command coverage. The signed stable channel and immutable Pages source tree
+> are staged and join-tested under `docs/catalog`; Pages enablement/publication
+> remains an explicit external step. A retained release-only `temper-catalog`
+> command now accepts the private seed only on stdin, validates the compiled
+> production trust/capability boundary, and atomically signs or verifies exact
+> catalog and channel bytes with dry-run and clean-rerun coverage. The uv
+> resolver remains pending in Phase A. The selected
 > release-artifact source, deterministic
 > resolver, production HTTPS reader, and isolated install/inspect/remove member
 > are now executable with hermetic archive/effect coverage. Exact macOS
@@ -796,8 +802,11 @@ or CI dependency.
    the bounded HTTPS publication source are complete. The production public
    trust root, signed two-package bootstrap, reviewed GitHub Pages channel root,
    and bounded public catalog-update command are wired and hermetically covered.
-   Next implement the uv reader/resolver for the explicitly non-default Python
-   packages. The 2026-08-24
+   The initial Pages publication tree is signed and locally ready; enabling and
+   publishing it remains an explicit external action. Its signing lifecycle is
+   retained in the release-only `temper-catalog` command rather than recreated
+   per publication. Next implement the uv reader/resolver for the explicitly
+   non-default Python packages. The 2026-08-24
    method review rejects both Homebrew application variants at the
    exact-install gate. The isolated `llama-swap` v251 and `llama.cpp` b10566
    artifacts passed the bounded model-backed runtime/router screen, selecting

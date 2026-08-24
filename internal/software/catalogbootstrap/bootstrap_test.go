@@ -1,15 +1,21 @@
 package catalogbootstrap
 
 import (
+	"bytes"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/temper-sh/temper/internal/software"
 	"github.com/temper-sh/temper/internal/software/adapter"
 	"github.com/temper-sh/temper/internal/software/adapter/upstreamrelease"
 	"github.com/temper-sh/temper/internal/software/catalog"
+	publication "github.com/temper-sh/temper/internal/software/catalogpublication"
 	"github.com/temper-sh/temper/internal/software/catalogreader"
 	"github.com/temper-sh/temper/internal/software/catalogtrust"
 )
+
+const productionCatalogDigest = "3b00bb311ed694b5771e146788e5e19dcd6e54aebb522d82621ff4b469487a44"
 
 func TestCatalogIsValidAndSupportedByTheReleaseAdapter(t *testing.T) {
 	snapshot, err := catalog.ParseSnapshot(catalogData)
@@ -58,6 +64,50 @@ func TestProductionReturnsIndependentBytes(t *testing.T) {
 	if second.CatalogData[0] != catalogData[0] || second.SignatureData[0] != signatureData[0] {
 		t.Fatal("Production() exposed mutable embedded bytes")
 	}
+}
+
+func TestStablePagesPublicationJoinsTheEmbeddedBootstrap(t *testing.T) {
+	repositoryRoot := filepath.Join("..", "..", "..")
+	publicationRoot := filepath.Join(repositoryRoot, "docs", "catalog")
+	snapshotRoot := filepath.Join(publicationRoot, "snapshots", productionCatalogDigest)
+	publishedCatalog := readPublicationFile(t, filepath.Join(snapshotRoot, "catalog.yaml"))
+	publishedCatalogSignature := readPublicationFile(t, filepath.Join(snapshotRoot, "catalog.signature.yaml"))
+	if !bytes.Equal(publishedCatalog, catalogData) || !bytes.Equal(publishedCatalogSignature, signatureData) {
+		t.Fatal("published sequence-1 snapshot differs from the embedded bootstrap publication")
+	}
+
+	channelRoot := filepath.Join(publicationRoot, "channels", "stable")
+	channelData := readPublicationFile(t, filepath.Join(channelRoot, "channel.yaml"))
+	channelSignature := readPublicationFile(t, filepath.Join(channelRoot, "channel.signature.yaml"))
+	trust, err := catalogtrust.Production()
+	if err != nil {
+		t.Fatal(err)
+	}
+	verifiedChannel, err := publication.VerifyChannel("stable", channelData, channelSignature, trust)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reference := verifiedChannel.Document.Catalog
+	wantLocator := "https://temper-sh.github.io/temper/catalog/snapshots/" + productionCatalogDigest + "/"
+	if reference.SHA256 != productionCatalogDigest || reference.Sequence != 1 || reference.Locator != wantLocator {
+		t.Fatalf("stable channel reference = %#v", reference)
+	}
+	verifiedCatalog, err := publication.VerifyCatalog(reference, publishedCatalog, publishedCatalogSignature, trust)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if verifiedCatalog.Snapshot.SHA256 != productionCatalogDigest {
+		t.Fatalf("verified snapshot digest = %q", verifiedCatalog.Snapshot.SHA256)
+	}
+}
+
+func readPublicationFile(t *testing.T, path string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
 }
 
 func assertRecipe(t *testing.T, document catalog.Document, target software.Target, packageID, version, revision, digest string, size, unpackedSize int64, installedEntries int, archiveRoot string) {
