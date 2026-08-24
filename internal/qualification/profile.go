@@ -89,8 +89,8 @@ type ProfileInvalidationTrigger struct {
 	Consequence string `yaml:"consequence"`
 }
 
-// ProfileEvidence is the typed public evidence inventory. Evidence-bearing
-// profiles remain refused until scope-key and claim-level validation lands.
+// ProfileEvidence is the typed public evidence inventory. Raw Labs and Field
+// Kit locators have no representation on this side of the C8 boundary.
 type ProfileEvidence struct {
 	ID     string                `yaml:"id"`
 	Source ProfileEvidenceSource `yaml:"source"`
@@ -260,11 +260,9 @@ func validateProfileEnvelope(envelope ProfileEnvelope, schema string, problem fu
 	validateDataBoundary(envelope.DataBoundary, problem)
 	validateKnownFailures(envelope.KnownFailures, envelope.Evidence, problem)
 	validateInvalidationTriggers(envelope.InvalidationTriggers, problem)
-	if len(envelope.Evidence) > 0 {
-		problem("evidence entries are not implemented in the current profile slice")
-	}
+	validateProfileEvidence(envelope, problem)
 	if envelope.Status == ProfileStatusQualified {
-		problem("QUALIFIED profiles require implemented evidence and witness-scope validation")
+		problem("QUALIFIED profiles require implemented qualification-gate and dependency-status validation")
 	}
 	validatePromotionReference(envelope.Promotion, problem)
 }

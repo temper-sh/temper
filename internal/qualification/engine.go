@@ -94,12 +94,23 @@ func (p EngineProfile) Validate() error {
 	if len(p.Dependencies) != 0 {
 		problem("engine dependencies must be empty")
 	}
+	validateEngineEvidenceScopes(p, problem)
 	validateEngineSpec(p.Spec, problem)
 
 	if len(problems) > 0 {
 		return &ValidationError{Problems: problems}
 	}
 	return nil
+}
+
+func validateEngineEvidenceScopes(profile EngineProfile, problem func(string, ...any)) {
+	for index, evidence := range profile.Evidence {
+		if !scopeReferenceEqualsReference(evidence.Scope.EngineProfile, Reference{
+			Schema: profile.Schema, ID: profile.ID, Revision: profile.Revision,
+		}) {
+			problem("evidence[%d].scope.engine_profile must identify the containing engine", index)
+		}
+	}
 }
 
 func validateEngineSpec(spec EngineSpec, problem func(string, ...any)) {

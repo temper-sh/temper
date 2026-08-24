@@ -107,12 +107,23 @@ func (p ModelArtifactProfile) Validate() error {
 	if len(p.Dependencies) != 0 {
 		problem("model artifact dependencies must be empty")
 	}
+	validateModelArtifactEvidenceScopes(p, problem)
 	validateModelArtifactSpec(p.Spec, problem)
 
 	if len(problems) > 0 {
 		return &ValidationError{Problems: problems}
 	}
 	return nil
+}
+
+func validateModelArtifactEvidenceScopes(profile ModelArtifactProfile, problem func(string, ...any)) {
+	for index, evidence := range profile.Evidence {
+		if !scopeReferenceEqualsReference(evidence.Scope.ArtifactProfile, Reference{
+			Schema: profile.Schema, ID: profile.ID, Revision: profile.Revision,
+		}) {
+			problem("evidence[%d].scope.artifact_profile must identify the containing model artifact", index)
+		}
+	}
 }
 
 func validateModelArtifactSpec(spec ModelArtifactSpec, problem func(string, ...any)) {

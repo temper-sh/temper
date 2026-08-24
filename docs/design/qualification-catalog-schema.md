@@ -15,11 +15,12 @@ their derived release paths, canonical bytes, digests, identities, exact
 bucket applicability, dependency presence, and compatible role, template, and
 speculation surfaces from a supplied in-memory bundle. The index
 representation already types every other profile reference and recommendation
-set so neither can become an untyped escape hatch. Evidence-bearing or
-`QUALIFIED` profiles, the other three profile document kinds, and nonempty
-recommendation sets remain explicit refusals until their validators and
-cross-document rules exist. All current catalog fixtures are fake and
-hermetic.
+set so neither can become an untyped escape hatch. Public evidence inventories
+and versioned canonical scope keys are validated for the implemented profile
+kinds. `QUALIFIED` profiles, the other three profile document kinds, and
+nonempty recommendation sets remain explicit refusals until their gate,
+dependency-status, and cross-document rules exist. All current catalog
+fixtures are fake and hermetic.
 
 ## Decision
 
@@ -272,10 +273,23 @@ machine-bucket ref × mode × ordered co-resident placements ×
 ordered harness integration revisions × conditions
 ```
 
-The validator recomputes the key. Storing it is an honest derived index: the
-scope is the source, the canonicalization rule is the update path, and a
-mismatch is a refusal. Static artifact compatibility evidence may use a
-smaller artifact-only scope; it cannot support runtime claims.
+The exact preimage is canonical YAML for
+`temper-qualification-evidence-scope/v1`: the displayed scope fields other
+than `key`, plus that schema ID. Mapping keys sort canonically; co-residents
+sort by exact runtime identity and placement; harnesses sort by ID and exact
+integration revision; empty sets remain explicit. A containing profile names
+itself by schema, ID, and revision without a digest. Every other profile and
+machine-bucket reference includes its exact digest.
+
+The validator recomputes the key from those typed fields. Storing it is an
+honest derived index: the scope is the source, the canonicalization rule is the
+update path, and a mismatch is a refusal. A runtime scope must contain exact
+artifact, engine, self-runtime, applicable machine-bucket, and semantic mode
+dimensions, plus explicit co-resident and harness sets. OS build, wired limit,
+and wired-limit source are observed; power, thermal, and competing load are
+observed or explicitly unmeasured. Static artifact compatibility evidence uses
+the smaller artifact-self scope with every condition explicitly
+`not-applicable`; it cannot support runtime claims.
 
 ### Evidence follows the claim
 
@@ -288,6 +302,12 @@ trusting every assertion in the profile.
 Only public-safe Results or product-promotion identities enter C7. Raw Labs
 paths, private corpora, prompts, user data, and Field Kit session contents stay
 behind C8's review boundary.
+
+For `source.kind: product-promotion`, the exact source identity must match the
+profile's top-level C8 `promotion` identity. `results-record` carries an exact
+versioned public record identity. Raw `field-kit-session/v1` and
+`field-kit-runtime-profile/v1` identities are refused on that public surface;
+C8 may cite them privately and emit only its reviewed public projection.
 
 ## Machine buckets
 

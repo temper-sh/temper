@@ -332,7 +332,10 @@ The deterministic field mapping is:
 | `promotion` | injected schema/ID/revision/SHA-256 of the canonical C8 packet |
 
 For every evidence record the compiler canonicalizes `scope`, computes the C7
-scope key, and drops C8-only `sources`. It then validates the complete emitted
+scope key, and drops C8-only `sources`. The key preimage is canonical
+`temper-qualification-evidence-scope/v1` YAML containing the scope fields but
+not `key`; this is the same pure computation exported by C7 validation, not a
+second Labs-owned encoding. The compiler then validates the complete emitted
 document under the target C7 schema and canonical-encodes it. Same inputs
 always produce byte-identical output.
 

@@ -78,10 +78,10 @@ func TestModelArtifactProfileValidationRefusesInvalidEnvelope(t *testing.T) {
 		{name: "unknown status", mutate: func(profile *qualification.ModelArtifactProfile) { profile.Status = "CURRENT" }, want: "status \"CURRENT\" is not supported"},
 		{name: "qualified without evidence", mutate: func(profile *qualification.ModelArtifactProfile) {
 			profile.Status = qualification.ProfileStatusQualified
-		}, want: "require implemented evidence"},
-		{name: "evidence before scope validation", mutate: func(profile *qualification.ModelArtifactProfile) {
+		}, want: "require implemented qualification-gate"},
+		{name: "incomplete evidence", mutate: func(profile *qualification.ModelArtifactProfile) {
 			profile.Evidence = []qualification.ProfileEvidence{{ID: "example-evidence"}}
-		}, want: "evidence entries are not implemented"},
+		}, want: "source.kind"},
 		{name: "empty roles", mutate: func(profile *qualification.ModelArtifactProfile) { profile.Roles = nil }, want: "roles must not be empty"},
 		{name: "unsorted roles", mutate: func(profile *qualification.ModelArtifactProfile) { profile.Roles = []string{"rerank", "coder"} }, want: "roles must be unique and sorted"},
 		{name: "empty foregrounds", mutate: func(profile *qualification.ModelArtifactProfile) { profile.Applicability.Foregrounds = nil }, want: "foregrounds must not be empty"},

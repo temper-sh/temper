@@ -83,11 +83,36 @@ func (p ModelRuntimeProfile) Validate() error {
 		problem("roles must contain exactly the layout role %q", p.Spec.Layout.Role)
 	}
 	validateRuntimePerformance(p.Spec.Performance, p.Evidence, problem)
+	validateModelRuntimeEvidenceScopes(p, problem)
 
 	if len(problems) > 0 {
 		return &ValidationError{Problems: problems}
 	}
 	return nil
+}
+
+func validateModelRuntimeEvidenceScopes(profile ModelRuntimeProfile, problem func(string, ...any)) {
+	for index, evidence := range profile.Evidence {
+		location := fmt.Sprintf("evidence[%d].scope", index)
+		if !scopeReferenceEqualsReference(evidence.Scope.ArtifactProfile, profile.Spec.ArtifactProfile) {
+			problem("%s.artifact_profile must exactly match spec.artifact_profile", location)
+		}
+		if !scopeReferenceEqualsReference(evidence.Scope.EngineProfile, profile.Spec.EngineProfile) {
+			problem("%s.engine_profile must exactly match spec.engine_profile", location)
+		}
+		if evidence.Scope.MachineBucket != nil && !referenceSetContains(profile.Applicability.MachineBuckets, *evidence.Scope.MachineBucket) {
+			problem("%s.machine_bucket must be present in applicability.machine_buckets", location)
+		}
+	}
+}
+
+func referenceSetContains(references []Reference, want Reference) bool {
+	for _, reference := range references {
+		if reference == want {
+			return true
+		}
+	}
+	return false
 }
 
 func validateRuntimeReference(location string, reference Reference, schema string, problem func(string, ...any)) {
