@@ -23,6 +23,19 @@ func TestReleaseArchiveSourceFreezesTargetArtifactAndNativeIdentity(t *testing.T
 	}
 }
 
+func TestReleaseArchiveSourceAllowsPolicyEligibleRecipeWithoutTestedEvidence(t *testing.T) {
+	document := releaseCatalog(t)
+	pkg := document.Packages["llama-cpp"]
+	recipe := pkg.Recipes["upstream-release"]
+	recipe.Tested = nil
+	pkg.Recipes["upstream-release"] = recipe
+	document.Packages["llama-cpp"] = pkg
+
+	if err := document.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
 func TestReleaseArchiveSourceRejectsMovingIncompleteOrAmbiguousInputs(t *testing.T) {
 	tests := []struct {
 		name string

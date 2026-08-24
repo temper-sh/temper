@@ -35,6 +35,15 @@ func TestCompareDerivesSignedCatalogStatusWithoutChangingTheLock(t *testing.T) {
 			want: testedstatus.PolicyEligibleUntested,
 		},
 		{
+			name: "eligible closure when recipe has no tested evidence",
+			mutate: func(_ *softwarelock.Document, supply *catalog.Snapshot) {
+				recipe := supply.Document.Packages["llama-cpp"].Recipes["homebrew"]
+				recipe.Tested = nil
+				supply.Document.Packages["llama-cpp"].Recipes["homebrew"] = recipe
+			},
+			want: testedstatus.PolicyEligibleUntested,
+		},
+		{
 			name: "excluded root",
 			mutate: func(_ *softwarelock.Document, supply *catalog.Snapshot) {
 				recipe := supply.Document.Packages["llama-cpp"].Recipes["homebrew"]

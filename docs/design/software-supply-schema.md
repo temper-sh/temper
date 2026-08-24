@@ -395,13 +395,7 @@ packages:
         dependencies: []
         exclude: []
         gates: [<router gate id>]
-        tested:
-          - root_version: <exact version>
-            closure_digest: <sha256>
-            target:
-              os: darwin
-              arch: arm64
-            evidence: <stable Results or release evidence id>
+        tested: []
 
   llama-cpp:
     description: primary llama.cpp runtime
@@ -430,13 +424,7 @@ packages:
         dependencies: []
         exclude: []
         gates: [<runtime qualification gate id>]
-        tested:
-          - root_version: <exact version>
-            closure_digest: <sha256>
-            target:
-              os: darwin
-              arch: arm64
-            evidence: <stable Results or release evidence id>
+        tested: []
 
   mlx:
     description: MLX runtime dependency shared by reviewed Python packages
@@ -595,7 +583,9 @@ packages:
   selection rule, so replacing a library does not expand catalog syntax
   implicitly.
 - `minimum_compatible` is resolution policy backed by cited review; it is not
-  proof that every later version was tested. `tested` rows are exact evidence.
+  proof that every later version was tested. `tested` may be empty for a
+  policy-eligible recipe awaiting stable evidence; rows that do exist are exact
+  evidence.
 - A tested row identifies the root version *and exact resolved closure digest*
   on a target. A transitive dependency move leaves that tested set even when
   the root version is unchanged. That target must select the same adapter as

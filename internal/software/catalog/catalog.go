@@ -327,9 +327,6 @@ func (d Document) Validate() error {
 					problem("%s gates[%d] %q is not a lowercase stable id", location, index, gate)
 				}
 			}
-			if len(recipe.Tested) == 0 {
-				problem("%s tested must not be empty", location)
-			}
 			for index, tested := range recipe.Tested {
 				testedLocation := fmt.Sprintf("%s tested[%d]", location, index)
 				if strings.TrimSpace(tested.RootVersion) == "" {
