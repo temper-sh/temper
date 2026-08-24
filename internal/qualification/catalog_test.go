@@ -234,6 +234,60 @@ func TestLoadCatalogVerifiesExactBucketBundle(t *testing.T) {
 	}
 }
 
+func TestLoadCatalogVerifiesExactModelArtifactAndBucketReferences(t *testing.T) {
+	index := parseCatalogFixture(t)
+	artifact := parseModelArtifactFixture(t)
+	artifact.Applicability.MachineBuckets = []qualification.Reference{index.MachineBuckets[0].Document}
+	artifactData, err := qualification.MarshalModelArtifactProfile(artifact)
+	if err != nil {
+		t.Fatal(err)
+	}
+	index.Profiles = []qualification.IndexedDocument{{
+		Document: qualification.Reference{
+			Schema: qualification.ModelArtifactSchemaV1, ID: "example-coder-artifact", Revision: 1, SHA256: qualification.Digest(artifactData),
+		},
+		Path: "profiles/model-artifact/example-coder-artifact/1.yaml",
+	}}
+	files := map[string][]byte{
+		exampleBucketPath:      readMachineBucketFixture(t),
+		index.Profiles[0].Path: artifactData,
+	}
+
+	catalog, err := qualification.LoadCatalog(marshalCatalogIndex(t, index), files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(catalog.ModelArtifacts) != 1 || catalog.ModelArtifacts[0].ID != "example-coder-artifact" {
+		t.Fatalf("model artifacts = %#v", catalog.ModelArtifacts)
+	}
+}
+
+func TestLoadCatalogRefusesProfileBucketAbsentFromIndex(t *testing.T) {
+	artifact := parseModelArtifactFixture(t)
+	artifact.Applicability.MachineBuckets = []qualification.Reference{{
+		Schema: qualification.MachineBucketSchemaV1, ID: "another-bucket", Revision: 1, SHA256: strings.Repeat("a", 64),
+	}}
+	artifactData, err := qualification.MarshalModelArtifactProfile(artifact)
+	if err != nil {
+		t.Fatal(err)
+	}
+	index := parseCatalogFixture(t)
+	index.Profiles = []qualification.IndexedDocument{{
+		Document: qualification.Reference{
+			Schema: qualification.ModelArtifactSchemaV1, ID: artifact.ID, Revision: artifact.Revision, SHA256: qualification.Digest(artifactData),
+		},
+		Path: "profiles/model-artifact/example-coder-artifact/1.yaml",
+	}}
+
+	_, err = qualification.LoadCatalog(marshalCatalogIndex(t, index), map[string][]byte{
+		exampleBucketPath:      readMachineBucketFixture(t),
+		index.Profiles[0].Path: artifactData,
+	})
+	if err == nil || !strings.Contains(err.Error(), "absent from the index") {
+		t.Fatalf("LoadCatalog() error = %v, want missing-bucket refusal", err)
+	}
+}
+
 func TestLoadCatalogRefusesMissingOrMismatchedBucketBytes(t *testing.T) {
 	t.Run("missing indexed file", func(t *testing.T) {
 		_, err := qualification.LoadCatalog(readCatalogFixture(t), nil)
@@ -288,7 +342,7 @@ func TestLoadCatalogRefusesUnimplementedProfileDocuments(t *testing.T) {
 	}}
 
 	_, err := qualification.LoadCatalog(marshalCatalogIndex(t, index), map[string][]byte{exampleBucketPath: readMachineBucketFixture(t)})
-	if err == nil || !strings.Contains(err.Error(), "profile documents are not implemented") {
+	if err == nil || !strings.Contains(err.Error(), "profile schema \"temper-qualification-engine/v1\" is not implemented") {
 		t.Fatalf("LoadCatalog() error = %v, want profile refusal", err)
 	}
 }

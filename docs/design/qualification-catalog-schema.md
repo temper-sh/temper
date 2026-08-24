@@ -8,14 +8,16 @@ claim that a current configuration is qualified, or authorize the wizard to
 select anything.
 
 Current Temper implementation boundary: `internal/qualification` strictly
-parses canonical machine-bucket documents and the canonical catalog index,
-validates exact references and derived release paths, and loads a supplied
-bucket-only bundle while verifying every indexed digest and document identity.
-The index representation already types profile references and recommendation
-sets so neither can become an untyped escape hatch. The bundle loader refuses
-nonempty `profiles` or `recommendation_sets` until the referenced profile
-document validators and their cross-document rules exist. All current catalog
-fixtures are fake and hermetic.
+parses canonical machine-bucket, model-artifact, and catalog-index documents.
+The shared profile envelope and model-artifact body are typed; the loader
+verifies their derived release paths, canonical bytes, digests, identities,
+and exact bucket applicability from a supplied in-memory bundle. The index
+representation already types every other profile reference and recommendation
+set so neither can become an untyped escape hatch. Evidence-bearing or
+`QUALIFIED` profiles, the other five profile document kinds, and nonempty
+recommendation sets remain explicit refusals until their validators and
+cross-document rules exist. All current catalog fixtures are fake and
+hermetic.
 
 ## Decision
 
@@ -98,13 +100,21 @@ Maps sort by key. Sets sort by exact identity. Sequence order exists only where
 the schema calls it semantic. Digests are computed over the exact canonical
 bytes and are never embedded in the document they identify.
 
+The one self-reference exception is inside `evidence[].scope`: a scope may
+name the profile containing that evidence by schema, ID, and revision without
+a SHA-256 because a document cannot contain its own byte digest. Every scope
+reference to another document remains exact, including its SHA-256. Scope-key
+validation must prove that an omitted digest denotes the containing profile;
+it is not a general shorthand for “latest.”
+
 ## Immutable revision and status history
 
 A published document is never edited. A correction, pin change, status change,
 applicability change, changed known failure, or changed recommendation basis
 creates a new revision. `supersedes`, when present, is an exact reference to
 the previous head with the same schema and ID. It may not skip or fork a
-lineage.
+lineage. Revision 1 has no `supersedes`; every later revision names exactly the
+immediately preceding revision.
 
 The status values remain:
 
@@ -340,7 +350,7 @@ spec:
   source:
     kind: hugging-face | upstream-release
     repository: <immutable repository identity>
-    revision: <exact upstream revision>
+    revision: <exact 40-character upstream commit>
   files:
     - path: <relative path>
       sha256: <exact bytes>
@@ -351,21 +361,38 @@ spec:
   quantization:
     family: <actual recipe family>
     recipe_revision: <exact recipe identity>
-    tensor_allocation: <complete typed allocation, never only an advertised bit label>
-    calibration: <exact provenance or not-applicable>
-  tokenizer: <exact file reference from files>
-  template: <exact file reference or not-applicable>
-  sidecars: [<exact file references and purposes>]
+    tensor_allocation:
+      - tensor_class: default
+        precision: <exact storage precision>
+      - tensor_class: <named override class>
+        precision: <exact storage precision>
+    calibration:
+      state: referenced | not-applicable
+      source: <exact external material reference when referenced>
+  tokenizer:
+    state: file
+    path: <exact selected file containing it, including embedded-in-weights>
+  template:
+    state: file | not-applicable
+    path: <exact selected file containing it when state is file>
+  sidecars: [<paths of every projector, drafter, or other sidecar file>]
   declared_download_bytes: <sum of every selected file>
   license:
     id: <reviewed license identity>
-    source: <exact upstream license location and revision>
+    source:
+      repository: <exact repository identity>
+      revision: <exact 40-character upstream commit>
+      path: <canonical relative license path>
     redistribution: referenced-not-vendored
 ```
 
 All selected files, including sidecars, contribute to identity and the
-download bill. Compatibility may be reused only when every referenced byte is
-identical.
+download bill. File and sidecar sets are unique and path-sorted. The required
+`default` tensor class makes the allocation total; named rows are exact
+overrides rather than an advertised average bit label. A tokenizer or template
+embedded in a weights file names that containing file, so embedded metadata is
+still bound to exact bytes. Compatibility may be reused only when every
+referenced byte is identical.
 
 ### Engine
 
