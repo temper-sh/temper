@@ -1,0 +1,35 @@
+axis_labels:
+  chip_generation: Example generation 5
+  memory: Example 32 GiB
+  memory_bandwidth: Example standard
+evidence:
+  - id: example-bucket-review
+    kind: release-review
+    revision: 1
+    sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  - id: example-bucket-results
+    kind: results-record
+    revision: 1
+    sha256: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+facts_schema: temper-machine-facts/v1
+id: example-gen5-32g-standard
+invalidation_triggers:
+  - Canonical facts schema changes its hardware identity fields
+  - Hardware mapping changes for this example bucket
+predicate:
+  chips:
+    - Example Chip A
+    - Example Chip B
+  hardware_models:
+    - ExampleMac1,1
+    - ExampleMac1,2
+  physical_memory_bytes:
+    maximum: 34359738368
+    minimum: 34359738368
+  target:
+    arch: arm64
+    distribution: macos
+    os: darwin
+revision: 1
+schema: temper-qualification-machine-bucket/v1
+title: Example 32 GiB by generation and bandwidth
