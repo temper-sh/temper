@@ -10,7 +10,8 @@ detect the exact macOS host target and compose the first concrete isolated
 member, `upstream-release`, which resolves exact catalog assets and implements
 archive-backed install, inspection, and removal behind an injected transport.
 Locks naming another installation adapter refuse without fallback. Its real
-scratch gate remains separately authorized. The canonical
+scratch gate now passes in a disposable root, including dry-run purity, exact
+check, and clean repeated install/remove. The canonical
 Temper-to-Field-Kit identity binding described below is executable as a pure
 schema/builder; Field Kit packet generation remains Field Kit-owned.
 

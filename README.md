@@ -68,9 +68,11 @@ production process edge now invokes no shell and forces Homebrew auto-update,
 analytics, prompts, and incidental GitHub API access off. A read-only catalog
 selector verifies either the active snapshot or an injected embedded fallback,
 and resolution derives exact-tested, policy-eligible-untested, known-bad, or
-outside-policy status without writing that status anywhere. Actual release
-trust/bootstrap bytes, catalog transport, the uv resolver implementation, and
-remaining production adapters remain next. The selected `release-artifact`
+outside-policy status without writing that status anywhere. A bounded HTTPS
+catalog source now implements the signed publication transport convention.
+Actual release trust/bootstrap bytes, its channel root and public command
+wiring, the uv resolver implementation, and remaining production adapters
+remain next. The selected `release-artifact`
 method now has a
 deterministic `upstream-release` resolver, a bounded HTTPS download edge, and an
 isolated install/inspect/remove implementation. Hermetic tests prove exact

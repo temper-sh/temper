@@ -12,14 +12,16 @@ non-shell process edge. Four-way tested-status derivation is executable and is
 returned by software resolution without being persisted. The deterministic
 `upstream-release` resolver and its production HTTPS reader plus isolated
 installer/inspector/remover are executable; their archive and effect contracts
-are covered hermetically. The uv reader and public command surface remain
-pending. The internal signed
+are covered hermetically and the real isolated lifecycle passes through the
+public software commands. The uv reader and remaining concrete installation
+members remain pending. The internal signed
 channel/catalog verification, immutable store, rollback and equivocation
 policy, capability gate, dry-run, and active-pointer transaction are now
 executable and hermetically tested; a read-only consumer verifies the active
-snapshot or an injected embedded bootstrap before use. Actual production
-trust/bootstrap bytes and transport inputs remain release work. Later schema
-changes still require review.
+snapshot or an injected embedded bootstrap before use. A bounded read-only
+HTTPS catalog source now implements the publication layout below. Actual
+production trust/bootstrap bytes, the channel root, and public catalog-command
+wiring remain release work. Later schema changes still require review.
 
 The isolation-first curation policy applies to every Temper installation, not
 only the Field Kit base. On macOS, the deliberately small shared bootstrap
@@ -27,9 +29,11 @@ layer may use Homebrew for `uv` and `hf`; uv then owns exact Python runtimes and
 application environments below that layer. The Field Kit serving base needs
 `llama-swap` and `llama-cpp`; the 2026-08-24 method review selects isolated
 `release-artifact` installation for both on macOS Apple Silicon. The concrete
-source/adapter is implemented; its explicitly authorized scratch round-trip
-still precedes recipe publication. `rapid-mlx` and `mlx-dspark` remain supported, non-default
-Python packages. Their explicit `python-environment`/`uv` recipes exercise PEP
+source/adapter is implemented and its explicitly authorized scratch round-trip
+passes. Exact recipes may now use those reviewed artifact identities, while an
+`exact-tested` claim still requires stable Results or Field Kit evidence.
+`rapid-mlx` and `mlx-dspark` remain supported, non-default Python packages.
+Their explicit `python-environment`/`uv` recipes exercise PEP
 440 and exact Python/MLX closure control. Nothing selects or installs either
 package unless the user or a reviewed packet explicitly requests it.
 
@@ -50,9 +54,10 @@ install orchestration are now executable. The read-only check analyzer and
 lock/store/adapter reader are executable as well. Provenance-guided removal now
 has a pure planner, a serialized active-to-retiring final-release transition,
 conditional receipt deletion, keyed adapter orchestration, and explicit-rerun
-recovery. The public commands, remaining concrete adapters, and packet binding
-remain Phase B work. The first concrete isolated member is the
-`upstream-release` adapter; public composition and its real scratch gate remain.
+recovery. The public commands and packet binding are executable on the Temper
+side. The first concrete isolated member is the `upstream-release` adapter;
+its public composition and real scratch gate pass. Field Kit-side stage
+integration and the remaining concrete adapters remain.
 
 ## Facts and their owners
 
@@ -92,8 +97,8 @@ The initial inventory is finite:
 |---|---|---|
 | `uv` | Temper-managed shared bootstrap tool | `system-package`/Homebrew on macOS; lock and receipt the exact formula closure |
 | `hf` | Temper-managed shared model-source tool | `system-package`/Homebrew on macOS; only revision-pinned operations are eligible |
-| `llama-swap` | Temper-managed Field Kit base | isolated `release-artifact` selected on macOS Apple Silicon; concrete recipe and scratch round-trip pending |
-| `llama-cpp` | Temper-managed Field Kit base | isolated `release-artifact` selected on macOS Apple Silicon after Metal/runtime and compatibility screening; concrete recipe and scratch round-trip pending |
+| `llama-swap` | Temper-managed Field Kit base | isolated `release-artifact` selected on macOS Apple Silicon; exact reviewed recipe identity and real lifecycle pass, shipping catalog artifact pending |
+| `llama-cpp` | Temper-managed Field Kit base | isolated `release-artifact` selected on macOS Apple Silicon after Metal/runtime and compatibility screening; exact reviewed recipe identity and real lifecycle pass, shipping catalog artifact pending |
 | `rapid-mlx` | Temper-managed, optional and non-default | isolated `python-environment`/`uv`; lock the exact interpreter and MLX closure |
 | `mlx-dspark` | Temper-managed, optional and non-default | isolated `python-environment`/`uv`; lock the exact interpreter and Python/MLX closure |
 | Pi | user-managed harness | absent from this catalog; render selected config and report observed compatibility only |
@@ -103,9 +108,10 @@ review](../qualification/field-kit-base-method-review-2026-08-24.md) rejects
 both Homebrew application variants at the exact-install gate. The two isolated
 release artifacts passed the bounded model-backed runtime/router gate, so the
 review selects `release-artifact` with exact catalog-reviewed releases. It does
-not yet publish the concrete recipes or add tested evidence: the release
-adapter is hermetically executable; its real scratch
-install/check/remove/second-run gate remains.
+not add tested evidence. The release adapter is hermetically executable and
+its real scratch install/check/remove/second-run gate passes. Publishing the
+exact recipes now waits on the authenticated production catalog artifact, not
+on another adapter gate.
 
 Recipe curation prefers an isolated verified upstream artifact for a native
 application and an isolated exact environment for a language application.
@@ -178,6 +184,19 @@ configured catalog source reader; it is never a command, shell fragment, or
 provider guessed from machine state. Tests inject their own trust roots and
 sources. Production signing keys and the embedded bootstrap snapshot are
 release inputs, not values invented by this design or fetched implicitly.
+
+The production HTTPS source has one explicit transport convention. Its
+configured channel root is an absolute HTTPS directory URL; channel `stable`
+reads `stable/channel.yaml` and `stable/channel.signature.yaml` below that
+root. The signed catalog `locator` is an absolute HTTPS publication-directory
+URL containing `catalog.yaml` and `catalog.signature.yaml`. Roots and
+redirects forbid credentials, query strings, fragments, non-HTTPS schemes,
+and encoded directory paths. Each read is context-bound, permits no more than
+five HTTPS redirects, and has no retry, cache, credential discovery, or host
+fallback. Channel bytes are capped at 64 KiB, detached signatures at 4 KiB,
+and catalog bytes at 8 MiB before cryptographic or schema verification. A
+failed data read prevents its signature read; a failed signature read prevents
+the updater from reading or committing anything else.
 
 The active catalog store under an explicit Temper data root is:
 
@@ -990,6 +1009,7 @@ store transaction is also executable with injected hermetic keys and sources.
 The Homebrew provider protocol/translator and controlled non-shell process edge
 are executable. The selected `upstream-release` resolver, production HTTPS
 reader, and isolated effect member are executable and hermetically exercised.
-Production trust/bootstrap, catalog transport/public-command wiring, the real
-release-adapter scratch gate, and the reviewed uv surface remain deliberate
+The bounded production catalog HTTPS source and the real release-adapter
+scratch gate are complete. Production trust/bootstrap bytes, the channel root,
+public catalog-command wiring, and the reviewed uv surface remain deliberate
 release-facing steps.

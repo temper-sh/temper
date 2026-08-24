@@ -322,9 +322,10 @@ configuration catalog follows without blocking that installed base.
 > and incidental GitHub API access off. The read-only catalog selector verifies
 > either the active snapshot or an injected embedded fallback, and resolution
 > returns the four derived tested-status states, including transitive
-> exclusions. Actual release trust/bootstrap bytes, catalog transport, and the
-> uv resolver implementation remain
-> pending in Phase A. The selected release-artifact source, deterministic
+> exclusions. The bounded HTTPS catalog source now implements the signed
+> publication transport convention. Actual release trust/bootstrap bytes, its
+> channel root and public command wiring, and the uv resolver implementation
+> remain pending in Phase A. The selected release-artifact source, deterministic
 > resolver, production HTTPS reader, and isolated install/inspect/remove member
 > are now executable with hermetic archive/effect coverage. Exact macOS
 > host-target detection and the frozen public install/check/remove commands are
@@ -784,9 +785,10 @@ or CI dependency.
    catalog lifecycle are approved; the shared resolver and authenticated
    catalog-store transactions are hermetically executable. Homebrew candidate
    translation, its controlled production process runner, authenticated
-   active-or-bootstrap catalog reading, and four-way tested-status reporting
-   are complete behind injected inputs. Next supply the reviewed release trust
-   key/bootstrap bytes and publication transport contract. The 2026-08-24
+   active-or-bootstrap catalog reading, four-way tested-status reporting, and
+   the bounded HTTPS publication source are complete behind explicit inputs.
+   Next supply the reviewed release trust key/bootstrap bytes, channel root,
+   and public catalog-command wiring. The 2026-08-24
    method review rejects both Homebrew application variants at the
    exact-install gate. The isolated `llama-swap` v251 and `llama.cpp` b10566
    artifacts passed the bounded model-backed runtime/router screen, selecting
