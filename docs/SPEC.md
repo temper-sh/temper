@@ -16,8 +16,11 @@ the name. The evidence side is `temper-sh/labs` (a fresh scaffold created
 2026-08-14 at `../labs`; the legacy `local-ai-setup` repo and its history
 remain the source of existing evidence until Labs' archive migration imports
 it). `temper-sh/results` is the human-readable evidence publication, created
-locally 2026-08-13; `temper-sh/field-kit` already exists and keeps owning
-the probes, running them over the base Temper installs (below, 2026-08-14).
+locally 2026-08-13. `temper-sh/field-kit` remains the public experiment surface
+but its original Bash installer is replaced after parity: Labs promotes
+immutable machine-dependent experiment packages into an agent-operated
+catalog, and those prompts run over the stable base Temper supplies (boundary
+revised by owner 2026-08-24).
 
 The manifest file is **`manifest.yaml`** with **`manifest.lock.yaml`**
 beside it (decided 2026-08-14: it carries the whole wizard selection —
@@ -41,10 +44,11 @@ model, tool, or harness integration.
    stack matched to their hardware without reading a lab notebook. Runs
    the wizard once, gets a manifest they own, applies updates when they
    choose.
-2. **The friend with a different Mac**: runs the field kit, sends back
-   one text block, gets to keep or fully remove
-   the result. Their machine's witnessed combination can become a catalog
-   row.
+2. **The consenting experiment participant**: asks Field Kit's root agent to
+   inspect their machine through Temper, sees the applicable current
+   experiments with purpose, cost, effects, and cleanup, then opts into named
+   experiments. Their local evidence may be shared with Labs for review; a run
+   never becomes a catalog row by itself.
 3. **The AI agent driving either of the above**: first-class. Stable
    RESULT lines, machine-parseable outcomes, an interpretive runbook
    (AGENT.md's evidence model), consent gates that stay human, and a
@@ -640,18 +644,25 @@ Lifecycle:
 - `temper init` — the wizard described above: deterministic machine checks,
   model universe, one-by-one tool choices, harness integrations, mode bindings
   and allowances. Writes manifest.yaml once.
-- the probe base (**decided 2026-08-14; moved to M2 immediately after the
-  supply catalog on 2026-08-20**): probes belong to the field kit; there is no
-  `temper probe`. Temper installs the exact locked basic requirements and
-  exposes the reversible base the field kit consumes — canonical machine
-  facts, provenance, llama-swap and basic dependencies, isolated profile
-  rendering, scoped service lifecycle, artifact verification, and removal of
-  only what its receipt and the root-wide claim state permit. A stable base and
-  multiple experiment locks/receipts may coexist below one explicit root.
-  Stages, RESULT lines,
-  tune/deviation/conclude, AGENT.md and keep-or-restore stay field-kit's;
-  packet identity binds the Temper binary, the ordered base/experiment
-  installation-lock-receipt set, manifest lock, generation, and machine facts.
+- the experiment execution base (**probe ownership decided 2026-08-14; moved
+  to M2 immediately after the supply catalog on 2026-08-20; Field Kit role
+  revised 2026-08-24**): experiment discovery and prompts belong to Field Kit;
+  there is no open-ended AI `temper probe` orchestrator. Temper installs the
+  exact locked basic requirements and exposes the reversible base the field
+  kit consumes — canonical machine facts, provenance, llama-swap and basic
+  dependencies, isolated profile rendering, scoped service lifecycle,
+  artifact verification, and removal of only what its receipt and the
+  root-wide claim state permit. A stable base and multiple experiment
+  locks/receipts may coexist below one explicit root.
+  The Field Kit root prompt applies hard machine predicates, explains advisory
+  relevance and estimated costs, and obtains explicit per-experiment consent.
+  Labs-promoted experiment prompts own stages, bounded adaptive
+  tune/deviation/conclude reasoning, session reporting, and keep-or-restore;
+  the Temper-material identity binds the Temper binary, the ordered
+  base/experiment installation-lock-receipt set, manifest lock, generation,
+  and machine facts.
+  Field Kit separately binds the immutable experiment metadata/prompt,
+  consent, attempts, decisions, observations, and report.
   Re-witnessing after an update is a
   field-kit run against this base.
 - `temper report` — print the current status-snapshot paste-block (probe
@@ -690,9 +701,11 @@ The software lock does not claim installation, the receipt does not select an
 update policy, and the manifest lock does not duplicate either. Probe results
 remain separate local artifacts (`report.md`, `provenance.txt`). Results
 contains sanitized conclusions, machine tables and detailed records—not Labs'
-raw journal—and is never a runtime dependency. The field kit's current packet
-is a signed-by-hash transport into review; it does not skip review, become a
-Results recommendation, or become a qualification-catalog row itself.
+raw journal—and is never a runtime dependency. A promoted Field Kit experiment
+is an immutable snapshot of a Labs-authored experiment, not a second mutable
+source. Its local session packet is a signed-by-hash transport back into Labs
+review; it does not skip review, become a Results recommendation, or become a
+qualification-catalog row itself.
 
 Software-supply catalog snapshots are signed and published independently of
 the Temper binary. The binary owns supported schemas, adapter protocols,
@@ -704,9 +717,23 @@ receipt, and there is no background updater.
 
 ## Labs qualification workflow
 
-Labs keeps decisions reproducible without turning exploratory code into product
-code. Model, tool, harness and mode candidates follow the same state machine
-and evidence discipline:
+Labs has two independent promotion gates. **Experiment promotion** publishes an
+immutable package into Field Kit only after review of its question, exact
+inputs, machine predicates and versioned buckets, estimated resources, consent
+and data boundaries, bounded adaptive prompt, stop/re-consent rules, evidence
+shape, cleanup and interruption behavior, hermetic refusal coverage, and
+invalidation/retirement triggers. Promotion says that the procedure is useful
+and safe to offer; it does not validate the hypothesis, recommend its subject,
+or authorize a product change. The editable experiment remains in Labs and any
+meaningful change creates a new promoted version. The detailed C12 schema and
+promotion implementation live in Labs and Field Kit, not Temper; Temper's
+boundary is specified in
+[`design/field-kit-experiment-boundary.md`](design/field-kit-experiment-boundary.md).
+
+**Product promotion** happens only after Labs reviews evidence. Labs keeps
+decisions reproducible without turning exploratory code into product code.
+Model, tool, harness and mode candidates follow the same state machine and
+evidence discipline:
 
 1. **Intake / `WATCH`.** Record the question, intended roles/modes, discovery
    sources, official artifact locations, release state and re-check triggers.
@@ -773,12 +800,16 @@ quality:
   base.
   It consumes reviewed output; it does not contain exploratory harnesses,
   unresolved candidate research or the full evidence narrative.
-- **`temper-sh/field-kit`** — stays the thin public probe repo
-  (friend-facing README + curl-able machine-report) and **keeps owning the
-  probes** (2026-08-14, replacing the earlier shim-over-`temper probe`
-  idea): it orchestrates its stages, packets, consent gates and
-  keep-or-restore over the base Temper installs, and the "send one file
-  first, then one clone" flow survives unchanged.
+- **`temper-sh/field-kit`** — the user-facing, agent-operated catalog of
+  immutable Labs-promoted machine experiments (owner revision 2026-08-24).
+  Its root prompt probes the machine through Temper, applies versioned
+  applicability/bucket metadata, explains applicable experiments and their
+  estimated costs, and asks the user to opt into named versions. Each promoted
+  experiment owns its bounded adaptive prompt, consent envelope, evidence
+  packet, and keep-or-restore orchestration over Temper's stable execution
+  base. It contains no duplicate installer and consumes no moving Labs state.
+  The current friend-facing Bash implementation is replaced only after the
+  fixed/adaptive parity and scratch gates.
 - **`temper-sh/extensions`** — possible common home for harness-specific
   adapters that are independently useful; whether Pi extensions share it or
   become separate projects remains open. Shared tool logic does not fork here:
@@ -871,11 +902,13 @@ reach the same standard before tool profiles enter the qualification catalog.
   2026-08-20; rendering, pin management, exact artifact materialization,
   receipt/full-hash admission, and the resident wall-model prediction execute
   in Go with no Bash runtime dependency.
-- **M2 — software supply catalog + Field Kit installed base, then the broader
+- **M2 — software supply catalog + Field Kit execution base, then the broader
   qualification catalog**. First model rolling/guarded/constrained package
   policy and exact software locking; next install/check/remove the receipted
-  reversible base Field Kit consumes; then add model, engine, tool, harness,
-  activity and mode qualification profiles plus the Labs promotion packet.
+  reversible base Labs-promoted Field Kit experiments consume and freeze the
+  cross-repository experiment-promotion boundary; then add model, engine, tool,
+  harness, activity and mode qualification profiles plus the separate Labs
+  product-promotion packet.
 - **M3 — wizard TUI** over a curated model universe, individually opt-in tools,
   harness integrations and mode bindings.
 - **M4 — production mode state machine + harness qualification** over the
@@ -896,8 +929,10 @@ reach the same standard before tool profiles enter the qualification catalog.
    candidates collapsed to two, so this is now two questions rather than
    four, and the tool-narrowing that used to distinguish planning from coding
    needs a permissions test rather than a resource witness.)
-3. Catalog contribution flow: how a friend's probe report becomes a row —
-   hand-curated by the owner (current stance) or a structured submission?
+3. Field Kit evidence submission transport: how a user deliberately exports a
+   local session packet to Labs for review. Labs review and explicit product
+   promotion are mandatory regardless of transport; no report becomes a row
+   directly.
 4. Is remote-provider integration strictly render-only (current direction),
    with credential and foreground-model ownership left to each harness?
 5. Versioning of witnessed rows when engines move: a row's witness pins

@@ -28,10 +28,11 @@ effect through one atomic target.
 **M2 is underway in three deliberate phases:** build the minimum independently
 published software-supply catalog and exact `software.lock.yaml`; use
 adapter-backed installation methods to install, check, and remove a receipted
-base for Field Kit; then expand the broader qualification catalog used by the
-wizard. `system-package` is the portable strategy—Homebrew is only its current
-macOS adapter—and the exact adapter is always target-selected, displayed, and
-locked. Catalog curation is package-specific: prefer an isolated verified
+base for Labs-promoted Field Kit experiments; then expand the broader
+qualification catalog used by the wizard. `system-package` is the portable
+strategy—Homebrew is only its current macOS adapter—and the exact adapter is
+always target-selected, displayed, and locked. Catalog curation is
+package-specific: prefer an isolated verified
 release or language environment when upstream supplies a maintainable one, and
 use shared system packages only for genuine system dependencies, bootstrap
 tools, or a demonstrably better-maintained distribution. This is a review
@@ -46,6 +47,17 @@ renders its selected integration but does not install Pi, Node, or a JavaScript
 package manager. This puts an installed test base ahead of the wizard and
 production mode machinery. Consumer-home installation, production service
 control, and the wizard remain later work.
+
+Field Kit is being rebuilt as a user-facing, agent-operated catalog rather
+than another installer. Labs authors and promotes immutable experiments with
+machine buckets, applicability, cost/consent metadata, bounded prompts, and
+evidence rules. Its root prompt reads Temper's canonical machine facts and
+suggests applicable experiments; the user opts into each one. Temper performs
+the exact mechanical work and records provenance but never reads the moving
+experiment catalog or decides what to try. Experiment promotion into Field Kit
+and product/profile promotion into Temper are separate reviews. The boundary
+and replacement gate for the original Bash kit are recorded in
+[`docs/design/field-kit-experiment-boundary.md`](docs/design/field-kit-experiment-boundary.md).
 
 The planned wizard does not force one global “best model.” The qualification
 catalog may recommend several layouts for the same machine and mode, each with
@@ -77,8 +89,9 @@ are staged under `docs/catalog` but are not yet deployed. The retained,
 release-only `temper-catalog` command validates, signs, atomically writes, and
 verifies those exact publication bytes while accepting the private seed only on
 stdin; no private signing material enters the tree. The uv resolver
-implementation remains next in Phase A. The selected `release-artifact`
-method now has a
+now reads the bounded uv 0.12.x protocol, locks an exact uv-managed CPython
+build and wheel-only dependency closure, and refuses incomplete or drifting
+provider facts. The selected `release-artifact` method now has a
 deterministic `upstream-release` resolver, a bounded HTTPS download edge, and an
 isolated install/inspect/remove implementation. Hermetic tests prove exact
 size/hash/archive/tree verification, atomic pointer publication, repair,
@@ -105,9 +118,11 @@ and prepared-operation state without creating or changing the root.
 Provenance-guided removal is executable behind keyed adapters, including
 serialized final-claim retirement, dry-run purity, pre-existing preservation,
 conditional receipt release, and interrupted-run recovery. Canonical machine
-facts and the pure ordered Field Kit identity binding are now executable too:
-the binding hashes exact Temper/manifest-lock bytes, names the rendered
+facts and the pure ordered Field Kit Temper-material binding are now executable
+too: the binding hashes exact Temper/manifest-lock bytes, names the rendered
 generation, and carries recursively explicit software lock/receipt identities.
+Field Kit will add the independently owned promoted-experiment, consent,
+attempt, decision, and report identities around that stable material layer.
 The frozen public `temper software install`, `check`, and `remove` surface is
 now wired to exact macOS host-target detection and the compiled
 `upstream-release` member. A hermetic command-level round-trip proves dry-run

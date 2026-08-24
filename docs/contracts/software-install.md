@@ -12,8 +12,10 @@ archive-backed install, inspection, and removal behind an injected transport.
 Locks naming another installation adapter refuse without fallback. Its real
 scratch gate now passes in a disposable root, including dry-run purity, exact
 check, and clean repeated install/remove. The canonical
-Temper-to-Field-Kit identity binding described below is executable as a pure
-schema/builder; Field Kit packet generation remains Field Kit-owned.
+Temper-to-Field-Kit material identity binding described below is executable as
+a pure schema/builder. Field Kit's promoted-experiment/session envelope remains
+Field Kit-owned; see
+[`../design/field-kit-experiment-boundary.md`](../design/field-kit-experiment-boundary.md).
 
 `software install` reconciles one already-resolved `software.lock.yaml` into
 one named installation below an explicit Temper root. It never resolves
@@ -444,7 +446,7 @@ strictly below the named installation directory. If any unit in that group was
 pre-existing, the whole provider group is preserved while the installation
 receipt is released.
 
-Field Kit binds a packet to the canonical bytes of one
+Field Kit binds a run's Temper-managed material to the canonical bytes of one
 `temper-field-kit-binding/v1` document:
 
 ```yaml
@@ -506,5 +508,8 @@ YAML bytes emitted by the schema. The manifest-lock checksum is deliberately a
 byte identity, while software locks use their resolution-date-independent
 semantic digest and receipts use their canonical byte identity.
 
-Field Kit consumes these identities and runs probes. It does not edit Temper's
-receipts or root state and does not invoke provider adapters directly.
+Field Kit consumes these identities from a promoted experiment prompt and adds
+its experiment, consent, attempt, decision, observation, and report identities
+in its own session envelope. It does not edit Temper's receipts or root state,
+invoke provider adapters directly, or make Temper parse the moving experiment
+catalog.
