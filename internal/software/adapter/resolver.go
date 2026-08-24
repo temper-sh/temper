@@ -13,6 +13,7 @@ import (
 type ResolveRequest struct {
 	Package string
 	Recipe  catalog.Recipe
+	Supply  catalog.Document
 	Target  software.Target
 }
 

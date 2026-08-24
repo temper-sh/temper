@@ -132,7 +132,9 @@ func Run(ctx context.Context, options Options, supply catalog.Snapshot, resolver
 		if err := ctx.Err(); err != nil {
 			return Result{}, err
 		}
-		candidates, err := item.resolver.Candidates(ctx, adapter.ResolveRequest{Package: item.request.Package, Recipe: item.recipe, Target: options.Target})
+		candidates, err := item.resolver.Candidates(ctx, adapter.ResolveRequest{
+			Package: item.request.Package, Recipe: item.recipe, Supply: supply.Document, Target: options.Target,
+		})
 		if err != nil {
 			return Result{}, fmt.Errorf("read %s candidates for package %q: %w", item.descriptor.ID, item.request.Package, err)
 		}

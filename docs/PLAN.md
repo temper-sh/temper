@@ -337,7 +337,14 @@ configuration catalog follows without blocking that installed base.
 > command now accepts the private seed only on stdin, validates the compiled
 > production trust/capability boundary, and atomically signs or verifies exact
 > catalog and channel bytes with dry-run and clean-rerun coverage. The uv
-> resolver remains pending in Phase A. The selected
+> resolver is now executable behind injected, bounded process and HTTPS reads:
+> it couples managed-Python metadata to the installed stable uv 0.12.x
+> protocol, selects and hashes the exact target CPython build, translates
+> wheel-only PEP 751 output, restores catalog dependency edges, and refuses
+> markers, alternate sources, missing hashes, or protocol drift. Its tests are
+> hermetic and the complete candidate passes the shared selector/software-lock
+> invariants. This closes the Phase A product engineering slice on 2026-08-24;
+> Pages publication remains a separate explicit release action. The selected
 > release-artifact source, deterministic
 > resolver, production HTTPS reader, and isolated install/inspect/remove member
 > are now executable with hermetic archive/effect coverage. Exact macOS
@@ -431,7 +438,7 @@ configuration catalog follows without blocking that installed base.
    composition root injects host facts and external command runners once. A
    new target adapter adds one family member plus its catalog target binding;
    the resolve/install/check/uninstall workflows do not change.
-4. *(build)* Implement the catalog validator and provider-native resolvers.
+4. *(build — complete)* Implement the catalog validator and provider-native resolvers.
    Candidate reading is an explicit upstream read; selection from those
    candidates is a pure, deterministic computation. Resolution writes the
    complete candidate lock once and never installs. Existing locks move only
@@ -443,8 +450,12 @@ configuration catalog follows without blocking that installed base.
    injected runner; its production non-shell process binding is complete. The
    uv surface now models `cpython` as a typed adapter-native runtime dependency:
    each Python application recipe constrains it and the resolved lock records
-   the exact uv-managed interpreter artifact as a closure unit. The uv
-   provider reader/translator remains to be implemented against that surface.
+   the exact uv-managed interpreter artifact as a closure unit. The uv provider
+   reader/translator now reads the installed stable uv 0.12.x protocol,
+   version-matched managed-Python metadata, and wheel-only PEP 751 output
+   through bounded injected edges. It returns one exact target-bound runtime/
+   package closure and refuses any fact it cannot translate without weakening
+   the lock.
 5. *(build — complete)* Add the tested-status read: compare exact software-lock pins with
    the software-supply catalog and distinguish exact-tested,
    policy-eligible-but-untested, known-bad, and outside-policy states without
@@ -794,7 +805,8 @@ or CI dependency.
 
 ## 7. Now / next
 
-1. **M2 Phase A — software supply:** C4, `software.lock.yaml`, and the signed
+1. **M2 Phase A — software supply (engineering complete 2026-08-24):** C4,
+   `software.lock.yaml`, and the signed
    catalog lifecycle are approved; the shared resolver and authenticated
    catalog-store transactions are hermetically executable. Homebrew candidate
    translation, its controlled production process runner, authenticated
@@ -805,8 +817,11 @@ or CI dependency.
    The initial Pages publication tree is signed and locally ready; enabling and
    publishing it remains an explicit external action. Its signing lifecycle is
    retained in the release-only `temper-catalog` command rather than recreated
-   per publication. Next implement the uv reader/resolver for the explicitly
-   non-default Python packages. The 2026-08-24
+   per publication. The bounded uv 0.12.x reader/resolver now locks the exact
+   uv-managed CPython build and PyPI wheel closure for explicitly requested,
+   non-default Python packages; its process environment, version-matched
+   metadata transport, PEP 751 translation, policy edges, and failure
+   boundaries are hermetically covered. The 2026-08-24
    method review rejects both Homebrew application variants at the
    exact-install gate. The isolated `llama-swap` v251 and `llama.cpp` b10566
    artifacts passed the bounded model-backed runtime/router screen, selecting
@@ -819,9 +834,8 @@ or CI dependency.
    The separately authorized real scratch install/check/remove/second-run gate
    now passes through that complete workflow, including both dry-run
    boundaries. No `exact-tested` row is published yet. The Field Kit-facing
-   C10/C11 install surface is frozen. The uv reader remains required for explicitly requested
-   `rapid-mlx` and `mlx-dspark`, but does not block beginning provider-neutral
-   Phase B install/receipt design with hermetic fake adapters.
+   C10/C11 install surface is frozen. The signed Pages tree still requires the
+   owner's explicit publication action; no code path publishes it implicitly.
 2. **M2 Phase B — Field Kit installed base:** freeze C10/C11, build hermetic
    fake-provider install/check/uninstall tests, then run one explicitly
    authorized scratch Field Kit round-trip with a checksummed Temper binary.
@@ -865,5 +879,5 @@ or CI dependency.
    when convenient — they gate production mode qualification, not the M2
    Field Kit base.
 6. **Craft field evidence:** keep `docs/craft-skill-field-notes.md` current at
-   each named phase closeout. The M1/current-M2 baseline is recorded; the next
-   formal note closes M2 Phase A.
+   each named phase closeout. The M1/current-M2 baseline and formal M2 Phase A
+   closeout are recorded; the next formal note closes M2 Phase B.

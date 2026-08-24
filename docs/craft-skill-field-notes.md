@@ -96,3 +96,67 @@ lifecycle, tested-status read, installation contract, and pure install planner.
 No model eval was needed to reach these observations. They came from product
 contracts, implementation seams, and concrete failure windows encountered in
 the phase work.
+
+## M2 Phase A — software supply complete, 2026-08-24
+
+**Status:** formal Phase A engineering closeout. Enabling and publishing the
+already signed Pages source remains an explicit release operation, not an
+unfinished product-code effect.
+
+**Artifacts reviewed:** typed software-supply catalog and exact software lock;
+shared selection and atomic resolution; authenticated catalog activation and
+retained release signer; Homebrew, upstream-release, and uv resolver edges;
+the isolated upstream-release installation member; tested-status derivation;
+and the hermetic command/effect suites that exercise those boundaries.
+
+### What helped
+
+- **Code organization and unit design:** provider reads, pure translation and
+  selection, and installation effects remained distinct units. The uv work
+  added one process reader, one HTTPS reader, and pure Python-metadata/PEP 751
+  translators without changing the shared resolver or lock writer.
+- **Data modeling:** the interpreter is an exact adapter-native closure unit,
+  not an ambient machine fact. Keeping policy edges in the catalog and exact
+  artifacts in the lock made it possible to consume uv's flattened PEP 751
+  install set without pretending that it supplied dependency metadata it does
+  not contain.
+- **Reliable effects:** signed publication stages and validates complete bytes
+  before one commit, and the retained signer makes key input an explicit
+  release boundary rather than a temporary code edit. The upstream-release
+  installer likewise publishes one validated generation and reconciles from
+  inspectable state.
+- **Testing:** every external protocol has an injected hermetic edge with
+  bounded output, cancellation, no hidden retry, protocol-drift refusals, and
+  end-to-end validation through the shared lock invariants. Real scratch work
+  remained an announced separate gate.
+
+### What the work exposed
+
+1. **Stable format does not imply sufficient semantics.** PEP 751 is a stable
+   artifact format, but uv 0.12 intentionally emits a flattened install set.
+   An adapter must state what information was absent and use an owned,
+   conservative projection rather than inferring a richer graph.
+2. **Upstream protocol versions are one compatibility unit.** uv's executable
+   version, version-tagged managed-Python metadata, command flags, and emitted
+   pylock shape must be reviewed together. Accepting a new version while
+   validating only one of those surfaces would create a false compatibility
+   claim.
+3. **Release secrets need a permanent narrow interface.** Recreating signing
+   code for each publication obscures review and increases key-handling risk.
+   A retained stdin-only command makes validation, dry-run, and clean reruns
+   part of the product's release machinery without storing private material.
+
+### Proposals and disposition
+
+- **Awaiting more evidence:** carry the first two observations into the
+  already planned `contract-evolution` work as candidate examples of a
+  version-coupled upstream protocol and an explicitly lossy adapter
+  projection. Phase A alone does not justify changing that guidance yet.
+- **No additional craft change warranted:** the existing organization,
+  modeling, effect, and testing guidance covered the signer and all three
+  adapter shapes without a new routing rule or skill. Reassess lifecycle
+  ownership and cross-repository contract testing at the M2 Phase B closeout.
+
+No fine-tuning or model evaluation was relevant to this phase. The engineering
+decisions followed from inspectable provider protocols, typed contracts, and
+failure-boundary tests.

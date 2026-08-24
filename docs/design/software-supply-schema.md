@@ -1,7 +1,7 @@
 # Software supply + lock — C4/C5 design
 
-Status: **approved by owner**, extended 2026-08-21 for experiment locks and
-layered installations. The executable M2 Phase A shared
+Status: **approved by owner**, extended through 2026-08-24 for experiment
+locks, layered installations, and the uv reader. The executable M2 Phase A shared
 resolver now consumes this surface: strict catalog/lock parsing and validation,
 normalized target selection, compiled adapter descriptor matching,
 provider-neutral candidate closures, SemVer/PEP 440 policy selection, closure
@@ -13,15 +13,17 @@ returned by software resolution without being persisted. The deterministic
 `upstream-release` resolver and its production HTTPS reader plus isolated
 installer/inspector/remover are executable; their archive and effect contracts
 are covered hermetically and the real isolated lifecycle passes through the
-public software commands. The uv reader and remaining concrete installation
-members remain pending. The internal signed
+public software commands. The bounded uv reader now translates exact managed
+Python and wheel closures; concrete installation members for shared Homebrew
+bootstrap tools and isolated uv environments remain pending. The internal signed
 channel/catalog verification, immutable store, rollback and equivocation
 policy, capability gate, dry-run, and active-pointer transaction are now
 executable and hermetically tested; a read-only consumer verifies the active
 snapshot or an injected embedded bootstrap before use. A bounded read-only
-HTTPS catalog source now implements the publication layout below. Actual
-production trust/bootstrap bytes, the channel root, and public catalog-command
-wiring remain release work. Later schema changes still require review.
+HTTPS catalog source now implements the publication layout below. Production
+trust/bootstrap bytes, the reviewed channel root, and the public catalog-update
+command are wired; enabling and publishing the signed Pages source remains an
+explicit release action. Later schema changes still require review.
 
 The isolation-first curation policy applies to every Temper installation, not
 only the Field Kit base. On macOS, the deliberately small shared bootstrap
@@ -685,19 +687,50 @@ ancestors and checks the pointer, group layout, marker, retained archive, every
 payload path, type, normalized mode, size, hash, and safe link target. Removal
 deletes only the exact prepared scope directory and refuses a symlink ancestor.
 
-The uv interpreter surface is settled. A Python application recipe declares a
-normal catalog dependency on the adapter-native `python-runtime`/`cpython`
-package with its compatible PEP 440 constraint. Provider resolution selects an
-exact uv-managed interpreter and returns it as a reachable closure unit with
-version, build revision, immutable artifact locator/hash, and the application's
-isolated scope. Exact wheel artifacts plus that interpreter unit and the lock's
-target bind the ABI decision; ambient Python never participates.
+The uv resolver implements a version-coupled narrow protocol for
+`darwin/arm64`. It deliberately does not consume uv's preview workspace-
+metadata schema:
 
-The remaining uv work is an adapter reader/translator contract. uv's rich
-workspace-metadata JSON is explicitly a preview schema, so it cannot silently
-become the long-lived boundary. The implementation must use a reviewed stable
-command/output surface or a deliberately owned narrow protocol, and it must
-refuse when it cannot prove the complete interpreter-and-package closure.
+1. invoke the injected absolute uv executable with `uv --version` and accept a
+   stable reviewed `0.12.x` protocol version;
+2. read that exact uv tag's
+   `crates/uv-python/download-metadata.json` from the fixed upstream repository
+   with a 32 MiB bound and no redirect, then select the newest
+   `darwin/aarch64` CPython build satisfying the runtime recipe and every
+   application constraint;
+3. validate the metadata key, PEP 440 version, eight-digit
+   python-build-standalone revision, approved artifact host/path, and lowercase
+   SHA-256 before translating the interpreter into a closure unit;
+4. send the complete catalog-constrained requirement set on stdin to `uv pip
+   compile --format pylock.toml`, fixing the exact interpreter patch, Apple
+   Silicon platform, PyPI first-index policy, highest resolution, package-
+   specific prerelease permission, wheels only, no builds, no configuration,
+   no cache, and no Python downloads;
+5. accept only PEP 751 lock version 1.0 created by uv for that interpreter,
+   with no unresolved environment markers, extras, dependency groups, local/
+   VCS/archive sources, source distributions, or attestations. Every package
+   must be a unique canonical PEP 440 pin from PyPI with one or more target-
+   compatible `files.pythonhosted.org` wheels carrying exact positive sizes and
+   lowercase SHA-256 hashes.
+
+uv 0.12 emits that PEP 751 file as a flattened install set and leaves its
+optional dependency extension empty. Temper therefore binds every returned
+wheel below the requested root so none can become an orphan, and separately
+restores the direct/transitive dependency edges authorized by the catalog.
+Every Python wheel also depends on the one exact managed CPython unit. This is
+an intentionally conservative projection: it preserves the complete exact
+install set and reviewed policy graph without inventing package-metadata edges
+that uv did not report.
+
+The version read, managed-Python metadata read, and compile share one timeout
+budget and have no inner retry. The production process edge invokes no shell,
+caps stdout and diagnostics, strips uv/pip/Python/ambient-environment
+overrides, and forces no-config/no-cache/no-progress/no-Python-download
+settings. The HTTPS reader accepts only the version-matched raw GitHub path.
+Hermetic tests inject all command and HTTP output, cover selection and lock
+validation, and never invoke uv, PyPI, or the network. A future uv protocol
+series is refused until its version output, managed-Python schema, and pylock
+projection are reviewed together.
 
 Each installer must meet the same semantic contract:
 
