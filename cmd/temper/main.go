@@ -43,17 +43,20 @@ func run(ctx context.Context, arguments []string, stdout, stderr io.Writer) int 
 	return runWithDependencies(ctx, arguments, stdout, stderr, dependencies{
 		newUpstream:   newUpstreamReader,
 		detectMachine: machine.Detect,
+		detectFacts:   machine.DetectFacts,
 		newSoftware:   newSoftwareCommand,
 	})
 }
 
 type upstreamFactory func() (upstream.Reader, error)
 type machineDetector func(context.Context) (budget.Machine, error)
+type machineFactsDetector func(context.Context) (machine.Facts, error)
 type softwareCommandFactory func() (softwarecmd.Command, error)
 
 type dependencies struct {
 	newUpstream   upstreamFactory
 	detectMachine machineDetector
+	detectFacts   machineFactsDetector
 	newSoftware   softwareCommandFactory
 }
 
@@ -61,6 +64,7 @@ func runWithUpstream(ctx context.Context, arguments []string, stdout, stderr io.
 	return runWithDependencies(ctx, arguments, stdout, stderr, dependencies{
 		newUpstream:   newSource,
 		detectMachine: machine.Detect,
+		detectFacts:   machine.DetectFacts,
 		newSoftware:   newSoftwareCommand,
 	})
 }
@@ -87,6 +91,8 @@ func runWithDependencies(ctx context.Context, arguments []string, stdout, stderr
 		return runCheck(ctx, arguments[1:], stdout, stderr, deps.detectMachine)
 	case "update":
 		return runUpdate(ctx, arguments[1:], stdout, stderr, deps.newUpstream)
+	case "machine":
+		return runMachine(ctx, arguments[1:], stdout, stderr, deps.detectFacts)
 	case "software":
 		if deps.newSoftware == nil {
 			fmt.Fprintln(stderr, "temper software: command dependencies are unavailable")
@@ -103,6 +109,35 @@ func runWithDependencies(ctx context.Context, arguments []string, stdout, stderr
 		usage(stderr)
 		return 2
 	}
+}
+
+func runMachine(ctx context.Context, arguments []string, stdout, stderr io.Writer, detectFacts machineFactsDetector) int {
+	if len(arguments) != 1 || arguments[0] != "facts" {
+		if len(arguments) > 0 {
+			fmt.Fprintf(stderr, "temper machine: unknown command %q\n\n", strings.Join(arguments, " "))
+		}
+		machineUsage(stderr)
+		return 2
+	}
+	if detectFacts == nil {
+		fmt.Fprintln(stderr, "temper machine facts: detector is unavailable")
+		return 1
+	}
+	facts, err := detectFacts(ctx)
+	if err != nil {
+		fmt.Fprintf(stderr, "temper machine facts: %v\n", err)
+		return 1
+	}
+	data, err := machine.MarshalFacts(facts)
+	if err != nil {
+		fmt.Fprintf(stderr, "temper machine facts: %v\n", err)
+		return 1
+	}
+	if _, err := stdout.Write(data); err != nil {
+		fmt.Fprintf(stderr, "temper machine facts: write output: %v\n", err)
+		return 1
+	}
+	return 0
 }
 
 func runUpdate(ctx context.Context, arguments []string, stdout, stderr io.Writer, newSource upstreamFactory) int {
@@ -430,9 +465,14 @@ func usage(writer io.Writer) {
 	fmt.Fprintln(writer, "  temper fetch <layout-id> --root PATH [options]")
 	fmt.Fprintln(writer, "  temper check --root PATH [options]")
 	fmt.Fprintln(writer, "  temper update [layout-id] [options]")
+	fmt.Fprintln(writer, "  temper machine facts")
 	fmt.Fprintln(writer, "  temper software <install|check|remove> [options]")
 	fmt.Fprintln(writer, "  temper version")
 	fmt.Fprintln(writer, "  temper help")
+}
+
+func machineUsage(writer io.Writer) {
+	fmt.Fprintln(writer, "usage: temper machine facts")
 }
 
 func applyUsage(writer io.Writer) {

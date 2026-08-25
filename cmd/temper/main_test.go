@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/temper-sh/temper/internal/budget"
+	"github.com/temper-sh/temper/internal/machine"
 	"github.com/temper-sh/temper/internal/software"
 	"github.com/temper-sh/temper/internal/software/adapter"
 	"github.com/temper-sh/temper/internal/software/catalogupdate"
@@ -18,6 +19,48 @@ import (
 	"github.com/temper-sh/temper/internal/testfixture"
 	"github.com/temper-sh/temper/internal/upstream"
 )
+
+func TestRunMachineFactsPrintsCanonicalReadOnlyDocument(t *testing.T) {
+	want := machine.Facts{
+		Schema: machine.FactsSchemaV1,
+		Target: software.Target{
+			OS: "darwin", Arch: "arm64", Distribution: "macos", DistributionVersion: "15.6",
+		},
+		HardwareModel: "Mac17,3", Chip: "Apple M5", OSBuild: "24G90",
+		PhysicalMemoryBytes:     34359738368,
+		MetalDeviceMemoryMiB:    26542,
+		MetalDeviceMemorySource: machine.MetalDeviceSourcePredicted,
+		WiredLimitMiB:           24576, WiredLimitSource: budget.WiredSourceLive,
+	}
+	var stdout, stderr bytes.Buffer
+	exit := runWithDependencies(context.Background(), []string{"machine", "facts"}, &stdout, &stderr, dependencies{
+		detectFacts: func(context.Context) (machine.Facts, error) { return want, nil },
+	})
+	if exit != 0 || stderr.Len() != 0 {
+		t.Fatalf("exit = %d, stderr = %q", exit, stderr.String())
+	}
+	got, err := machine.ParseFacts(stdout.Bytes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("facts = %#v, want %#v", got, want)
+	}
+}
+
+func TestRunMachineFactsRefusesUnknownSubcommandWithoutDetecting(t *testing.T) {
+	called := false
+	var stdout, stderr bytes.Buffer
+	exit := runWithDependencies(context.Background(), []string{"machine", "guess"}, &stdout, &stderr, dependencies{
+		detectFacts: func(context.Context) (machine.Facts, error) {
+			called = true
+			return machine.Facts{}, nil
+		},
+	})
+	if exit != 2 || called || !strings.Contains(stderr.String(), "usage: temper machine facts") {
+		t.Fatalf("exit = %d, called = %v, stderr = %q", exit, called, stderr.String())
+	}
+}
 
 func TestRunDispatchesTheSoftwareCommand(t *testing.T) {
 	family, err := adapter.NewInstallationFamily()
