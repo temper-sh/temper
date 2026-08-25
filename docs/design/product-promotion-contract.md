@@ -315,6 +315,26 @@ triggers appropriate to both axes, and completed sanitization review.
   disposition before throughput claims; and
 - no unresolved confound invalidates an accepted claim.
 
+The v1 required gate set is closed by target schema:
+
+| Target | Required passing gate IDs |
+|---|---|
+| model artifact | `artifact-bytes-pinned`, `artifact-license-review` |
+| engine | `engine-serving-contract`, `engine-software-tested` |
+| model runtime | `runtime-regression-disposition`, `runtime-task-success` |
+| tool | `tool-permission-review`, `tool-transport-contract` |
+| mode | `mode-composition`, `mode-resource-fit` |
+| activity | `activity-composition`, `activity-scope-review` |
+
+A packet may retain additional reviewed gates, but every gate on a
+`QUALIFIED` decision must pass. The sole v1 `not-applicable` exception is
+`mode-resource-fit` for a non-local mode whose wall model is explicitly
+`not-applicable`; a local mode must pass it with a `fit` wall-model result.
+Required gates cannot be omitted, failed, or left `not-run`. Every passing
+gate cites at least one packet-local evidence record. This table is Labs'
+review contract; the public C7 projection keeps accepted evidence and exact
+promotion identity rather than copying the private gate audit.
+
 Qualification remains exact and scoped. It does not imply recommendation,
 selection, consent, installation, residency, or preference.
 

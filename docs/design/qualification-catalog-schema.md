@@ -158,6 +158,24 @@ stage to `RETIRED`, or return an active stage to `EXPERIMENTAL`. Reopening a
 qualified support. Every revision carries nonempty independent reasons and a
 distinct exact C8 promotion identity.
 
+Qualification closure is evaluated from the exact documents in one catalog
+bundle. Every active `QUALIFIED` profile requires every direct dependency to
+be `QUALIFIED` and not `RETIRED`; because each dependency is checked by the
+same rule, this proves the transitive closure. Lifecycle narrows that closure:
+
+- an `EXPERIMENTAL` profile may depend on `EXPERIMENTAL` or `SUPPORTED`
+  qualified profiles;
+- a `SUPPORTED` profile may depend only on `SUPPORTED` qualified profiles;
+- a `DEPRECATED` profile may depend on `SUPPORTED` or `DEPRECATED` qualified
+  profiles; and
+- a `RETIRED` profile remains historical and does not require an available
+  dependency closure.
+
+This rule prevents a supported product from quietly acquiring an experimental
+or retiring foundation, while allowing a whole experimental composition to be
+reviewed together. It is applied both by the pure C8 compiler to explicitly
+supplied dependency bytes and by the catalog loader to indexed documents.
+
 The pure transition validator receives the previous and current envelopes plus
 the already-verified SHA-256 of the previous canonical bytes. It requires one
 schema/ID lineage, the immediately following revision, and an exact
@@ -624,7 +642,12 @@ canonical nonnegative decimal string. A success-fraction arm contains
 Exactly one arm must match the declared kind.
 
 A `QUALIFIED` runtime requires measured first-attempt task success and a
-complete regression disposition for its claimed role. Other axes may remain
+complete regression disposition for its claimed role. In v1, complete means
+that `task_success` is measured and contains
+`first-attempt-task-success`, while `regressions` is measured and contains
+`known-bad-tasks`, `new-regressions`, and `retained-good-tasks`. The reviewed
+C8 gates decide whether those exact values clear the product bar; C7 refuses
+only absent or structurally incomplete measurements. Other axes may remain
 explicitly unmeasured. A recommendation may cite only measured observations.
 
 ### Tool
