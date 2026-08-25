@@ -629,7 +629,9 @@ base.
     wrong, duplicate, or unused dependency/bucket documents and performs no
     adjacent-repository or filesystem discovery. Exact prior packet and target-
     profile bytes are required for independent supersession-chain validation.
-    Five target-kind fixtures and the `QUALIFIED` gate set remain.
+    Hermetic generated packets cover all six target kinds; the adopted Labs
+    model-artifact pair remains the independent byte-for-byte golden. The
+    `QUALIFIED` gate set remains.
     `field-kit-runtime-profile/v1` is the exploratory-witness special case;
     `external-lab` packets stay inspectable but outside the generic install
     path.

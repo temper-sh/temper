@@ -181,6 +181,233 @@ func TestCompileProductPromotionRequiresExactIndependentSupersessionChains(t *te
 	}
 }
 
+func TestCompileProductPromotionCoversEveryC7TargetKind(t *testing.T) {
+	artifactData := readPromotionInputFixture(t, "model-artifact.yaml")
+	engineData := readPromotionInputFixture(t, "engine.yaml")
+	runtimeData := readPromotionInputFixture(t, "model-runtime.yaml")
+	toolData := readPromotionInputFixture(t, "tool.yaml")
+	modeData := readPromotionInputFixture(t, "mode.yaml")
+	bucketData := readPromotionInputFixture(t, "machine-bucket.yaml")
+	bucket, err := qualification.ParseMachineBucket(bucketData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bucketReference := qualification.Reference{
+		Schema: bucket.Schema, ID: bucket.ID, Revision: bucket.Revision, SHA256: qualification.Digest(bucketData),
+	}
+
+	tests := []struct {
+		name   string
+		packet func(*testing.T) qualification.ProductPromotionPacket
+		inputs qualification.ProductPromotionInputs
+		parse  func([]byte) error
+	}{
+		{
+			name: "model artifact",
+			packet: func(t *testing.T) qualification.ProductPromotionPacket {
+				profile, err := qualification.ParseModelArtifactProfile(artifactData)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return promotionPacketForProfile(profile.ProfileEnvelope, qualification.PromotionModelArtifactSpec{ModelArtifactSpec: profile.Spec}, selfPromotionScope(profile.Schema, profile.ID, profile.Revision))
+			},
+			parse: func(data []byte) error { _, err := qualification.ParseModelArtifactProfile(data); return err },
+		},
+		{
+			name: "engine",
+			packet: func(t *testing.T) qualification.ProductPromotionPacket {
+				profile, err := qualification.ParseEngineProfile(engineData)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return promotionPacketForProfile(profile.ProfileEnvelope, qualification.PromotionEngineSpec{EngineSpec: profile.Spec}, selfPromotionScope(profile.Schema, profile.ID, profile.Revision))
+			},
+			parse: func(data []byte) error { _, err := qualification.ParseEngineProfile(data); return err },
+		},
+		{
+			name: "model runtime",
+			packet: func(t *testing.T) qualification.ProductPromotionPacket {
+				profile, err := qualification.ParseModelRuntimeProfile(runtimeData)
+				if err != nil {
+					t.Fatal(err)
+				}
+				profile.Applicability.MachineBuckets = []qualification.Reference{bucketReference}
+				scope := selfPromotionScope(profile.Schema, profile.ID, profile.Revision)
+				scope.ArtifactProfile = scopeReference(profile.Spec.ArtifactProfile)
+				scope.EngineProfile = scopeReference(profile.Spec.EngineProfile)
+				scope.MachineBucket = &bucketReference
+				scope.Mode = "local"
+				scope.Conditions = qualification.ProfileEvidenceConditions{
+					OSBuild:          qualification.EvidenceStringCondition{State: "observed", Value: "fake-os-build"},
+					WiredLimitMiB:    qualification.EvidenceIntegerCondition{State: "observed", Value: 24576},
+					WiredLimitSource: qualification.EvidenceStringCondition{State: "observed", Value: "fake-source"},
+					Power:            qualification.EvidenceStringCondition{State: "unmeasured"},
+					Thermal:          qualification.EvidenceStringCondition{State: "unmeasured"},
+					Load:             qualification.EvidenceStringCondition{State: "unmeasured"},
+				}
+				return promotionPacketForProfile(profile.ProfileEnvelope, qualification.PromotionModelRuntimeSpec{ModelRuntimeSpec: profile.Spec}, scope)
+			},
+			inputs: qualification.ProductPromotionInputs{
+				Profiles: [][]byte{artifactData, engineData}, MachineBuckets: [][]byte{bucketData},
+			},
+			parse: func(data []byte) error { _, err := qualification.ParseModelRuntimeProfile(data); return err },
+		},
+		{
+			name: "tool",
+			packet: func(t *testing.T) qualification.ProductPromotionPacket {
+				profile, err := qualification.ParseToolProfile(toolData)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return promotionPacketForProfile(profile.ProfileEnvelope, qualification.PromotionToolSpec{ToolSpec: profile.Spec}, selfPromotionScope(profile.Schema, profile.ID, profile.Revision))
+			},
+			parse: func(data []byte) error { _, err := qualification.ParseToolProfile(data); return err },
+		},
+		{
+			name: "mode",
+			packet: func(t *testing.T) qualification.ProductPromotionPacket {
+				profile, err := qualification.ParseModeProfile(modeData)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return promotionPacketForProfile(profile.ProfileEnvelope, qualification.PromotionModeSpec{ModeSpec: profile.Spec}, selfPromotionScope(profile.Schema, profile.ID, profile.Revision))
+			},
+			inputs: qualification.ProductPromotionInputs{Profiles: [][]byte{runtimeData, toolData}},
+			parse:  func(data []byte) error { _, err := qualification.ParseModeProfile(data); return err },
+		},
+		{
+			name: "activity",
+			packet: func(t *testing.T) qualification.ProductPromotionPacket {
+				profile, err := qualification.ParseActivityProfile(readPromotionInputFixture(t, "activity.yaml"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				return promotionPacketForProfile(profile.ProfileEnvelope, qualification.PromotionActivitySpec{ActivitySpec: profile.Spec}, selfPromotionScope(profile.Schema, profile.ID, profile.Revision))
+			},
+			inputs: qualification.ProductPromotionInputs{Profiles: [][]byte{modeData}},
+			parse:  func(data []byte) error { _, err := qualification.ParseActivityProfile(data); return err },
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			packetData, err := qualification.MarshalProductPromotionPacket(tt.packet(t))
+			if err != nil {
+				t.Fatal(err)
+			}
+			compiled, err := qualification.CompileProductPromotion(packetData, tt.inputs)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := tt.parse(compiled); err != nil {
+				t.Fatalf("compiled target is not canonical C7: %v", err)
+			}
+			if !bytes.Contains(compiled, []byte("sha256: "+qualification.Digest(packetData))) {
+				t.Fatalf("compiled target does not carry exact packet digest")
+			}
+		})
+	}
+}
+
+func promotionPacketForProfile(envelope qualification.ProfileEnvelope, spec qualification.ProductPromotionSpec, scope qualification.ProductPromotionEvidenceScope) qualification.ProductPromotionPacket {
+	return qualification.ProductPromotionPacket{
+		Schema: qualification.ProductPromotionSchemaV1,
+		ID:     envelope.ID + "-lab", Revision: 1,
+		Target: qualification.ProductPromotionTarget{
+			Schema: envelope.Schema, ID: envelope.ID, Revision: envelope.Revision, Supersedes: envelope.Supersedes,
+		},
+		Decision: qualification.ProductPromotionDecision{
+			Status: envelope.Status, StatusReason: envelope.StatusReason,
+			DecidedAt: "2026-08-25T19:00:00Z", Reviewers: []string{"fake-reviewer"},
+			AcceptedClaims:           []string{"profile-identity"},
+			ForbiddenGeneralizations: []string{"Fake fixture carries no real qualification or recommendation claim"},
+			Gates: []qualification.ProductPromotionGate{{
+				ID: "profile-material-pinned", Result: "pass", Evidence: []string{"profile-identity-witness"},
+				Explanation: "Fake target material is structurally complete",
+			}},
+		},
+		Evidence: []qualification.ProductPromotionEvidence{{
+			ID: "profile-identity-witness", Claims: []string{"profile-identity"},
+			Sources: []qualification.ProductPromotionEvidenceSource{{
+				Kind: "labs-record", Schema: "temper-labs-record/v1", ID: "fake-profile-review",
+				Revision: 1, Locator: "fixtures/public/fake-profile-review.json",
+				SHA256: strings.Repeat("d", 64), Classification: "public",
+			}},
+			PublicSource: qualification.ProductPromotionPublicSource{Kind: "product-promotion"},
+			Scope:        scope,
+		}},
+		Candidate: qualification.ProductPromotionCandidate{
+			ProductPromotionCandidateCommon: qualification.ProductPromotionCandidateCommon{
+				Title: envelope.Title, Summary: envelope.Summary, WhatThisMeans: envelope.WhatThisMeans,
+				Roles: envelope.Roles, Applicability: envelope.Applicability, Dependencies: envelope.Dependencies,
+				DataBoundary: envelope.DataBoundary, KnownFailures: envelope.KnownFailures,
+				InvalidationTriggers: envelope.InvalidationTriggers,
+			},
+			Spec: spec,
+		},
+		Sanitization: qualification.ProductPromotionSanitization{
+			PublicCandidateReviewed: true,
+			ExcludedClasses: []string{
+				"credentials", "machine-identifying-values-outside-the-C7-bucket", "private-corpus-content",
+				"prompts-not-approved-for-publication", "raw-user-content",
+			},
+			Redactions:        []qualification.ProductPromotionRedaction{},
+			ReviewerStatement: "Fake candidate and public source contain no private material",
+		},
+		CatalogConsideration: qualification.ProductCatalogConsideration{
+			RecommendationReview: "separate", Comparisons: []qualification.Reference{},
+			Note: "Fake fixture provides no recommendation evidence",
+		},
+	}
+}
+
+func selfPromotionScope(schema, id string, revision uint64) qualification.ProductPromotionEvidenceScope {
+	self := &qualification.ScopeReference{Schema: schema, ID: id, Revision: revision}
+	scope := qualification.ProductPromotionEvidenceScope{
+		CoResidents: []qualification.ProfileCoResident{}, Harnesses: []qualification.ProfileHarnessWitness{},
+		Conditions: notApplicablePromotionConditions(),
+	}
+	switch schema {
+	case qualification.ModelArtifactSchemaV1:
+		scope.ArtifactProfile = self
+	case qualification.EngineSchemaV1:
+		scope.EngineProfile = self
+	case qualification.ModelRuntimeSchemaV1:
+		scope.RuntimeProfile = self
+	case qualification.ToolSchemaV1:
+		scope.ToolProfile = self
+	case qualification.ModeSchemaV1:
+		scope.ModeProfile = self
+	case qualification.ActivitySchemaV1:
+		scope.ActivityProfile = self
+	}
+	return scope
+}
+
+func notApplicablePromotionConditions() qualification.ProfileEvidenceConditions {
+	return qualification.ProfileEvidenceConditions{
+		OSBuild:          qualification.EvidenceStringCondition{State: "not-applicable"},
+		WiredLimitMiB:    qualification.EvidenceIntegerCondition{State: "not-applicable"},
+		WiredLimitSource: qualification.EvidenceStringCondition{State: "not-applicable"},
+		Power:            qualification.EvidenceStringCondition{State: "not-applicable"},
+		Thermal:          qualification.EvidenceStringCondition{State: "not-applicable"},
+		Load:             qualification.EvidenceStringCondition{State: "not-applicable"},
+	}
+}
+
+func scopeReference(reference qualification.Reference) *qualification.ScopeReference {
+	return &qualification.ScopeReference{Schema: reference.Schema, ID: reference.ID, Revision: reference.Revision, SHA256: reference.SHA256}
+}
+
+func readPromotionInputFixture(t *testing.T, name string) []byte {
+	t.Helper()
+	data, err := os.ReadFile("testdata/" + name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
+}
+
 func readProductPromotionFixture(t *testing.T) []byte {
 	t.Helper()
 	data, err := os.ReadFile("testdata/product-promotion.yaml")

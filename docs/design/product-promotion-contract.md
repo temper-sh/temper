@@ -2,9 +2,9 @@
 
 Status: **Labs writer adoption explicitly authorized; first Temper compiler
 slice implemented**, 2026-08-25. The canonical fake model-artifact packet now
-crosses the boundary byte for byte; it promotes no real profile. The remaining
-five target-kind fixtures, `QUALIFIED` gates, and release publication effect
-remain incomplete and fail closed.
+crosses the boundary byte for byte, and hermetic generated packets exercise
+all six target-schema projections; none promotes a real profile. `QUALIFIED`
+gates and the release publication effect remain incomplete and fail closed.
 
 ## Implementation map
 
