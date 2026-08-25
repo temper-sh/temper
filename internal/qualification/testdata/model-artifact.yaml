@@ -24,11 +24,15 @@ invalidation_triggers:
     consequence: return-to-lab
     id: artifact-material-changes
 known_failures: []
+lifecycle_reason: Fake artifact remains an experimental catalog fixture
+lifecycle_status: EXPERIMENTAL
 promotion:
   id: example-artifact-promotion
   revision: 1
   schema: temper-labs-product-promotion/v1
   sha256: ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+qualification_reason: Fake materials are pinned while qualification evidence remains absent
+qualification_status: LAB
 revision: 1
 roles:
   - coder
@@ -83,8 +87,6 @@ spec:
   tokenizer:
     path: tokenizer/tokenizer.json
     state: file
-status: LAB
-status_reason: Fake materials are pinned while qualification evidence remains absent
 summary: Fake byte identities for exercising the C7 model-artifact boundary
 title: Example coder artifact
 what_this_means: This fake artifact is inspectable but not qualified or recommended

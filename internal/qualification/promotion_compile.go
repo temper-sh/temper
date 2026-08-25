@@ -49,8 +49,9 @@ func compileProductPromotionProfile(packet ProductPromotionPacket, promotion Pro
 	}
 	envelope := ProfileEnvelope{
 		Schema: packet.Target.Schema, ID: packet.Target.ID, Revision: packet.Target.Revision,
-		Supersedes: packet.Target.Supersedes,
-		Status:     packet.Decision.Status, StatusReason: packet.Decision.StatusReason,
+		Supersedes:          packet.Target.Supersedes,
+		QualificationStatus: packet.Decision.QualificationStatus, QualificationReason: packet.Decision.QualificationReason,
+		LifecycleStatus: packet.Decision.LifecycleStatus, LifecycleReason: packet.Decision.LifecycleReason,
 		Title: packet.Candidate.Title, Summary: packet.Candidate.Summary,
 		WhatThisMeans: packet.Candidate.WhatThisMeans, Roles: packet.Candidate.Roles,
 		Applicability: packet.Candidate.Applicability, Dependencies: packet.Candidate.Dependencies,
@@ -150,8 +151,8 @@ func validateProductPromotionInputs(packet ProductPromotionPacket, promotion Pro
 		if !ok {
 			return fmt.Errorf("compile product promotion: required profile %s/%s@%d with sha256 %s was not supplied", reference.Schema, reference.ID, reference.Revision, reference.SHA256)
 		}
-		if _, isDependency := qualifiedDependencies[identity]; packet.Decision.Status == ProfileStatusQualified && isDependency && profile.Status != ProfileStatusQualified {
-			return fmt.Errorf("compile product promotion: QUALIFIED target requires profile %s/%s@%d to be QUALIFIED, got %s", reference.Schema, reference.ID, reference.Revision, profile.Status)
+		if _, isDependency := qualifiedDependencies[identity]; packet.Decision.QualificationStatus == QualificationStatusQualified && isDependency && profile.Envelope.QualificationStatus != QualificationStatusQualified {
+			return fmt.Errorf("compile product promotion: QUALIFIED target requires profile %s/%s@%d to be QUALIFIED, got %s", reference.Schema, reference.ID, reference.Revision, profile.Envelope.QualificationStatus)
 		}
 	}
 	for identity, reference := range neededBuckets {
@@ -169,9 +170,12 @@ func validateProductPromotionInputs(packet ProductPromotionPacket, promotion Pro
 		previous := profiles[referenceExactIdentity(*packet.Target.Supersedes)]
 		current := ProfileEnvelope{
 			Schema: packet.Target.Schema, ID: packet.Target.ID, Revision: packet.Target.Revision,
-			Supersedes: packet.Target.Supersedes, Status: packet.Decision.Status, Promotion: promotion,
+			Supersedes:          packet.Target.Supersedes,
+			QualificationStatus: packet.Decision.QualificationStatus, QualificationReason: packet.Decision.QualificationReason,
+			LifecycleStatus: packet.Decision.LifecycleStatus, LifecycleReason: packet.Decision.LifecycleReason,
+			Promotion: promotion,
 		}
-		if err := ValidateProfileStatusTransition(previous.Envelope, current, packet.Target.Supersedes.SHA256); err != nil {
+		if err := ValidateProfileDispositionTransition(previous.Envelope, current, packet.Target.Supersedes.SHA256); err != nil {
 			return fmt.Errorf("compile product promotion: target profile transition: %w", err)
 		}
 	}
@@ -204,7 +208,6 @@ func validatePriorPromotionPacket(current ProductPromotionPacket, documents [][]
 
 type promotionInputProfile struct {
 	Reference
-	Status   string
 	Envelope ProfileEnvelope
 }
 
@@ -234,7 +237,7 @@ func parsePromotionInputProfile(data []byte) (promotionInputProfile, error) {
 	makeInput := func(envelope ProfileEnvelope) promotionInputProfile {
 		return promotionInputProfile{
 			Reference: Reference{Schema: envelope.Schema, ID: envelope.ID, Revision: envelope.Revision, SHA256: Digest(data)},
-			Status:    envelope.Status, Envelope: envelope,
+			Envelope:  envelope,
 		}
 	}
 	switch header.Schema {

@@ -95,10 +95,12 @@ decision:
       explanation: No real license review was performed for the fake material
       id: artifact-license-review
       result: not-run
+  lifecycle_reason: Fake artifact remains an experimental contract fixture
+  lifecycle_status: EXPERIMENTAL
+  qualification_reason: Fake artifact material is pinned while real qualification gates remain absent
+  qualification_status: LAB
   reviewers:
     - fake-reviewer
-  status: LAB
-  status_reason: Fake artifact material is pinned while real qualification gates remain absent
 evidence:
   - claims:
       - artifact-identity

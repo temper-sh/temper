@@ -20,7 +20,7 @@ dependencies:
       id: example-local-search-mode
       revision: 1
       schema: temper-qualification-mode/v1
-      sha256: 89977ffaf901dd769fca4662ed9daa741b164fed6966235aa655d362e6d85205
+      sha256: f1777afa345b0b7906b25964b9e13802f1b3c08dbdbd40d165a0ebb12cefe7fe
     relationship: mode
 evidence: []
 id: example-inspect-activity
@@ -29,11 +29,15 @@ invalidation_triggers:
     consequence: return-to-lab
     id: activity-boundary-changes
 known_failures: []
+lifecycle_reason: Fake activity remains an experimental catalog fixture
+lifecycle_status: EXPERIMENTAL
 promotion:
   id: example-activity-promotion
   revision: 1
   schema: temper-labs-product-promotion/v1
   sha256: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+qualification_reason: Fake activity boundary is exact while qualification evidence remains absent
+qualification_status: LAB
 revision: 1
 roles:
   - coder
@@ -44,10 +48,8 @@ spec:
     id: example-local-search-mode
     revision: 1
     schema: temper-qualification-mode/v1
-    sha256: 89977ffaf901dd769fca4662ed9daa741b164fed6966235aa655d362e6d85205
+    sha256: f1777afa345b0b7906b25964b9e13802f1b3c08dbdbd40d165a0ebb12cefe7fe
   purpose: inspect
-status: LAB
-status_reason: Fake activity boundary is exact while qualification evidence remains absent
 summary: Fake strict tool subset for exercising C7 activity narrowing
 title: Example inspect activity
 what_this_means: This fake activity is inspectable but does not enable any tool or mode

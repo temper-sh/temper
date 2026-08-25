@@ -47,18 +47,22 @@ evidence:
       kind: product-promotion
       revision: 1
       schema: temper-labs-product-promotion/v1
-      sha256: 49a2a20f5fc06955095a74cdb224587b455c6678f064983054d3b832391d809f
+      sha256: a7885a8ba68a1761abc6794de706681176f4fdc7793be520151b06fa45fa03a4
 id: fake-coder-artifact
 invalidation_triggers:
   - condition: Any fake artifact byte or interpretation metadata changes
     consequence: return-to-lab
     id: artifact-material-changes
 known_failures: []
+lifecycle_reason: Fake artifact remains an experimental contract fixture
+lifecycle_status: EXPERIMENTAL
 promotion:
   id: fake-coder-artifact-lab
   revision: 1
   schema: temper-labs-product-promotion/v1
-  sha256: 49a2a20f5fc06955095a74cdb224587b455c6678f064983054d3b832391d809f
+  sha256: a7885a8ba68a1761abc6794de706681176f4fdc7793be520151b06fa45fa03a4
+qualification_reason: Fake artifact material is pinned while real qualification gates remain absent
+qualification_status: LAB
 revision: 1
 roles:
   - coder
@@ -106,8 +110,6 @@ spec:
   tokenizer:
     path: tokenizer/tokenizer.json
     state: file
-status: LAB
-status_reason: Fake artifact material is pinned while real qualification gates remain absent
 summary: Fake byte identities for exercising the C8 writer boundary
 title: Fake coder artifact promotion
 what_this_means: This fake artifact is inspectable but not qualified or recommended

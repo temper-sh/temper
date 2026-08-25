@@ -19,13 +19,13 @@ dependencies:
       id: example-coder-artifact
       revision: 1
       schema: temper-qualification-model-artifact/v1
-      sha256: 4b9163c761905b2b6adbdcee890a97735f40f15ac3f81b9d1fe068aa68bf27b5
+      sha256: fea132ab6d30dddf9d62ea4c70280dbbb94e7afee9eb8dcfd873ffced6458f2e
     relationship: artifact
   - profile:
       id: example-local-engine
       revision: 1
       schema: temper-qualification-engine/v1
-      sha256: 8b85e82911816ad8c55f3fe0b34462759b980a74f4492c90ec33935409c8ec06
+      sha256: 500ad5654cc0086d0ca2be5dcc8d24763761f8b821fe0dfd5cd8c0a1293b02b1
     relationship: engine
 evidence: []
 id: example-coder-runtime
@@ -34,11 +34,15 @@ invalidation_triggers:
     consequence: return-to-lab
     id: runtime-identity-changes
 known_failures: []
+lifecycle_reason: Fake runtime remains an experimental catalog fixture
+lifecycle_status: EXPERIMENTAL
 promotion:
   id: example-runtime-promotion
   revision: 1
   schema: temper-labs-product-promotion/v1
   sha256: dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+qualification_reason: Fake composition is exact while qualification evidence remains absent
+qualification_status: LAB
 revision: 1
 roles:
   - coder
@@ -48,12 +52,12 @@ spec:
     id: example-coder-artifact
     revision: 1
     schema: temper-qualification-model-artifact/v1
-    sha256: 4b9163c761905b2b6adbdcee890a97735f40f15ac3f81b9d1fe068aa68bf27b5
+    sha256: fea132ab6d30dddf9d62ea4c70280dbbb94e7afee9eb8dcfd873ffced6458f2e
   engine_profile:
     id: example-local-engine
     revision: 1
     schema: temper-qualification-engine/v1
-    sha256: 8b85e82911816ad8c55f3fe0b34462759b980a74f4492c90ec33935409c8ec06
+    sha256: 500ad5654cc0086d0ca2be5dcc8d24763761f8b821fe0dfd5cd8c0a1293b02b1
   layout:
     batching:
       batch: 512
@@ -98,8 +102,6 @@ spec:
     throughput:
       reason: Fake fixture has no throughput witness
       state: unmeasured
-status: LAB
-status_reason: Fake composition is exact while qualification evidence remains absent
 summary: Fake artifact and engine composition for exercising the C7 runtime boundary
 title: Example coder runtime
 what_this_means: This fake runtime is inspectable but not qualified or recommended

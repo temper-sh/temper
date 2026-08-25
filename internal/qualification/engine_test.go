@@ -16,7 +16,7 @@ func TestParseEngineProfileRoundTripsCanonicalFixture(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if profile.Schema != qualification.EngineSchemaV1 || profile.ID != "example-local-engine" || profile.Revision != 1 || profile.Status != qualification.ProfileStatusLab {
+	if profile.Schema != qualification.EngineSchemaV1 || profile.ID != "example-local-engine" || profile.Revision != 1 || profile.QualificationStatus != qualification.QualificationStatusLab {
 		t.Fatalf("profile identity = %#v", profile.ProfileEnvelope)
 	}
 	if profile.Spec.Software.RootVersion != "b1234" || profile.Spec.API.LayoutContract != qualification.RuntimeLayoutContractV1 || profile.Spec.API.Protocol != "openai-chat-completions/v1" || profile.Spec.ServiceContract.Shutdown.Signal != "SIGTERM" {
@@ -139,8 +139,8 @@ func TestParseEngineProfileRefusesNoncanonicalOrAmbiguousYAML(t *testing.T) {
 		want  string
 	}{
 		{name: "unknown field", input: strings.Replace(canonical, "evidence: []", "evidence: []\nselected: true", 1), want: "field selected not found"},
-		{name: "anchor", input: strings.Replace(canonical, "status: LAB", "status: &status LAB", 1), want: "not canonical"},
-		{name: "duplicate key", input: strings.Replace(canonical, "status: LAB", "status: LAB\nstatus: WATCH", 1), want: "mapping key \"status\" already defined"},
+		{name: "anchor", input: strings.Replace(canonical, "qualification_status: LAB", "qualification_status: &qualification LAB", 1), want: "not canonical"},
+		{name: "duplicate key", input: strings.Replace(canonical, "qualification_status: LAB", "qualification_status: LAB\nqualification_status: WATCH", 1), want: "mapping key \"qualification_status\" already defined"},
 		{name: "multiple documents", input: canonical + "---\nnull\n", want: "multiple YAML documents"},
 		{name: "missing final newline", input: strings.TrimSuffix(canonical, "\n"), want: "not canonical"},
 		{name: "noncanonical mapping order", input: "schema: temper-qualification-engine/v1\n" + strings.Replace(canonical, "schema: temper-qualification-engine/v1\n", "", 1), want: "not canonical"},

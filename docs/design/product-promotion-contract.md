@@ -428,7 +428,7 @@ product claims:
    Field Kit evidence packet without inheriting its runner or install meaning;
 3. compile one `QUALIFIED` fake runtime with complete task-quality evidence,
    then reject the same packet when task success, regression, conditions, or
-   dependency status is weakened;
+   dependency qualification is weakened;
 4. keep private source locators in C8 while proving none occur in C7 output;
 5. use both public-source forms and pin the exact injected packet digest;
 6. correct a packet and profile through independent supersession chains,

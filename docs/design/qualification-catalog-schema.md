@@ -842,8 +842,7 @@ against an existing manifest is advisory only.
 
 `check` may compare exact selected pins with the catalog and report drift or
 retirement. It never changes the manifest, lock, profile qualification,
-lifecycle, or active
-catalog.
+lifecycle, or active catalog.
 
 ## Validation and refusal matrix
 

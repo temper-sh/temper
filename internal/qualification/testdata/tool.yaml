@@ -22,11 +22,15 @@ invalidation_triggers:
     consequence: return-to-lab
     id: tool-contract-changes
 known_failures: []
+lifecycle_reason: Fake tool remains an experimental catalog fixture
+lifecycle_status: EXPERIMENTAL
 promotion:
   id: example-tool-promotion
   revision: 1
   schema: temper-labs-product-promotion/v1
   sha256: ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+qualification_reason: Fake tool material is exact while qualification evidence remains absent
+qualification_status: LAB
 revision: 1
 roles:
   - coder
@@ -62,8 +66,6 @@ spec:
       protocol: mcp/v1
       request_schema: example-search-request/v1
       result_schema: example-search-result/v1
-status: LAB
-status_reason: Fake tool material is exact while qualification evidence remains absent
 summary: Fake search core and Pi transport for exercising the C7 tool boundary
 title: Example project search
 what_this_means: This fake tool is inspectable but is not enabled or qualified

@@ -16,7 +16,7 @@ func TestParseModelArtifactProfileRoundTripsCanonicalFixture(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if profile.Schema != qualification.ModelArtifactSchemaV1 || profile.ID != "example-coder-artifact" || profile.Revision != 1 || profile.Status != qualification.ProfileStatusLab {
+	if profile.Schema != qualification.ModelArtifactSchemaV1 || profile.ID != "example-coder-artifact" || profile.Revision != 1 || profile.QualificationStatus != qualification.QualificationStatusLab {
 		t.Fatalf("profile identity = %#v", profile.ProfileEnvelope)
 	}
 	if profile.Spec.DeclaredDownloadBytes != 1472 || len(profile.Spec.Files) != 4 || profile.Spec.Quantization.TensorAllocation[0].TensorClass != "default" {
@@ -75,10 +75,21 @@ func TestModelArtifactProfileValidationRefusesInvalidEnvelope(t *testing.T) {
 			profile.Revision = 3
 			profile.Supersedes = &qualification.Reference{Schema: profile.Schema, ID: profile.ID, Revision: 1, SHA256: strings.Repeat("a", 64)}
 		}, want: "immediately precede"},
-		{name: "unknown status", mutate: func(profile *qualification.ModelArtifactProfile) { profile.Status = "CURRENT" }, want: "status \"CURRENT\" is not supported"},
-		{name: "initial retirement", mutate: func(profile *qualification.ModelArtifactProfile) { profile.Status = qualification.ProfileStatusRetired }, want: "initial revision cannot be RETIRED"},
+		{name: "unknown qualification status", mutate: func(profile *qualification.ModelArtifactProfile) { profile.QualificationStatus = "CURRENT" }, want: "qualification_status \"CURRENT\" is not supported"},
+		{name: "missing qualification reason", mutate: func(profile *qualification.ModelArtifactProfile) { profile.QualificationReason = "" }, want: "qualification_reason must be nonempty"},
+		{name: "unknown lifecycle status", mutate: func(profile *qualification.ModelArtifactProfile) { profile.LifecycleStatus = "CURRENT" }, want: "lifecycle_status \"CURRENT\" is not supported"},
+		{name: "missing lifecycle reason", mutate: func(profile *qualification.ModelArtifactProfile) { profile.LifecycleReason = "" }, want: "lifecycle_reason must be nonempty"},
+		{name: "initial retirement", mutate: func(profile *qualification.ModelArtifactProfile) {
+			profile.LifecycleStatus = qualification.LifecycleStatusRetired
+		}, want: "initial RETIRED lifecycle requires REJECTED"},
+		{name: "supported lab evidence", mutate: func(profile *qualification.ModelArtifactProfile) {
+			profile.LifecycleStatus = qualification.LifecycleStatusSupported
+		}, want: "SUPPORTED lifecycle requires QUALIFIED"},
+		{name: "rejected experiment", mutate: func(profile *qualification.ModelArtifactProfile) {
+			profile.QualificationStatus = qualification.QualificationStatusRejected
+		}, want: "REJECTED qualification requires RETIRED"},
 		{name: "qualified without evidence", mutate: func(profile *qualification.ModelArtifactProfile) {
-			profile.Status = qualification.ProfileStatusQualified
+			profile.QualificationStatus = qualification.QualificationStatusQualified
 		}, want: "require implemented qualification-gate"},
 		{name: "incomplete evidence", mutate: func(profile *qualification.ModelArtifactProfile) {
 			profile.Evidence = []qualification.ProfileEvidence{{ID: "example-evidence"}}
@@ -183,8 +194,8 @@ func TestParseModelArtifactProfileRefusesNoncanonicalOrAmbiguousYAML(t *testing.
 		want  string
 	}{
 		{name: "unknown field", input: strings.Replace(canonical, "evidence: []", "evidence: []\nselected: true", 1), want: "field selected not found"},
-		{name: "anchor", input: strings.Replace(canonical, "status: LAB", "status: &status LAB", 1), want: "not canonical"},
-		{name: "duplicate key", input: strings.Replace(canonical, "status: LAB", "status: LAB\nstatus: WATCH", 1), want: "mapping key \"status\" already defined"},
+		{name: "anchor", input: strings.Replace(canonical, "qualification_status: LAB", "qualification_status: &qualification LAB", 1), want: "not canonical"},
+		{name: "duplicate key", input: strings.Replace(canonical, "qualification_status: LAB", "qualification_status: LAB\nqualification_status: WATCH", 1), want: "mapping key \"qualification_status\" already defined"},
 		{name: "multiple documents", input: canonical + "---\nnull\n", want: "multiple YAML documents"},
 		{name: "missing final newline", input: strings.TrimSuffix(canonical, "\n"), want: "not canonical"},
 		{name: "noncanonical mapping order", input: "schema: temper-qualification-model-artifact/v1\n" + strings.Replace(canonical, "schema: temper-qualification-model-artifact/v1\n", "", 1), want: "not canonical"},

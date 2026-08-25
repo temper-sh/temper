@@ -16,7 +16,7 @@ func TestParseModelRuntimeProfileRoundTripsCanonicalFixture(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if profile.Schema != qualification.ModelRuntimeSchemaV1 || profile.ID != "example-coder-runtime" || profile.Revision != 1 || profile.Status != qualification.ProfileStatusLab {
+	if profile.Schema != qualification.ModelRuntimeSchemaV1 || profile.ID != "example-coder-runtime" || profile.Revision != 1 || profile.QualificationStatus != qualification.QualificationStatusLab {
 		t.Fatalf("profile identity = %#v", profile.ProfileEnvelope)
 	}
 	if profile.Spec.Layout.Role != "coder" || profile.Spec.Layout.Window != 8192 || profile.Spec.Performance.TaskSuccess.State != "unmeasured" {
@@ -266,8 +266,8 @@ func TestParseModelRuntimeProfileRefusesNoncanonicalOrAmbiguousYAML(t *testing.T
 		want  string
 	}{
 		{name: "unknown field", input: strings.Replace(canonical, "evidence: []", "evidence: []\nselected: true", 1), want: "field selected not found"},
-		{name: "anchor", input: strings.Replace(canonical, "status: LAB", "status: &status LAB", 1), want: "not canonical"},
-		{name: "duplicate key", input: strings.Replace(canonical, "status: LAB", "status: LAB\nstatus: WATCH", 1), want: "mapping key \"status\" already defined"},
+		{name: "anchor", input: strings.Replace(canonical, "qualification_status: LAB", "qualification_status: &qualification LAB", 1), want: "not canonical"},
+		{name: "duplicate key", input: strings.Replace(canonical, "qualification_status: LAB", "qualification_status: LAB\nqualification_status: WATCH", 1), want: "mapping key \"qualification_status\" already defined"},
 		{name: "multiple documents", input: canonical + "---\nnull\n", want: "multiple YAML documents"},
 		{name: "missing final newline", input: strings.TrimSuffix(canonical, "\n"), want: "not canonical"},
 		{name: "noncanonical mapping order", input: "schema: temper-qualification-model-runtime/v1\n" + strings.Replace(canonical, "schema: temper-qualification-model-runtime/v1\n", "", 1), want: "not canonical"},

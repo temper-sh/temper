@@ -78,6 +78,12 @@ func TestParseProductPromotionRefusesNoncanonicalOrAmbiguousYAML(t *testing.T) {
 		{name: "missing final newline", input: strings.TrimSuffix(canonical, "\n"), want: "not canonical"},
 		{name: "noncanonical mapping order", input: "schema: temper-labs-product-promotion/v1\n" + strings.Replace(canonical, "schema: temper-labs-product-promotion/v1\n", "", 1), want: "not canonical"},
 		{name: "false sanitization", input: strings.Replace(canonical, "public_candidate_reviewed: true", "public_candidate_reviewed: false", 1), want: "must be true"},
+		{name: "unknown qualification", input: strings.Replace(canonical, "qualification_status: LAB", "qualification_status: CURRENT", 1), want: "decision.qualification_status"},
+		{name: "unknown lifecycle", input: strings.Replace(canonical, "lifecycle_status: EXPERIMENTAL", "lifecycle_status: CURRENT", 1), want: "decision.lifecycle_status"},
+		{name: "missing qualification reason", input: strings.Replace(canonical, "qualification_reason: Fake artifact material is pinned while real qualification gates remain absent", "qualification_reason: \"\"", 1), want: "decision.qualification_reason must be nonempty"},
+		{name: "missing lifecycle reason", input: strings.Replace(canonical, "lifecycle_reason: Fake artifact remains an experimental contract fixture", "lifecycle_reason: \"\"", 1), want: "decision.lifecycle_reason must be nonempty"},
+		{name: "supported without qualification", input: strings.Replace(canonical, "lifecycle_status: EXPERIMENTAL", "lifecycle_status: SUPPORTED", 1), want: "SUPPORTED lifecycle requires QUALIFIED"},
+		{name: "rejected without retirement", input: strings.Replace(canonical, "qualification_status: LAB", "qualification_status: REJECTED", 1), want: "REJECTED qualification requires RETIRED"},
 		{name: "target body mismatch", input: strings.Replace(canonical, "target:\n  id: fake-coder-artifact\n  revision: 1\n  schema: temper-qualification-model-artifact/v1", "target:\n  id: fake-coder-artifact\n  revision: 1\n  schema: temper-qualification-engine/v1", 1), want: "field declared_download_bytes not found"},
 		{name: "uninjected product source identity", input: strings.Replace(canonical, "kind: product-promotion", "id: forged-packet\n      kind: product-promotion", 1), want: "must not supply its injected identity"},
 		{name: "unsupported accepted claim", input: strings.Replace(canonical, "- artifact-identity\n  confounds:", "- artifact-quality\n  confounds:", 1), want: "unsupported claim"},
@@ -171,7 +177,7 @@ func TestCompileProductPromotionRequiresExactIndependentSupersessionChains(t *te
 	}
 
 	illegal := current
-	illegal.Decision.Status = qualification.ProfileStatusWatch
+	illegal.Decision.QualificationStatus = qualification.QualificationStatusWatch
 	illegalData, err := qualification.MarshalProductPromotionPacket(illegal)
 	if err != nil {
 		t.Fatal(err)
@@ -317,7 +323,8 @@ func promotionPacketForProfile(envelope qualification.ProfileEnvelope, spec qual
 			Schema: envelope.Schema, ID: envelope.ID, Revision: envelope.Revision, Supersedes: envelope.Supersedes,
 		},
 		Decision: qualification.ProductPromotionDecision{
-			Status: envelope.Status, StatusReason: envelope.StatusReason,
+			QualificationStatus: envelope.QualificationStatus, QualificationReason: envelope.QualificationReason,
+			LifecycleStatus: envelope.LifecycleStatus, LifecycleReason: envelope.LifecycleReason,
 			DecidedAt: "2026-08-25T19:00:00Z", Reviewers: []string{"fake-reviewer"},
 			AcceptedClaims:           []string{"profile-identity"},
 			ForbiddenGeneralizations: []string{"Fake fixture carries no real qualification or recommendation claim"},

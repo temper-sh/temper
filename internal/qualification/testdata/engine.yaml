@@ -22,11 +22,15 @@ invalidation_triggers:
     consequence: return-to-lab
     id: engine-contract-changes
 known_failures: []
+lifecycle_reason: Fake engine remains an experimental catalog fixture
+lifecycle_status: EXPERIMENTAL
 promotion:
   id: example-engine-promotion
   revision: 1
   schema: temper-labs-product-promotion/v1
   sha256: eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+qualification_reason: Fake serving identity is pinned while qualification evidence remains absent
+qualification_status: LAB
 revision: 1
 roles:
   - coder
@@ -69,8 +73,6 @@ spec:
     target:
       arch: arm64
       os: darwin
-status: LAB
-status_reason: Fake serving identity is pinned while qualification evidence remains absent
 summary: Fake tested software and serving identity for exercising the C7 engine boundary
 title: Example local engine
 what_this_means: This fake engine is inspectable but not qualified or recommended

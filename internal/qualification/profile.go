@@ -14,11 +14,17 @@ import (
 const ProductPromotionSchemaV1 = "temper-labs-product-promotion/v1"
 
 const (
-	ProfileStatusWatch     = "WATCH"
-	ProfileStatusLab       = "LAB"
-	ProfileStatusQualified = "QUALIFIED"
-	ProfileStatusRejected  = "REJECTED"
-	ProfileStatusRetired   = "RETIRED"
+	QualificationStatusWatch     = "WATCH"
+	QualificationStatusLab       = "LAB"
+	QualificationStatusQualified = "QUALIFIED"
+	QualificationStatusRejected  = "REJECTED"
+)
+
+const (
+	LifecycleStatusExperimental = "EXPERIMENTAL"
+	LifecycleStatusSupported    = "SUPPORTED"
+	LifecycleStatusDeprecated   = "DEPRECATED"
+	LifecycleStatusRetired      = "RETIRED"
 )
 
 var (
@@ -33,8 +39,10 @@ type ProfileEnvelope struct {
 	ID                   string                       `yaml:"id"`
 	Revision             uint64                       `yaml:"revision"`
 	Supersedes           *Reference                   `yaml:"supersedes,omitempty"`
-	Status               string                       `yaml:"status"`
-	StatusReason         string                       `yaml:"status_reason"`
+	QualificationStatus  string                       `yaml:"qualification_status"`
+	QualificationReason  string                       `yaml:"qualification_reason"`
+	LifecycleStatus      string                       `yaml:"lifecycle_status"`
+	LifecycleReason      string                       `yaml:"lifecycle_reason"`
 	Title                string                       `yaml:"title"`
 	Summary              string                       `yaml:"summary"`
 	WhatThisMeans        string                       `yaml:"what_this_means"`
@@ -248,13 +256,7 @@ func validateProfileEnvelope(envelope ProfileEnvelope, schema string, problem fu
 		}
 	}
 
-	if !isProfileStatus(envelope.Status) {
-		problem("status %q is not supported", envelope.Status)
-	}
-	if envelope.Revision == 1 && envelope.Status == ProfileStatusRetired {
-		problem("initial revision cannot be RETIRED")
-	}
-	validateLine("status_reason", envelope.StatusReason, problem)
+	validateProfileDisposition(envelope, problem)
 	validateLine("title", envelope.Title, problem)
 	validateLine("summary", envelope.Summary, problem)
 	validateLine("what_this_means", envelope.WhatThisMeans, problem)
@@ -265,7 +267,7 @@ func validateProfileEnvelope(envelope ProfileEnvelope, schema string, problem fu
 	validateKnownFailures(envelope.KnownFailures, envelope.Evidence, problem)
 	validateInvalidationTriggers(envelope.InvalidationTriggers, problem)
 	validateProfileEvidence(envelope, problem)
-	if envelope.Status == ProfileStatusQualified {
+	if envelope.QualificationStatus == QualificationStatusQualified {
 		problem("QUALIFIED profiles require implemented qualification-gate and dependency-status validation")
 	}
 	validatePromotionReference(envelope.Promotion, problem)

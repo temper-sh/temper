@@ -21,13 +21,13 @@ dependencies:
       id: example-coder-runtime
       revision: 1
       schema: temper-qualification-model-runtime/v1
-      sha256: 5fc238dbef6235d25b60d3102da1ec72cdb68d262012f7e4a9700260e34a9d66
+      sha256: f9242b588152cf4ab6f5ad693a183ecf5926f2b110fbf92ddcd9e563c9dbe509
     relationship: runtime
   - profile:
       id: example-project-search
       revision: 1
       schema: temper-qualification-tool/v1
-      sha256: 1cec9c47835e7a5f946a295c91a6c1c2e440bdae161ff92b497b5b3e1d6ee2c7
+      sha256: bc6a11871a470af7919556daf937da84772d700e88478beee21fd2aabc153a71
     relationship: tool
 evidence: []
 id: example-local-search-mode
@@ -36,11 +36,15 @@ invalidation_triggers:
     consequence: return-to-lab
     id: mode-world-changes
 known_failures: []
+lifecycle_reason: Fake mode remains an experimental catalog fixture
+lifecycle_status: EXPERIMENTAL
 promotion:
   id: example-mode-promotion
   revision: 1
   schema: temper-labs-product-promotion/v1
   sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+qualification_reason: Fake composed world is exact while qualification evidence remains absent
+qualification_status: LAB
 revision: 1
 roles:
   - coder
@@ -57,7 +61,7 @@ spec:
         id: example-coder-runtime
         revision: 1
         schema: temper-qualification-model-runtime/v1
-        sha256: 5fc238dbef6235d25b60d3102da1ec72cdb68d262012f7e4a9700260e34a9d66
+        sha256: f9242b588152cf4ab6f5ad693a183ecf5926f2b110fbf92ddcd9e563c9dbe509
       ttl_seconds: 7200
   foreground: local
   harnesses:
@@ -73,12 +77,10 @@ spec:
         id: example-project-search
         revision: 1
         schema: temper-qualification-tool/v1
-        sha256: 1cec9c47835e7a5f946a295c91a6c1c2e440bdae161ff92b497b5b3e1d6ee2c7
+        sha256: bc6a11871a470af7919556daf937da84772d700e88478beee21fd2aabc153a71
   wall_model:
     reason: Fake fixture has no wall-model witness
     result: unmeasured
-status: LAB
-status_reason: Fake composed world is exact while qualification evidence remains absent
 summary: Fake runtime, tool, placement, and harness world for exercising C7 mode composition
 title: Example local search mode
 what_this_means: This fake world is inspectable but is not selected or qualified

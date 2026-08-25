@@ -35,8 +35,10 @@ type ProductPromotionTarget struct {
 }
 
 type ProductPromotionDecision struct {
-	Status                   string                     `yaml:"status"`
-	StatusReason             string                     `yaml:"status_reason"`
+	QualificationStatus      string                     `yaml:"qualification_status"`
+	QualificationReason      string                     `yaml:"qualification_reason"`
+	LifecycleStatus          string                     `yaml:"lifecycle_status"`
+	LifecycleReason          string                     `yaml:"lifecycle_reason"`
 	DecidedAt                string                     `yaml:"decided_at"`
 	Reviewers                []string                   `yaml:"reviewers"`
 	AcceptedClaims           []string                   `yaml:"accepted_claims"`
@@ -248,7 +250,7 @@ func (p ProductPromotionPacket) Validate() error {
 
 	validateProductPromotionIdentity(p, problem)
 	validateProductPromotionTarget(p.Target, problem)
-	validateProductPromotionDecision(p.Decision, problem)
+	validateProductPromotionDecision(p.Target, p.Decision, problem)
 	validateProductPromotionEvidence(p, problem)
 	validateProductPromotionSanitization(p, problem)
 	validateProductCatalogConsideration(p.CatalogConsideration, problem)
@@ -386,16 +388,13 @@ func validateProductPromotionTarget(target ProductPromotionTarget, problem func(
 	}
 }
 
-func validateProductPromotionDecision(decision ProductPromotionDecision, problem func(string, ...any)) {
-	if !isProfileStatus(decision.Status) {
-		problem("decision.status %q is not supported", decision.Status)
-	}
-	validateLine("decision.status_reason", decision.StatusReason, problem)
+func validateProductPromotionDecision(target ProductPromotionTarget, decision ProductPromotionDecision, problem func(string, ...any)) {
+	validateDisposition("decision.", target.Revision, decision.QualificationStatus, decision.QualificationReason, decision.LifecycleStatus, decision.LifecycleReason, problem)
 	if _, err := time.Parse(time.RFC3339, decision.DecidedAt); err != nil {
 		problem("decision.decided_at %q must be RFC 3339", decision.DecidedAt)
 	}
 	validateSortedStableIDs("decision.reviewers", decision.Reviewers, false, problem)
-	validateSortedStableIDs("decision.accepted_claims", decision.AcceptedClaims, decision.Status == ProfileStatusWatch, problem)
+	validateSortedStableIDs("decision.accepted_claims", decision.AcceptedClaims, decision.QualificationStatus == QualificationStatusWatch, problem)
 	validateSortedLines("decision.forbidden_generalizations", decision.ForbiddenGeneralizations, problem)
 
 	previous := ""
