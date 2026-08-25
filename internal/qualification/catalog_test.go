@@ -361,6 +361,64 @@ func TestLoadCatalogVerifiesExactToolProfile(t *testing.T) {
 	}
 }
 
+func TestLoadCatalogVerifiesExactModeComposition(t *testing.T) {
+	index, files := catalogWithMode(t, readModeFixture(t))
+
+	catalog, err := qualification.LoadCatalog(marshalCatalogIndex(t, index), files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(catalog.Modes) != 1 || catalog.Modes[0].ID != "example-local-search-mode" {
+		t.Fatalf("modes = %#v", catalog.Modes)
+	}
+}
+
+func TestLoadCatalogRefusesModeDependencyAbsentFromIndex(t *testing.T) {
+	mode := parseModeFixture(t)
+	mode.Spec.Tools[0].Profile.SHA256 = strings.Repeat("f", 64)
+	mode.Dependencies[1].Profile = mode.Spec.Tools[0].Profile
+	modeData, err := qualification.MarshalModeProfile(mode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	index, files := catalogWithMode(t, modeData)
+
+	_, err = qualification.LoadCatalog(marshalCatalogIndex(t, index), files)
+	if err == nil || !strings.Contains(err.Error(), "references tool") || !strings.Contains(err.Error(), "absent from the index") {
+		t.Fatalf("LoadCatalog() error = %v, want missing-tool refusal", err)
+	}
+}
+
+func TestLoadCatalogRefusesModeCompositionDrift(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*qualification.ModeProfile)
+		want   string
+	}{
+		{name: "active data boundary", mutate: func(mode *qualification.ModeProfile) { mode.DataBoundary.Reads = []string{"local-request"} }, want: "data boundary reads/writes"},
+		{name: "harness transport revision", mutate: func(mode *qualification.ModeProfile) {
+			mode.Spec.Harnesses[0].IntegrationRevision = "temper-pi-tools/v2"
+		}, want: "has no exact harness transport"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mode := parseModeFixture(t)
+			tt.mutate(&mode)
+			modeData, err := qualification.MarshalModeProfile(mode)
+			if err != nil {
+				t.Fatal(err)
+			}
+			index, files := catalogWithMode(t, modeData)
+
+			_, err = qualification.LoadCatalog(marshalCatalogIndex(t, index), files)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("LoadCatalog() error = %v, want %q", err, tt.want)
+			}
+		})
+	}
+}
+
 func TestLoadCatalogRefusesProfileBucketAbsentFromIndex(t *testing.T) {
 	artifact := parseModelArtifactFixture(t)
 	artifact.Applicability.MachineBuckets = []qualification.Reference{{
@@ -436,12 +494,12 @@ func TestLoadCatalogRefusesMissingOrMismatchedBucketBytes(t *testing.T) {
 func TestLoadCatalogRefusesUnimplementedProfileDocuments(t *testing.T) {
 	index := parseCatalogFixture(t)
 	index.Profiles = []qualification.IndexedDocument{{
-		Document: qualification.Reference{Schema: qualification.ModeSchemaV1, ID: "example-mode", Revision: 1, SHA256: strings.Repeat("a", 64)},
-		Path:     "profiles/mode/example-mode/1.yaml",
+		Document: qualification.Reference{Schema: qualification.ActivitySchemaV1, ID: "example-activity", Revision: 1, SHA256: strings.Repeat("a", 64)},
+		Path:     "profiles/activity/example-activity/1.yaml",
 	}}
 
 	_, err := qualification.LoadCatalog(marshalCatalogIndex(t, index), map[string][]byte{exampleBucketPath: readMachineBucketFixture(t)})
-	if err == nil || !strings.Contains(err.Error(), "profile schema \"temper-qualification-mode/v1\" is not implemented") {
+	if err == nil || !strings.Contains(err.Error(), "profile schema \"temper-qualification-activity/v1\" is not implemented") {
 		t.Fatalf("LoadCatalog() error = %v, want profile refusal", err)
 	}
 }
@@ -531,6 +589,47 @@ func catalogWithModelRuntime(t *testing.T, runtimeData []byte) (qualification.Ca
 		profiles[0].Path:  engineData,
 		profiles[1].Path:  artifactData,
 		profiles[2].Path:  runtimeData,
+	}
+	return index, files
+}
+
+func catalogWithMode(t *testing.T, modeData []byte) (qualification.CatalogIndex, map[string][]byte) {
+	t.Helper()
+	index := parseCatalogFixture(t)
+	artifactData := readModelArtifactFixture(t)
+	engineData := readEngineFixture(t)
+	runtimeData := readModelRuntimeFixture(t)
+	toolData := readToolFixture(t)
+	profiles := []qualification.IndexedDocument{
+		{
+			Document: qualification.Reference{Schema: qualification.EngineSchemaV1, ID: "example-local-engine", Revision: 1, SHA256: qualification.Digest(engineData)},
+			Path:     "profiles/engine/example-local-engine/1.yaml",
+		},
+		{
+			Document: qualification.Reference{Schema: qualification.ModeSchemaV1, ID: "example-local-search-mode", Revision: 1, SHA256: qualification.Digest(modeData)},
+			Path:     "profiles/mode/example-local-search-mode/1.yaml",
+		},
+		{
+			Document: qualification.Reference{Schema: qualification.ModelArtifactSchemaV1, ID: "example-coder-artifact", Revision: 1, SHA256: qualification.Digest(artifactData)},
+			Path:     "profiles/model-artifact/example-coder-artifact/1.yaml",
+		},
+		{
+			Document: qualification.Reference{Schema: qualification.ModelRuntimeSchemaV1, ID: "example-coder-runtime", Revision: 1, SHA256: qualification.Digest(runtimeData)},
+			Path:     "profiles/model-runtime/example-coder-runtime/1.yaml",
+		},
+		{
+			Document: qualification.Reference{Schema: qualification.ToolSchemaV1, ID: "example-project-search", Revision: 1, SHA256: qualification.Digest(toolData)},
+			Path:     "profiles/tool/example-project-search/1.yaml",
+		},
+	}
+	index.Profiles = profiles
+	files := map[string][]byte{
+		exampleBucketPath: readMachineBucketFixture(t),
+		profiles[0].Path:  engineData,
+		profiles[1].Path:  modeData,
+		profiles[2].Path:  artifactData,
+		profiles[3].Path:  runtimeData,
+		profiles[4].Path:  toolData,
 	}
 	return index, files
 }

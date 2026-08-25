@@ -9,15 +9,16 @@ select anything.
 
 Current Temper implementation boundary: `internal/qualification` strictly
 parses canonical machine-bucket, model-artifact, engine, model-runtime, tool,
-and catalog-index documents. The shared profile envelope, dependency-root
-profiles, and composed runtime are typed; the loader verifies their derived
-release paths, canonical bytes, digests, identities, exact bucket
-applicability, dependency presence, and compatible role, template, and
-speculation surfaces from a supplied in-memory bundle. The index
+mode, and catalog-index documents. The shared profile envelope,
+dependency-root profiles, and composed runtime/mode worlds are typed; the
+loader verifies their derived release paths, canonical bytes, digests,
+identities, exact bucket applicability, dependency presence, compatible role,
+template, and speculation surfaces, plus active permission boundaries from a
+supplied in-memory bundle. The index
 representation already types every other profile reference and recommendation
 set so neither can become an untyped escape hatch. Public evidence inventories
 and versioned canonical scope keys are validated for the implemented profile
-kinds. `QUALIFIED` profiles, the other two profile document kinds, and
+kinds. `QUALIFIED` profiles, the remaining activity document kind, and
 nonempty recommendation sets remain explicit refusals until their gate,
 dependency-status, and cross-document rules exist. All current catalog
 fixtures are fake and hermetic.
@@ -668,9 +669,11 @@ spec:
       role: <stable role id>
       runtime_profile: <exact qualified runtime reference>
       placement: resident | on-demand
-      ngl: <exact placement setting>
-      ttl: <exact witnessed TTL>
-      preload: <exact witnessed preload setting>
+      ngl:
+        state: engine-default | explicit
+        layers: <explicit nonnegative integer, including zero>
+      ttl_seconds: <exact nonnegative TTL>
+      preload: <boolean; true only when resident>
   tools:
     - profile: <exact qualified tool reference>
       active: <whether this witnessed world exposed it>
@@ -681,16 +684,33 @@ spec:
   role_bindings:
     <role id>: <binding id>
   wall_model:
-    result: fit | does-not-fit
-    predicted_resident_mib: <typed prediction>
-    witness: <document-local evidence id>
+    result: fit | does-not-fit | unmeasured | not-applicable
+    predicted_resident_mib: <prediction for fit or does-not-fit>
+    witness: <document-local evidence id for fit or does-not-fit>
+    reason: <required only for unmeasured or not-applicable>
 ```
 
-This is the exact world that was qualified, not a default world. It contains
-no `preferred`, `selected`, or install authorization. A user may explicitly
-choose members from one or more applicable catalog offers; render validation
-may call the resulting composition qualified only when an exact qualified mode
-profile covers it.
+Bindings are unique by both binding ID and exact runtime. `role_bindings` keys
+exactly equal the common role set and each value names a binding with that
+role. A local foreground has a resident coder binding; a harness foreground
+has at least one exact integration. The `none` world has no roles, bindings,
+tools, harnesses, or dependencies, an empty/not-applicable data boundary, and
+a not-applicable wall model. This is the schema-defined exception to the
+otherwise nonempty common role set.
+
+Mode dependencies exactly enumerate each distinct runtime and tool reference.
+The loader resolves them all, proves each binding role and applicability,
+requires every active tool's backend roles, and finds an exact harness
+transport revision. It also recomputes the sorted union of reads, writes, and
+network uses from every bound runtime and active tool; disagreement with the
+mode data boundary is a refusal.
+
+This is the exact world that was witnessed, not a default world. `tools[].active`
+records whether that witnessed world exposed a tool; it is not a request to
+activate it for the user. The profile contains no `preferred`, `selected`, or
+install authorization. A user may explicitly choose members from one or more
+applicable catalog offers; render validation may call the resulting
+composition qualified only when an exact qualified mode profile covers it.
 
 The six-kind v1 deliberately has no standalone harness profile. Harness
 executables are user-managed; exact integration revisions and deviations live

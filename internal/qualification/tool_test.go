@@ -94,7 +94,7 @@ func TestToolProfileValidationRefusesPermissionOrFailureAmbiguity(t *testing.T) 
 		{name: "unsorted executes", mutate: func(profile *qualification.ToolProfile) {
 			profile.Spec.Permissions.Executes = []string{"write-command", "read-command"}
 		}, want: "executes must be unique and sorted"},
-		{name: "overlapping backend role", mutate: func(profile *qualification.ToolProfile) { profile.Spec.Backend.OptionalRoles = []string{"rerank"} }, want: "cannot be both required and optional"},
+		{name: "overlapping backend role", mutate: func(profile *qualification.ToolProfile) { profile.Spec.Backend.RequiredRoles = []string{"rerank"} }, want: "cannot be both required and optional"},
 		{name: "silent invalid input", mutate: func(profile *qualification.ToolProfile) { profile.Spec.FailureSemantics.InvalidInput = "ignore" }, want: "invalid_input must be refuse"},
 		{name: "silent permission denial", mutate: func(profile *qualification.ToolProfile) { profile.Spec.FailureSemantics.PermissionDenied = "ignore" }, want: "permission_denied must be refuse"},
 		{name: "silent backend failure", mutate: func(profile *qualification.ToolProfile) { profile.Spec.FailureSemantics.BackendUnavailable = "ignore" }, want: "backend_unavailable"},

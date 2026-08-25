@@ -249,6 +249,8 @@ func validateScopeShape(location string, scope ProfileEvidenceScope, envelope Pr
 		}
 	case ToolSchemaV1:
 		requireSelfScopeReference(location+".tool_profile", scope.ToolProfile, envelope, problem)
+	case ModeSchemaV1:
+		requireSelfScopeReference(location+".mode_profile", scope.ModeProfile, envelope, problem)
 	}
 }
 

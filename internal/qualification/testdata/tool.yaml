@@ -33,9 +33,9 @@ roles:
 schema: temper-qualification-tool/v1
 spec:
   backend:
-    optional_roles: []
-    required_roles:
+    optional_roles:
       - rerank
+    required_roles: []
   core:
     interface_revision: project-search/v1
     source:

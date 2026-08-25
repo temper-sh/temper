@@ -1,0 +1,84 @@
+applicability:
+  explanation: Fake local world with one resident coder and one active search tool
+  foregrounds:
+    - local
+  harnesses:
+    - pi
+  machine_buckets: []
+data_boundary:
+  credentials: none
+  evidence_export: explicit-user-action
+  inference: local
+  network: []
+  reads:
+    - local-request
+    - project-files
+  telemetry: none
+  writes:
+    - local-response
+dependencies:
+  - profile:
+      id: example-coder-runtime
+      revision: 1
+      schema: temper-qualification-model-runtime/v1
+      sha256: 5fc238dbef6235d25b60d3102da1ec72cdb68d262012f7e4a9700260e34a9d66
+    relationship: runtime
+  - profile:
+      id: example-project-search
+      revision: 1
+      schema: temper-qualification-tool/v1
+      sha256: 1cec9c47835e7a5f946a295c91a6c1c2e440bdae161ff92b497b5b3e1d6ee2c7
+    relationship: tool
+evidence: []
+id: example-local-search-mode
+invalidation_triggers:
+  - condition: Any runtime, tool, placement, harness integration, or wall-model fact changes
+    consequence: return-to-lab
+    id: mode-world-changes
+known_failures: []
+promotion:
+  id: example-mode-promotion
+  revision: 1
+  schema: temper-labs-product-promotion/v1
+  sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+revision: 1
+roles:
+  - coder
+schema: temper-qualification-mode/v1
+spec:
+  bindings:
+    - id: primary-coder
+      ngl:
+        state: engine-default
+      placement: resident
+      preload: true
+      role: coder
+      runtime_profile:
+        id: example-coder-runtime
+        revision: 1
+        schema: temper-qualification-model-runtime/v1
+        sha256: 5fc238dbef6235d25b60d3102da1ec72cdb68d262012f7e4a9700260e34a9d66
+      ttl_seconds: 7200
+  foreground: local
+  harnesses:
+    - id: pi
+      integration_revision: temper-pi-tools/v1
+      required_capabilities:
+        - mcp-tools
+  role_bindings:
+    coder: primary-coder
+  tools:
+    - active: true
+      profile:
+        id: example-project-search
+        revision: 1
+        schema: temper-qualification-tool/v1
+        sha256: 1cec9c47835e7a5f946a295c91a6c1c2e440bdae161ff92b497b5b3e1d6ee2c7
+  wall_model:
+    reason: Fake fixture has no wall-model witness
+    result: unmeasured
+status: LAB
+status_reason: Fake composed world is exact while qualification evidence remains absent
+summary: Fake runtime, tool, placement, and harness world for exercising C7 mode composition
+title: Example local search mode
+what_this_means: This fake world is inspectable but is not selected or qualified

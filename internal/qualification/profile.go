@@ -258,7 +258,7 @@ func validateProfileEnvelope(envelope ProfileEnvelope, schema string, problem fu
 	validateLine("title", envelope.Title, problem)
 	validateLine("summary", envelope.Summary, problem)
 	validateLine("what_this_means", envelope.WhatThisMeans, problem)
-	validateSortedStableIDs("roles", envelope.Roles, false, problem)
+	validateSortedStableIDs("roles", envelope.Roles, envelope.Schema == ModeSchemaV1, problem)
 	validateApplicability(envelope.Applicability, problem)
 	validateProfileDependencies(envelope.Dependencies, problem)
 	validateDataBoundary(envelope.DataBoundary, problem)
