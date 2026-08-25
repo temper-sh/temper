@@ -158,7 +158,7 @@ follows the one-writer rule.
 | C5 | `software.lock.yaml`: exact target/method/adapter/provider closure, immutable catalog and/or experiment provenance, and required base-lock identities | explicit catalog resolution/update or explicit experiment-lock generation | installer, `check`, Field Kit Temper-material binding | M2 phase A |
 | C6 | named installation receipt plus root-wide software state: observed closure/base receipts and current prepared operations/shared claims | installer around inspected effects and receipt commit | `check`, uninstall, Field Kit Temper-material binding | M2 phase B |
 | C7 | qualification profiles (model artifact, engine, model runtime, tool, mode, activity) + the `WATCH/LAB/QUALIFIED/RETIRED/REJECTED` status machine | release review | wizard, `check`, render validation | M2 phase C; Temper-only surface provisionally approved 2026-08-25 in `docs/design/qualification-catalog-schema.md` |
-| C8 | Labs product-promotion packet | Labs review | the qualification-catalog compiler | M2 phase C; Temper side provisionally approved 2026-08-25 in `docs/design/product-promotion-contract.md`, Labs adoption pending |
+| C8 | Labs product-promotion packet | Labs review | the qualification-catalog compiler | M2 phase C; approved Labs writer adoption and first pure Temper compiler slice implemented 2026-08-25; see `docs/design/product-promotion-contract.md` |
 | C9 | state dir: active mode, leases | `mode`/`start`/`stop` | `mode`, `status`, cooperating harnesses | M4 |
 | C10 | Field Kit execution base: reversible install/check/remove mechanics plus canonical machine facts and the ordered installation-set binding (experiment packages and sessions remain Field Kit-owned) | Temper's software and machine verbs | Field Kit experiment prompts; Labs imports reviewed run packets | M2 phase B, designed with Field Kit |
 | C11 | CLI verb surface: verbs, exit codes, RESULT lines, machine-parseable outcomes | this plan → per-verb design docs | humans and agents | grows M1 → M4 |
@@ -612,8 +612,8 @@ base.
     explicit refusals pending gate, dependency-status, and recommendation
     cross-document rules.
     The fixtures remain fake and do not seed a qualification row.
-13. *(design, with Labs — Temper side provisionally approved by owner
-    2026-08-25; Labs adoption still requires explicit authorization)* Define
+13. *(design/build, with Labs — writer adoption explicitly authorized by owner
+    and first compiler slice complete 2026-08-25)* Define
     the product-promotion packet
     (C8): how a reviewed Labs packet compiles into a qualification row without
     becoming consent. The provisionally approved Temper-side contract is
@@ -621,6 +621,14 @@ base.
     one canonical packet targets one C7 revision, private/raw provenance stays
     in Labs, and a pure compiler emits only public-safe claim-level evidence
     plus exact packet identity.
+    Labs now owns the canonical writer schema, lifecycle, prompt, registry,
+    and fake model-artifact packet. Temper strictly parses that exact packet,
+    injects its byte digest, recomputes evidence-scope keys, drops C8-only and
+    private source material, and reproduces the declared fake C7 projection
+    byte for byte from explicit in-memory inputs. The compiler refuses missing,
+    wrong, duplicate, or unused dependency/bucket documents and performs no
+    adjacent-repository or filesystem discovery. Five target-kind fixtures,
+    supersession input validation, and the `QUALIFIED` gate set remain.
     `field-kit-runtime-profile/v1` is the exploratory-witness special case;
     `external-lab` packets stay inspectable but outside the generic install
     path.
@@ -968,11 +976,11 @@ or CI dependency.
    boundary composition. Activity profiles resolve an exact mode and prove
    strict tool, applicability, role, and data-boundary narrowing. The complete
    six-kind C7 document chain therefore runs over fake hermetic fixtures.
-   Qualification-gate, dependency-status, and recommendation validation still
-   follows the authorized C8 writer adoption.
-   Co-design/adopt the C8 writer side in Labs only under explicit
-   cross-repository authorization; its pure packet compiler follows that gate.
-   Then add the plural recommendation/performance projection and reviewed seed
+   The explicitly authorized Labs C8 writer adoption and first Temper compiler
+   slice are complete: an exact fake model-artifact packet produces the Labs-
+   declared public profile bytes while private locators remain packet-side.
+   Next complete all six compiler fixtures, qualification-gate and dependency-
+   status validation, then add the plural recommendation/performance projection and reviewed seed
    rows. The first two-layout fixture should preserve co-recommended
    speed/context and quality-first coder layouts rather than manufacture one
    global winner. No real native-MTP row exists until Labs supplies an accepted

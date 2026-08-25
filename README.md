@@ -73,10 +73,12 @@ Labs product-promotion contract whose pure compiler excludes raw/private
 evidence and cannot add recommendation, consent, or selection. The owner
 approved both Temper-side designs provisionally on 2026-08-25 so refinement and
 fake-fixture C7 implementation could proceed. The six typed documents and
-their exact composition chain now execute against hermetic fake fixtures. C8
-still requires an explicitly authorized Labs-side adoption before its compiler
-is built; `QUALIFIED` rows, recommendation content, and seeded qualification
-rows remain gated.
+their exact composition chain now execute against hermetic fake fixtures. The
+separately authorized Labs C8 writer adoption is also complete, and Temper's
+pure compiler reproduces its first fake model-artifact projection byte for
+byte without reading Labs at runtime. `QUALIFIED` rows, the remaining five C8
+profile-kind fixtures, recommendation content, and seeded qualification rows
+remain gated.
 
 The M2 Phase A shared resolver core is executable: strict software-catalog and
 software-lock parsing, deterministic target-to-adapter selection, compiled

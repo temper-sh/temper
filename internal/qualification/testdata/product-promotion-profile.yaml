@@ -1,0 +1,113 @@
+applicability:
+  explanation: Fake coder artifact available for local contract testing
+  foregrounds:
+    - local
+  harnesses: []
+  machine_buckets: []
+data_boundary:
+  credentials: none
+  evidence_export: explicit-user-action
+  inference: not-applicable
+  network:
+    - destination: example.invalid
+      purpose: artifact-download
+      timing: install-only
+  reads: []
+  telemetry: none
+  writes:
+    - artifact-cache
+dependencies: []
+evidence:
+  - claims:
+      - artifact-identity
+    id: artifact-identity-witness
+    scope:
+      artifact_profile:
+        id: fake-coder-artifact
+        revision: 1
+        schema: temper-qualification-model-artifact/v1
+      co_residents: []
+      conditions:
+        load:
+          state: not-applicable
+        os_build:
+          state: not-applicable
+        power:
+          state: not-applicable
+        thermal:
+          state: not-applicable
+        wired_limit_mib:
+          state: not-applicable
+        wired_limit_source:
+          state: not-applicable
+      harnesses: []
+      key: ef1b1974e5bac19c972badf57159805c31c602e12190e6ed32296d9f35936908
+    source:
+      id: fake-coder-artifact-lab
+      kind: product-promotion
+      revision: 1
+      schema: temper-labs-product-promotion/v1
+      sha256: 49a2a20f5fc06955095a74cdb224587b455c6678f064983054d3b832391d809f
+id: fake-coder-artifact
+invalidation_triggers:
+  - condition: Any fake artifact byte or interpretation metadata changes
+    consequence: return-to-lab
+    id: artifact-material-changes
+known_failures: []
+promotion:
+  id: fake-coder-artifact-lab
+  revision: 1
+  schema: temper-labs-product-promotion/v1
+  sha256: 49a2a20f5fc06955095a74cdb224587b455c6678f064983054d3b832391d809f
+revision: 1
+roles:
+  - coder
+schema: temper-qualification-model-artifact/v1
+spec:
+  declared_download_bytes: 1216
+  files:
+    - path: models/example.gguf
+      purpose: weights
+      sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      size: 1024
+    - path: templates/chat.jinja
+      purpose: template
+      sha256: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+      size: 64
+    - path: tokenizer/tokenizer.json
+      purpose: tokenizer
+      sha256: cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+      size: 128
+  format: gguf
+  license:
+    id: example-2.0
+    redistribution: referenced-not-vendored
+    source:
+      path: LICENSE
+      repository: example/model
+      revision: eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+  model_family: example-coder
+  quantization:
+    calibration:
+      state: not-applicable
+    family: example-mixed
+    recipe_revision: example-quant/v1
+    tensor_allocation:
+      - precision: q4-k
+        tensor_class: default
+  sidecars: []
+  source:
+    kind: hugging-face
+    repository: example/model
+    revision: eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+  template:
+    path: templates/chat.jinja
+    state: file
+  tokenizer:
+    path: tokenizer/tokenizer.json
+    state: file
+status: LAB
+status_reason: Fake artifact material is pinned while real qualification gates remain absent
+summary: Fake byte identities for exercising the C8 writer boundary
+title: Fake coder artifact promotion
+what_this_means: This fake artifact is inspectable but not qualified or recommended

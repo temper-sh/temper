@@ -1,10 +1,28 @@
 # Labs product promotion — C8
 
-Status: **Temper side provisionally approved by owner for refinement**,
-2026-08-25. This approval does not authorize an adjacent-repository change:
-Labs must still adopt the writer side in its own repository before the C8
-compiler is implemented or a real packet is accepted. This document changes no
-adjacent repository and promotes no real profile.
+Status: **Labs writer adoption explicitly authorized; first Temper compiler
+slice implemented**, 2026-08-25. The canonical fake model-artifact packet now
+crosses the boundary byte for byte; it promotes no real profile. The remaining
+five target-kind fixtures, `QUALIFIED` gates, and release publication effect
+remain incomplete and fail closed.
+
+## Implementation map
+
+The executable path deliberately follows the contract nouns:
+
+| Boundary piece | Implementation |
+|---|---|
+| Labs writer schema and lifecycle | `../labs/schemas/product-promotion-v1.md` and `../labs/product-promotions/` |
+| closed C8 parser and validator | `internal/qualification/promotion.go` |
+| pure C8 → C7 compiler and explicit inputs | `internal/qualification/promotion_compile.go` |
+| exact writer/consumer byte contract | `internal/qualification/testdata/product-promotion*.yaml` |
+| round-trip, projection, privacy, and refusal checks | `internal/qualification/promotion_test.go` |
+
+`CompileProductPromotion` receives packet, dependency-profile, and machine-
+bucket bytes directly. It performs no path lookup and has no Labs or catalog
+reader. The copied fake fixture hashes are the cross-repository compatibility
+contract; the test requires the compiled public profile to match the Labs
+writer's declared projection exactly.
 
 ## Decision
 
@@ -408,7 +426,7 @@ accepted C8 packet with exact evidence and sanitization. A legacy run or
 Field Kit profile found elsewhere is inspectable evidence, not an accepted
 Temper product-promotion packet.
 
-## Cross-repository adoption gate
+## Cross-repository adoption gate — satisfied 2026-08-25
 
 Adoption and final approval of C8 require an explicitly authorized Labs-side
 step that:
@@ -421,6 +439,8 @@ step that:
 6. hands the canonical fixture bytes to Temper without a runtime dependency on
    a Labs checkout.
 
-Only after that co-design may Temper implement the parser/compiler and accept
-real promotion packets. No part of this document authorizes editing Labs,
-publishing Results, rebuilding Field Kit, or reading moving experiment state.
+The owner explicitly authorized this Labs-side adoption on 2026-08-25. The
+writer schema, workflow, registry skeleton, fake packet, expected projection,
+and offline checks now satisfy this gate; Temper imports only the exact fixture
+bytes. This does not authorize accepting a real packet, publishing Results,
+rebuilding Field Kit, or reading moving experiment state at runtime.

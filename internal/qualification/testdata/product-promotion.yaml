@@ -1,0 +1,155 @@
+candidate:
+  applicability:
+    explanation: Fake coder artifact available for local contract testing
+    foregrounds:
+      - local
+    harnesses: []
+    machine_buckets: []
+  data_boundary:
+    credentials: none
+    evidence_export: explicit-user-action
+    inference: not-applicable
+    network:
+      - destination: example.invalid
+        purpose: artifact-download
+        timing: install-only
+    reads: []
+    telemetry: none
+    writes:
+      - artifact-cache
+  dependencies: []
+  invalidation_triggers:
+    - condition: Any fake artifact byte or interpretation metadata changes
+      consequence: return-to-lab
+      id: artifact-material-changes
+  known_failures: []
+  roles:
+    - coder
+  spec:
+    declared_download_bytes: 1216
+    files:
+      - path: models/example.gguf
+        purpose: weights
+        sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+        size: 1024
+      - path: templates/chat.jinja
+        purpose: template
+        sha256: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+        size: 64
+      - path: tokenizer/tokenizer.json
+        purpose: tokenizer
+        sha256: cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+        size: 128
+    format: gguf
+    license:
+      id: example-2.0
+      redistribution: referenced-not-vendored
+      source:
+        path: LICENSE
+        repository: example/model
+        revision: eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+    model_family: example-coder
+    quantization:
+      calibration:
+        state: not-applicable
+      family: example-mixed
+      recipe_revision: example-quant/v1
+      tensor_allocation:
+        - precision: q4-k
+          tensor_class: default
+    sidecars: []
+    source:
+      kind: hugging-face
+      repository: example/model
+      revision: eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+    template:
+      path: templates/chat.jinja
+      state: file
+    tokenizer:
+      path: tokenizer/tokenizer.json
+      state: file
+  summary: Fake byte identities for exercising the C8 writer boundary
+  title: Fake coder artifact promotion
+  what_this_means: This fake artifact is inspectable but not qualified or recommended
+catalog_consideration:
+  comparisons: []
+  note: Fake contract fixture provides no recommendation evidence
+  recommendation_review: separate
+decision:
+  accepted_claims:
+    - artifact-identity
+  confounds:
+    - disposition: bounded
+      effect: No runtime quality, fit, or performance evidence is present
+      id: runtime-evidence-absent
+  decided_at: "2026-08-25T18:00:00Z"
+  forbidden_generalizations:
+    - The fake artifact is not a real supported or recommended model
+  gates:
+    - evidence:
+        - artifact-identity-witness
+      explanation: Fake selected files have exact fixture identities
+      id: artifact-bytes-pinned
+      result: pass
+    - evidence: []
+      explanation: No real license review was performed for the fake material
+      id: artifact-license-review
+      result: not-run
+  reviewers:
+    - fake-reviewer
+  status: LAB
+  status_reason: Fake artifact material is pinned while real qualification gates remain absent
+evidence:
+  - claims:
+      - artifact-identity
+    id: artifact-identity-witness
+    public_source:
+      kind: product-promotion
+    scope:
+      artifact_profile:
+        id: fake-coder-artifact
+        revision: 1
+        schema: temper-qualification-model-artifact/v1
+      co_residents: []
+      conditions:
+        load:
+          state: not-applicable
+        os_build:
+          state: not-applicable
+        power:
+          state: not-applicable
+        thermal:
+          state: not-applicable
+        wired_limit_mib:
+          state: not-applicable
+        wired_limit_source:
+          state: not-applicable
+      harnesses: []
+    sources:
+      - classification: private
+        id: fake-private-artifact-review
+        kind: labs-record
+        locator: fixtures/private/fake-artifact-review.json
+        revision: 1
+        schema: temper-labs-record/v1
+        sha256: dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+id: fake-coder-artifact-lab
+revision: 1
+sanitization:
+  excluded_classes:
+    - credentials
+    - machine-identifying-values-outside-the-C7-bucket
+    - private-corpus-content
+    - prompts-not-approved-for-publication
+    - raw-user-content
+  public_candidate_reviewed: true
+  redactions:
+    - class: private-corpus-content
+      source: fake-private-artifact-review
+      treatment: omitted
+  reviewer_statement: Fake candidate contains no private source locator or content
+schema: temper-labs-product-promotion/v1
+target:
+  id: fake-coder-artifact
+  revision: 1
+  schema: temper-qualification-model-artifact/v1
