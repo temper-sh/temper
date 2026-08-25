@@ -109,6 +109,76 @@ func TestCompileProductPromotionRefusesPrivateProjectionAndUnusedInputs(t *testi
 	if _, err := qualification.CompileProductPromotion([]byte(canonical), qualification.ProductPromotionInputs{Profiles: [][]byte{unused}}); err == nil || !strings.Contains(err.Error(), "unused document") {
 		t.Fatalf("unused input CompileProductPromotion() error = %v", err)
 	}
+	if _, err := qualification.CompileProductPromotion([]byte(canonical), qualification.ProductPromotionInputs{PriorPackets: [][]byte{[]byte(canonical)}}); err == nil || !strings.Contains(err.Error(), "initial packet") {
+		t.Fatalf("unused prior packet CompileProductPromotion() error = %v", err)
+	}
+}
+
+func TestCompileProductPromotionRequiresExactIndependentSupersessionChains(t *testing.T) {
+	priorPacketData := readProductPromotionFixture(t)
+	priorProfileData := readProductPromotionProfileFixture(t)
+	current := parseProductPromotionFixture(t)
+	current.Revision = 2
+	current.Supersedes = &qualification.MaterialReference{
+		Schema: qualification.ProductPromotionSchemaV1, ID: current.ID,
+		Revision: 1, SHA256: qualification.Digest(priorPacketData),
+	}
+	current.Target.Revision = 2
+	current.Target.Supersedes = &qualification.Reference{
+		Schema: qualification.ModelArtifactSchemaV1, ID: current.Target.ID,
+		Revision: 1, SHA256: qualification.Digest(priorProfileData),
+	}
+	evidenceScope := current.Evidence[0].Scope.ArtifactProfile
+	evidenceScope.Revision = 2
+
+	currentData, err := qualification.MarshalProductPromotionPacket(current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inputs := qualification.ProductPromotionInputs{
+		PriorPackets: [][]byte{priorPacketData},
+		Profiles:     [][]byte{priorProfileData},
+	}
+	compiled, err := qualification.CompileProductPromotion(currentData, inputs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile, err := qualification.ParseModelArtifactProfile(compiled)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if profile.Revision != 2 || profile.Supersedes == nil || profile.Supersedes.SHA256 != qualification.Digest(priorProfileData) {
+		t.Fatalf("compiled profile lineage = revision %d, supersedes %#v", profile.Revision, profile.Supersedes)
+	}
+	if profile.Promotion.Revision != 2 || profile.Promotion.SHA256 != qualification.Digest(currentData) {
+		t.Fatalf("compiled packet lineage = %#v", profile.Promotion)
+	}
+
+	if _, err := qualification.CompileProductPromotion(currentData, qualification.ProductPromotionInputs{Profiles: [][]byte{priorProfileData}}); err == nil || !strings.Contains(err.Error(), "exactly one prior-packet") {
+		t.Fatalf("missing prior packet CompileProductPromotion() error = %v", err)
+	}
+	wrongPacket := current
+	wrongPacket.Supersedes = &qualification.MaterialReference{
+		Schema: qualification.ProductPromotionSchemaV1, ID: current.ID,
+		Revision: 1, SHA256: strings.Repeat("f", 64),
+	}
+	wrongPacketData, err := qualification.MarshalProductPromotionPacket(wrongPacket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := qualification.CompileProductPromotion(wrongPacketData, inputs); err == nil || !strings.Contains(err.Error(), "does not exactly match") {
+		t.Fatalf("wrong prior digest CompileProductPromotion() error = %v", err)
+	}
+
+	illegal := current
+	illegal.Decision.Status = qualification.ProfileStatusWatch
+	illegalData, err := qualification.MarshalProductPromotionPacket(illegal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := qualification.CompileProductPromotion(illegalData, inputs); err == nil || !strings.Contains(err.Error(), "LAB -> WATCH") {
+		t.Fatalf("illegal target transition CompileProductPromotion() error = %v", err)
+	}
 }
 
 func readProductPromotionFixture(t *testing.T) []byte {
@@ -127,4 +197,13 @@ func readProductPromotionProfileFixture(t *testing.T) []byte {
 		t.Fatal(err)
 	}
 	return data
+}
+
+func parseProductPromotionFixture(t *testing.T) qualification.ProductPromotionPacket {
+	t.Helper()
+	packet, err := qualification.ParseProductPromotionPacket(readProductPromotionFixture(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return packet
 }

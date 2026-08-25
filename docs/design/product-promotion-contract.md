@@ -18,11 +18,12 @@ The executable path deliberately follows the contract nouns:
 | exact writer/consumer byte contract | `internal/qualification/testdata/product-promotion*.yaml` |
 | round-trip, projection, privacy, and refusal checks | `internal/qualification/promotion_test.go` |
 
-`CompileProductPromotion` receives packet, dependency-profile, and machine-
-bucket bytes directly. It performs no path lookup and has no Labs or catalog
-reader. The copied fake fixture hashes are the cross-repository compatibility
-contract; the test requires the compiled public profile to match the Labs
-writer's declared projection exactly.
+`CompileProductPromotion` receives packet, immediate prior-packet, target-
+history/dependency-profile, and machine-bucket bytes directly. It performs no
+path lookup and has no Labs or catalog reader. Independent C8 and C7
+supersession chains are checked against those bytes. The copied fake fixture
+hashes are the cross-repository compatibility contract; the test requires the
+compiled public profile to match the Labs writer's declared projection exactly.
 
 ## Decision
 
@@ -333,7 +334,8 @@ selection, consent, installation, residency, or preference.
 Conceptually:
 
 ```text
-compile(canonical C8 packet bytes, exact C7 dependencies, exact buckets)
+compile(canonical C8 packet bytes, exact prior packet,
+        exact C7 target history/dependencies, exact buckets)
   -> canonical one-profile C7 bytes | typed refusal
 ```
 

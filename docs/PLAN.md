@@ -627,8 +627,9 @@ base.
     private source material, and reproduces the declared fake C7 projection
     byte for byte from explicit in-memory inputs. The compiler refuses missing,
     wrong, duplicate, or unused dependency/bucket documents and performs no
-    adjacent-repository or filesystem discovery. Five target-kind fixtures,
-    supersession input validation, and the `QUALIFIED` gate set remain.
+    adjacent-repository or filesystem discovery. Exact prior packet and target-
+    profile bytes are required for independent supersession-chain validation.
+    Five target-kind fixtures and the `QUALIFIED` gate set remain.
     `field-kit-runtime-profile/v1` is the exploratory-witness special case;
     `external-lab` packets stay inspectable but outside the generic install
     path.

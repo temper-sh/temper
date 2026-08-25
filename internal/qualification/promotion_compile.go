@@ -11,6 +11,7 @@ import (
 // available to the pure compiler. The compiler never discovers a catalog or
 // reads Labs, Results, Field Kit, or the filesystem.
 type ProductPromotionInputs struct {
+	PriorPackets   [][]byte
 	Profiles       [][]byte
 	MachineBuckets [][]byte
 }
@@ -24,13 +25,12 @@ func CompileProductPromotion(packetData []byte, inputs ProductPromotionInputs) (
 	if err != nil {
 		return nil, err
 	}
-	if err := validateProductPromotionInputs(packet, inputs); err != nil {
-		return nil, err
-	}
-
 	promotion := PromotionReference{
 		Schema: ProductPromotionSchemaV1,
 		ID:     packet.ID, Revision: packet.Revision, SHA256: Digest(packetData),
+	}
+	if err := validateProductPromotionInputs(packet, promotion, inputs); err != nil {
+		return nil, err
 	}
 	profile, err := compileProductPromotionProfile(packet, promotion)
 	if err != nil {
@@ -108,7 +108,10 @@ func compileProductPromotionEvidence(packet ProductPromotionPacket, promotion Pr
 	return compiled, nil
 }
 
-func validateProductPromotionInputs(packet ProductPromotionPacket, inputs ProductPromotionInputs) error {
+func validateProductPromotionInputs(packet ProductPromotionPacket, promotion PromotionReference, inputs ProductPromotionInputs) error {
+	if err := validatePriorPromotionPacket(packet, inputs.PriorPackets); err != nil {
+		return err
+	}
 	profiles, err := indexPromotionProfiles(inputs.Profiles)
 	if err != nil {
 		return err
@@ -119,6 +122,7 @@ func validateProductPromotionInputs(packet ProductPromotionPacket, inputs Produc
 	}
 
 	neededProfiles := map[string]Reference{}
+	qualifiedDependencies := map[string]Reference{}
 	neededBuckets := map[string]Reference{}
 	addProfile := func(reference Reference) {
 		if reference.Schema == packet.Target.Schema && reference.ID == packet.Target.ID && reference.Revision == packet.Target.Revision && reference.SHA256 == "" {
@@ -129,6 +133,10 @@ func validateProductPromotionInputs(packet ProductPromotionPacket, inputs Produc
 	addBucket := func(reference Reference) { neededBuckets[referenceExactIdentity(reference)] = reference }
 	for _, dependency := range packet.Candidate.Dependencies {
 		addProfile(dependency.Profile)
+		qualifiedDependencies[referenceExactIdentity(dependency.Profile)] = dependency.Profile
+	}
+	if packet.Target.Supersedes != nil {
+		addProfile(*packet.Target.Supersedes)
 	}
 	for _, reference := range packet.Candidate.Applicability.MachineBuckets {
 		addBucket(reference)
@@ -142,7 +150,7 @@ func validateProductPromotionInputs(packet ProductPromotionPacket, inputs Produc
 		if !ok {
 			return fmt.Errorf("compile product promotion: required profile %s/%s@%d with sha256 %s was not supplied", reference.Schema, reference.ID, reference.Revision, reference.SHA256)
 		}
-		if packet.Decision.Status == ProfileStatusQualified && profile.Status != ProfileStatusQualified {
+		if _, isDependency := qualifiedDependencies[identity]; packet.Decision.Status == ProfileStatusQualified && isDependency && profile.Status != ProfileStatusQualified {
 			return fmt.Errorf("compile product promotion: QUALIFIED target requires profile %s/%s@%d to be QUALIFIED, got %s", reference.Schema, reference.ID, reference.Revision, profile.Status)
 		}
 	}
@@ -157,12 +165,47 @@ func validateProductPromotionInputs(packet ProductPromotionPacket, inputs Produc
 	if len(buckets) != len(neededBuckets) {
 		return fmt.Errorf("compile product promotion: supplied machine-bucket set contains %d unused document(s)", len(buckets)-len(neededBuckets))
 	}
+	if packet.Target.Supersedes != nil {
+		previous := profiles[referenceExactIdentity(*packet.Target.Supersedes)]
+		current := ProfileEnvelope{
+			Schema: packet.Target.Schema, ID: packet.Target.ID, Revision: packet.Target.Revision,
+			Supersedes: packet.Target.Supersedes, Status: packet.Decision.Status, Promotion: promotion,
+		}
+		if err := ValidateProfileStatusTransition(previous.Envelope, current, packet.Target.Supersedes.SHA256); err != nil {
+			return fmt.Errorf("compile product promotion: target profile transition: %w", err)
+		}
+	}
+	return nil
+}
+
+func validatePriorPromotionPacket(current ProductPromotionPacket, documents [][]byte) error {
+	if current.Revision == 1 {
+		if len(documents) != 0 {
+			return fmt.Errorf("compile product promotion: initial packet must not receive prior-packet inputs")
+		}
+		return nil
+	}
+	if len(documents) != 1 {
+		return fmt.Errorf("compile product promotion: packet revision %d requires exactly one prior-packet input", current.Revision)
+	}
+	previousData := documents[0]
+	previous, err := ParseProductPromotionPacket(previousData)
+	if err != nil {
+		return fmt.Errorf("compile product promotion: prior packet: %w", err)
+	}
+	want := MaterialReference{
+		Schema: previous.Schema, ID: previous.ID, Revision: previous.Revision, SHA256: Digest(previousData),
+	}
+	if current.Supersedes == nil || *current.Supersedes != want {
+		return fmt.Errorf("compile product promotion: prior packet does not exactly match supersedes")
+	}
 	return nil
 }
 
 type promotionInputProfile struct {
 	Reference
-	Status string
+	Status   string
+	Envelope ProfileEnvelope
 }
 
 func indexPromotionProfiles(documents [][]byte) (map[string]promotionInputProfile, error) {
@@ -191,7 +234,7 @@ func parsePromotionInputProfile(data []byte) (promotionInputProfile, error) {
 	makeInput := func(envelope ProfileEnvelope) promotionInputProfile {
 		return promotionInputProfile{
 			Reference: Reference{Schema: envelope.Schema, ID: envelope.ID, Revision: envelope.Revision, SHA256: Digest(data)},
-			Status:    envelope.Status,
+			Status:    envelope.Status, Envelope: envelope,
 		}
 	}
 	switch header.Schema {
