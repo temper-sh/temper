@@ -248,6 +248,10 @@ Three catalog concepts stay separate:
 
 - **`QUALIFIED` is evidence validity:** the exact artifact/runtime/machine
   witness cleared its gates.
+- **Lifecycle is product posture:** `EXPERIMENTAL` may be working and
+  qualified while long-term retention remains unsettled; `SUPPORTED` is the
+  maintained path, `DEPRECATED` preserves existing-user continuity, and
+  `RETIRED` ends availability without rewriting historical evidence.
 - **Recommended is applicability:** among qualified rows, this layout is a
   sensible choice for this machine, mode and job. Zero, one or many layouts may
   be recommended. Recommendation does not imply a total order or a default.
@@ -517,10 +521,13 @@ their evidence key includes artifact revision, engine-profile revision,
 runtime-profile revision, machine bucket, mode and relevant co-residents. A
 mode is qualified only for the exact composed configuration that was tested.
 
-Profiles move through `WATCH → LAB → QUALIFIED → RETIRED` (or `REJECTED`). Web
+Profiles carry independent evidence qualification and product lifecycle.
+Evidence moves through `WATCH → LAB → QUALIFIED` (or `REJECTED`); lifecycle
+moves from `EXPERIMENTAL` toward `SUPPORTED`, `DEPRECATED`, or `RETIRED`. Web
 research alone cannot produce `QUALIFIED`. Any artifact, engine, template,
 schema, prompt-policy or meaningful tuning change invalidates the affected
-witness and sends the profile back to `LAB` until its targeted gates pass.
+witness and sends qualification back to `LAB` and lifecycle to `EXPERIMENTAL`
+until its targeted gates pass. Retirement preserves the last evidence status.
 
 ## Modes (settled shape 2026-08-13; bindings still need witnesses)
 
@@ -746,8 +753,8 @@ create recommendation, consent, or selection. See
 [`design/product-promotion-contract.md`](design/product-promotion-contract.md)
 and the provisionally approved typed C7 surface in
 [`design/qualification-catalog-schema.md`](design/qualification-catalog-schema.md).
-Model, tool, harness and mode candidates follow the same state machine and
-evidence discipline:
+Model, tool, harness and mode candidates follow the same two-axis transition
+rules and evidence discipline:
 
 1. **Intake / `WATCH`.** Record the question, intended roles/modes, discovery
    sources, official artifact locations, release state and re-check triggers.
@@ -767,9 +774,10 @@ evidence discipline:
    correct selection/arguments, recovery and unnecessary calls before tokens or
    speed. Community templates, prompts, fine-tunes and tool descriptions are
    separate arms wherever possible; unavoidable confounds are declared.
-6. **Decision packet.** Emit `QUALIFIED`, `REJECTED`, continued `LAB`, or
-   `WATCH`, plus exact scope, raw-evidence index, known failures, rollback,
-   invalidation triggers and the smallest candidate profile(s).
+6. **Decision packet.** Emit evidence qualification (`QUALIFIED`, `REJECTED`,
+   continued `LAB`, or `WATCH`) plus lifecycle (`EXPERIMENTAL`, `SUPPORTED`,
+   `DEPRECATED`, or `RETIRED`), exact scope, raw-evidence index, known failures,
+   rollback, invalidation triggers and the smallest candidate profile(s).
 7. **Publication and release review.** Publish a laconic Results record with
    current/rejected status, machine scope, detailed sanitized evidence and
    provenance; compile an accepted profile into the catalog. Neither Results
@@ -951,7 +959,7 @@ reach the same standard before tool profiles enter the qualification catalog.
    with credential and foreground-model ownership left to each harness?
 5. Versioning of witnessed rows when engines move: the provisionally approved
    C7 answer keeps the old witness immutable, supersedes the same product
-   lineage through a new `LAB` revision, and uses a new profile ID when both
+   lineage through a new `LAB/EXPERIMENTAL` revision, and uses a new profile ID when both
    combinations remain deliberately supported. Refine this before the v1
    surface freezes.
 6. llama-swap mechanics the modes design leans on: role aliases

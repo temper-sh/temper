@@ -157,7 +157,7 @@ follows the one-writer rule.
 | C4 | software supply records for Temper-managed packages: logical package, portable installation method, target-adapter definition, adapter-native package recipe/version scheme, selection policy, constraints, and tested-version evidence | release review | software resolver, installer, `check` | M2 phase A |
 | C5 | `software.lock.yaml`: exact target/method/adapter/provider closure, immutable catalog and/or experiment provenance, and required base-lock identities | explicit catalog resolution/update or explicit experiment-lock generation | installer, `check`, Field Kit Temper-material binding | M2 phase A |
 | C6 | named installation receipt plus root-wide software state: observed closure/base receipts and current prepared operations/shared claims | installer around inspected effects and receipt commit | `check`, uninstall, Field Kit Temper-material binding | M2 phase B |
-| C7 | qualification profiles (model artifact, engine, model runtime, tool, mode, activity) + the `WATCH/LAB/QUALIFIED/RETIRED/REJECTED` status machine | release review | wizard, `check`, render validation | M2 phase C; Temper-only surface provisionally approved 2026-08-25 in `docs/design/qualification-catalog-schema.md` |
+| C7 | qualification profiles (model artifact, engine, model runtime, tool, mode, activity) + independent evidence qualification (`WATCH/LAB/QUALIFIED/REJECTED`) and product lifecycle (`EXPERIMENTAL/SUPPORTED/DEPRECATED/RETIRED`) | release review | wizard, `check`, render validation | M2 phase C; two-axis surface approved 2026-08-25 in `docs/design/qualification-catalog-schema.md` |
 | C8 | Labs product-promotion packet | Labs review | the qualification-catalog compiler | M2 phase C; approved Labs writer adoption and first pure Temper compiler slice implemented 2026-08-25; see `docs/design/product-promotion-contract.md` |
 | C9 | state dir: active mode, leases | `mode`/`start`/`stop` | `mode`, `status`, cooperating harnesses | M4 |
 | C10 | Field Kit execution base: reversible install/check/remove mechanics plus canonical machine facts and the ordered installation-set binding (experiment packages and sessions remain Field Kit-owned) | Temper's software and machine verbs | Field Kit experiment prompts; Labs imports reviewed run packets | M2 phase B, designed with Field Kit |
@@ -587,7 +587,7 @@ base.
     six content-addressed typed profile documents, immutable supersession and
     status history, separately versioned machine-bucket vocabulary, and
     unordered catalog-level recommendation sets. It proposes the D7 rule that
-    changed material returns through `LAB`, while deliberately parallel
+    changed material returns through `LAB/EXPERIMENTAL`, while deliberately parallel
     supported combinations use separate profile IDs.
     Temper refinement currently implements the exact-reference and index
     surface plus strict machine-bucket, model-artifact, engine, model-runtime,
@@ -604,7 +604,8 @@ base.
     serving/process contract, output-affecting runtime layout, and explicit
     structured performance axes are typed. Public evidence inventories and
     canonical witness-scope keys are validated, and a pure immutable-lineage
-    validator enforces exact supersession and legal status transitions. Tool
+    validator enforces exact supersession and legal qualification/lifecycle
+    transitions. Tool
     core/transport/permission/backend/failure identity is closed and
     consent-neutral. Exact composed mode worlds remain distinct from user
     selection. All six typed document kinds are executable against fake
@@ -878,7 +879,7 @@ or CI dependency.
 | D4 | Final public distribution: brew vs curl-installer vs release asset (including prebuilt darwin/arm64 vs build-at-setup) | M5; does not block the checksummed pre-release Field Kit binary in M2 | open |
 | D5 | Mode-posture soaks as Labs-promoted Field Kit experiment packages (Temper only guarantees the base can render and serve the requested posture in isolation) | M4 qualification | open — a Field Kit/Labs question (spec Q8) |
 | D6 | Advisory lease file with expiry sufficient; `--force` human-only | M4 | leaning yes on both (spec Q7) |
-| D7 | Witnessed-row versioning on engine update: invalidate vs fork | M2 Phase C schema design | **provisionally approved 2026-08-25:** immutable old witness; same product lineage supersedes through a new `LAB` revision, while deliberately parallel support gets a new profile ID; refine before v1 freeze (`docs/design/qualification-catalog-schema.md`) |
+| D7 | Witnessed-row versioning on engine update: invalidate vs fork | M2 Phase C schema design | **provisionally approved 2026-08-25:** immutable old witness; same product lineage supersedes through a new `LAB/EXPERIMENTAL` revision, while deliberately parallel support gets a new profile ID; refine before v1 freeze (`docs/design/qualification-catalog-schema.md`) |
 | D8 | Remote-provider integration strictly render-only | M3 | leaning yes (spec Q4) |
 | D9 | Qualification-catalog contribution flow for Field Kit witnesses | post-M5 | Labs review and explicit product promotion; submission transport remains open |
 | D10 | Pi `packages` / Codex / Claude Code plugin packaging as distribution channels | M4 adapters | open (spec Q9) |
@@ -972,8 +973,9 @@ or CI dependency.
    dependency-root profiles, output-affecting runtime layout, and explicit
    performance axes are typed. Public evidence inventories and complete,
    recomputed runtime witness scopes are accepted for non-qualified rows;
-   `QUALIFIED` profiles and recommendations fail closed. Exact immutable status
-   edges are also validated without a moving-history lookup. The tool
+   `QUALIFIED` profiles and recommendations fail closed. Exact immutable
+   qualification/lifecycle edges are also validated without a moving-history
+   lookup. The tool
    dependency root is typed and loaded with exact permission/data-boundary
    agreement, and mode worlds now verify role, placement, harness, and active
    boundary composition. Activity profiles resolve an exact mode and prove

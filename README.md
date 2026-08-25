@@ -66,8 +66,9 @@ never selects or prefers one: the user may install any subset and explicitly
 chooses which layout starts.
 
 The provisionally approved M2 Phase C surfaces now make that boundary concrete.
-C7 uses six content-addressed typed profile documents with immutable status
-history, versioned machine buckets, structured performance evidence, and
+C7 uses six content-addressed typed profile documents with independent,
+immutable qualification and product-lifecycle history, versioned machine
+buckets, structured performance evidence, and
 unordered plural recommendation sets. C8 is a separate one-packet/one-profile
 Labs product-promotion contract whose pure compiler excludes raw/private
 evidence and cannot add recommendation, consent, or selection. The owner

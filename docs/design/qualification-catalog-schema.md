@@ -39,7 +39,7 @@ kinds:
 
 The catalog also carries immutable `temper-qualification-machine-bucket/v1`
 vocabulary documents and plural recommendation sets. A machine bucket is not
-a profile and recommendation is not a profile status. There is no normalized
+a profile and recommendation is neither qualification nor lifecycle. There is no normalized
 entity graph, generic `kind: ...` record, or untyped payload whose validity
 depends on consumers guessing which fields apply.
 
@@ -83,7 +83,7 @@ revision: 3
 sha256: <64 lowercase hexadecimal characters>
 ```
 
-No reader resolves “latest,” follows a status name, or chooses the largest
+No reader resolves “latest,” follows a qualification/lifecycle name, or chooses the largest
 revision. The catalog index lists the exact documents active in that snapshot.
 References form this acyclic dependency order:
 
@@ -111,41 +111,58 @@ reference to another document remains exact, including its SHA-256. Scope-key
 validation must prove that an omitted digest denotes the containing profile;
 it is not a general shorthand for “latest.”
 
-## Immutable revision and status history
+## Immutable revision, qualification, and lifecycle history
 
-A published document is never edited. A correction, pin change, status change,
-applicability change, changed known failure, or changed recommendation basis
-creates a new revision. `supersedes`, when present, is an exact reference to
-the previous head with the same schema and ID. It may not skip or fork a
-lineage. Revision 1 has no `supersedes`; every later revision names exactly the
-immediately preceding revision.
+A published document is never edited. A correction, pin change, qualification
+change, lifecycle change, applicability change, changed known failure, or
+changed recommendation basis creates a new revision. `supersedes`, when
+present, is an exact reference to the previous head with the same schema and
+ID. It may not skip or fork a lineage. Revision 1 has no `supersedes`; every
+later revision names exactly the immediately preceding revision.
 
-The status values remain:
+C7 records two independent reviewed facts. Qualification describes evidence:
 
 - `WATCH`: a recorded candidate whose product case or evidence plan is not yet
   ready to run;
 - `LAB`: exact enough to investigate, but missing or failing qualification
   gates;
-- `QUALIFIED`: the exact declared scope passed its required gates;
-- `REJECTED`: reviewed evidence rules this exact candidate or claim out; and
-- `RETIRED`: the exact record remains history but is no longer offered or
-  supported.
+- `QUALIFIED`: the exact declared scope passed its required gates; and
+- `REJECTED`: reviewed evidence rules this exact candidate or claim out.
 
-Initial revisions may be `WATCH`, `LAB`, `QUALIFIED`, or `REJECTED`; an initial
-`RETIRED` record is meaningless and refused. A seed `QUALIFIED` revision
-therefore still needs a complete accepted C8 packet. Later revisions may keep
-the same status for an immutable correction, move `WATCH → LAB`, move
-`LAB → QUALIFIED`, and move any active status to `REJECTED` or `RETIRED`. A
-previously qualified profile returns through `LAB` when its evidence or
-material identity changes. A correction may move `REJECTED` or `RETIRED` back
-to `LAB`, never directly to `QUALIFIED`; those terminal statuses otherwise
-remain in place and do not cross directly into each other. Every transition
-carries a nonempty `status_reason` and a distinct exact C8 promotion identity.
+Lifecycle describes Temper's product posture:
+
+- `EXPERIMENTAL`: available only with an explicit experimental label while
+  long-term retention or support remains unsettled;
+- `SUPPORTED`: an ordinary maintained catalog member;
+- `DEPRECATED`: retained for existing users while new use is discouraged; and
+- `RETIRED`: preserved as history but no longer offered or supported.
+
+The axes are not aliases. A tool such as `project_search` may be
+`QUALIFIED/EXPERIMENTAL`: it works in its exact scope, while its long-term
+product place is intentionally unsettled. Retirement does not rewrite that
+evidence fact; a later revision can be `QUALIFIED/RETIRED`.
+
+Valid combinations are deliberately narrow. `EXPERIMENTAL` permits `WATCH`,
+`LAB`, or `QUALIFIED`. `SUPPORTED` and `DEPRECATED` require `QUALIFIED`.
+`RETIRED` preserves any qualification state, and `REJECTED` requires
+`RETIRED`. An initial retired revision is refused except for an initial
+`REJECTED/RETIRED` review outcome.
+
+Qualification transitions may stay unchanged, move `WATCH → LAB`,
+`WATCH → REJECTED`, `LAB → QUALIFIED`, `LAB → REJECTED`, or return
+`QUALIFIED/REJECTED → LAB`; changed material never inherits qualification.
+Lifecycle transitions may stay unchanged, move `EXPERIMENTAL → SUPPORTED`,
+`SUPPORTED → DEPRECATED`, reverse `DEPRECATED → SUPPORTED`, move any active
+stage to `RETIRED`, or return an active stage to `EXPERIMENTAL`. Reopening a
+`RETIRED` lineage requires `LAB/EXPERIMENTAL`; it cannot jump directly back to
+qualified support. Every revision carries nonempty independent reasons and a
+distinct exact C8 promotion identity.
 
 The pure transition validator receives the previous and current envelopes plus
 the already-verified SHA-256 of the previous canonical bytes. It requires one
 schema/ID lineage, the immediately following revision, and an exact
-`supersedes` reference before applying the status table. It performs no
+`supersedes` reference before applying both transition tables and their
+combination rules. It performs no
 filesystem discovery or “latest” lookup. The future C8 compiler supplies that
 prior material explicitly; the catalog index remains a current projection and
 does not infer history from revision numbers.
@@ -160,7 +177,8 @@ version. D7 is therefore settled as follows:
   parallel, the new combination gets a new profile ID rather than forking one
   supersession chain; and
 - retiring or rejecting the old exact combination is a separate reviewed
-  status revision, not a side effect of resolving the new engine.
+  lifecycle/qualification revision, not a side effect of resolving the new
+  engine.
 
 The catalog index is the explicit current projection. Revision number alone
 has no currentness or preference semantics.
@@ -181,8 +199,10 @@ supersedes:                         # absent on the first revision
   revision: <previous revision>
   sha256: <previous canonical bytes>
 
-status: WATCH | LAB | QUALIFIED | REJECTED | RETIRED
-status_reason: <why this exact revision has this status>
+qualification_status: WATCH | LAB | QUALIFIED | REJECTED
+qualification_reason: <why the evidence has this disposition>
+lifecycle_status: EXPERIMENTAL | SUPPORTED | DEPRECATED | RETIRED
+lifecycle_reason: <why Temper has this product posture>
 title: <short factual title>
 summary: <evidence-scoped description>
 what_this_means: <one plain-language line for the wizard or check output>
@@ -781,8 +801,8 @@ recommendation_sets:
 
 Member order is canonical identity order and has no ranking meaning. The
 schema has no `rank`, score, winner, default, selected, checked, or preferred
-field. Every member must be `QUALIFIED`, applicable to the set, and carry the
-measured performance observations cited by its reason. Several members may
+field. Every member must be `QUALIFIED/SUPPORTED`, applicable to the set, and
+carry the measured performance observations cited by its reason. Several members may
 share the same bucket/mode/role; none, one, or all may later be selected by the
 user. A recommendation set is never projected into `manifest.yaml`.
 
@@ -802,9 +822,12 @@ The wizard reads only the exact catalog index selected by its Temper release:
 
 1. verify index structure and every referenced document digest;
 2. match canonical machine facts to exact bucket predicates;
-3. ignore `WATCH`, `LAB`, `REJECTED`, and `RETIRED` profiles for furnishing;
-4. find `QUALIFIED` mode profiles whose exact dependency closure is present,
-   qualified, and applicable;
+3. ignore non-`QUALIFIED` and `RETIRED` profiles for furnishing;
+4. show `QUALIFIED/EXPERIMENTAL` profiles only as explicit experimental
+   choices, keep `QUALIFIED/DEPRECATED` profiles available only to explain or
+   validate existing selections, and find `QUALIFIED/SUPPORTED` mode profiles
+   whose exact dependency closure is present, qualified, supported, and
+   applicable;
 5. show unfurnishable modes disabled with the derived refusal reason;
 6. display every applicable recommendation-set member and its measured
    tradeoffs with all controls initially unselected; and
@@ -812,26 +835,28 @@ The wizard reads only the exact catalog index selected by its Temper release:
    facts into C2, then require the user to choose residency, harness enablement,
    and at most one `preferred` member.
 
-Projection strips `status`, recommendation, evidence, prose, known failures,
-and promotion metadata. It does not synthesize a layout, tool, or mode that no
-qualified profile covers. Re-running the wizard against an existing manifest
-is advisory only.
+Projection strips qualification/lifecycle status, recommendation, evidence,
+prose, known failures, and promotion metadata. It does not synthesize a
+layout, tool, or mode that no qualified profile covers. Re-running the wizard
+against an existing manifest is advisory only.
 
 `check` may compare exact selected pins with the catalog and report drift or
-retirement. It never changes the manifest, lock, profile status, or active
+retirement. It never changes the manifest, lock, profile qualification,
+lifecycle, or active
 catalog.
 
 ## Validation and refusal matrix
 
 The Phase C validator must reject at least:
 
-- an unknown schema, field, status, role, relationship, performance state, or
-  data-boundary value;
+- an unknown schema, field, qualification/lifecycle status, role,
+  relationship, performance state, or data-boundary value;
 - a noncanonical document, wrong digest, duplicate identity, missing
   dependency, dependency cycle, or reference to a document absent from the
   index;
 - a supersession edge across schemas/IDs, a skipped/forked head, illegal
-  status transition, or same `id@revision` with different bytes;
+  qualification/lifecycle transition or combination, or same `id@revision`
+  with different bytes;
 - a machine bucket whose predicate uses facts absent from its named facts
   schema, or a profile whose applicability names a missing bucket;
 - a witness key that does not match its canonical scope, a runtime witness
