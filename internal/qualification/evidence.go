@@ -251,6 +251,8 @@ func validateScopeShape(location string, scope ProfileEvidenceScope, envelope Pr
 		requireSelfScopeReference(location+".tool_profile", scope.ToolProfile, envelope, problem)
 	case ModeSchemaV1:
 		requireSelfScopeReference(location+".mode_profile", scope.ModeProfile, envelope, problem)
+	case ActivitySchemaV1:
+		requireSelfScopeReference(location+".activity_profile", scope.ActivityProfile, envelope, problem)
 	}
 }
 

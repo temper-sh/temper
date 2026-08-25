@@ -93,6 +93,7 @@ type Catalog struct {
 	ModelRuntimes  []ModelRuntimeProfile
 	Tools          []ToolProfile
 	Modes          []ModeProfile
+	Activities     []ActivityProfile
 }
 
 // ParseCatalogIndex accepts only the canonical YAML bytes produced by
@@ -155,7 +156,7 @@ func LoadCatalog(indexData []byte, files map[string][]byte) (Catalog, error) {
 		return Catalog{}, err
 	}
 	if len(index.RecommendationSets) > 0 {
-		return Catalog{}, errors.New("load qualification catalog: recommendation sets require implemented profile documents")
+		return Catalog{}, errors.New("load qualification catalog: recommendation sets require qualification-gate and cross-document validation")
 	}
 
 	buckets := make([]MachineBucket, 0, len(index.MachineBuckets))
@@ -184,10 +185,12 @@ func LoadCatalog(indexData []byte, files map[string][]byte) (Catalog, error) {
 	modelRuntimes := make([]ModelRuntimeProfile, 0, len(index.Profiles))
 	toolProfiles := make([]ToolProfile, 0, len(index.Profiles))
 	modeProfiles := make([]ModeProfile, 0, len(index.Profiles))
+	activityProfiles := make([]ActivityProfile, 0, len(index.Profiles))
 	modelArtifactsByReference := map[string]ModelArtifactProfile{}
 	enginesByReference := map[string]EngineProfile{}
 	modelRuntimesByReference := map[string]ModelRuntimeProfile{}
 	toolsByReference := map[string]ToolProfile{}
+	modesByReference := map[string]ModeProfile{}
 	type indexedRuntime struct {
 		indexed IndexedDocument
 		profile ModelRuntimeProfile
@@ -198,8 +201,13 @@ func LoadCatalog(indexData []byte, files map[string][]byte) (Catalog, error) {
 		profile ModeProfile
 	}
 	indexedModes := make([]indexedMode, 0, len(index.Profiles))
+	type indexedActivity struct {
+		indexed IndexedDocument
+		profile ActivityProfile
+	}
+	indexedActivities := make([]indexedActivity, 0, len(index.Profiles))
 	for _, indexed := range index.Profiles {
-		if indexed.Document.Schema != ModelArtifactSchemaV1 && indexed.Document.Schema != EngineSchemaV1 && indexed.Document.Schema != ModelRuntimeSchemaV1 && indexed.Document.Schema != ToolSchemaV1 && indexed.Document.Schema != ModeSchemaV1 {
+		if indexed.Document.Schema != ModelArtifactSchemaV1 && indexed.Document.Schema != EngineSchemaV1 && indexed.Document.Schema != ModelRuntimeSchemaV1 && indexed.Document.Schema != ToolSchemaV1 && indexed.Document.Schema != ModeSchemaV1 && indexed.Document.Schema != ActivitySchemaV1 {
 			return Catalog{}, fmt.Errorf("load qualification catalog: profile schema %q is not implemented", indexed.Document.Schema)
 		}
 		data, ok := files[indexed.Path]
@@ -261,7 +269,18 @@ func LoadCatalog(indexData []byte, files map[string][]byte) (Catalog, error) {
 				return Catalog{}, err
 			}
 			modeProfiles = append(modeProfiles, profile)
+			modesByReference[referenceExactIdentity(indexed.Document)] = profile
 			indexedModes = append(indexedModes, indexedMode{indexed: indexed, profile: profile})
+		case ActivitySchemaV1:
+			profile, err := ParseActivityProfile(data)
+			if err != nil {
+				return Catalog{}, fmt.Errorf("load qualification catalog: indexed document %q: %w", indexed.Path, err)
+			}
+			if err := verifyIndexedProfile(indexed, profile.ProfileEnvelope, bucketReferences); err != nil {
+				return Catalog{}, err
+			}
+			activityProfiles = append(activityProfiles, profile)
+			indexedActivities = append(indexedActivities, indexedActivity{indexed: indexed, profile: profile})
 		}
 	}
 
@@ -283,28 +302,22 @@ func LoadCatalog(indexData []byte, files map[string][]byte) (Catalog, error) {
 			return Catalog{}, err
 		}
 	}
+	for _, activity := range indexedActivities {
+		mode, ok := modesByReference[referenceExactIdentity(activity.profile.Spec.ModeProfile)]
+		if !ok {
+			return Catalog{}, fmt.Errorf("load qualification catalog: indexed document %q references mode %s/%s@%d absent from the index", activity.indexed.Path, activity.profile.Spec.ModeProfile.Schema, activity.profile.Spec.ModeProfile.ID, activity.profile.Spec.ModeProfile.Revision)
+		}
+		if err := verifyActivityComposition(activity.indexed.Path, activity.profile, mode, modelRuntimesByReference, toolsByReference); err != nil {
+			return Catalog{}, err
+		}
+	}
 
 	return Catalog{
-		Index: index, MachineBuckets: buckets, ModelArtifacts: modelArtifacts, Engines: engines, ModelRuntimes: modelRuntimes, Tools: toolProfiles, Modes: modeProfiles,
+		Index: index, MachineBuckets: buckets, ModelArtifacts: modelArtifacts, Engines: engines, ModelRuntimes: modelRuntimes, Tools: toolProfiles, Modes: modeProfiles, Activities: activityProfiles,
 	}, nil
 }
 
 func verifyModeComposition(path string, mode ModeProfile, runtimes map[string]ModelRuntimeProfile, tools map[string]ToolProfile) error {
-	reads := map[string]bool{}
-	writes := map[string]bool{}
-	network := map[string]ProfileNetworkUse{}
-	addBoundary := func(boundary ProfileDataBoundary) {
-		for _, value := range boundary.Reads {
-			reads[value] = true
-		}
-		for _, value := range boundary.Writes {
-			writes[value] = true
-		}
-		for _, use := range boundary.Network {
-			identity := use.Purpose + "\x00" + use.Destination + "\x00" + use.Timing
-			network[identity] = use
-		}
-	}
 	for _, binding := range mode.Spec.Bindings {
 		runtime, ok := runtimes[referenceExactIdentity(binding.RuntimeProfile)]
 		if !ok {
@@ -316,13 +329,13 @@ func verifyModeComposition(path string, mode ModeProfile, runtimes map[string]Mo
 		if !contains(runtime.Applicability.Foregrounds, mode.Spec.Foreground) {
 			return fmt.Errorf("load qualification catalog: indexed document %q foreground %q is absent from runtime %s@%d applicability", path, mode.Spec.Foreground, runtime.ID, runtime.Revision)
 		}
-		addBoundary(runtime.DataBoundary)
 	}
 
 	harnesses := map[string]ModeHarness{}
 	for _, harness := range mode.Spec.Harnesses {
 		harnesses[harness.ID] = harness
 	}
+	activeTools := make([]Reference, 0, len(mode.Spec.Tools))
 	for _, modeTool := range mode.Spec.Tools {
 		tool, ok := tools[referenceExactIdentity(modeTool.Profile)]
 		if !ok {
@@ -348,12 +361,94 @@ func verifyModeComposition(path string, mode ModeProfile, runtimes map[string]Mo
 			if !compatible {
 				return fmt.Errorf("load qualification catalog: indexed document %q active tool %s@%d has no exact harness transport", path, tool.ID, tool.Revision)
 			}
-			addBoundary(tool.DataBoundary)
+			activeTools = append(activeTools, modeTool.Profile)
 		}
 	}
-	if !equalStrings(mode.DataBoundary.Reads, sortedSetKeys(reads)) || !equalStrings(mode.DataBoundary.Writes, sortedSetKeys(writes)) {
-		return fmt.Errorf("load qualification catalog: indexed document %q data boundary reads/writes do not match the active composition", path)
+	composition, err := composeModeDataBoundary(path, mode.Spec.Bindings, activeTools, runtimes, tools)
+	if err != nil {
+		return err
 	}
+	return verifyComposedDataBoundary(path, mode.DataBoundary, composition)
+}
+
+func verifyActivityComposition(path string, activity ActivityProfile, mode ModeProfile, runtimes map[string]ModelRuntimeProfile, tools map[string]ToolProfile) error {
+	if !equalStrings(activity.Roles, mode.Roles) {
+		return fmt.Errorf("load qualification catalog: indexed document %q roles must exactly match mode %s@%d", path, mode.ID, mode.Revision)
+	}
+	if !stringSetIsSubset(activity.Applicability.Foregrounds, mode.Applicability.Foregrounds) {
+		return fmt.Errorf("load qualification catalog: indexed document %q foreground applicability widens mode %s@%d", path, mode.ID, mode.Revision)
+	}
+	if !stringSetIsSubset(activity.Applicability.Harnesses, mode.Applicability.Harnesses) {
+		return fmt.Errorf("load qualification catalog: indexed document %q harness applicability widens mode %s@%d", path, mode.ID, mode.Revision)
+	}
+	for _, bucket := range activity.Applicability.MachineBuckets {
+		if !referenceSetContains(mode.Applicability.MachineBuckets, bucket) {
+			return fmt.Errorf("load qualification catalog: indexed document %q machine-bucket applicability widens mode %s@%d", path, mode.ID, mode.Revision)
+		}
+	}
+
+	modeActiveTools := map[string]bool{}
+	for _, tool := range mode.Spec.Tools {
+		if tool.Active {
+			modeActiveTools[referenceExactIdentity(tool.Profile)] = true
+		}
+	}
+	for _, tool := range activity.Spec.ActiveTools {
+		if !modeActiveTools[referenceExactIdentity(tool)] {
+			return fmt.Errorf("load qualification catalog: indexed document %q active tool %s/%s@%d is not active in mode %s@%d", path, tool.Schema, tool.ID, tool.Revision, mode.ID, mode.Revision)
+		}
+	}
+	if len(activity.Spec.ActiveTools) >= len(modeActiveTools) {
+		return fmt.Errorf("load qualification catalog: indexed document %q active tools must be a strict subset of mode %s@%d active tools", path, mode.ID, mode.Revision)
+	}
+	if activity.DataBoundary.Inference != mode.DataBoundary.Inference || activity.DataBoundary.Credentials != mode.DataBoundary.Credentials {
+		return fmt.Errorf("load qualification catalog: indexed document %q inference and credentials must exactly match mode %s@%d", path, mode.ID, mode.Revision)
+	}
+
+	composition, err := composeModeDataBoundary(path, mode.Spec.Bindings, activity.Spec.ActiveTools, runtimes, tools)
+	if err != nil {
+		return err
+	}
+	return verifyComposedDataBoundary(path, activity.DataBoundary, composition)
+}
+
+type composedDataBoundary struct {
+	reads   []string
+	writes  []string
+	network []ProfileNetworkUse
+}
+
+func composeModeDataBoundary(path string, bindings []ModeBinding, activeTools []Reference, runtimes map[string]ModelRuntimeProfile, tools map[string]ToolProfile) (composedDataBoundary, error) {
+	reads := map[string]bool{}
+	writes := map[string]bool{}
+	network := map[string]ProfileNetworkUse{}
+	add := func(boundary ProfileDataBoundary) {
+		for _, value := range boundary.Reads {
+			reads[value] = true
+		}
+		for _, value := range boundary.Writes {
+			writes[value] = true
+		}
+		for _, use := range boundary.Network {
+			identity := use.Purpose + "\x00" + use.Destination + "\x00" + use.Timing
+			network[identity] = use
+		}
+	}
+	for _, binding := range bindings {
+		runtime, ok := runtimes[referenceExactIdentity(binding.RuntimeProfile)]
+		if !ok {
+			return composedDataBoundary{}, fmt.Errorf("load qualification catalog: indexed document %q references runtime %s/%s@%d absent from the index", path, binding.RuntimeProfile.Schema, binding.RuntimeProfile.ID, binding.RuntimeProfile.Revision)
+		}
+		add(runtime.DataBoundary)
+	}
+	for _, reference := range activeTools {
+		tool, ok := tools[referenceExactIdentity(reference)]
+		if !ok {
+			return composedDataBoundary{}, fmt.Errorf("load qualification catalog: indexed document %q references tool %s/%s@%d absent from the index", path, reference.Schema, reference.ID, reference.Revision)
+		}
+		add(tool.DataBoundary)
+	}
+
 	networkUses := make([]ProfileNetworkUse, 0, len(network))
 	for _, use := range network {
 		networkUses = append(networkUses, use)
@@ -361,15 +456,31 @@ func verifyModeComposition(path string, mode ModeProfile, runtimes map[string]Mo
 	sort.Slice(networkUses, func(left, right int) bool {
 		return networkUses[left].Purpose+"\x00"+networkUses[left].Destination+"\x00"+networkUses[left].Timing < networkUses[right].Purpose+"\x00"+networkUses[right].Destination+"\x00"+networkUses[right].Timing
 	})
-	if len(networkUses) != len(mode.DataBoundary.Network) {
+	return composedDataBoundary{reads: sortedSetKeys(reads), writes: sortedSetKeys(writes), network: networkUses}, nil
+}
+
+func verifyComposedDataBoundary(path string, boundary ProfileDataBoundary, composition composedDataBoundary) error {
+	if !equalStrings(boundary.Reads, composition.reads) || !equalStrings(boundary.Writes, composition.writes) {
+		return fmt.Errorf("load qualification catalog: indexed document %q data boundary reads/writes do not match the active composition", path)
+	}
+	if len(composition.network) != len(boundary.Network) {
 		return fmt.Errorf("load qualification catalog: indexed document %q data boundary network does not match the active composition", path)
 	}
-	for index := range networkUses {
-		if networkUses[index] != mode.DataBoundary.Network[index] {
+	for index := range composition.network {
+		if composition.network[index] != boundary.Network[index] {
 			return fmt.Errorf("load qualification catalog: indexed document %q data boundary network does not match the active composition", path)
 		}
 	}
 	return nil
+}
+
+func stringSetIsSubset(subset, superset []string) bool {
+	for _, value := range subset {
+		if !contains(superset, value) {
+			return false
+		}
+	}
+	return true
 }
 
 func sortedSetKeys(values map[string]bool) []string {

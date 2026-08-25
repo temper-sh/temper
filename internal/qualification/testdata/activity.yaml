@@ -1,0 +1,53 @@
+applicability:
+  explanation: Fake inspection activity narrows the fake local mode to no tools
+  foregrounds:
+    - local
+  harnesses:
+    - pi
+  machine_buckets: []
+data_boundary:
+  credentials: none
+  evidence_export: explicit-user-action
+  inference: local
+  network: []
+  reads:
+    - local-request
+  telemetry: none
+  writes:
+    - local-response
+dependencies:
+  - profile:
+      id: example-local-search-mode
+      revision: 1
+      schema: temper-qualification-mode/v1
+      sha256: 89977ffaf901dd769fca4662ed9daa741b164fed6966235aa655d362e6d85205
+    relationship: mode
+evidence: []
+id: example-inspect-activity
+invalidation_triggers:
+  - condition: The mode identity, active tool subset, or activity purpose changes
+    consequence: return-to-lab
+    id: activity-boundary-changes
+known_failures: []
+promotion:
+  id: example-activity-promotion
+  revision: 1
+  schema: temper-labs-product-promotion/v1
+  sha256: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+revision: 1
+roles:
+  - coder
+schema: temper-qualification-activity/v1
+spec:
+  active_tools: []
+  mode_profile:
+    id: example-local-search-mode
+    revision: 1
+    schema: temper-qualification-mode/v1
+    sha256: 89977ffaf901dd769fca4662ed9daa741b164fed6966235aa655d362e6d85205
+  purpose: inspect
+status: LAB
+status_reason: Fake activity boundary is exact while qualification evidence remains absent
+summary: Fake strict tool subset for exercising C7 activity narrowing
+title: Example inspect activity
+what_this_means: This fake activity is inspectable but does not enable any tool or mode

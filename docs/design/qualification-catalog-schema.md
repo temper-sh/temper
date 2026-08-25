@@ -9,19 +9,19 @@ select anything.
 
 Current Temper implementation boundary: `internal/qualification` strictly
 parses canonical machine-bucket, model-artifact, engine, model-runtime, tool,
-mode, and catalog-index documents. The shared profile envelope,
-dependency-root profiles, and composed runtime/mode worlds are typed; the
-loader verifies their derived release paths, canonical bytes, digests,
+mode, activity, and catalog-index documents. The shared profile envelope,
+dependency-root profiles, composed runtime/mode worlds, and narrowed activity
+worlds are typed; the loader verifies their derived release paths, canonical
+bytes, digests,
 identities, exact bucket applicability, dependency presence, compatible role,
-template, and speculation surfaces, plus active permission boundaries from a
-supplied in-memory bundle. The index
-representation already types every other profile reference and recommendation
-set so neither can become an untyped escape hatch. Public evidence inventories
-and versioned canonical scope keys are validated for the implemented profile
-kinds. `QUALIFIED` profiles, the remaining activity document kind, and
-nonempty recommendation sets remain explicit refusals until their gate,
-dependency-status, and cross-document rules exist. All current catalog
-fixtures are fake and hermetic.
+template, and speculation surfaces, active mode permission boundaries, and
+activity non-widening from a supplied in-memory bundle. The index
+representation types recommendation sets so they cannot become an untyped
+escape hatch. Public evidence inventories and versioned canonical scope keys
+are validated for all six profile kinds. `QUALIFIED` profiles and nonempty
+recommendation sets remain explicit refusals until their gate,
+dependency-status, and recommendation cross-document rules exist. All current
+catalog fixtures are fake and hermetic.
 
 ## Decision
 
@@ -722,14 +722,26 @@ reviewed C7 schema revision, not an untyped v1 escape hatch.
 
 ```yaml
 spec:
-  mode_profile: <exact qualified mode reference>
+  mode_profile: <exact mode reference>
   active_tools: [<exact tool references already present in that mode>]
-  purpose: inspect | change | verify | review | <reviewed future value>
+  purpose: change | inspect | review | verify
 ```
 
 An activity profile is valid only when `active_tools` is a strict subset of
-the referenced mode's active tools. It cannot add a tool, runtime, harness,
-permission, role binding, or data destination.
+the referenced mode's active tools. Its sole dependency is that exact mode
+reference. Roles must exactly match the mode, and foreground, harness, and
+machine-bucket applicability may only narrow the mode's applicability. The
+loader retains every mode runtime binding, includes only the activity's active
+tool subset, and recomputes the sorted union of reads, writes, and network uses.
+Inference and credential ownership remain exactly the mode's. Any disagreement
+with the activity data boundary is a refusal. An activity therefore cannot add
+a tool, runtime, harness, permission, role binding, data destination, or
+credential path.
+
+The referenced mode need not already be `QUALIFIED` while an activity is in
+`WATCH` or `LAB`; once the qualification gate is implemented, a `QUALIFIED`
+activity requires the exact mode and every transitive dependency to be
+`QUALIFIED` too.
 
 ## Catalog index and recommendation sets
 

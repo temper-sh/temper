@@ -373,6 +373,93 @@ func TestLoadCatalogVerifiesExactModeComposition(t *testing.T) {
 	}
 }
 
+func TestLoadCatalogVerifiesExactActivityNarrowing(t *testing.T) {
+	index, files := catalogWithActivity(t, readActivityFixture(t))
+
+	catalog, err := qualification.LoadCatalog(marshalCatalogIndex(t, index), files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(catalog.Activities) != 1 || catalog.Activities[0].ID != "example-inspect-activity" {
+		t.Fatalf("activities = %#v", catalog.Activities)
+	}
+	if len(catalog.Modes) != 1 || len(catalog.Tools) != 1 || len(catalog.ModelRuntimes) != 1 {
+		t.Fatalf("loaded dependency counts = modes %d, tools %d, runtimes %d", len(catalog.Modes), len(catalog.Tools), len(catalog.ModelRuntimes))
+	}
+}
+
+func TestLoadCatalogRefusesActivityModeAbsentFromIndex(t *testing.T) {
+	activity := parseActivityFixture(t)
+	activity.Spec.ModeProfile.SHA256 = strings.Repeat("f", 64)
+	activity.Dependencies[0].Profile = activity.Spec.ModeProfile
+	activityData, err := qualification.MarshalActivityProfile(activity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	index, files := catalogWithActivity(t, activityData)
+
+	_, err = qualification.LoadCatalog(marshalCatalogIndex(t, index), files)
+	if err == nil || !strings.Contains(err.Error(), "references mode") || !strings.Contains(err.Error(), "absent from the index") {
+		t.Fatalf("LoadCatalog() error = %v, want missing-mode refusal", err)
+	}
+}
+
+func TestLoadCatalogRefusesActivityCompositionWidening(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*qualification.ActivityProfile)
+		want   string
+	}{
+		{name: "all mode tools", mutate: func(activity *qualification.ActivityProfile) {
+			activity.Spec.ActiveTools = []qualification.Reference{parseModeFixture(t).Spec.Tools[0].Profile}
+		}, want: "strict subset"},
+		{name: "tool outside mode", mutate: func(activity *qualification.ActivityProfile) {
+			tool := parseModeFixture(t).Spec.Tools[0].Profile
+			tool.SHA256 = strings.Repeat("f", 64)
+			activity.Spec.ActiveTools = []qualification.Reference{tool}
+		}, want: "is not active in mode"},
+		{name: "different roles", mutate: func(activity *qualification.ActivityProfile) {
+			activity.Roles = []string{"rerank"}
+		}, want: "roles must exactly match"},
+		{name: "wider foreground", mutate: func(activity *qualification.ActivityProfile) {
+			activity.Applicability.Foregrounds = []string{"harness"}
+		}, want: "foreground applicability widens"},
+		{name: "wider harness", mutate: func(activity *qualification.ActivityProfile) {
+			activity.Applicability.Harnesses = []string{"other"}
+		}, want: "harness applicability widens"},
+		{name: "wider machine bucket", mutate: func(activity *qualification.ActivityProfile) {
+			activity.Applicability.MachineBuckets = []qualification.Reference{parseCatalogFixture(t).MachineBuckets[0].Document}
+		}, want: "machine-bucket applicability widens"},
+		{name: "wider reads", mutate: func(activity *qualification.ActivityProfile) {
+			activity.DataBoundary.Reads = []string{"local-request", "project-files"}
+		}, want: "data boundary reads/writes"},
+		{name: "wider network", mutate: func(activity *qualification.ActivityProfile) {
+			activity.DataBoundary.Network = []qualification.ProfileNetworkUse{{Purpose: "tool-request", Destination: "example-provider", Timing: "request-time"}}
+		}, want: "data boundary network"},
+		{name: "different inference", mutate: func(activity *qualification.ActivityProfile) {
+			activity.DataBoundary.Inference = "harness-owned-remote"
+			activity.DataBoundary.Credentials = "harness-owned"
+		}, want: "inference and credentials must exactly match"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			activity := parseActivityFixture(t)
+			tt.mutate(&activity)
+			activityData, err := qualification.MarshalActivityProfile(activity)
+			if err != nil {
+				t.Fatal(err)
+			}
+			index, files := catalogWithActivity(t, activityData)
+
+			_, err = qualification.LoadCatalog(marshalCatalogIndex(t, index), files)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("LoadCatalog() error = %v, want %q", err, tt.want)
+			}
+		})
+	}
+}
+
 func TestLoadCatalogRefusesModeDependencyAbsentFromIndex(t *testing.T) {
 	mode := parseModeFixture(t)
 	mode.Spec.Tools[0].Profile.SHA256 = strings.Repeat("f", 64)
@@ -491,20 +578,7 @@ func TestLoadCatalogRefusesMissingOrMismatchedBucketBytes(t *testing.T) {
 	})
 }
 
-func TestLoadCatalogRefusesUnimplementedProfileDocuments(t *testing.T) {
-	index := parseCatalogFixture(t)
-	index.Profiles = []qualification.IndexedDocument{{
-		Document: qualification.Reference{Schema: qualification.ActivitySchemaV1, ID: "example-activity", Revision: 1, SHA256: strings.Repeat("a", 64)},
-		Path:     "profiles/activity/example-activity/1.yaml",
-	}}
-
-	_, err := qualification.LoadCatalog(marshalCatalogIndex(t, index), map[string][]byte{exampleBucketPath: readMachineBucketFixture(t)})
-	if err == nil || !strings.Contains(err.Error(), "profile schema \"temper-qualification-activity/v1\" is not implemented") {
-		t.Fatalf("LoadCatalog() error = %v, want profile refusal", err)
-	}
-}
-
-func TestLoadCatalogRefusesRecommendationsUntilProfilesAreImplemented(t *testing.T) {
+func TestLoadCatalogRefusesRecommendationsUntilQualificationRulesAreImplemented(t *testing.T) {
 	index := parseCatalogFixture(t)
 	index.RecommendationSets = []qualification.RecommendationSet{{
 		ID: "example-coding-options",
@@ -523,7 +597,7 @@ func TestLoadCatalogRefusesRecommendationsUntilProfilesAreImplemented(t *testing
 	}}
 
 	_, err := qualification.LoadCatalog(marshalCatalogIndex(t, index), map[string][]byte{exampleBucketPath: readMachineBucketFixture(t)})
-	if err == nil || !strings.Contains(err.Error(), "recommendation sets require implemented profile documents") {
+	if err == nil || !strings.Contains(err.Error(), "recommendation sets require qualification-gate and cross-document validation") {
 		t.Fatalf("LoadCatalog() error = %v, want recommendation refusal", err)
 	}
 }
@@ -630,6 +704,53 @@ func catalogWithMode(t *testing.T, modeData []byte) (qualification.CatalogIndex,
 		profiles[2].Path:  artifactData,
 		profiles[3].Path:  runtimeData,
 		profiles[4].Path:  toolData,
+	}
+	return index, files
+}
+
+func catalogWithActivity(t *testing.T, activityData []byte) (qualification.CatalogIndex, map[string][]byte) {
+	t.Helper()
+	index := parseCatalogFixture(t)
+	artifactData := readModelArtifactFixture(t)
+	engineData := readEngineFixture(t)
+	runtimeData := readModelRuntimeFixture(t)
+	toolData := readToolFixture(t)
+	modeData := readModeFixture(t)
+	profiles := []qualification.IndexedDocument{
+		{
+			Document: qualification.Reference{Schema: qualification.ActivitySchemaV1, ID: "example-inspect-activity", Revision: 1, SHA256: qualification.Digest(activityData)},
+			Path:     "profiles/activity/example-inspect-activity/1.yaml",
+		},
+		{
+			Document: qualification.Reference{Schema: qualification.EngineSchemaV1, ID: "example-local-engine", Revision: 1, SHA256: qualification.Digest(engineData)},
+			Path:     "profiles/engine/example-local-engine/1.yaml",
+		},
+		{
+			Document: qualification.Reference{Schema: qualification.ModeSchemaV1, ID: "example-local-search-mode", Revision: 1, SHA256: qualification.Digest(modeData)},
+			Path:     "profiles/mode/example-local-search-mode/1.yaml",
+		},
+		{
+			Document: qualification.Reference{Schema: qualification.ModelArtifactSchemaV1, ID: "example-coder-artifact", Revision: 1, SHA256: qualification.Digest(artifactData)},
+			Path:     "profiles/model-artifact/example-coder-artifact/1.yaml",
+		},
+		{
+			Document: qualification.Reference{Schema: qualification.ModelRuntimeSchemaV1, ID: "example-coder-runtime", Revision: 1, SHA256: qualification.Digest(runtimeData)},
+			Path:     "profiles/model-runtime/example-coder-runtime/1.yaml",
+		},
+		{
+			Document: qualification.Reference{Schema: qualification.ToolSchemaV1, ID: "example-project-search", Revision: 1, SHA256: qualification.Digest(toolData)},
+			Path:     "profiles/tool/example-project-search/1.yaml",
+		},
+	}
+	index.Profiles = profiles
+	files := map[string][]byte{
+		exampleBucketPath: readMachineBucketFixture(t),
+		profiles[0].Path:  activityData,
+		profiles[1].Path:  engineData,
+		profiles[2].Path:  modeData,
+		profiles[3].Path:  artifactData,
+		profiles[4].Path:  runtimeData,
+		profiles[5].Path:  toolData,
 	}
 	return index, files
 }
