@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/temper-sh/temper/internal/budget"
+	"github.com/temper-sh/temper/internal/fieldkitcmd"
 	"github.com/temper-sh/temper/internal/machine"
 	"github.com/temper-sh/temper/internal/software"
 	"github.com/temper-sh/temper/internal/software/adapter"
@@ -19,6 +20,30 @@ import (
 	"github.com/temper-sh/temper/internal/testfixture"
 	"github.com/temper-sh/temper/internal/upstream"
 )
+
+func TestRunDispatchesFieldKitHelpWithoutReadingMachineOrBinary(t *testing.T) {
+	called := false
+	command, err := fieldkitcmd.New(
+		func(context.Context) (machine.Facts, error) {
+			called = true
+			return machine.Facts{}, errors.New("unexpected facts read")
+		},
+		func() ([]byte, error) {
+			called = true
+			return nil, errors.New("unexpected binary read")
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	exit := runWithDependencies(context.Background(), []string{"field-kit", "help"}, &stdout, &stderr, dependencies{
+		newFieldKit: func() (fieldkitcmd.Command, error) { return command, nil },
+	})
+	if exit != 0 || called || stderr.Len() != 0 || !strings.Contains(stdout.String(), "temper field-kit bind") {
+		t.Fatalf("exit = %d, called = %v, stdout = %q, stderr = %q", exit, called, stdout.String(), stderr.String())
+	}
+}
 
 func TestRunMachineFactsPrintsCanonicalReadOnlyDocument(t *testing.T) {
 	want := machine.Facts{

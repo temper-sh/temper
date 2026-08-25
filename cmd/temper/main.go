@@ -20,6 +20,7 @@ import (
 	"github.com/temper-sh/temper/internal/budget"
 	checkverb "github.com/temper-sh/temper/internal/check"
 	fetchverb "github.com/temper-sh/temper/internal/fetch"
+	"github.com/temper-sh/temper/internal/fieldkitcmd"
 	"github.com/temper-sh/temper/internal/huggingface"
 	"github.com/temper-sh/temper/internal/machine"
 	resolveverb "github.com/temper-sh/temper/internal/resolve"
@@ -45,6 +46,9 @@ func run(ctx context.Context, arguments []string, stdout, stderr io.Writer) int 
 		detectMachine: machine.Detect,
 		detectFacts:   machine.DetectFacts,
 		newSoftware:   newSoftwareCommand,
+		newFieldKit: func() (fieldkitcmd.Command, error) {
+			return fieldkitcmd.New(machine.DetectFacts, fieldkitcmd.ReadExecutingBinary)
+		},
 	})
 }
 
@@ -52,12 +56,14 @@ type upstreamFactory func() (upstream.Reader, error)
 type machineDetector func(context.Context) (budget.Machine, error)
 type machineFactsDetector func(context.Context) (machine.Facts, error)
 type softwareCommandFactory func() (softwarecmd.Command, error)
+type fieldKitCommandFactory func() (fieldkitcmd.Command, error)
 
 type dependencies struct {
 	newUpstream   upstreamFactory
 	detectMachine machineDetector
 	detectFacts   machineFactsDetector
 	newSoftware   softwareCommandFactory
+	newFieldKit   fieldKitCommandFactory
 }
 
 func runWithUpstream(ctx context.Context, arguments []string, stdout, stderr io.Writer, newSource upstreamFactory) int {
@@ -66,6 +72,9 @@ func runWithUpstream(ctx context.Context, arguments []string, stdout, stderr io.
 		detectMachine: machine.Detect,
 		detectFacts:   machine.DetectFacts,
 		newSoftware:   newSoftwareCommand,
+		newFieldKit: func() (fieldkitcmd.Command, error) {
+			return fieldkitcmd.New(machine.DetectFacts, fieldkitcmd.ReadExecutingBinary)
+		},
 	})
 }
 
@@ -93,6 +102,17 @@ func runWithDependencies(ctx context.Context, arguments []string, stdout, stderr
 		return runUpdate(ctx, arguments[1:], stdout, stderr, deps.newUpstream)
 	case "machine":
 		return runMachine(ctx, arguments[1:], stdout, stderr, deps.detectFacts)
+	case "field-kit":
+		if deps.newFieldKit == nil {
+			fmt.Fprintln(stderr, "temper field-kit: command dependencies are unavailable")
+			return 1
+		}
+		command, err := deps.newFieldKit()
+		if err != nil {
+			fmt.Fprintf(stderr, "temper field-kit: construct command: %v\n", err)
+			return 1
+		}
+		return command.Run(ctx, arguments[1:], stdout, stderr)
 	case "software":
 		if deps.newSoftware == nil {
 			fmt.Fprintln(stderr, "temper software: command dependencies are unavailable")
@@ -466,6 +486,7 @@ func usage(writer io.Writer) {
 	fmt.Fprintln(writer, "  temper check --root PATH [options]")
 	fmt.Fprintln(writer, "  temper update [layout-id] [options]")
 	fmt.Fprintln(writer, "  temper machine facts")
+	fmt.Fprintln(writer, "  temper field-kit bind [options]")
 	fmt.Fprintln(writer, "  temper software <install|check|remove> [options]")
 	fmt.Fprintln(writer, "  temper version")
 	fmt.Fprintln(writer, "  temper help")
