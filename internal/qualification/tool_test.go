@@ -119,6 +119,21 @@ func TestToolProfileValidationRefusesPermissionOrFailureAmbiguity(t *testing.T) 
 	}
 }
 
+func TestQualifiedToolRequiresExactHarnessWitness(t *testing.T) {
+	profile, _ := qualifiedToolFixture(t, qualification.LifecycleStatusExperimental)
+	profile.Evidence[0].Scope.Harnesses[0].IntegrationRevision = "temper-pi-tools/v2"
+	key, err := qualification.EvidenceScopeKey(profile.Evidence[0].Scope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile.Evidence[0].Scope.Key = key
+
+	_, err = qualification.MarshalToolProfile(profile)
+	if err == nil || !strings.Contains(err.Error(), "has no exact evidence witness") {
+		t.Fatalf("MarshalToolProfile() error = %v, want exact harness-witness refusal", err)
+	}
+}
+
 func TestParseToolProfileRefusesNoncanonicalOrAmbiguousYAML(t *testing.T) {
 	canonical := string(readToolFixture(t))
 	tests := []struct {

@@ -84,6 +84,7 @@ func (p ModelRuntimeProfile) Validate() error {
 	}
 	validateRuntimePerformance(p.Spec.Performance, p.Evidence, problem)
 	validateModelRuntimeEvidenceScopes(p, problem)
+	validateQualifiedRuntime(p, problem)
 
 	if len(problems) > 0 {
 		return &ValidationError{Problems: problems}

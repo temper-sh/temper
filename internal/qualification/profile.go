@@ -267,9 +267,7 @@ func validateProfileEnvelope(envelope ProfileEnvelope, schema string, problem fu
 	validateKnownFailures(envelope.KnownFailures, envelope.Evidence, problem)
 	validateInvalidationTriggers(envelope.InvalidationTriggers, problem)
 	validateProfileEvidence(envelope, problem)
-	if envelope.QualificationStatus == QualificationStatusQualified {
-		problem("QUALIFIED profiles require implemented qualification-gate and dependency-status validation")
-	}
+	validateQualifiedProfileEvidence(envelope, problem)
 	validatePromotionReference(envelope.Promotion, problem)
 }
 

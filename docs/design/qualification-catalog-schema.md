@@ -18,10 +18,12 @@ template, and speculation surfaces, active mode permission boundaries, and
 activity non-widening from a supplied in-memory bundle. The index
 representation types recommendation sets so they cannot become an untyped
 escape hatch. Public evidence inventories and versioned canonical scope keys
-are validated for all six profile kinds. `QUALIFIED` profiles and nonempty
-recommendation sets remain explicit refusals until their gate,
-dependency-status, and recommendation cross-document rules exist. All current
-catalog fixtures are fake and hermetic.
+are validated for all six profile kinds. Schema-specific `QUALIFIED` gates,
+runtime task-quality completeness, applicability witnesses, evidence-scope
+references, and dependency qualification/lifecycle closure execute over a
+complete fake six-profile chain. Nonempty recommendation sets remain an
+explicit refusal until their performance and applicability projection rules
+exist. All current catalog fixtures are fake and hermetic.
 
 ## Decision
 

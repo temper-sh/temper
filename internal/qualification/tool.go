@@ -89,6 +89,7 @@ func (p ToolProfile) Validate() error {
 	}
 	validateToolEvidenceScopes(p, problem)
 	validateToolSpec(p.Spec, p.ProfileEnvelope, problem)
+	validateQualifiedToolHarnesses(p, problem)
 
 	if len(problems) > 0 {
 		return &ValidationError{Problems: problems}

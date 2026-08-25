@@ -120,6 +120,25 @@ func TestModeProfileAcceptsClosedOffWorld(t *testing.T) {
 	}
 }
 
+func TestQualifiedLocalModeRequiresFitWallModel(t *testing.T) {
+	runtime := parseModelRuntimeFixture(t)
+	tool := parseToolFixture(t)
+	profile, _ := qualifiedModeFixture(
+		t,
+		qualification.LifecycleStatusExperimental,
+		profileReference(runtime.ProfileEnvelope, readModelRuntimeFixture(t)),
+		profileReference(tool.ProfileEnvelope, readToolFixture(t)),
+	)
+	profile.Spec.WallModel = qualification.ModeWallModel{
+		Result: "unmeasured", Reason: "Fake wall fit is absent",
+	}
+
+	_, err := qualification.MarshalModeProfile(profile)
+	if err == nil || !strings.Contains(err.Error(), "QUALIFIED local mode requires a fit") {
+		t.Fatalf("MarshalModeProfile() error = %v, want qualified wall-fit refusal", err)
+	}
+}
+
 func TestParseModeProfileRefusesNoncanonicalOrAmbiguousYAML(t *testing.T) {
 	canonical := string(readModeFixture(t))
 	tests := []struct {

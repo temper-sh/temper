@@ -609,9 +609,12 @@ base.
     core/transport/permission/backend/failure identity is closed and
     consent-neutral. Exact composed mode worlds remain distinct from user
     selection. All six typed document kinds are executable against fake
-    hermetic fixtures. `QUALIFIED` profiles and recommendation content remain
-    explicit refusals pending gate, dependency-status, and recommendation
-    cross-document rules.
+    hermetic fixtures. Schema-specific `QUALIFIED` packet gates, public
+    applicability/evidence completeness, runtime task-quality requirements,
+    and exact dependency qualification/lifecycle closure now pass a complete
+    fake six-profile chain and refuse weakened variants. Recommendation
+    content remains an explicit refusal pending its performance and
+    applicability cross-document rules.
     The fixtures remain fake and do not seed a qualification row.
 13. *(design/build, with Labs — writer adoption explicitly authorized by owner
     and first compiler slice complete 2026-08-25)* Define
@@ -632,14 +635,19 @@ base.
     profile bytes are required for independent supersession-chain validation.
     Hermetic generated packets cover all six target kinds; the adopted Labs
     model-artifact pair remains the independent byte-for-byte golden. The
-    `QUALIFIED` gate set remains.
+    compiler now enforces the closed target-specific `QUALIFIED` gate set,
+    complete runtime task quality, bounded confounds, and exact dependency
+    qualification/lifecycle closure against explicitly supplied bytes.
     `field-kit-runtime-profile/v1` is the exploratory-witness special case;
     `external-lab` packets stay inspectable but outside the generic install
     path.
-14. *(build)* Extend validation with status-machine legality, witness-scope
-    completeness, applicability, and consent-neutrality (no row selects
-    itself). A binding to an unselected item, or an unqualified combination
-    presented as qualified, fails rendering.
+14. *(build; qualification/closure slice complete 2026-08-25)* Extend
+    validation with status-machine legality, witness-scope completeness,
+    applicability, and consent-neutrality (no row selects itself). Immutable
+    status edges, qualified applicability witnesses, exact evidence-scope
+    references, task-quality gates, and dependency closure are implemented.
+    The remaining slice is recommendation/performance projection and its
+    no-selection acceptance fixture.
 15. *(build)* After accepted C8 packets exist, seed the reviewed current
     posture as narrowly scoped `QUALIFIED` rows and compile a native-MTP
     candidate as a consent-neutral `LAB` row. It remains opt-in, non-default,
@@ -972,8 +980,10 @@ or CI dependency.
    through a pure bundle loader. The reusable profile envelope, both
    dependency-root profiles, output-affecting runtime layout, and explicit
    performance axes are typed. Public evidence inventories and complete,
-   recomputed runtime witness scopes are accepted for non-qualified rows;
-   `QUALIFIED` profiles and recommendations fail closed. Exact immutable
+   recomputed runtime witness scopes are accepted, and `QUALIFIED` profiles
+   now require schema-specific C8 gates, complete runtime task quality,
+   applicability witnesses, and an available exact dependency closure.
+   Recommendations still fail closed. Exact immutable
    qualification/lifecycle edges are also validated without a moving-history
    lookup. The tool
    dependency root is typed and loaded with exact permission/data-boundary
@@ -984,9 +994,9 @@ or CI dependency.
    The explicitly authorized Labs C8 writer adoption and first Temper compiler
    slice are complete: an exact fake model-artifact packet produces the Labs-
    declared public profile bytes while private locators remain packet-side.
-   Next complete all six compiler fixtures, qualification-gate and dependency-
-   status validation, then add the plural recommendation/performance projection and reviewed seed
-   rows. The first two-layout fixture should preserve co-recommended
+   All six compiler fixtures and qualification/dependency closure validation
+   are complete. Next add the plural recommendation/performance projection and
+   reviewed seed rows. The first two-layout fixture should preserve co-recommended
    speed/context and quality-first coder layouts rather than manufacture one
    global winner. No real native-MTP row exists until Labs supplies an accepted
    C8 packet.

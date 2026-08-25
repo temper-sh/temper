@@ -75,6 +75,7 @@ func (p ModeProfile) Validate() error {
 	validateProfileEnvelope(p.ProfileEnvelope, ModeSchemaV1, problem)
 	validateModeEvidenceScopes(p, problem)
 	validateModeSpec(p.Spec, p.ProfileEnvelope, problem)
+	validateQualifiedMode(p, problem)
 
 	if len(problems) > 0 {
 		return &ValidationError{Problems: problems}

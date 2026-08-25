@@ -258,6 +258,60 @@ func TestModelRuntimePerformanceRefusesInvalidSuccessFraction(t *testing.T) {
 	}
 }
 
+func TestModelRuntimeProfileQualificationRequiresTaskQualityEvidence(t *testing.T) {
+	bucket := parseCatalogFixture(t).MachineBuckets[0].Document
+	artifact, artifactData := qualifiedArtifactFixture(t, qualification.LifecycleStatusExperimental)
+	engine, engineData := qualifiedEngineFixture(t, qualification.LifecycleStatusExperimental)
+	runtime, _ := qualifiedRuntimeFixture(
+		t,
+		qualification.LifecycleStatusExperimental,
+		profileReference(artifact.ProfileEnvelope, artifactData),
+		profileReference(engine.ProfileEnvelope, engineData),
+		bucket,
+	)
+
+	tests := []struct {
+		name   string
+		mutate func(*qualification.ModelRuntimeProfile)
+		want   string
+	}{
+		{name: "unmeasured task success", mutate: func(profile *qualification.ModelRuntimeProfile) {
+			profile.Spec.Performance.TaskSuccess = qualification.PerformanceAxis{State: "unmeasured", Reason: "Fake task success is absent"}
+		}, want: "measured first-attempt-task-success"},
+		{name: "missing first attempt metric", mutate: func(profile *qualification.ModelRuntimeProfile) {
+			profile.Spec.Performance.TaskSuccess.Observations[0].Metric = "overall-task-success"
+		}, want: "measured first-attempt-task-success"},
+		{name: "unmeasured regressions", mutate: func(profile *qualification.ModelRuntimeProfile) {
+			profile.Spec.Performance.Regressions = qualification.PerformanceAxis{State: "unmeasured", Reason: "Fake regressions are absent"}
+		}, want: "measured regression disposition"},
+		{name: "incomplete regressions", mutate: func(profile *qualification.ModelRuntimeProfile) {
+			profile.Spec.Performance.Regressions.Observations = profile.Spec.Performance.Regressions.Observations[:2]
+		}, want: "retained-good-tasks"},
+		{name: "unwitnessed applicability bucket", mutate: func(profile *qualification.ModelRuntimeProfile) {
+			profile.Applicability.MachineBuckets = append(profile.Applicability.MachineBuckets, qualification.Reference{
+				Schema: qualification.MachineBucketSchemaV1, ID: "zz-fake-bucket", Revision: 1, SHA256: strings.Repeat("a", 64),
+			})
+		}, want: "has no exact evidence witness"},
+	}
+
+	if _, err := qualification.MarshalModelRuntimeProfile(runtime); err != nil {
+		t.Fatalf("complete qualified runtime error = %v", err)
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			profile := runtime
+			profile.Spec.Performance.TaskSuccess.Observations = append([]qualification.PerformanceObservation(nil), runtime.Spec.Performance.TaskSuccess.Observations...)
+			profile.Spec.Performance.Regressions.Observations = append([]qualification.PerformanceObservation(nil), runtime.Spec.Performance.Regressions.Observations...)
+			tt.mutate(&profile)
+
+			_, err := qualification.MarshalModelRuntimeProfile(profile)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("MarshalModelRuntimeProfile() error = %v, want %q", err, tt.want)
+			}
+		})
+	}
+}
+
 func TestParseModelRuntimeProfileRefusesNoncanonicalOrAmbiguousYAML(t *testing.T) {
 	canonical := string(readModelRuntimeFixture(t))
 	tests := []struct {

@@ -259,6 +259,7 @@ func (p ProductPromotionPacket) Validate() error {
 	} else if p.Candidate.Spec.productPromotionSchema() != p.Target.Schema {
 		problem("candidate.spec schema is %q, want target schema %q", p.Candidate.Spec.productPromotionSchema(), p.Target.Schema)
 	}
+	validateQualifiedPromotionPacket(p, problem)
 
 	if len(problems) == 0 {
 		promotion := PromotionReference{Schema: ProductPromotionSchemaV1, ID: p.ID, Revision: p.Revision, SHA256: zeroSHA256}

@@ -1,10 +1,11 @@
 # Labs product promotion — C8
 
-Status: **Labs writer adoption explicitly authorized; first Temper compiler
-slice implemented**, 2026-08-25. The canonical fake model-artifact packet now
-crosses the boundary byte for byte, and hermetic generated packets exercise
-all six target-schema projections; none promotes a real profile. `QUALIFIED`
-gates and the release publication effect remain incomplete and fail closed.
+Status: **Labs writer adoption explicitly authorized; Temper compiler and
+`QUALIFIED` gate validation implemented**, 2026-08-25. The canonical fake
+model-artifact packet crosses the boundary byte for byte, and hermetic
+generated packets exercise all six target-schema projections plus one complete
+fake qualified runtime; none promotes a real profile. Recommendation and
+release publication effects remain incomplete and fail closed.
 
 ## Implementation map
 
@@ -15,6 +16,7 @@ The executable path deliberately follows the contract nouns:
 | Labs writer schema and lifecycle | `../labs/schemas/product-promotion-v1.md` and `../labs/product-promotions/` |
 | closed C8 parser and validator | `internal/qualification/promotion.go` |
 | pure C8 → C7 compiler and explicit inputs | `internal/qualification/promotion_compile.go` |
+| schema-specific qualification gates and dependency closure | `internal/qualification/qualification_gate.go` |
 | exact writer/consumer byte contract | `internal/qualification/testdata/product-promotion*.yaml` |
 | round-trip, projection, privacy, and refusal checks | `internal/qualification/promotion_test.go` |
 

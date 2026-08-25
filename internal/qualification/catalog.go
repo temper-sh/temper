@@ -156,7 +156,7 @@ func LoadCatalog(indexData []byte, files map[string][]byte) (Catalog, error) {
 		return Catalog{}, err
 	}
 	if len(index.RecommendationSets) > 0 {
-		return Catalog{}, errors.New("load qualification catalog: recommendation sets require qualification-gate and cross-document validation")
+		return Catalog{}, errors.New("load qualification catalog: recommendation sets require performance and applicability cross-document validation")
 	}
 
 	buckets := make([]MachineBucket, 0, len(index.MachineBuckets))
@@ -186,6 +186,12 @@ func LoadCatalog(indexData []byte, files map[string][]byte) (Catalog, error) {
 	toolProfiles := make([]ToolProfile, 0, len(index.Profiles))
 	modeProfiles := make([]ModeProfile, 0, len(index.Profiles))
 	activityProfiles := make([]ActivityProfile, 0, len(index.Profiles))
+	type indexedProfile struct {
+		path     string
+		envelope ProfileEnvelope
+	}
+	indexedProfiles := make([]indexedProfile, 0, len(index.Profiles))
+	profilesByReference := map[string]ProfileEnvelope{}
 	modelArtifactsByReference := map[string]ModelArtifactProfile{}
 	enginesByReference := map[string]EngineProfile{}
 	modelRuntimesByReference := map[string]ModelRuntimeProfile{}
@@ -229,6 +235,8 @@ func LoadCatalog(indexData []byte, files map[string][]byte) (Catalog, error) {
 			}
 			modelArtifacts = append(modelArtifacts, profile)
 			modelArtifactsByReference[referenceExactIdentity(indexed.Document)] = profile
+			indexedProfiles = append(indexedProfiles, indexedProfile{path: indexed.Path, envelope: profile.ProfileEnvelope})
+			profilesByReference[referenceExactIdentity(indexed.Document)] = profile.ProfileEnvelope
 		case EngineSchemaV1:
 			profile, err := ParseEngineProfile(data)
 			if err != nil {
@@ -239,6 +247,8 @@ func LoadCatalog(indexData []byte, files map[string][]byte) (Catalog, error) {
 			}
 			engines = append(engines, profile)
 			enginesByReference[referenceExactIdentity(indexed.Document)] = profile
+			indexedProfiles = append(indexedProfiles, indexedProfile{path: indexed.Path, envelope: profile.ProfileEnvelope})
+			profilesByReference[referenceExactIdentity(indexed.Document)] = profile.ProfileEnvelope
 		case ModelRuntimeSchemaV1:
 			profile, err := ParseModelRuntimeProfile(data)
 			if err != nil {
@@ -250,6 +260,8 @@ func LoadCatalog(indexData []byte, files map[string][]byte) (Catalog, error) {
 			modelRuntimes = append(modelRuntimes, profile)
 			modelRuntimesByReference[referenceExactIdentity(indexed.Document)] = profile
 			indexedRuntimes = append(indexedRuntimes, indexedRuntime{indexed: indexed, profile: profile})
+			indexedProfiles = append(indexedProfiles, indexedProfile{path: indexed.Path, envelope: profile.ProfileEnvelope})
+			profilesByReference[referenceExactIdentity(indexed.Document)] = profile.ProfileEnvelope
 		case ToolSchemaV1:
 			profile, err := ParseToolProfile(data)
 			if err != nil {
@@ -260,6 +272,8 @@ func LoadCatalog(indexData []byte, files map[string][]byte) (Catalog, error) {
 			}
 			toolProfiles = append(toolProfiles, profile)
 			toolsByReference[referenceExactIdentity(indexed.Document)] = profile
+			indexedProfiles = append(indexedProfiles, indexedProfile{path: indexed.Path, envelope: profile.ProfileEnvelope})
+			profilesByReference[referenceExactIdentity(indexed.Document)] = profile.ProfileEnvelope
 		case ModeSchemaV1:
 			profile, err := ParseModeProfile(data)
 			if err != nil {
@@ -271,6 +285,8 @@ func LoadCatalog(indexData []byte, files map[string][]byte) (Catalog, error) {
 			modeProfiles = append(modeProfiles, profile)
 			modesByReference[referenceExactIdentity(indexed.Document)] = profile
 			indexedModes = append(indexedModes, indexedMode{indexed: indexed, profile: profile})
+			indexedProfiles = append(indexedProfiles, indexedProfile{path: indexed.Path, envelope: profile.ProfileEnvelope})
+			profilesByReference[referenceExactIdentity(indexed.Document)] = profile.ProfileEnvelope
 		case ActivitySchemaV1:
 			profile, err := ParseActivityProfile(data)
 			if err != nil {
@@ -281,6 +297,22 @@ func LoadCatalog(indexData []byte, files map[string][]byte) (Catalog, error) {
 			}
 			activityProfiles = append(activityProfiles, profile)
 			indexedActivities = append(indexedActivities, indexedActivity{indexed: indexed, profile: profile})
+			indexedProfiles = append(indexedProfiles, indexedProfile{path: indexed.Path, envelope: profile.ProfileEnvelope})
+			profilesByReference[referenceExactIdentity(indexed.Document)] = profile.ProfileEnvelope
+		}
+	}
+	for _, profile := range indexedProfiles {
+		if err := verifyIndexedEvidenceReferences(profile.path, profile.envelope, profilesByReference, bucketReferences); err != nil {
+			return Catalog{}, err
+		}
+		for _, dependencyReference := range profile.envelope.Dependencies {
+			dependency, ok := profilesByReference[referenceExactIdentity(dependencyReference.Profile)]
+			if !ok {
+				continue
+			}
+			if err := validateDependencyDisposition(profile.envelope, dependency); err != nil {
+				return Catalog{}, fmt.Errorf("load qualification catalog: indexed document %q %w", profile.path, err)
+			}
 		}
 	}
 
@@ -384,6 +416,15 @@ func verifyActivityComposition(path string, activity ActivityProfile, mode ModeP
 	for _, bucket := range activity.Applicability.MachineBuckets {
 		if !referenceSetContains(mode.Applicability.MachineBuckets, bucket) {
 			return fmt.Errorf("load qualification catalog: indexed document %q machine-bucket applicability widens mode %s@%d", path, mode.ID, mode.Revision)
+		}
+	}
+	if activity.QualificationStatus == QualificationStatusQualified {
+		for _, harnessID := range activity.Applicability.Harnesses {
+			for _, harness := range mode.Spec.Harnesses {
+				if harness.ID == harnessID && !evidenceHasHarness(activity.Evidence, harness.ID, harness.IntegrationRevision) {
+					return fmt.Errorf("load qualification catalog: indexed document %q qualified activity harness %s@%s has no exact evidence witness", path, harness.ID, harness.IntegrationRevision)
+				}
+			}
 		}
 	}
 
@@ -499,6 +540,37 @@ func verifyIndexedProfile(indexed IndexedDocument, envelope ProfileEnvelope, buc
 	for _, bucket := range envelope.Applicability.MachineBuckets {
 		if !bucketReferences[referenceExactIdentity(bucket)] {
 			return fmt.Errorf("load qualification catalog: indexed document %q references machine bucket %s/%s@%d absent from the index", indexed.Path, bucket.Schema, bucket.ID, bucket.Revision)
+		}
+	}
+	return nil
+}
+
+func verifyIndexedEvidenceReferences(path string, envelope ProfileEnvelope, profiles map[string]ProfileEnvelope, buckets map[string]bool) error {
+	for _, evidence := range envelope.Evidence {
+		for _, scope := range []*ScopeReference{
+			evidence.Scope.ArtifactProfile,
+			evidence.Scope.EngineProfile,
+			evidence.Scope.RuntimeProfile,
+			evidence.Scope.ToolProfile,
+			evidence.Scope.ModeProfile,
+			evidence.Scope.ActivityProfile,
+		} {
+			if scope == nil || (scope.Schema == envelope.Schema && scope.ID == envelope.ID && scope.Revision == envelope.Revision) {
+				continue
+			}
+			reference := Reference{Schema: scope.Schema, ID: scope.ID, Revision: scope.Revision, SHA256: scope.SHA256}
+			if _, ok := profiles[referenceExactIdentity(reference)]; !ok {
+				return fmt.Errorf("load qualification catalog: indexed document %q evidence %q references profile %s/%s@%d absent from the index", path, evidence.ID, reference.Schema, reference.ID, reference.Revision)
+			}
+		}
+		if evidence.Scope.MachineBucket != nil && !buckets[referenceExactIdentity(*evidence.Scope.MachineBucket)] {
+			bucket := evidence.Scope.MachineBucket
+			return fmt.Errorf("load qualification catalog: indexed document %q evidence %q references machine bucket %s@%d absent from the index", path, evidence.ID, bucket.ID, bucket.Revision)
+		}
+		for _, resident := range evidence.Scope.CoResidents {
+			if _, ok := profiles[referenceExactIdentity(resident.RuntimeProfile)]; !ok {
+				return fmt.Errorf("load qualification catalog: indexed document %q evidence %q references co-resident runtime %s@%d absent from the index", path, evidence.ID, resident.RuntimeProfile.ID, resident.RuntimeProfile.Revision)
+			}
 		}
 	}
 	return nil

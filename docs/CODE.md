@@ -248,8 +248,9 @@ M5 cutover gate.
 4. Extend the index loader only after each referenced typed document surface
    exists. It verifies machine buckets and all six profile kinds, including
    exact runtime/mode composition and activity narrowing. Public evidence is
-   accepted only with a recomputed typed scope; qualified profiles and
-   recommendations fail closed.
+   accepted only with a recomputed typed scope; qualified profiles require the
+   complete schema-specific review gates, runtime task-quality evidence, and
+   an available exact dependency closure. Recommendations still fail closed.
 5. Do not build the C8 compiler until Labs adopts the writer contract under
    explicit cross-repository authorization.
 

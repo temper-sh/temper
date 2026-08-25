@@ -151,8 +151,14 @@ func validateProductPromotionInputs(packet ProductPromotionPacket, promotion Pro
 		if !ok {
 			return fmt.Errorf("compile product promotion: required profile %s/%s@%d with sha256 %s was not supplied", reference.Schema, reference.ID, reference.Revision, reference.SHA256)
 		}
-		if _, isDependency := qualifiedDependencies[identity]; packet.Decision.QualificationStatus == QualificationStatusQualified && isDependency && profile.Envelope.QualificationStatus != QualificationStatusQualified {
-			return fmt.Errorf("compile product promotion: QUALIFIED target requires profile %s/%s@%d to be QUALIFIED, got %s", reference.Schema, reference.ID, reference.Revision, profile.Envelope.QualificationStatus)
+		if _, isDependency := qualifiedDependencies[identity]; isDependency {
+			owner := ProfileEnvelope{
+				QualificationStatus: packet.Decision.QualificationStatus,
+				LifecycleStatus:     packet.Decision.LifecycleStatus,
+			}
+			if err := validateDependencyDisposition(owner, profile.Envelope); err != nil {
+				return fmt.Errorf("compile product promotion: %w", err)
+			}
 		}
 	}
 	for identity, reference := range neededBuckets {

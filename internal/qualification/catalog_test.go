@@ -578,7 +578,131 @@ func TestLoadCatalogRefusesMissingOrMismatchedBucketBytes(t *testing.T) {
 	})
 }
 
-func TestLoadCatalogRefusesRecommendationsUntilQualificationRulesAreImplemented(t *testing.T) {
+func TestLoadCatalogAcceptsQualifiedDependencyClosure(t *testing.T) {
+	tests := []struct {
+		name      string
+		lifecycle string
+	}{
+		{name: "experimental closure", lifecycle: qualification.LifecycleStatusExperimental},
+		{name: "supported closure", lifecycle: qualification.LifecycleStatusSupported},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			index, files := qualifiedCatalogBundle(t, tt.lifecycle)
+
+			catalog, err := qualification.LoadCatalog(marshalCatalogIndex(t, index), files)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(catalog.ModelRuntimes) != 1 || len(catalog.Modes) != 1 || len(catalog.Activities) != 1 {
+				t.Fatalf("qualified composed counts = runtimes %d, modes %d, activities %d", len(catalog.ModelRuntimes), len(catalog.Modes), len(catalog.Activities))
+			}
+		})
+	}
+}
+
+func TestLoadCatalogRefusesBrokenQualifiedDependencyClosure(t *testing.T) {
+	bucket := parseCatalogFixture(t).MachineBuckets[0].Document
+
+	t.Run("non-qualified dependency", func(t *testing.T) {
+		artifact := parseModelArtifactFixture(t)
+		artifactData := readModelArtifactFixture(t)
+		engine, engineData := qualifiedEngineFixture(t, qualification.LifecycleStatusExperimental)
+		runtime, runtimeData := qualifiedRuntimeFixture(
+			t,
+			qualification.LifecycleStatusExperimental,
+			profileReference(artifact.ProfileEnvelope, artifactData),
+			profileReference(engine.ProfileEnvelope, engineData),
+			bucket,
+		)
+		index, files := catalogWithRuntimeMaterials(t, artifactData, engineData, runtimeData)
+
+		_, err := qualification.LoadCatalog(marshalCatalogIndex(t, index), files)
+		if err == nil || !strings.Contains(err.Error(), "to be QUALIFIED, got LAB") {
+			t.Fatalf("LoadCatalog() error = %v, want non-qualified dependency refusal for %s", err, runtime.ID)
+		}
+	})
+
+	t.Run("supported profile with experimental dependency", func(t *testing.T) {
+		artifact, artifactData := qualifiedArtifactFixture(t, qualification.LifecycleStatusExperimental)
+		engine, engineData := qualifiedEngineFixture(t, qualification.LifecycleStatusSupported)
+		_, runtimeData := qualifiedRuntimeFixture(
+			t,
+			qualification.LifecycleStatusSupported,
+			profileReference(artifact.ProfileEnvelope, artifactData),
+			profileReference(engine.ProfileEnvelope, engineData),
+			bucket,
+		)
+		index, files := catalogWithRuntimeMaterials(t, artifactData, engineData, runtimeData)
+
+		_, err := qualification.LoadCatalog(marshalCatalogIndex(t, index), files)
+		if err == nil || !strings.Contains(err.Error(), "SUPPORTED profile requires dependency") || !strings.Contains(err.Error(), "got EXPERIMENTAL") {
+			t.Fatalf("LoadCatalog() error = %v, want lifecycle-closure refusal", err)
+		}
+	})
+
+	t.Run("evidence co-resident absent from index", func(t *testing.T) {
+		artifact, artifactData := qualifiedArtifactFixture(t, qualification.LifecycleStatusExperimental)
+		engine, engineData := qualifiedEngineFixture(t, qualification.LifecycleStatusExperimental)
+		runtime, _ := qualifiedRuntimeFixture(
+			t,
+			qualification.LifecycleStatusExperimental,
+			profileReference(artifact.ProfileEnvelope, artifactData),
+			profileReference(engine.ProfileEnvelope, engineData),
+			bucket,
+		)
+		runtime.Evidence[0].Scope.CoResidents = []qualification.ProfileCoResident{{
+			RuntimeProfile: qualification.Reference{
+				Schema: qualification.ModelRuntimeSchemaV1, ID: "missing-co-resident", Revision: 1, SHA256: strings.Repeat("a", 64),
+			},
+			Placement: "resident",
+		}}
+		key, err := qualification.EvidenceScopeKey(runtime.Evidence[0].Scope)
+		if err != nil {
+			t.Fatal(err)
+		}
+		runtime.Evidence[0].Scope.Key = key
+		runtimeData, err := qualification.MarshalModelRuntimeProfile(runtime)
+		if err != nil {
+			t.Fatal(err)
+		}
+		index, files := catalogWithRuntimeMaterials(t, artifactData, engineData, runtimeData)
+
+		_, err = qualification.LoadCatalog(marshalCatalogIndex(t, index), files)
+		if err == nil || !strings.Contains(err.Error(), "co-resident runtime missing-co-resident@1 absent from the index") {
+			t.Fatalf("LoadCatalog() error = %v, want missing co-resident refusal", err)
+		}
+	})
+
+	t.Run("qualified activity harness revision has no witness", func(t *testing.T) {
+		index, files := qualifiedCatalogBundle(t, qualification.LifecycleStatusExperimental)
+		activityPath := index.Profiles[0].Path
+		activity, err := qualification.ParseActivityProfile(files[activityPath])
+		if err != nil {
+			t.Fatal(err)
+		}
+		activity.Evidence[0].Scope.Harnesses[0].IntegrationRevision = "temper-pi-tools/v2"
+		key, err := qualification.EvidenceScopeKey(activity.Evidence[0].Scope)
+		if err != nil {
+			t.Fatal(err)
+		}
+		activity.Evidence[0].Scope.Key = key
+		activityData, err := qualification.MarshalActivityProfile(activity)
+		if err != nil {
+			t.Fatal(err)
+		}
+		index.Profiles[0].Document.SHA256 = qualification.Digest(activityData)
+		files[activityPath] = activityData
+
+		_, err = qualification.LoadCatalog(marshalCatalogIndex(t, index), files)
+		if err == nil || !strings.Contains(err.Error(), "qualified activity harness pi@temper-pi-tools/v1 has no exact evidence witness") {
+			t.Fatalf("LoadCatalog() error = %v, want exact activity harness refusal", err)
+		}
+	})
+}
+
+func TestLoadCatalogRefusesRecommendationsUntilProjectionRulesAreImplemented(t *testing.T) {
 	index := parseCatalogFixture(t)
 	index.RecommendationSets = []qualification.RecommendationSet{{
 		ID: "example-coding-options",
@@ -597,9 +721,38 @@ func TestLoadCatalogRefusesRecommendationsUntilQualificationRulesAreImplemented(
 	}}
 
 	_, err := qualification.LoadCatalog(marshalCatalogIndex(t, index), map[string][]byte{exampleBucketPath: readMachineBucketFixture(t)})
-	if err == nil || !strings.Contains(err.Error(), "recommendation sets require qualification-gate and cross-document validation") {
+	if err == nil || !strings.Contains(err.Error(), "recommendation sets require performance and applicability cross-document validation") {
 		t.Fatalf("LoadCatalog() error = %v, want recommendation refusal", err)
 	}
+}
+
+func catalogWithRuntimeMaterials(t *testing.T, artifactData, engineData, runtimeData []byte) (qualification.CatalogIndex, map[string][]byte) {
+	t.Helper()
+	artifact, err := qualification.ParseModelArtifactProfile(artifactData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine, err := qualification.ParseEngineProfile(engineData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime, err := qualification.ParseModelRuntimeProfile(runtimeData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	index := parseCatalogFixture(t)
+	index.Profiles = []qualification.IndexedDocument{
+		indexedProfile(engine.ProfileEnvelope, engineData, "engine"),
+		indexedProfile(artifact.ProfileEnvelope, artifactData, "model-artifact"),
+		indexedProfile(runtime.ProfileEnvelope, runtimeData, "model-runtime"),
+	}
+	files := map[string][]byte{
+		exampleBucketPath:      readMachineBucketFixture(t),
+		index.Profiles[0].Path: engineData,
+		index.Profiles[1].Path: artifactData,
+		index.Profiles[2].Path: runtimeData,
+	}
+	return index, files
 }
 
 func readCatalogFixture(t *testing.T) []byte {

@@ -90,7 +90,7 @@ func TestModelArtifactProfileValidationRefusesInvalidEnvelope(t *testing.T) {
 		}, want: "REJECTED qualification requires RETIRED"},
 		{name: "qualified without evidence", mutate: func(profile *qualification.ModelArtifactProfile) {
 			profile.QualificationStatus = qualification.QualificationStatusQualified
-		}, want: "require implemented qualification-gate"},
+		}, want: "requires accepted public evidence"},
 		{name: "incomplete evidence", mutate: func(profile *qualification.ModelArtifactProfile) {
 			profile.Evidence = []qualification.ProfileEvidence{{ID: "example-evidence"}}
 		}, want: "source.kind"},

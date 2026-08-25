@@ -78,8 +78,10 @@ their exact composition chain now execute against hermetic fake fixtures. The
 separately authorized Labs C8 writer adoption is also complete, and Temper's
 pure compiler reproduces its first fake model-artifact projection byte for
 byte without reading Labs at runtime. Hermetic generated packets exercise all
-six target-schema compiler paths. `QUALIFIED` rows, recommendation content,
-and seeded qualification rows remain gated.
+six target-schema compiler paths. Schema-specific `QUALIFIED` gates, runtime
+task-quality requirements, and exact dependency qualification/lifecycle
+closure now execute over fake fixtures. Recommendation content and real seeded
+qualification rows remain gated.
 
 The M2 Phase A shared resolver core is executable: strict software-catalog and
 software-lock parsing, deterministic target-to-adapter selection, compiled
