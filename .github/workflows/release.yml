@@ -15,7 +15,7 @@ concurrency:
 jobs:
   release:
     runs-on: macos-15
-    timeout-minutes: 45
+    timeout-minutes: 150
     env:
       GITHUB_TOKEN: ${{ github.token }}
       RELEASE_TAG: ${{ github.ref_name }}
@@ -153,7 +153,7 @@ jobs:
             --password "$APPLE_APP_PASSWORD" \
             --team-id "$APPLE_TEAM_ID" \
             --wait \
-            --timeout 30m \
+            --timeout 2h \
             --output-format json | tee "$RUNNER_TEMP/temper-notarization.json"
 
       - name: Verify release from clean extraction
