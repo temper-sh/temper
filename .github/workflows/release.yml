@@ -73,6 +73,7 @@ jobs:
           keychain_path="$RUNNER_TEMP/temper-signing.keychain-db"
           keychain_password="$(uuidgen)"
 
+          printf '::add-mask::%s\n' "$keychain_password"
           printf 'TEMPER_CERTIFICATE_PATH=%s\n' "$certificate_path" >> "$GITHUB_ENV"
           printf 'TEMPER_KEYCHAIN_PATH=%s\n' "$keychain_path" >> "$GITHUB_ENV"
           printf 'TEMPER_KEYCHAIN_PASSWORD=%s\n' "$keychain_password" >> "$GITHUB_ENV"
