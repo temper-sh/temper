@@ -192,7 +192,8 @@ The complete public command edge then consumed one direct-experiment
 
 The concrete `upstream-release` reader/installer therefore has hermetic
 archive-path, symlink, bounds, atomic-publication, repair, and scope-removal
-coverage plus a real network-backed lifecycle through C11. This gate selects
+coverage plus a real network-backed lifecycle through the public software
+commands. This gate selects
 the method and permits exact recipes for these artifacts. It does not
 manufacture an `exact-tested` catalog row; stable Results or Field Kit evidence
 must still supply the reviewed installed-base proof for that status.

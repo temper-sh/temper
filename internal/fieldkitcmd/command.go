@@ -1,6 +1,6 @@
-// Package fieldkitcmd exposes Temper's read-only material binding to Field Kit.
-// It reads only explicitly named Temper state and never selects an experiment,
-// consults a catalog, or mutates a root.
+// Package fieldkitcmd exposes Temper's Field Kit runtime and the pure material
+// binding command. Baseline effects require exact embedded content, disclosure,
+// consent, and a dedicated root; bind reads only explicitly named Temper state.
 package fieldkitcmd
 
 import (
@@ -26,19 +26,23 @@ type BinaryReader func() ([]byte, error)
 type Command struct {
 	detectFacts FactsDetector
 	readBinary  BinaryReader
+	input       io.Reader
 }
 
 func New(detectFacts FactsDetector, readBinary BinaryReader) (Command, error) {
 	if detectFacts == nil || readBinary == nil {
 		return Command{}, errors.New("field-kit command requires facts and binary readers")
 	}
-	return Command{detectFacts: detectFacts, readBinary: readBinary}, nil
+	return Command{detectFacts: detectFacts, readBinary: readBinary, input: os.Stdin}, nil
 }
 
 func (c Command) Run(ctx context.Context, arguments []string, stdout, stderr io.Writer) int {
 	if len(arguments) == 0 || arguments[0] == "help" || arguments[0] == "--help" || arguments[0] == "-h" {
 		usage(stdout)
 		return 0
+	}
+	if arguments[0] == "baseline" {
+		return runBaselineWithInput(ctx, arguments[1:], c.input, stdout, stderr, processExecutor{}, c.detectFacts)
 	}
 	if arguments[0] != "bind" {
 		fmt.Fprintf(stderr, "temper field-kit: unknown command %q\n\n", arguments[0])
@@ -164,5 +168,7 @@ func readRegular(path string) ([]byte, error) {
 }
 
 func usage(writer io.Writer) {
-	fmt.Fprintln(writer, "usage: temper field-kit bind --root PATH --manifest-lock PATH --generation SHA256 --installation ID=LOCK [--installation ID=LOCK ...]")
+	fmt.Fprintln(writer, "usage:")
+	fmt.Fprintln(writer, "  temper field-kit baseline <verify|inspect|explain|start|status|run|run-next|finish> [options]")
+	fmt.Fprintln(writer, "  temper field-kit bind --root PATH --manifest-lock PATH --generation SHA256 --installation ID=LOCK [--installation ID=LOCK ...]")
 }

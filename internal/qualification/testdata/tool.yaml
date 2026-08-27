@@ -66,6 +66,6 @@ spec:
       protocol: mcp/v1
       request_schema: example-search-request/v1
       result_schema: example-search-result/v1
-summary: Fake search core and Pi transport for exercising the C7 tool boundary
+summary: Fake search core and Pi transport for exercising the qualification tool boundary
 title: Example project search
 what_this_means: This fake tool is inspectable but is not enabled or qualified

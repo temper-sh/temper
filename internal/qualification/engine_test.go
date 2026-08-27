@@ -111,7 +111,7 @@ func TestEngineProfileValidationRefusesOpenServingContract(t *testing.T) {
 			profile.Spec.ServiceContract.Shutdown.GracePeriodMillis = 0
 		}, want: "must be greater than zero"},
 		{name: "network required after install", mutate: func(profile *qualification.EngineProfile) { profile.Spec.ServiceContract.OfflineAfterInstall = false }, want: "offline_after_install must be true"},
-		{name: "C7 dependency", mutate: func(profile *qualification.EngineProfile) {
+		{name: "qualification dependency", mutate: func(profile *qualification.EngineProfile) {
 			profile.Dependencies = []qualification.ProfileDependency{{
 				Relationship: "artifact", Profile: qualification.Reference{Schema: qualification.ModelArtifactSchemaV1, ID: "example-artifact", Revision: 1, SHA256: strings.Repeat("a", 64)},
 			}}

@@ -1,8 +1,9 @@
-# Labs product promotion — C8
+# Labs product-promotion contract
 
-Status: **Labs writer adoption explicitly authorized; Temper compiler and
-`QUALIFIED` gate validation implemented**, 2026-08-25. The canonical fake
-model-artifact packet crosses the boundary byte for byte, and hermetic
+Status: **Labs writer adopted; Temper compiler and `QUALIFIED` gate validation
+implemented**. Labs adopted the writer on 2026-08-25, and the owner explicitly
+re-authorized the semantic-name packet/projection byte refresh on 2026-08-27.
+Hermetic
 generated packets exercise all six target-schema projections plus one complete
 fake qualified runtime; none promotes a real profile. Recommendation and
 release publication effects remain incomplete and fail closed.
@@ -14,26 +15,27 @@ The executable path deliberately follows the contract nouns:
 | Boundary piece | Implementation |
 |---|---|
 | Labs writer schema and lifecycle | `../labs/schemas/product-promotion-v1.md` and `../labs/product-promotions/` |
-| closed C8 parser and validator | `internal/qualification/promotion.go` |
-| pure C8 → C7 compiler and explicit inputs | `internal/qualification/promotion_compile.go` |
+| closed product-promotion parser and validator | `internal/qualification/promotion.go` |
+| pure product-promotion → qualification-profile compiler and explicit inputs | `internal/qualification/promotion_compile.go` |
 | schema-specific qualification gates and dependency closure | `internal/qualification/qualification_gate.go` |
 | exact writer/consumer byte contract | `internal/qualification/testdata/product-promotion*.yaml` |
 | round-trip, projection, privacy, and refusal checks | `internal/qualification/promotion_test.go` |
 
 `CompileProductPromotion` receives packet, immediate prior-packet, target-
 history/dependency-profile, and machine-bucket bytes directly. It performs no
-path lookup and has no Labs or catalog reader. Independent C8 and C7
-supersession chains are checked against those bytes. The copied fake fixture
-hashes are the cross-repository compatibility contract; the test requires the
-compiled public profile to match the Labs writer's declared projection exactly.
+path lookup and has no Labs or catalog reader. Independent packet and
+qualification-profile supersession chains are
+checked against those bytes. The refreshed fake fixture hashes are the
+cross-repository compatibility contract; the test requires the compiled public
+profile to match the Labs writer's declared projection exactly.
 
 ## Decision
 
-C8 is `temper-labs-product-promotion/v1`: one immutable Labs review packet
-proposes one exact revision of one C7 qualification profile. Temper's catalog
+`temper-labs-product-promotion/v1` is one immutable Labs review packet that
+proposes one exact revision of one qualification profile. Temper's catalog
 compiler consumes only an explicitly supplied packet and an explicitly
-supplied set of exact C7 dependencies. Compilation is pure, canonical, and
-one-to-one.
+supplied set of exact qualification-profile dependencies. Compilation is
+pure, canonical, and one-to-one.
 
 The boundary exists to preserve three separate authorities:
 
@@ -50,32 +52,36 @@ A packet proposes both a qualification disposition (`WATCH`, `LAB`,
 consent, install anything, add a recommendation-set member, publish Results,
 or mutate a catalog. Those remain distinct actions with distinct writers.
 
-## Not C12, not a session, not a generic component handoff
+## Not Field Kit experiment promotion, not a session, not a generic component handoff
 
 Two Labs outputs use the word promotion and must not share a schema:
 
 | Boundary | Certifies | Destination | Temper reads it? |
 |---|---|---|---|
-| C12 experiment promotion | a bounded experiment is useful and safe to offer | Field Kit immutable experiment catalog | no |
-| C8 product promotion | reviewed evidence supports one exact product/profile disposition | Temper C7 compiler | yes, only when explicitly supplied |
+| Field Kit experiment promotion | a bounded experiment is useful and safe to offer | Field Kit immutable experiment catalog | no |
+| product promotion | reviewed evidence supports one exact product/profile disposition | Temper qualification-profile compiler | yes, only when explicitly supplied |
 
 A Field Kit session may be one evidence source inside Labs review. Its
 experiment identity, prompt, consent, attempts, adaptive decisions,
-observations, deviations, and report remain in the session packet. C8 cites
-the reviewed packet identity and extracts only the product facts and
+observations, deviations, and report remain in the session packet. The
+product-promotion packet cites the reviewed packet identity and extracts only
+the product facts and
 public-safe claims accepted by Labs.
 
 The historical `field-kit-runtime-profile/v1` packet is likewise evidence
-metadata, not C8. `stack-manifest` or `external-lab` describes how the original
-Bash oracle could inspect or execute that exploratory packet. It does not
-become a C7 engine, install method, support claim, or generic execution path.
-Labs may cite an exact legacy packet and hash while reviewing a C8 candidate;
-Temper never compiles that packet directly.
+metadata, not a product-promotion packet. `stack-manifest` or `external-lab`
+describes how the original Bash oracle could inspect or execute that
+exploratory packet. It does not
+become a qualification engine, install method, support claim, or generic
+execution path. Labs may cite an exact legacy packet and hash while reviewing
+a product-promotion candidate; Temper never compiles that packet directly.
 
 Labs also has a generic product-handoff lifecycle for reusable code,
-protocols, and repositories. C8 does not replace it. A new maintained engine
-adapter may need a generic product handoff, while a tested engine/runtime
-combination needs a C8 profile packet. Neither output implies the other.
+protocols, and repositories. Product promotion does not replace it. A new
+maintained engine adapter may need a generic product handoff, while a tested
+engine/runtime
+combination needs a product-promotion packet for that profile. Neither output
+implies the other.
 
 ## One packet, one profile revision
 
@@ -93,8 +99,8 @@ This cardinality buys:
 - no partial success when one output of a multi-row packet is invalid; and
 - review diffs whose scope matches the catalog document being changed.
 
-Shared evidence is referenced, not copied. The C8 packets are immutable
-historical snapshots; the emitted C7 document is the release-owned public
+Shared evidence is referenced, not copied. The product-promotion packets are immutable
+historical snapshots; the emitted qualification-profile document is the release-owned public
 projection. That deliberate snapshot relationship is not two mutable homes.
 
 ## Packet identity and canonical bytes
@@ -105,7 +111,8 @@ candidate creates a new packet revision. `supersedes`, when present, is an
 exact packet reference with the same ID; it does not imply the target profile
 has the same revision history.
 
-Packets use the same strict canonical-YAML rules as C7: one document, known
+Packets use the same strict canonical-YAML rules as qualification documents:
+one document, known
 fields only, no aliases or duplicate keys, canonical scalars, deterministic
 map/set order, final newline, and exact byte round-trip. The compiler hashes
 the supplied canonical packet bytes; it never trusts a caller-supplied
@@ -123,7 +130,7 @@ supersedes:                         # absent on first packet revision
 ```
 
 Packet IDs identify a review lineage, not a model, experiment, Field Kit run,
-or C7 profile. Those identities remain explicit separate fields.
+or qualification profile. Those identities remain explicit separate fields.
 
 ## Complete packet shape
 
@@ -134,13 +141,13 @@ data.
 schema: temper-labs-product-promotion/v1
 id: <stable promotion id>
 revision: <positive integer>
-supersedes: <optional exact prior C8 packet reference>
+supersedes: <optional exact prior product-promotion packet reference>
 
 target:
-  schema: <one of the six C7 profile schemas>
+  schema: <one of the six qualification profile schemas>
   id: <target profile id>
   revision: <target profile revision>
-  supersedes: <optional exact prior C7 profile reference>
+  supersedes: <optional exact prior qualification profile reference>
 
 decision:
   qualification_status: WATCH | LAB | QUALIFIED | REJECTED
@@ -176,11 +183,11 @@ evidence:
         classification: public | private | restricted
     public_source:
       kind: product-promotion | results-record
-      # product-promotion means the compiler injects this C8 packet identity.
+      # product-promotion means the compiler injects this packet identity.
       # results-record additionally requires schema/id/revision/sha256 here.
     scope:
-      artifact_profile: <exact C7 reference when material>
-      engine_profile: <exact C7 reference when material>
+      artifact_profile: <exact qualification-profile reference when material>
+      engine_profile: <exact qualification-profile reference when material>
       runtime_profile:
         schema: temper-qualification-model-runtime/v1
         id: <target or dependency id>
@@ -188,7 +195,7 @@ evidence:
       tool_profile: <target or dependency identity when material>
       mode_profile: <target or dependency identity when material>
       activity_profile: <target identity when material>
-      machine_bucket: <exact C7 bucket reference when machine-dependent>
+      machine_bucket: <exact qualification machine-bucket reference when machine-dependent>
       mode: <exact semantic mode id when mode-dependent>
       co_residents: [<exact runtime references plus placement>]
       harnesses: [<harness ids plus integration revisions>]
@@ -205,11 +212,11 @@ candidate:
   summary: <evidence-scoped description>
   what_this_means: <one plain-language user line>
   roles: [<stable role ids>]
-  applicability: <C7 applicability block>
-  dependencies: [<C7 exact relationship/profile references>]
-  data_boundary: <C7 data-boundary block>
-  known_failures: [<C7 failures citing packet-local evidence ids>]
-  invalidation_triggers: [<C7 triggers>]
+  applicability: <qualification-profile applicability block>
+  dependencies: [<qualification-profile exact relationship/profile references>]
+  data_boundary: <qualification-profile data-boundary block>
+  known_failures: [<qualification-profile failures citing packet-local evidence ids>]
+  invalidation_triggers: [<qualification-profile triggers>]
   spec: <body for target.schema, including evidence-id uses>
 
 sanitization:
@@ -219,7 +226,7 @@ sanitization:
     - private-corpus-content
     - credentials
     - prompts-not-approved-for-publication
-    - machine-identifying-values-outside-the-C7-bucket
+    - machine-identifying-values-outside-the-declared-machine-bucket
   redactions:
     - source: <evidence source id>
       class: <excluded class>
@@ -232,38 +239,41 @@ catalog_consideration:
   note: <nonbinding advice to the cross-profile release review>
 ```
 
-`catalog_consideration` is review input only and never enters the emitted C7
-profile. Recommendation is a relation among multiple qualified profiles; a
-one-row packet cannot establish that set by itself.
+`catalog_consideration` is review input only and never enters the emitted
+qualification profile. Recommendation is a relation among multiple qualified
+profiles; a one-row packet cannot establish that set by itself.
 
 ## Candidate shape and exact pins
 
-`candidate` is deliberately the C7 common envelope minus fields owned or
-generated by the release boundary:
+`candidate` is deliberately the qualification profile's common envelope minus
+fields owned or generated by the release boundary:
 
 - target schema/ID/revision/supersession live in `target`;
 - qualification/lifecycle statuses and their independent reasons live in
   `decision`;
 - public evidence inventory is generated from `evidence`;
-- exact C8 provenance is generated from the packet's canonical identity; and
+- exact product-promotion provenance is generated from the packet's canonical identity; and
 - the remaining common fields plus typed `spec` are copied without semantic
   translation.
 
-All immutable subject pins live in the target schema's typed `spec`; all C7
-dependencies are full schema/ID/revision/SHA references. A packet cannot say
+All immutable subject pins live in the target schema's typed `spec`; all
+qualification-profile dependencies are full schema/ID/revision/SHA
+references. A packet cannot say
 “current,” “latest,” “the installed version,” or “whatever the experiment
 used.” If Labs has not resolved the exact facts required by the target schema,
 the correct disposition is `WATCH` or `LAB`, not a free-form escape field.
 
 ## Evidence, privacy, and public provenance
 
-C8 retains exact source identities at the trust boundary where Labs can audit
-them. C7 receives only the public-safe source selected by review:
+The product-promotion packet retains exact source identities at the trust
+boundary where Labs can audit them. The qualification profile receives only
+the public-safe source selected by review:
 
 - `public_source.kind: results-record` copies an exact, already-sanitized
-  Results identity into C7; or
-- `public_source.kind: product-promotion` cites the C8 schema/ID/revision and
-  canonical packet digest injected by the compiler, without copying its raw
+  Results identity into the qualification profile; or
+- `public_source.kind: product-promotion` cites the product-promotion
+  schema/ID/revision and canonical packet digest injected by the compiler,
+  without copying its raw
   source locators or contents.
 
 The second form permits a catalog row to remain auditable even when Labs or
@@ -276,7 +286,8 @@ IDs. Each ID declares the exact claims it supports. `decision.accepted_claims`
 is a subset of those declared claims, and the compiler refuses any candidate
 use outside that subset. A source classified `private` or `restricted` may
 support an accepted claim, but its locator and contents are never copied to
-C7. Sanitization does not weaken the evidence identity; it changes only what
+the qualification profile. Sanitization does not weaken the evidence identity;
+it changes only what
 the public projection exposes.
 
 The packet may record negative and conflicting evidence. `accepted_claims`
@@ -310,7 +321,7 @@ triggers appropriate to both axes, and completed sanitization review.
 - every target-schema qualification gate is present and passes or is explicitly
   not applicable for a schema-defined reason;
 - every claimed machine/mode/co-resident scope has a complete witness key;
-- all exact dependencies are `QUALIFIED` revisions in the supplied C7 set;
+- all exact dependencies are `QUALIFIED` revisions in the supplied qualification-profile set;
 - all measurements and failures have accepted claim-level provenance;
 - applicability does not exceed the evidence reuse rules;
 - a runtime profile has measured first-attempt task success and regression
@@ -334,7 +345,7 @@ A packet may retain additional reviewed gates, but every gate on a
 `not-applicable`; a local mode must pass it with a `fit` wall-model result.
 Required gates cannot be omitted, failed, or left `not-run`. Every passing
 gate cites at least one packet-local evidence record. This table is Labs'
-review contract; the public C7 projection keeps accepted evidence and exact
+review contract; the public qualification-profile projection keeps accepted evidence and exact
 promotion identity rather than copying the private gate audit.
 
 Qualification remains exact and scoped. It does not imply recommendation,
@@ -371,9 +382,9 @@ For a retired revision, the packet:
 Conceptually:
 
 ```text
-compile(canonical C8 packet bytes, exact prior packet,
-        exact C7 target history/dependencies, exact buckets)
-  -> canonical one-profile C7 bytes | typed refusal
+compile(canonical product-promotion packet bytes, exact prior packet,
+        exact qualification-profile target history/dependencies, exact buckets)
+  -> canonical one-profile qualification-profile bytes | typed refusal
 ```
 
 The compiler performs no filesystem discovery, adjacent-repository read,
@@ -382,22 +393,24 @@ or mutation. The composition root must supply every byte it may read.
 
 The deterministic field mapping is:
 
-| C7 output | C8 source |
+| qualification-profile output | product-promotion source |
 |---|---|
 | `schema`, `id`, `revision`, `supersedes` | `target` |
 | qualification/lifecycle statuses and reasons | `decision` |
 | title, summary, meaning, roles, applicability, dependencies, data boundary, failures, invalidation, typed spec | `candidate`, copied exactly |
 | evidence IDs, claims, scopes | `evidence`, after accepted-claim and scope validation |
 | public evidence source | exact Results reference or injected packet reference from `evidence.public_source` |
-| `promotion` | injected schema/ID/revision/SHA-256 of the canonical C8 packet |
+| `promotion` | injected schema/ID/revision/SHA-256 of the canonical product-promotion packet |
 
-For every evidence record the compiler canonicalizes `scope`, computes the C7
-scope key, and drops C8-only `sources`. The key preimage is canonical
-`temper-qualification-evidence-scope/v1` YAML containing the scope fields but
-not `key`; this is the same pure computation exported by C7 validation, not a
-second Labs-owned encoding. The compiler then validates the complete emitted
-document under the target C7 schema and canonical-encodes it. Same inputs
-always produce byte-identical output.
+For every evidence record the compiler canonicalizes `scope`, computes the
+qualification evidence-scope key, and drops product-promotion-only `sources`.
+The key preimage is canonical `temper-qualification-evidence-scope/v1` YAML
+containing the scope fields but
+not `key`; this is the same pure computation exported by qualification
+validation, not a second Labs-owned encoding. The compiler then validates the
+complete emitted
+document under the target qualification schema and canonical-encodes it. Same
+inputs always produce byte-identical output.
 
 Compiler success means only “this packet can become this profile document.”
 Including that document in a catalog snapshot is Temper release review's
@@ -409,10 +422,10 @@ catalog once; the pure compiler itself has no commit point.
 
 The compiler rejects at least:
 
-- noncanonical C8 bytes, an unknown field/schema/qualification/lifecycle
+- noncanonical product-promotion bytes, an unknown field/schema/qualification/lifecycle
   status, wrong prior-packet
   digest, or a forked/skipped packet supersession chain;
-- a target schema outside C7, invalid target profile transition, missing exact
+- a target schema outside qualification-profile, invalid target profile transition, missing exact
   target dependency, wrong dependency digest, dependency cycle, or absent
   bucket;
 - a candidate field that does not belong to the target typed schema, a missing
@@ -427,7 +440,7 @@ The compiler rejects at least:
   incomplete runtime task-quality evidence;
 - raw source locators or private contents appearing in the candidate/public
   source, or incomplete/false sanitization declarations;
-- a direct `field-kit-runtime-profile/v1` or session packet presented as C8;
+- a direct `field-kit-runtime-profile/v1` or session packet presented as product-promotion;
 - a legacy `external-lab` runner value used as installation or support
   authority;
 - recommendation membership, ranking, default, selected, checked, preferred,
@@ -444,14 +457,14 @@ revision; Temper never repairs or rewrites the source packet.
 The first implementation fixture set will use fake identities and no real
 product claims:
 
-1. compile one packet for every C7 profile kind and byte-round-trip each
+1. compile one packet for every qualification profile kind and byte-round-trip each
    emitted document;
 2. compile a `LAB` runtime candidate that cites an exact legacy-style
    Field Kit evidence packet without inheriting its runner or install meaning;
 3. compile one `QUALIFIED` fake runtime with complete task-quality evidence,
    then reject the same packet when task success, regression, conditions, or
    dependency qualification is weakened;
-4. keep private source locators in C8 while proving none occur in C7 output;
+4. keep private source locators in product-promotion while proving none occur in qualification-profile output;
 5. use both public-source forms and pin the exact injected packet digest;
 6. correct a packet and profile through independent supersession chains,
    proving neither chain is inferred from the other;
@@ -462,25 +475,27 @@ product claims:
    index.
 
 The planned native-MTP `LAB` row is not a fixture input until Labs supplies an
-accepted C8 packet with exact evidence and sanitization. A legacy run or
+accepted product-promotion packet with exact evidence and sanitization. A legacy run or
 Field Kit profile found elsewhere is inspectable evidence, not an accepted
 Temper product-promotion packet.
 
-## Cross-repository adoption gate — satisfied 2026-08-25
+## Cross-repository adoption gate
 
-Adoption and final approval of C8 require an explicitly authorized Labs-side
+Adoption and final approval of product-promotion require an explicitly authorized Labs-side
 step that:
 
 1. adopts the exact writer schema and canonicalization rules;
 2. maps Labs review gates and retained evidence to the claim-level fields;
 3. creates one fake hermetic packet with no private material;
-4. proves private/restricted source locators do not cross the C7 projection;
+4. proves private/restricted source locators do not cross the qualification-profile projection;
 5. records how packet corrections and retirement append history; and
 6. hands the canonical fixture bytes to Temper without a runtime dependency on
    a Labs checkout.
 
 The owner explicitly authorized this Labs-side adoption on 2026-08-25. The
 writer schema, workflow, registry skeleton, fake packet, expected projection,
-and offline checks now satisfy this gate; Temper imports only the exact fixture
-bytes. This does not authorize accepting a real packet, publishing Results,
-rebuilding Field Kit, or reading moving experiment state at runtime.
+and offline checks satisfied this gate for the adopted bytes. The owner
+explicitly re-authorized the later semantic-name packet/projection refresh on
+2026-08-27; the Labs writer and Temper consumer copies are byte-identical. This
+does not authorize accepting a real packet, publishing Results, rebuilding
+Field Kit, or reading moving experiment state at runtime.

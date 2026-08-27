@@ -1,8 +1,9 @@
 # Craft skills — real-work field notes
 
 Temper is the craft set's first sustained real-product test. These notes close
-the secondary objective in `PLAN.md` §1: after each named phase through
-M5/1.0, record how the skills affected actual work and propose a narrow
+the execution plan's craft-skill field-test objective: after each named
+workstream through the 1.0 release, record how the skills affected actual work
+and propose a narrow
 improvement only when the phase supplies evidence for it.
 
 This is not a model-eval log, product evidence, or permission to change the
@@ -26,10 +27,11 @@ Keep product-specific facts here. Any proposal transferred to the skills plan
 must state the context-independent invariant and preserve the skills
 repository's routing, stance, and eval gates.
 
-## Baseline — M1 complete plus M2 work through 2026-08-21
+## Baseline — native manifest complete plus installed-base work through 2026-08-21
 
-**Status:** retrospective M1 closeout and provisional M2 observation. This
-does not close M2 Phase A or B; each still receives its own note.
+**Status:** retrospective native-manifest closeout and provisional
+installed-base observation. This does not close the software-supply or Field
+Kit execution-base work; each still receives its own note.
 
 **Artifacts reviewed:** native manifest/lock/render/check contracts and tests;
 software-supply catalog, software lock, adapter family, signed-catalog
@@ -97,9 +99,9 @@ No model eval was needed to reach these observations. They came from product
 contracts, implementation seams, and concrete failure windows encountered in
 the phase work.
 
-## M2 Phase A — software supply complete, 2026-08-24
+## Software supply complete, 2026-08-24
 
-**Status:** formal Phase A engineering closeout. Enabling and publishing the
+**Status:** formal software-supply engineering closeout. Enabling and publishing the
 already signed Pages source remains an explicit release operation, not an
 unfinished product-code effect.
 
@@ -151,12 +153,60 @@ and the hermetic command/effect suites that exercise those boundaries.
 - **Awaiting more evidence:** carry the first two observations into the
   already planned `contract-evolution` work as candidate examples of a
   version-coupled upstream protocol and an explicitly lossy adapter
-  projection. Phase A alone does not justify changing that guidance yet.
+  projection. Software-supply completion alone does not justify changing that
+  guidance yet.
 - **No additional craft change warranted:** the existing organization,
   modeling, effect, and testing guidance covered the signer and all three
   adapter shapes without a new routing rule or skill. Reassess lifecycle
-  ownership and cross-repository contract testing at the M2 Phase B closeout.
+  ownership and cross-repository contract testing at the Field Kit
+  execution-base closeout.
 
 No fine-tuning or model evaluation was relevant to this phase. The engineering
 decisions followed from inspectable provider protocols, typed contracts, and
 failure-boundary tests.
+
+## Embedded Field Kit runtime closeout (2026-08-27)
+
+### Applied guidance
+
+- **Code organization and unit design:** the ownership decision became one
+  vertical `fieldkit` slice inside Temper: pure catalog/session/planning units,
+  a command orchestrator, and narrow protocol/process/resource effects. The
+  adjacent Field Kit repository now contains only promotion content.
+- **Data modeling:** package revision 2 names an exact Temper protocol identity
+  instead of a script path. The consented session binds catalog, package,
+  material, machine, executing binary, software lock, outcome, stage evidence,
+  protocol report, and final report without a moving runtime dependency.
+- **Reliable effects:** start materializes immutable embedded bytes into a new
+  owned root before one atomic external session commit. Each stage validates
+  all consented inputs, records failed output without advancing, and commits a
+  successful transition once. Restore remains marker- and confirmation-gated.
+- **Testing:** hermetic workflow tests cover keep/restore, consent refusal,
+  resumability, protocol dispatch, and embedded package validation. Protocol
+  unit tests cover exact identity, structured-only evidence, resource stops,
+  and refusal before effects. Live model/download work remains separately
+  authorized.
+
+### What the work exposed
+
+1. A content repository and its runtime do not need the same distribution
+   boundary. Embedding reviewed content in the effect-owning binary removes a
+   second build and a second executable identity without collapsing Labs,
+   promotion, and product-review authority.
+2. Runtime behavior needs a versioned identity of its own. Replacing a bound
+   script with `{id, revision, schema}` lets the package remain declarative and
+   makes unsupported behavior fail at catalog verification.
+3. Consent is stronger when it binds materialized bytes. Copying the exact
+   embedded package and machine facts into the dedicated root makes every
+   resumed stage check the same local evidence rather than trust a checkout.
+
+### Proposals and disposition
+
+- Add embedded/source byte-parity as a permanent release check when the release
+  workflow is formalized.
+- No craft-skill change is warranted yet; the existing vertical-slice,
+  explicit-effect, canonical-modeling, and hermetic-test guidance directly
+  covered the ownership refactor.
+
+No fine-tuning or model evaluation was relevant. The problem was distribution,
+authority, and effect ownership rather than learned model behavior.

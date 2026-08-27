@@ -1,7 +1,8 @@
 # `temper software install` — exact layered software installations
 
-Status: approved M2 Phase B surface, updated 2026-08-24. C5 provenance, the
-pure installation/claim planner, strict canonical C6 receipt/root-state
+Status: approved installed-base surface, updated 2026-08-24. Software-lock
+provenance, the pure installation/claim planner, strict canonical installation
+receipt/root-state
 documents and stores, and internal keyed-adapter effect orchestration are
 executable. The read-only check analyzer/reader and provenance-guided removal
 planner, retiring-authority state machine, receipt release, adapter effect
@@ -13,8 +14,8 @@ Locks naming another installation adapter refuse without fallback. Its real
 scratch gate now passes in a disposable root, including dry-run purity, exact
 check, and clean repeated install/remove. The canonical
 Temper-to-Field-Kit material identity binding described below is executable as
-a pure schema/builder. Field Kit's promoted-experiment/session envelope remains
-Field Kit-owned; see
+a pure schema/builder. Temper now owns the promoted-package session envelope
+around Field Kit content; see
 [`../design/field-kit-experiment-boundary.md`](../design/field-kit-experiment-boundary.md).
 
 `software install` reconciles one already-resolved `software.lock.yaml` into
@@ -74,7 +75,8 @@ boundary:
     .temper/unit.json        # canonical adapter-private identity/tree marker
 ```
 
-The marker is not desired policy or removal authority and does not extend C6;
+The marker is not desired policy or removal authority and does not extend the
+installation receipt/root-state contract;
 inspection accepts it only when its identity matches the lock, its retained
 archive still matches locked bytes, and a fresh full tree scan matches the
 manifest re-derived from that archive. A new generation is fully downloaded,
@@ -264,7 +266,7 @@ state transition activates claims and removes leftover intent. A failure before
 prepare changes nothing; a failure after it leaves enough durable state to
 reconcile and is never silently discarded.
 
-## `temper-software-installation/v1` (C6)
+## `temper-software-installation/v1`
 
 The receipt is per-installation observed history, not desired policy or global
 ownership authority:

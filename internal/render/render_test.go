@@ -38,6 +38,7 @@ func TestBuildMapsManifestFactsToConcreteConfig(t *testing.T) {
 				"--parallel 1\n      -c 24576\n      -fa on",
 				"-ctk q8_0 -ctv q8_0",
 				"-b 512\n      -ub 512",
+				"--spec-type draft-mtp\n      --spec-draft-n-max 3",
 				"--chat-template-file '/temper/artifacts/layouts/coder/dc0bf13d38e973845242c06b8a09ac72b014da701f66e925d2f716ad8a417166/patches/sharp/template.jinja'",
 				`--chat-template-kwargs '{"enable_thinking":false}'`,
 			},
@@ -273,7 +274,7 @@ layouts:
     kv: q8
     thinking: off
     chat_template: sharp
-    llama: {parallel: 1, flash_attention: on, batch: 512, ubatch: 512}
+    llama: {parallel: 1, flash_attention: on, batch: 512, ubatch: 512, spec_type: draft-mtp, spec_draft_n_max: 3}
   rerank-0.6b:
     display_name: Reranker
     model: {repo: org/Reranker, file: reranker.gguf}

@@ -1,4 +1,4 @@
-// Package rootstate owns the canonical root-wide C6 authority for prepared
+// Package rootstate owns the canonical root-wide authority for prepared
 // software operations and shared-provider claims.
 package rootstate
 

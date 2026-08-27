@@ -34,7 +34,7 @@ func TestParseCatalogIndexRoundTripsCanonicalFixture(t *testing.T) {
 	}
 }
 
-func TestReferenceValidationAcceptsEveryC7DocumentSchema(t *testing.T) {
+func TestReferenceValidationAcceptsEveryQualificationDocumentSchema(t *testing.T) {
 	schemas := []string{
 		qualification.MachineBucketSchemaV1,
 		qualification.ModelArtifactSchemaV1,

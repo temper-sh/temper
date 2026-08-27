@@ -1,6 +1,6 @@
 # `temper resolve` — missing lock rows
 
-Status: executable M1 contract, 2026-08-20.
+Status: executable native lock-resolution contract, 2026-08-20.
 
 `resolve` adds pins for manifest layouts absent from `manifest.lock.yaml`. It
 never moves, repairs, or re-resolves an existing row; changing a pin belongs to

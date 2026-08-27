@@ -7,8 +7,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// ProductPromotionInputs are the exact immutable C7 materials a caller makes
-// available to the pure compiler. The compiler never discovers a catalog or
+// ProductPromotionInputs are the exact immutable qualification materials a
+// caller makes available to the pure compiler. The compiler never discovers a catalog or
 // reads Labs, Results, Field Kit, or the filesystem.
 type ProductPromotionInputs struct {
 	PriorPackets   [][]byte
@@ -16,8 +16,8 @@ type ProductPromotionInputs struct {
 	MachineBuckets [][]byte
 }
 
-// CompileProductPromotion projects one canonical Labs C8 packet into one
-// canonical C7 profile. The packet digest is computed over the exact accepted
+// CompileProductPromotion projects one canonical Labs product-promotion packet
+// into one canonical qualification profile. The packet digest is computed over the exact accepted
 // input bytes and becomes both profile provenance and, when selected, its
 // public evidence source.
 func CompileProductPromotion(packetData []byte, inputs ProductPromotionInputs) ([]byte, error) {
@@ -284,7 +284,7 @@ func parsePromotionInputProfile(data []byte) (promotionInputProfile, error) {
 		}
 		return makeInput(profile.ProfileEnvelope), nil
 	default:
-		return promotionInputProfile{}, fmt.Errorf("schema %q is not a C7 profile schema", header.Schema)
+		return promotionInputProfile{}, fmt.Errorf("schema %q is not a qualification profile schema", header.Schema)
 	}
 }
 
@@ -338,7 +338,7 @@ func refusePrivateProjection(packet ProductPromotionPacket, profile []byte) erro
 	for _, evidence := range packet.Evidence {
 		for _, source := range evidence.Sources {
 			if (source.Classification == "private" || source.Classification == "restricted") && yamlScalarContains(&document, source.Locator) {
-				return fmt.Errorf("compile product promotion: private or restricted locator from source %q crossed the C7 projection", source.ID)
+				return fmt.Errorf("compile product promotion: private or restricted locator from source %q crossed the qualification-profile projection", source.ID)
 			}
 		}
 	}

@@ -47,7 +47,7 @@ func TestCompileProductPromotionMatchesLabsPublicProjection(t *testing.T) {
 	}
 	profile, err := qualification.ParseModelArtifactProfile(got)
 	if err != nil {
-		t.Fatalf("compiled profile is not canonical C7: %v", err)
+		t.Fatalf("compiled qualification profile is not canonical: %v", err)
 	}
 	if profile.Promotion.SHA256 != qualification.Digest(packet) || profile.Evidence[0].Source.SHA256 != profile.Promotion.SHA256 {
 		t.Fatalf("compiled provenance = promotion %#v, evidence %#v", profile.Promotion, profile.Evidence[0].Source)
@@ -60,7 +60,7 @@ func TestCompileProductPromotionMatchesLabsPublicProjection(t *testing.T) {
 		"sanitization",
 	} {
 		if bytes.Contains(got, []byte(forbidden)) {
-			t.Fatalf("compiled public profile contains C8-only/private value %q", forbidden)
+			t.Fatalf("compiled public profile contains product-promotion-only/private value %q", forbidden)
 		}
 	}
 }
@@ -103,7 +103,7 @@ func TestCompileProductPromotionRefusesPrivateProjectionAndUnusedInputs(t *testi
 	canonical := string(readProductPromotionFixture(t))
 	privateCandidate := strings.Replace(
 		canonical,
-		"summary: Fake byte identities for exercising the C8 writer boundary",
+		"summary: Fake byte identities for exercising the product-promotion writer boundary",
 		"summary: fixtures/private/fake-artifact-review.json",
 		1,
 	)
@@ -187,7 +187,7 @@ func TestCompileProductPromotionRequiresExactIndependentSupersessionChains(t *te
 	}
 }
 
-func TestCompileProductPromotionCoversEveryC7TargetKind(t *testing.T) {
+func TestCompileProductPromotionCoversEveryQualificationTargetKind(t *testing.T) {
 	artifactData := readPromotionInputFixture(t, "model-artifact.yaml")
 	engineData := readPromotionInputFixture(t, "engine.yaml")
 	runtimeData := readPromotionInputFixture(t, "model-runtime.yaml")
@@ -306,7 +306,7 @@ func TestCompileProductPromotionCoversEveryC7TargetKind(t *testing.T) {
 				t.Fatal(err)
 			}
 			if err := tt.parse(compiled); err != nil {
-				t.Fatalf("compiled target is not canonical C7: %v", err)
+				t.Fatalf("compiled qualification target is not canonical: %v", err)
 			}
 			if !bytes.Contains(compiled, []byte("sha256: "+qualification.Digest(packetData))) {
 				t.Fatalf("compiled target does not carry exact packet digest")
@@ -492,7 +492,7 @@ func promotionPacketForProfile(envelope qualification.ProfileEnvelope, spec qual
 		Sanitization: qualification.ProductPromotionSanitization{
 			PublicCandidateReviewed: true,
 			ExcludedClasses: []string{
-				"credentials", "machine-identifying-values-outside-the-C7-bucket", "private-corpus-content",
+				"credentials", "machine-identifying-values-outside-the-declared-machine-bucket", "private-corpus-content",
 				"prompts-not-approved-for-publication", "raw-user-content",
 			},
 			Redactions:        []qualification.ProductPromotionRedaction{},

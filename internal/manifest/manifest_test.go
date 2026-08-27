@@ -121,3 +121,47 @@ modes:
 		t.Fatalf("Parse error = %v, want pinned patch-source refusal", err)
 	}
 }
+
+func TestParseValidatesEmbeddedMTPAsAPairedCoderSetting(t *testing.T) {
+	tests := []struct {
+		name string
+		role string
+		spec string
+		want string
+	}{
+		{name: "maximum without type", role: "coder", spec: "spec_draft_n_max: 3", want: "requires spec_type"},
+		{name: "unknown type", role: "coder", spec: "spec_type: magic\n      spec_draft_n_max: 3", want: "is unsupported"},
+		{name: "zero maximum", role: "coder", spec: "spec_type: draft-mtp", want: "must be between 1 and 16"},
+		{name: "reranker", role: "rerank", spec: "spec_type: draft-mtp\n      spec_draft_n_max: 3", want: "supported only for coder"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			coderOnly := "    max_tokens: 2048\n    kv: q8\n    thinking: off\n"
+			if test.role == "rerank" {
+				coderOnly = ""
+			}
+			input := `schema: temper-manifest/v1
+defaults: {ttl: 1800, gpu_memory_utilization: 0.85}
+layouts:
+  layout:
+    display_name: Model
+    model: {repo: org/Model, file: model.gguf}
+    engine: llama-server
+    role: ` + test.role + `
+    window: 8192
+` + coderOnly + `    llama:
+      parallel: 1
+      flash_attention: on
+      batch: 512
+      ubatch: 512
+      ` + test.spec + `
+modes:
+  off: {foreground: none}
+`
+			_, err := manifest.Parse([]byte(input))
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("Parse error = %v, want %q", err, test.want)
+			}
+		})
+	}
+}

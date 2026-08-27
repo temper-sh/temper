@@ -1,6 +1,6 @@
 # `temper check` — lock, artifact, and budget audit
 
-Status: executable M1 contract, 2026-08-20.
+Status: executable native audit contract, 2026-08-20.
 
 `check` answers whether one manifest, lock, selected mode, and local Temper
 root agree, and whether the selected resident posture is predicted to fit this
@@ -48,7 +48,7 @@ failed without guessing an artifact identity.
 
 ## Budget prediction
 
-Every completed audit also emits the M1 wall model defined in
+Every completed audit also emits the bootstrap wall model defined in
 [`docs/design/wall-model.md`](../design/wall-model.md). The prediction uses:
 
 - the manifest's `gpu_memory_utilization` policy;

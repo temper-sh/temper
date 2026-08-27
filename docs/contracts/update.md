@@ -1,6 +1,6 @@
 # `temper update` — move existing lock pins
 
-Status: executable M1 contract, 2026-08-20.
+Status: executable native lock-update contract, 2026-08-20.
 
 `update` re-resolves existing layout pins from authoritative upstream metadata
 and commits changed lock rows once. It does not download model weights,
@@ -104,5 +104,5 @@ endpoint.
 The commands are printed and never executed, including during a non-dry run.
 Exit `2` is usage refusal, `1` is input/upstream/filesystem failure, and `0`
 means the result line is valid. Tested-catalog membership warnings join this
-surface in M2, once the signed software catalog exists; v1 does not invent a local
+surface once the signed software catalog exists; v1 does not invent a local
 verified/unverified state.

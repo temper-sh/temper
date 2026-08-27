@@ -47,7 +47,7 @@ evidence:
       kind: product-promotion
       revision: 1
       schema: temper-labs-product-promotion/v1
-      sha256: a7885a8ba68a1761abc6794de706681176f4fdc7793be520151b06fa45fa03a4
+      sha256: 9061edda901c8b92e66632f02f4e2bed2dcf52550bb620774247f077571eae9d
 id: fake-coder-artifact
 invalidation_triggers:
   - condition: Any fake artifact byte or interpretation metadata changes
@@ -60,7 +60,7 @@ promotion:
   id: fake-coder-artifact-lab
   revision: 1
   schema: temper-labs-product-promotion/v1
-  sha256: a7885a8ba68a1761abc6794de706681176f4fdc7793be520151b06fa45fa03a4
+  sha256: 9061edda901c8b92e66632f02f4e2bed2dcf52550bb620774247f077571eae9d
 qualification_reason: Fake artifact material is pinned while real qualification gates remain absent
 qualification_status: LAB
 revision: 1
@@ -110,6 +110,6 @@ spec:
   tokenizer:
     path: tokenizer/tokenizer.json
     state: file
-summary: Fake byte identities for exercising the C8 writer boundary
+summary: Fake byte identities for exercising the product-promotion writer boundary
 title: Fake coder artifact promotion
 what_this_means: This fake artifact is inspectable but not qualified or recommended

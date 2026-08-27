@@ -7,15 +7,63 @@ number carries the conditions it ran under, and anything unmeasured is
 labeled unmeasured.
 
 This is `temper-sh/temper`, the release repository: it ships reviewed
-configuration and the minimum probe environment. Setup, wizard, generator,
-lock, reviewed catalog profiles, acceptance suites, machine report, harness
-adapters, and the probe *base* live (or will live) here — the probes
-themselves belong to field-kit, which runs its stages over the base Temper
-installs.
+configuration, Field Kit execution, and the minimum probe environment. Setup,
+wizard, generator, lock, reviewed catalog profiles, acceptance suites, machine
+report, harness adapters, consent/session orchestration, and reviewed live
+protocols live (or will live) here. The adjacent Field Kit repository is
+promotion content that Temper snapshots into a release, not another runtime.
 
-## Status
+## Install and run Field Kit
 
-**Pre-release product build — native M1 pin/render/check complete**
+The first alpha is distributed as one signed and notarized Apple Silicon
+binary. On the [Temper Releases page](https://github.com/temper-sh/temper/releases),
+download both files for the release you want:
+
+```text
+temper_VERSION_darwin_arm64.zip
+temper_VERSION_darwin_arm64.zip.sha256
+```
+
+Then verify and install it without `sudo`:
+
+```sh
+cd ~/Downloads
+shasum -a 256 -c temper_VERSION_darwin_arm64.zip.sha256
+unzip temper_VERSION_darwin_arm64.zip
+mkdir -p "$HOME/.local/bin"
+install -m 0755 temper_VERSION_darwin_arm64/temper "$HOME/.local/bin/temper"
+"$HOME/.local/bin/temper" version
+```
+
+Replace `VERSION` with the version shown on the release. If `~/.local/bin` is
+not already on your `PATH`, either add it or keep using the absolute command
+path shown above.
+
+Field Kit is already inside that binary. On an eligible Apple Silicon Mac,
+start its guided baseline with one command and a new isolated directory:
+
+```sh
+temper field-kit baseline run qwen38-dynamic-q4xl@3 \
+  --root /absolute/new/path/for/temper-field-kit
+```
+
+Temper checks the machine, explains the complete download/change/cleanup
+boundary, asks whether to keep or restore the setup, and requires explicit
+consent before it creates anything. The current baseline needs at least 32 GiB
+of memory and may transfer 17.6 GB; the complete user guide is in the
+[Field Kit README](https://github.com/temper-sh/field-kit#readme).
+
+Until a signed alpha appears on the Releases page, contributors can build the
+same embedded Field Kit runtime from this checkout:
+
+```sh
+go build -o ./temper ./cmd/temper
+./temper field-kit baseline verify
+```
+
+## Development status
+
+**Pre-release product build — native pin/render/check workflow complete**
 (2026-08-20). Temper strictly parses `temper-manifest/v1` and
 `temper-lock/v1`, resolves missing rows without moving existing pins,
 re-resolves explicitly selected existing pins without fetching or activating
@@ -25,7 +73,8 @@ the local Mac's memory allowances and emits a labeled resident-wall
 prediction, renders llama-swap and Pi configuration in Go, and commits each
 effect through one atomic target.
 
-**M2 is underway in three deliberate phases:** build the minimum independently
+**The installed-base and qualification work proceeds in three deliberate
+workstreams:** build the minimum independently
 published software-supply catalog and exact `software.lock.yaml`; use
 adapter-backed installation methods to install, check, and remove a receipted
 base for Labs-promoted Field Kit experiments; then expand the broader
@@ -48,15 +97,15 @@ package manager. This puts an installed test base ahead of the wizard and
 production mode machinery. Consumer-home installation, production service
 control, and the wizard remain later work.
 
-Field Kit is being rebuilt as a user-facing, agent-operated catalog rather
-than another installer. Labs authors and promotes immutable experiments with
-machine buckets, applicability, cost/consent metadata, bounded prompts, and
-evidence rules. Its root prompt reads Temper's canonical machine facts and
-suggests applicable experiments; the user opts into each one. Temper performs
-the exact mechanical work and records provenance but never reads the moving
-experiment catalog or decides what to try. Experiment promotion into Field Kit
-and product/profile promotion into Temper are separate reviews. The boundary
-and replacement gate for the original Bash kit are recorded in
+Field Kit is now the reviewed content layer of Temper's experiment supply
+chain, not a second program. Labs authors evidence and promotion candidates;
+Field Kit retains immutable packages with applicability, cost/consent,
+protocol, and evidence contracts; a Temper release embeds a reviewed snapshot
+and owns discovery, disclosure, consent, resumable sessions, all effects, live
+protocols, reporting, and cleanup through `temper field-kit`. Temper never
+reads moving Labs state, and normal users need only the Temper binary.
+Experiment promotion into Field Kit and product/profile promotion into Temper
+remain separate reviews. The boundary is recorded in
 [`docs/design/field-kit-experiment-boundary.md`](docs/design/field-kit-experiment-boundary.md).
 
 The planned wizard does not force one global “best model.” The qualification
@@ -65,25 +114,28 @@ an evidence-backed performance profile and visible tradeoffs. Recommendation
 never selects or prefers one: the user may install any subset and explicitly
 chooses which layout starts.
 
-The provisionally approved M2 Phase C surfaces now make that boundary concrete.
-C7 uses six content-addressed typed profile documents with independent,
+The provisionally approved qualification surfaces now make that boundary
+concrete. The qualification catalog uses six content-addressed typed profile
+documents with independent,
 immutable qualification and product-lifecycle history, versioned machine
 buckets, structured performance evidence, and
-unordered plural recommendation sets. C8 is a separate one-packet/one-profile
-Labs product-promotion contract whose pure compiler excludes raw/private
+unordered plural recommendation sets. A separate one-packet/one-profile Labs
+product-promotion contract has a pure compiler that excludes raw/private
 evidence and cannot add recommendation, consent, or selection. The owner
 approved both Temper-side designs provisionally on 2026-08-25 so refinement and
-fake-fixture C7 implementation could proceed. The six typed documents and
+fake-fixture qualification implementation could proceed. The six typed documents and
 their exact composition chain now execute against hermetic fake fixtures. The
-separately authorized Labs C8 writer adoption is also complete, and Temper's
-pure compiler reproduces its first fake model-artifact projection byte for
-byte without reading Labs at runtime. Hermetic generated packets exercise all
-six target-schema compiler paths. Schema-specific `QUALIFIED` gates, runtime
+separately authorized Labs product-promotion writer adoption completed on
+2026-08-25, and the owner re-authorized its semantic-name byte refresh on
+2026-08-27. The Labs packet/projection and Temper copies are byte-identical.
+The pure compiler and hermetic generated packets exercise all six target-schema
+paths without reading Labs at runtime. Schema-specific `QUALIFIED` gates, runtime
 task-quality requirements, and exact dependency qualification/lifecycle
 closure now execute over fake fixtures. Recommendation content and real seeded
 qualification rows remain gated.
 
-The M2 Phase A shared resolver core is executable: strict software-catalog and
+The shared software-supply resolver core is executable: strict
+software-catalog and
 software-lock parsing, deterministic target-to-adapter selection, compiled
 adapter descriptor checks, provider-neutral candidate closures, SemVer/PEP 440
 policy selection backed by pinned maintained parsers, exact closure validation,
@@ -118,13 +170,13 @@ manager is invoked by the suite. Python interpreter identity is no longer
 ambient: a uv recipe constrains a `cpython` dependency and the exact uv-managed
 interpreter is an ordinary hashed unit in the locked isolated closure. The
 compiled Homebrew edge is an available shared adapter, not Temper's default
-application-installation method. The first Phase B pure install planner is also
+application-installation method. The first pure installation planner is also
 executable: it groups the complete lock by adapter/scope, orders dependencies,
 isolates each named base or experiment installation, verifies required base
 receipts, consumes direct or catalog-backed experiment locks without catalog
 reads, shares exact global packages through root-wide claims, converges on
 receipt/prepared state, and atomically republishes only wholly Temper-owned
-isolated groups. Strict canonical C6 receipt and root-state documents,
+isolated groups. Strict canonical installation-receipt and root-state documents,
 derived-path conditional atomic stores, and the prepare/effect/inspect/
 receipt/finalize orchestration are now
 executable behind keyed injected adapters. Hermetic fake adapters prove dry-run
@@ -139,20 +191,57 @@ conditional receipt release, and interrupted-run recovery. Canonical machine
 facts and the pure ordered Field Kit Temper-material binding are now executable
 too: the binding hashes exact Temper/manifest-lock bytes, names the rendered
 generation, and carries recursively explicit software lock/receipt identities.
-Field Kit will add the independently owned promoted-experiment, consent,
-attempt, decision, and report identities around that stable material layer.
+Temper now embeds Field Kit's independently reviewed immutable baseline
+packages and owns their consented, resumable keep-or-restore session envelope.
+The active Qwen Dynamic revision compiles a machine-exact direct software lock,
+materializes its bound package bytes into the dedicated root, and selects a
+Temper-owned Go protocol by exact identity; the former Python-runner revision
+is retained but retired. Its effect-free command workflow and cross-repository
+contract checks pass. The separate promoted-experiment path remains empty
+pending Labs promotion review.
 The frozen public `temper software install`, `check`, and `remove` surface is
 now wired to exact macOS host-target detection and the compiled
 `upstream-release` member. A hermetic command-level round-trip proves dry-run
-purity, clean second runs, stable C11 output, and refusal of target mismatch or
+purity, clean second runs, stable public command output, and refusal of target mismatch or
 an uncompiled locked adapter. The real release-adapter scratch round-trip has
 now passed in a disposable root: dry-run left the root absent, fresh exact
 assets installed and checked, the second install was byte-clean, removal
 preview was pure, and removal was second-run-clean. This proves the
 installation lifecycle, not an `exact-tested` catalog claim.
 
+For bounded Field Kit runs, `temper probe serve` validates the exact software
+lock and matching installation receipt, resolves `llama-swap` and
+`llama-server` only inside their isolated payloads, requires one exact rendered
+generation, and starts a loopback foreground process group. `--dry-run`
+performs the full admission check without starting it. This is not the later
+production `start`/`stop`/`status` lifecycle.
+
+The user-facing Field Kit surface is part of this binary. These discovery
+commands are effect-free and use the embedded release snapshot plus locally
+detected machine facts:
+
+```sh
+temper field-kit baseline verify
+temper field-kit baseline inspect
+temper field-kit baseline explain qwen38-dynamic-q4xl@3
+```
+
+The normal user workflow is one guided command:
+
+```sh
+temper field-kit baseline run qwen38-dynamic-q4xl@3 \
+  --root /absolute/new/path/for/temper-field-kit
+```
+
+Temper prints the exact disclosure, asks for keep-or-restore and explicit
+consent, then creates or resumes the session, runs its stages, and writes the
+report. The lower-level `start`, session-form `run`, `run-next`, and `finish`
+commands remain available for automation and recovery. Current cost and
+evidence limits are documented in the adjacent Field Kit README.
+
 The legacy `local-ai-setup` repo remains the installer of record for the one
-machine currently running the stack until M5. These commands therefore require
+machine currently running the stack until the release cutover gate. These
+commands therefore require
 an explicit, isolated data root and never infer the live installation. The
 workflow steps stay separate and run in this order:
 
@@ -244,7 +333,7 @@ never downloads weights, runs those commands, or touches the service. Bare
 
 - [Product spec](docs/SPEC.md) — what Temper is, for whom, and its
   non-negotiable principles.
-- [Execution plan](docs/PLAN.md) — milestones M0–M5 with acceptance gates,
+- [Execution plan](docs/PLAN.md) — sequenced work with acceptance gates,
   interface contracts, the design discipline, and the owner decision
   register.
 - [Maintainer code map](docs/CODE.md) — where each operation, decision,
@@ -254,13 +343,17 @@ never downloads weights, runs those commands, or touches the service. Bare
 - Native verb contracts: [apply](docs/contracts/apply.md),
   [resolve](docs/contracts/resolve.md), [fetch](docs/contracts/fetch.md),
   [update](docs/contracts/update.md), and [check](docs/contracts/check.md).
-- Approved M2 installed-base contract: [software install, prepared recovery,
+- Approved installed-base contract: [software install, prepared recovery,
   and installation receipt](docs/contracts/software-install.md).
-- Approved M2 catalog command: [software catalog update](docs/contracts/software-catalog-update.md).
+- Approved catalog command: [software catalog update](docs/contracts/software-catalog-update.md).
+- Field Kit ownership and promotion boundary:
+  [Field Kit experiment boundary](docs/design/field-kit-experiment-boundary.md).
+- User-facing Field Kit verbs: [`temper field-kit`](docs/contracts/field-kit.md).
+- Isolated Field Kit process primitive: [probe serve](docs/contracts/probe-serve.md).
 - Retained release tool: [software catalog signing and verification](docs/contracts/catalog-signing.md).
-- Approved M2 surface: [software supply, independent catalog lifecycle, lock,
+- Approved surface: [software supply, independent catalog lifecycle, lock,
   and adapter-family design](docs/design/software-supply-schema.md).
-- Provisionally approved M2 Phase C surface: [typed qualification catalog and profiles](docs/design/qualification-catalog-schema.md)
+- Provisionally approved surface: [typed qualification catalog and profiles](docs/design/qualification-catalog-schema.md)
   plus the separate [Labs product-promotion contract](docs/design/product-promotion-contract.md).
 - [Current-posture render acceptance](docs/acceptance/current-posture-render.md)
   — the concrete legacy-to-native comparison and reviewed differences.
@@ -272,8 +365,8 @@ never downloads weights, runs those commands, or touches the service. Bare
 |---|---|
 | `temper-sh/labs` | authors experiments, promotes bounded experiment packages, reviews evidence, and produces product-promotion packets |
 | `temper-sh/results` | explains reviewed evidence to people |
-| `temper-sh/field-kit` | offers immutable Labs-promoted experiments to consenting users and executes them over Temper |
-| **`temper-sh/temper`** | **ships reviewed configuration and the minimum probe environment** |
+| `temper-sh/field-kit` | retains immutable reviewed promotion content; it has no user runtime |
+| **`temper-sh/temper`** | **embeds reviewed Field Kit content and owns consent, execution, evidence, and cleanup** |
 
 Temper consumes reviewed packets and accepted product handoffs, never a
 moving Labs directory. Reports and witnesses flow back through Labs review;

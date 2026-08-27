@@ -1,0 +1,233 @@
+{
+  "schema": "field-kit-baseline/v3",
+  "id": "qwen38-dynamic-q4xl",
+  "revision": 3,
+  "origin": {
+    "source_id": "20260827-apple-silicon-portfolio",
+    "source_schema": "temper-labs-field-kit-portfolio-baseline/v1-draft",
+    "source_sha256": "9d884bd1d0168e1355db82428d5599b2e9f6b4418fdaff4341a0b71b089cfec6",
+    "profile_id": "qwen38-dynamic-q4xl-b10636-v251-froggeric"
+  },
+  "title": "Qwen3.8 Dynamic 27B Q4 XL local baseline",
+  "summary": "Install, render, bind, and exercise the exact Qwen3.8 Dynamic profile that passed the retained Labs mechanical protocol.",
+  "evidence_scope": "The frozen source evidence is one Apple M5 with 32 GiB unified memory. This portable run checks a second consenting Apple Silicon machine; it does not establish general model quality or enforce exact child peak memory because router-root portable process telemetry remains unavailable.",
+  "applicability": {
+    "os": "darwin",
+    "arch": "arm64",
+    "distribution": "macos",
+    "min_physical_memory_mib": 32768,
+    "max_physical_memory_mib": 0,
+    "min_wired_limit_mib": 24576,
+    "chip_prefixes": [
+      "Apple M"
+    ]
+  },
+  "relevance": [
+    {
+      "id": "portable-second-machine-witness",
+      "when": {
+        "os": "darwin",
+        "arch": "arm64",
+        "distribution": "macos",
+        "min_physical_memory_mib": 32768,
+        "max_physical_memory_mib": 65536,
+        "min_wired_limit_mib": 24576,
+        "chip_prefixes": [
+          "Apple M"
+        ]
+      },
+      "reason": "This machine is in the unverified portable class closest to the 32 GiB Apple M5 source witness."
+    }
+  ],
+  "cost": {
+    "fixed_runtime_minutes": 20,
+    "setup_minutes_min": 10,
+    "setup_minutes_max": 120,
+    "network_bytes_max": 17583047337,
+    "temporary_disk_bytes_max": 35200000000,
+    "retained_disk_bytes_max": 17650000000,
+    "memory_pressure": "high; retained source peak RSS was 22.835 GiB and Temper stops between protocol stages on thermal warning or 512 MiB swap growth",
+    "service_disruption": "none; one dedicated loopback-only foreground router",
+    "paid_provider_exposure": "none",
+    "idle_required": true
+  },
+  "consent": {
+    "choices": [
+      "keep exact local baseline after run",
+      "restore dedicated Field Kit root after run"
+    ],
+    "reads": [
+      "explicit Temper binary",
+      "immutable baseline package",
+      "local machine facts",
+      "local process and resource metrics"
+    ],
+    "writes": [
+      "dedicated Temper root",
+      "local baseline report",
+      "local session record"
+    ],
+    "network_destinations": [
+      "github.com",
+      "huggingface.co",
+      "localhost loopback"
+    ],
+    "local_output": "local-only",
+    "cleanup": "keep retains the exact dedicated root; restore validates the ownership marker, asks Temper to remove its software installation, and removes that dedicated root while retaining the external session and report",
+    "renewed_consent_conditions": [
+      "any additional artifact or network destination",
+      "any different model, runtime, router, template, or protocol bytes",
+      "any non-loopback listener or existing service change",
+      "cost bound, safety stop, or expected runtime exceeded"
+    ]
+  },
+  "profile": {
+    "layout": "qwen38-dynamic-q4xl",
+    "model_repository": "unsloth/Qwen3.8-27B-GGUF",
+    "model_revision": "4ca720788d1e01f1bff70c033e0d0028fd02e502",
+    "model_file": "Qwen3.8-27B-UD-Q4_K_XL.gguf",
+    "model_bytes": 17559178144,
+    "model_sha256": "3f227079003add2511437e5b1e94812e363385225bf6a9b47b0054a72bc8b01e",
+    "engine_version": "b10636",
+    "engine_revision": "4d19b287691e8f47fc303be420f630c40ec45684",
+    "router_version": "v251",
+    "router_revision": "4ec317589b21f58b64802c2b3371a179b9fdaa53",
+    "template_revision": "756cfb69d742355fd310b4ba9d50815a27d9d241",
+    "template_sha256": "c47c82b0544752d454f4e427228d9d9d8c3df64c9e446cbd0229362f67948009",
+    "context_tokens": 102400,
+    "maximum_output_tokens": 4096,
+    "parallel_slots": 1,
+    "kv": "q8_0",
+    "flash_attention": "on",
+    "batch_tokens": 512,
+    "microbatch_tokens": 512,
+    "reasoning": "off",
+    "speculation": "embedded-mtp-maximum-3"
+  },
+  "software": {
+    "definition_schema": "temper-labs-field-kit-portfolio-baseline/v1-draft",
+    "definition_id": "20260827-apple-silicon-portfolio",
+    "definition_sha256": "9d884bd1d0168e1355db82428d5599b2e9f6b4418fdaff4341a0b71b089cfec6",
+    "resolved": "2026-08-27",
+    "packages": [
+      {
+        "id": "llama-cpp",
+        "scope": "engine",
+        "native_name": "llama-cpp",
+        "version": "b10636",
+        "revision": "4d19b287691e8f47fc303be420f630c40ec45684",
+        "recipe_revision": "field-kit-b10636-v1",
+        "locator": "https://github.com/ggml-org/llama.cpp/releases/download/b10636/llama-b10636-bin-macos-arm64.tar.gz",
+        "sha256": "d3b97acc7e617cfa19a7d33fd0c63ea03a6c188aa79ee37e861bc19322264dc9",
+        "bytes": 10970530,
+        "unpacked_bytes": 27386950,
+        "installed_entries": 60,
+        "archive_root": "llama-b10636"
+      },
+      {
+        "id": "llama-swap",
+        "scope": "router",
+        "native_name": "llama-swap",
+        "version": "v251",
+        "revision": "4ec317589b21f58b64802c2b3371a179b9fdaa53",
+        "recipe_revision": "field-kit-v251-v1",
+        "locator": "https://github.com/mostlygeek/llama-swap/releases/download/v251/llama-swap_251_darwin_arm64.tar.gz",
+        "sha256": "b438acbfbe588b4a2e9ffe11f08eb22c5d7955b9b304cab0e668a8686edfccdc",
+        "bytes": 12871496,
+        "unpacked_bytes": 23027581,
+        "installed_entries": 3,
+        "archive_root": "."
+      }
+    ]
+  },
+  "mechanics": {
+    "installation": "field-kit-qwen38-dynamic",
+    "mode": "baseline",
+    "manifest": {
+      "path": "manifest.yaml",
+      "sha256": "04dd6480993f292ff0e97e66178a4c7c5c939662a8ade08377309b3c367a3eb7"
+    },
+    "manifest_lock": {
+      "path": "manifest.lock.yaml",
+      "sha256": "f9db5817fd6dbad5e7a92520300b6432e55761ec4bce520b52d2b139749e565a"
+    },
+    "runtime_protocol": {
+      "id": "qwen38-dynamic-short",
+      "revision": 1,
+      "schema": "field-kit-qwen38-dynamic-protocol/v1"
+    },
+    "orchestration": "temper-multi-stage/v1",
+    "prompt": {
+      "path": "PROMPT.md",
+      "sha256": "11cefe34c841af583e1a2a6429b023f551ed1faf67dbccbb457468743c923daf"
+    },
+    "protocols": [],
+    "stages": [
+      {
+        "id": "01-install-software",
+        "operation": "software-install",
+        "summary": "Install the exact isolated llama.cpp and llama-swap archives."
+      },
+      {
+        "id": "02-fetch-model",
+        "operation": "model-fetch",
+        "summary": "Fetch and hash the exact model and Froggeric template into a content-addressed set."
+      },
+      {
+        "id": "03-apply-config",
+        "operation": "config-apply",
+        "summary": "Render the exact content-addressed baseline generation."
+      },
+      {
+        "id": "04-check-software",
+        "operation": "software-check",
+        "summary": "Reconcile installed runtime and router bytes with their receipt."
+      },
+      {
+        "id": "05-check-artifacts",
+        "operation": "artifact-check",
+        "summary": "Stream and re-hash the complete model and template artifact set."
+      },
+      {
+        "id": "06-bind-material",
+        "operation": "material-bind",
+        "summary": "Bind the Temper binary, machine, locks, receipts, and rendered generation."
+      },
+      {
+        "id": "07-live-protocol",
+        "operation": "live-protocol",
+        "summary": "Run the loopback-only short behavior, cancellation, soak, and safety protocol."
+      },
+      {
+        "id": "08-outcome",
+        "operation": "outcome",
+        "summary": "Keep the dedicated exact baseline or remove software before verified root restoration."
+      }
+    ],
+    "resume": "Rerun temper field-kit baseline run with the same session, or use run-next for one stage; the first pending immutable stage is retried.",
+    "interruption": "The live router is foreground-owned and terminated as a process group; partial stage output is retained without advancing the session."
+  },
+  "report": {
+    "schema": "field-kit-baseline-report/v1",
+    "required_conditions": [
+      "artifact-integrity",
+      "cancellation-recovery",
+      "exact-material-binding",
+      "four-turn-history",
+      "model-discovery",
+      "nonstream-control",
+      "resource-safety",
+      "stream-control",
+      "three-request-soak",
+      "tool-calls"
+    ],
+    "sensitivity": "machine-local sanitized hashes and measurements; generated content is not retained",
+    "submission": "explicit-export-only"
+  },
+  "invalidation_triggers": [
+    "engine-or-router-revision-change",
+    "model-or-template-byte-change",
+    "runtime-tuning-change",
+    "temper-runtime-protocol-revision-change"
+  ]
+}

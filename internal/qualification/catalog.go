@@ -83,7 +83,7 @@ type RecommendationMember struct {
 	Costs          []string  `yaml:"costs"`
 }
 
-// Catalog is a validated C7 bundle containing only profile kinds whose complete
+// Catalog is a validated qualification bundle containing only profile kinds whose complete
 // typed validators have landed. Recommendation sets remain fail-closed.
 type Catalog struct {
 	Index          CatalogIndex

@@ -1,6 +1,6 @@
 # `temper fetch` — one exact layout artifact set
 
-Status: executable M1 contract, 2026-08-20.
+Status: executable native artifact-fetch contract, 2026-08-20.
 
 `fetch` materializes one explicitly named layout from a validated manifest and
 lock. The layout argument is required: a command that may download many

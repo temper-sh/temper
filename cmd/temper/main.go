@@ -13,8 +13,10 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 
 	applyverb "github.com/temper-sh/temper/internal/apply"
 	"github.com/temper-sh/temper/internal/budget"
@@ -23,6 +25,7 @@ import (
 	"github.com/temper-sh/temper/internal/fieldkitcmd"
 	"github.com/temper-sh/temper/internal/huggingface"
 	"github.com/temper-sh/temper/internal/machine"
+	"github.com/temper-sh/temper/internal/probecmd"
 	resolveverb "github.com/temper-sh/temper/internal/resolve"
 	"github.com/temper-sh/temper/internal/software/adapter"
 	"github.com/temper-sh/temper/internal/software/adapter/upstreamrelease"
@@ -34,10 +37,13 @@ import (
 	"github.com/temper-sh/temper/internal/upstream"
 )
 
-const version = "0.0.0-dev"
+// version is replaced only by the release build's validated linker flag.
+var version = "0.0.0-dev"
 
 func main() {
-	os.Exit(run(context.Background(), os.Args[1:], os.Stdout, os.Stderr))
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	os.Exit(run(ctx, os.Args[1:], os.Stdout, os.Stderr))
 }
 
 func run(ctx context.Context, arguments []string, stdout, stderr io.Writer) int {
@@ -46,6 +52,9 @@ func run(ctx context.Context, arguments []string, stdout, stderr io.Writer) int 
 		detectMachine: machine.Detect,
 		detectFacts:   machine.DetectFacts,
 		newSoftware:   newSoftwareCommand,
+		newProbe: func() (probecmd.Command, error) {
+			return probecmd.New(probecmd.ProcessRunner{})
+		},
 		newFieldKit: func() (fieldkitcmd.Command, error) {
 			return fieldkitcmd.New(machine.DetectFacts, fieldkitcmd.ReadExecutingBinary)
 		},
@@ -57,6 +66,7 @@ type machineDetector func(context.Context) (budget.Machine, error)
 type machineFactsDetector func(context.Context) (machine.Facts, error)
 type softwareCommandFactory func() (softwarecmd.Command, error)
 type fieldKitCommandFactory func() (fieldkitcmd.Command, error)
+type probeCommandFactory func() (probecmd.Command, error)
 
 type dependencies struct {
 	newUpstream   upstreamFactory
@@ -64,6 +74,7 @@ type dependencies struct {
 	detectFacts   machineFactsDetector
 	newSoftware   softwareCommandFactory
 	newFieldKit   fieldKitCommandFactory
+	newProbe      probeCommandFactory
 }
 
 func runWithUpstream(ctx context.Context, arguments []string, stdout, stderr io.Writer, newSource upstreamFactory) int {
@@ -72,6 +83,9 @@ func runWithUpstream(ctx context.Context, arguments []string, stdout, stderr io.
 		detectMachine: machine.Detect,
 		detectFacts:   machine.DetectFacts,
 		newSoftware:   newSoftwareCommand,
+		newProbe: func() (probecmd.Command, error) {
+			return probecmd.New(probecmd.ProcessRunner{})
+		},
 		newFieldKit: func() (fieldkitcmd.Command, error) {
 			return fieldkitcmd.New(machine.DetectFacts, fieldkitcmd.ReadExecutingBinary)
 		},
@@ -110,6 +124,17 @@ func runWithDependencies(ctx context.Context, arguments []string, stdout, stderr
 		command, err := deps.newFieldKit()
 		if err != nil {
 			fmt.Fprintf(stderr, "temper field-kit: construct command: %v\n", err)
+			return 1
+		}
+		return command.Run(ctx, arguments[1:], stdout, stderr)
+	case "probe":
+		if deps.newProbe == nil {
+			fmt.Fprintln(stderr, "temper probe: command dependencies are unavailable")
+			return 1
+		}
+		command, err := deps.newProbe()
+		if err != nil {
+			fmt.Fprintf(stderr, "temper probe: construct command: %v\n", err)
 			return 1
 		}
 		return command.Run(ctx, arguments[1:], stdout, stderr)
@@ -486,7 +511,9 @@ func usage(writer io.Writer) {
 	fmt.Fprintln(writer, "  temper check --root PATH [options]")
 	fmt.Fprintln(writer, "  temper update [layout-id] [options]")
 	fmt.Fprintln(writer, "  temper machine facts")
+	fmt.Fprintln(writer, "  temper field-kit baseline <verify|inspect|explain|start|status|run|run-next|finish> [options]")
 	fmt.Fprintln(writer, "  temper field-kit bind [options]")
+	fmt.Fprintln(writer, "  temper probe serve [options]")
 	fmt.Fprintln(writer, "  temper software <install|check|remove> [options]")
 	fmt.Fprintln(writer, "  temper version")
 	fmt.Fprintln(writer, "  temper help")

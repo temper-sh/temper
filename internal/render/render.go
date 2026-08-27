@@ -249,6 +249,12 @@ func llamaCommand(member resolvedMember) []string {
 		fmt.Sprintf("-b %d", layout.Llama.Batch),
 		fmt.Sprintf("-ub %d", layout.Llama.UBatch),
 	)
+	if layout.Llama.SpecType != "" {
+		lines = append(lines,
+			"--spec-type "+layout.Llama.SpecType,
+			fmt.Sprintf("--spec-draft-n-max %d", layout.Llama.SpecDraftNMax),
+		)
+	}
 	if member.PatchPath != "" {
 		lines = append(lines, "--chat-template-file "+shellQuote(member.PatchPath))
 	}

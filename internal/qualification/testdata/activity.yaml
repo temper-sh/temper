@@ -20,7 +20,7 @@ dependencies:
       id: example-local-search-mode
       revision: 1
       schema: temper-qualification-mode/v1
-      sha256: f1777afa345b0b7906b25964b9e13802f1b3c08dbdbd40d165a0ebb12cefe7fe
+      sha256: 38141db9071b3f296e1364fe8f715c49111300da43db8909d25539405c96921e
     relationship: mode
 evidence: []
 id: example-inspect-activity
@@ -48,8 +48,8 @@ spec:
     id: example-local-search-mode
     revision: 1
     schema: temper-qualification-mode/v1
-    sha256: f1777afa345b0b7906b25964b9e13802f1b3c08dbdbd40d165a0ebb12cefe7fe
+    sha256: 38141db9071b3f296e1364fe8f715c49111300da43db8909d25539405c96921e
   purpose: inspect
-summary: Fake strict tool subset for exercising C7 activity narrowing
+summary: Fake strict tool subset for exercising qualification activity narrowing
 title: Example inspect activity
 what_this_means: This fake activity is inspectable but does not enable any tool or mode

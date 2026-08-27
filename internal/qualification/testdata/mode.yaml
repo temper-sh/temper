@@ -21,13 +21,13 @@ dependencies:
       id: example-coder-runtime
       revision: 1
       schema: temper-qualification-model-runtime/v1
-      sha256: f9242b588152cf4ab6f5ad693a183ecf5926f2b110fbf92ddcd9e563c9dbe509
+      sha256: 480e82e8675433cad0425da1a0595cba047a0a8fbf57740669f6ad65bbef1d7d
     relationship: runtime
   - profile:
       id: example-project-search
       revision: 1
       schema: temper-qualification-tool/v1
-      sha256: bc6a11871a470af7919556daf937da84772d700e88478beee21fd2aabc153a71
+      sha256: 4cbceaae2fb643423288a1b8760c0c28b84b65f33a8da3fc9f029a89504b9b30
     relationship: tool
 evidence: []
 id: example-local-search-mode
@@ -61,7 +61,7 @@ spec:
         id: example-coder-runtime
         revision: 1
         schema: temper-qualification-model-runtime/v1
-        sha256: f9242b588152cf4ab6f5ad693a183ecf5926f2b110fbf92ddcd9e563c9dbe509
+        sha256: 480e82e8675433cad0425da1a0595cba047a0a8fbf57740669f6ad65bbef1d7d
       ttl_seconds: 7200
   foreground: local
   harnesses:
@@ -77,10 +77,10 @@ spec:
         id: example-project-search
         revision: 1
         schema: temper-qualification-tool/v1
-        sha256: bc6a11871a470af7919556daf937da84772d700e88478beee21fd2aabc153a71
+        sha256: 4cbceaae2fb643423288a1b8760c0c28b84b65f33a8da3fc9f029a89504b9b30
   wall_model:
     reason: Fake fixture has no wall-model witness
     result: unmeasured
-summary: Fake runtime, tool, placement, and harness world for exercising C7 mode composition
+summary: Fake runtime, tool, placement, and harness world for exercising qualification mode composition
 title: Example local search mode
 what_this_means: This fake world is inspectable but is not selected or qualified

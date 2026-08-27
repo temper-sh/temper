@@ -1,6 +1,6 @@
 # `temper-catalog` release signing contract
 
-Status: approved for retained M2 release tooling, 2026-08-24.
+Status: approved for retained software-catalog release tooling, 2026-08-24.
 
 `temper-catalog` is a release-only command, deliberately separate from the
 end-user `temper` binary. It validates and signs exact software catalog or

@@ -112,7 +112,9 @@ automatic projector downloads. Typed manifest fields replace raw flag
 strings, and tests pin each field-to-config mapping.
 `preferred` selects Pi's starting model but never implies a llama-swap
 startup preload; `preload` is a separate explicit member choice. The
-flash-attention enum preserves `auto` as distinct from `off`.
+flash-attention enum preserves `auto` as distinct from `off`. The paired
+`llama.spec_type: draft-mtp` and `llama.spec_draft_n_max` fields render exact
+embedded-MTP flags; omitted fields render no speculative-decoding behavior.
 
 ## Deliberately outside this slice
 

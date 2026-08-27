@@ -1,5 +1,5 @@
 // Package receiptstore owns derived-path, concurrency-safe reads and atomic
-// commits for one canonical C6 installation receipt.
+// commits for one canonical installation receipt.
 package receiptstore
 
 import (

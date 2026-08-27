@@ -1,6 +1,6 @@
 # `temper software catalog update` contract
 
-Status: approved for M2 Phase A implementation, 2026-08-24.
+Status: approved software-catalog update implementation, 2026-08-24.
 
 ## Invocation
 

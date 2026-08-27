@@ -65,7 +65,7 @@ type Prediction struct {
 	HasSuggestion        bool
 }
 
-// Predict applies the M1 wall model to already-read, typed facts.
+// Predict applies the bootstrap wall model to already-read, typed facts.
 func Predict(input Input) (Prediction, error) {
 	if err := validate(input); err != nil {
 		return Prediction{}, err

@@ -73,6 +73,6 @@ spec:
     target:
       arch: arm64
       os: darwin
-summary: Fake tested software and serving identity for exercising the C7 engine boundary
+summary: Fake tested software and serving identity for exercising the qualification engine boundary
 title: Example local engine
 what_this_means: This fake engine is inspectable but not qualified or recommended

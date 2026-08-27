@@ -13,6 +13,7 @@ import (
 	"github.com/temper-sh/temper/internal/budget"
 	"github.com/temper-sh/temper/internal/fieldkitcmd"
 	"github.com/temper-sh/temper/internal/machine"
+	"github.com/temper-sh/temper/internal/probecmd"
 	"github.com/temper-sh/temper/internal/software"
 	"github.com/temper-sh/temper/internal/software/adapter"
 	"github.com/temper-sh/temper/internal/software/catalogupdate"
@@ -42,6 +43,26 @@ func TestRunDispatchesFieldKitHelpWithoutReadingMachineOrBinary(t *testing.T) {
 	})
 	if exit != 0 || called || stderr.Len() != 0 || !strings.Contains(stdout.String(), "temper field-kit bind") {
 		t.Fatalf("exit = %d, called = %v, stdout = %q, stderr = %q", exit, called, stdout.String(), stderr.String())
+	}
+}
+
+type commandRunnerStub struct{}
+
+func (commandRunnerStub) Run(context.Context, probecmd.Invocation, io.Writer, io.Writer) error {
+	return errors.New("help must not launch a process")
+}
+
+func TestRunDispatchesProbeHelpWithoutLaunchingAProcess(t *testing.T) {
+	command, err := probecmd.New(commandRunnerStub{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	exit := runWithDependencies(context.Background(), []string{"probe", "help"}, &stdout, &stderr, dependencies{
+		newProbe: func() (probecmd.Command, error) { return command, nil },
+	})
+	if exit != 0 || stderr.Len() != 0 || !strings.Contains(stdout.String(), "temper probe serve") {
+		t.Fatalf("exit = %d, stdout = %q, stderr = %q", exit, stdout.String(), stderr.String())
 	}
 }
 

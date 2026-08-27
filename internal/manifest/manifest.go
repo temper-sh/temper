@@ -64,6 +64,8 @@ type LlamaTuning struct {
 	FlashAttention string `yaml:"flash_attention"`
 	Batch          int    `yaml:"batch"`
 	UBatch         int    `yaml:"ubatch"`
+	SpecType       string `yaml:"spec_type,omitempty"`
+	SpecDraftNMax  int    `yaml:"spec_draft_n_max,omitempty"`
 }
 
 type Tool struct {
@@ -185,6 +187,21 @@ func (d Document) Validate() error {
 		}
 		if layout.Llama.FlashAttention != "on" && layout.Llama.FlashAttention != "off" && layout.Llama.FlashAttention != "auto" {
 			problem("layout %q llama.flash_attention %q must be on, off or auto", id, layout.Llama.FlashAttention)
+		}
+		switch layout.Llama.SpecType {
+		case "":
+			if layout.Llama.SpecDraftNMax != 0 {
+				problem("layout %q llama.spec_draft_n_max requires spec_type", id)
+			}
+		case "draft-mtp":
+			if layout.Role != "coder" {
+				problem("layout %q llama.spec_type draft-mtp is supported only for coder layouts", id)
+			}
+			if layout.Llama.SpecDraftNMax <= 0 || layout.Llama.SpecDraftNMax > 16 {
+				problem("layout %q llama.spec_draft_n_max must be between 1 and 16 for draft-mtp", id)
+			}
+		default:
+			problem("layout %q llama.spec_type %q is unsupported", id, layout.Llama.SpecType)
 		}
 
 		switch layout.Role {

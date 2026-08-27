@@ -1,7 +1,8 @@
-# Software supply + lock — C4/C5 design
+# Software supply and lock design
 
 Status: **approved by owner**, extended through 2026-08-24 for experiment
-locks, layered installations, and the uv reader. The executable M2 Phase A shared
+locks, layered installations, and the uv reader. The executable shared
+software-supply
 resolver now consumes this surface: strict catalog/lock parsing and validation,
 normalized target selection, compiled adapter descriptor matching,
 provider-neutral candidate closures, SemVer/PEP 440 policy selection, closure
@@ -39,16 +40,18 @@ Their explicit `python-environment`/`uv` recipes exercise PEP
 440 and exact Python/MLX closure control. Nothing selects or installs either
 package unless the user or a reviewed packet explicitly requests it.
 
-The Phase A resolver answers one narrow question:
+The software-supply resolver answers one narrow question:
 
 > Given a logical package, an explicit installation method, a signed catalog snapshot,
 > and target-machine facts, which exact software closure should Temper install?
 
 It does not install that closure. Resolution is a read plus pure selection and
-one lock-file commit. Installation and its receipt are the following M2 Phase B
+one lock-file commit. Installation and its receipt are the following
+installed-base
 slice. Its schema-independent pure planner now handles named installations,
 verified base requirements, direct or catalog-backed experiment provenance,
-prepared recovery, and root-wide shared claims. The approved C6 receipt,
+prepared recovery, and root-wide shared claims. The approved installation
+receipt,
 root-state, CLI output, and packet-identity surface are in
 `../contracts/software-install.md`. Strict canonical receipt/root-state
 documents, derived-path conditional atomic stores, and internal keyed-adapter
@@ -73,8 +76,8 @@ integration and the remaining concrete adapters remain.
 | version policy, constraints, exclusions | supply catalog recipe | update policy, not a resolved or installed fact |
 | exact tested evidence | supply catalog recipe evidence | signed catalog knowledge; local files never claim verification |
 | exact desired closure, resolution provenance, required base lock identities | `software.lock.yaml` | portable resolution snapshot; says nothing about actual installation |
-| per-installation observed closure and relation | Phase B installation receipt | historical proof; never inferred from desired state |
-| current shared acquisition, lifecycle, claims, and prepared operations | root-wide Phase B software state | one concurrency/removal authority across base and experiment receipts |
+| per-installation observed closure and relation | installation receipt | historical proof; never inferred from desired state |
+| current shared acquisition, lifecycle, claims, and prepared operations | root-wide software state | one concurrency/removal authority across base and experiment receipts |
 
 The lock snapshots every immutable resolution input that applies. Catalog
 provenance records a catalog snapshot when one participated; experiment
@@ -128,7 +131,7 @@ changes method automatically.
 surfaces. The former is an acceptable cataloged Homebrew tool; when Temper uses
 it to fetch artifacts, it may act only on an exact revision already owned by
 `manifest.lock.yaml`. The latter asks llama-server to resolve a moving
-repository/quant shortcut at runtime and is forbidden. The native M1
+repository/quant shortcut at runtime and is forbidden. The native manifest
 resolver/fetcher currently uses Temper's Go Hugging Face client, so it does not
 discover or require an ambient `hf` command. Any later workflow that invokes
 the cataloged CLI must pass its absolute observed path, suppress update and
@@ -934,7 +937,8 @@ units:
   or pre-existing state. Those belong to catalog comparison or the receipt.
 - The semantic digest covers `schema`, all provenance, sorted base
   requirements, target, selections, and units in canonical key order. It
-  excludes `resolved`. Phase B receipts and Field Kit packets bind this digest.
+  excludes `resolved`. Installation receipts and Field Kit packets bind this
+  digest.
 - A root closure digest covers its selection identity, root unit id, and the
   complete reachable unit subgraph serialized as canonical JSON with sorted
   map keys and dependency lists. It excludes `resolved`. This is the digest

@@ -1,4 +1,4 @@
-# M1 wall-model prediction
+# Bootstrap wall-model prediction
 
 Status: executable design, 2026-08-20.
 
@@ -20,8 +20,9 @@ No new persistent field is added for this slice.
   each check. They are not copied into the manifest or lock.
 - Selected model-byte sizes come from the already verified immutable artifact
   receipts. They are lower bounds on runtime footprint, not evidence claims.
-- Reviewed runtime footprints and machine applicability remain catalog facts
-  for M2. The M1 prediction cannot manufacture them from a file size.
+- Reviewed runtime footprints and machine applicability remain qualification
+  catalog facts. The bootstrap prediction cannot manufacture them from a file
+  size.
 
 This preserves one home per fact: intent in the manifest, resolution in the
 lock, local materialization facts in receipts, live hardware at the read edge,
@@ -33,7 +34,7 @@ All byte quantities are converted to MiB and integer results round toward the
 safer side: model bytes round up; percentage-derived capacities and allocation
 round down.
 
-The M1 hardware adapter uses the witnessed legacy approximations until a
+The bootstrap hardware adapter uses the witnessed legacy approximations until a
 native Metal capability read replaces them:
 
 ```text

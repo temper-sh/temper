@@ -68,7 +68,7 @@ candidate:
     tokenizer:
       path: tokenizer/tokenizer.json
       state: file
-  summary: Fake byte identities for exercising the C8 writer boundary
+  summary: Fake byte identities for exercising the product-promotion writer boundary
   title: Fake coder artifact promotion
   what_this_means: This fake artifact is inspectable but not qualified or recommended
 catalog_consideration:
@@ -140,7 +140,7 @@ revision: 1
 sanitization:
   excluded_classes:
     - credentials
-    - machine-identifying-values-outside-the-C7-bucket
+    - machine-identifying-values-outside-the-declared-machine-bucket
     - private-corpus-content
     - prompts-not-approved-for-publication
     - raw-user-content

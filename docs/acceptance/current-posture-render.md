@@ -6,7 +6,7 @@ artifact admission and explicit `--no-mmproj`; those additions are covered by
 the hermetic renderer, artifact-set, apply, and CLI tests rather than a second
 multi-GB machine run. This remains a renderer acceptance snapshot, not a
 catalog recommendation or permission to activate Temper on the live machine.
-The legacy stack remains live through the M5 cutover gate.
+The legacy stack remains live through the release cutover gate.
 
 ## Inputs and witness
 

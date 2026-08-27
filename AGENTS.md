@@ -16,7 +16,7 @@ it worked once.
   or an unreviewed prototype.
 - Do not edit adjacent repositories unless the user explicitly asks for the
   cross-repository step.
-- The live machine runs the legacy `local-ai-setup` stack until the M5
+- The live machine runs the legacy `local-ai-setup` stack until the release
   cutover gate. Never point the running service, the real manifest, or
   launchd at this repo without the user's explicit go-ahead.
 - A recommendation is never consent: no code path may select a model, tool,
@@ -29,7 +29,13 @@ review of product code: `code-organization` (layout; its Go reference
 governs the CLI — the whole CLI is Go, decided 2026-08-14), `unit-design`, `data-modeling` (every schema:
 manifest, lock, catalog, state), `reliable-effects` (every verb that
 mutates), `testing`. Load the matching skill before designing or reviewing;
-`docs/PLAN.md` §1 maps the set's spine onto Temper concretely.
+The design-discipline section of `docs/PLAN.md` maps the set's spine onto
+Temper concretely.
+
+Plan-local numbers, milestone labels, decision numbers, and paragraph or
+section numbers are never durable names. Outside the plan that defines one,
+use the semantic contract or workflow name, a versioned schema/protocol
+identity, and a named file or heading link.
 
 The short form of that mapping:
 
@@ -47,6 +53,13 @@ The short form of that mapping:
 
 ## Ground rules (inherited, non-negotiable)
 
+- **Assume yesterday's state is stale** (owner, 2026-08-20). Checking upstream
+  versions — engines, models, templates, patches — is routine at the start of
+  a session, and the default on finding one is **smoke test and adopt**, not
+  defer. Version currency is cheap and reversible; it does not relax the
+  evidence bar for any *claim* about quality or speed. For this repo it also
+  means a pinned dependency or a hard-coded upstream revision in a design doc
+  is assumed rotten until re-checked.
 - Anything shell targets **bash 3.2** and is shellcheck-clean: no
   associative arrays, no `${var,,}`, no `mapfile`.
 - **Never run `sudo`.** Detect the state, print a ready-to-paste command,

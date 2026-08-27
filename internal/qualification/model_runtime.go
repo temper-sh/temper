@@ -6,7 +6,7 @@ const RuntimeLayoutContractV1 = "temper-runtime-layout/v1"
 
 // ModelRuntimeProfile binds one artifact and engine to output-affecting layout
 // identity and an explicit performance inventory. Placement remains a mode
-// concern and user selection remains outside C7.
+// concern and user selection remains outside the qualification catalog.
 type ModelRuntimeProfile struct {
 	ProfileEnvelope `yaml:",inline"`
 	Spec            ModelRuntimeSpec `yaml:"spec"`

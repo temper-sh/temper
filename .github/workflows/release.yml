@@ -1,0 +1,272 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Test tagged source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = "arm64"
+          test "$(git rev-parse "$RELEASE_TAG^{commit}")" = "$GITHUB_SHA"
+          unformatted="$(gofmt -l .)"
+          if [[ -n "$unformatted" ]]; then
+            printf 'Files require gofmt:\n%s\n' "$unformatted"
+            exit 1
+          fi
+          git diff --check
+          go test -count=1 ./...
+          go vet ./...
+          go test -race -count=1 ./...
+
+      - name: Build versioned macOS ARM64 binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          go run ./cmd/temper-release build \
+            --version "$version" \
+            --output build/temper
+          printf 'VERSION=%s\n' "$version" >> "$GITHUB_ENV"
+
+      - name: Import Developer ID identity
+        shell: bash
+        env:
+          APPLE_DEVELOPER_ID_APPLICATION: ${{ secrets.APPLE_DEVELOPER_ID_APPLICATION }}
+          APPLE_DEVELOPER_ID_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          set -euo pipefail
+          : "${APPLE_DEVELOPER_ID_APPLICATION:?missing APPLE_DEVELOPER_ID_APPLICATION}"
+          : "${APPLE_DEVELOPER_ID_PASSWORD:?missing APPLE_DEVELOPER_ID_PASSWORD}"
+          : "${APPLE_SIGNING_IDENTITY:?missing APPLE_SIGNING_IDENTITY}"
+
+          certificate_path="$RUNNER_TEMP/temper-developer-id.p12"
+          keychain_path="$RUNNER_TEMP/temper-signing.keychain-db"
+          keychain_password="$(uuidgen)"
+
+          printf 'TEMPER_CERTIFICATE_PATH=%s\n' "$certificate_path" >> "$GITHUB_ENV"
+          printf 'TEMPER_KEYCHAIN_PATH=%s\n' "$keychain_path" >> "$GITHUB_ENV"
+          printf '%s' "$APPLE_DEVELOPER_ID_APPLICATION" |
+            openssl base64 -d -A -out "$certificate_path"
+          security create-keychain -p "$keychain_password" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security import "$certificate_path" \
+            -k "$keychain_path" \
+            -P "$APPLE_DEVELOPER_ID_PASSWORD" \
+            -T /usr/bin/codesign \
+            -t cert \
+            -f pkcs12
+          security set-key-partition-list \
+            -S apple-tool:,apple: \
+            -s \
+            -k "$keychain_password" \
+            "$keychain_path"
+          identity_output="$(security find-identity -v -p codesigning "$keychain_path")"
+          printf '%s\n' "$identity_output"
+          if [[ "$identity_output" != *"$APPLE_SIGNING_IDENTITY"* ]]; then
+            printf 'Configured signing identity was not imported.\n'
+            exit 1
+          fi
+
+      - name: Sign binary
+        shell: bash
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          set -euo pipefail
+          codesign \
+            --force \
+            --options runtime \
+            --timestamp \
+            --sign "$APPLE_SIGNING_IDENTITY" \
+            --keychain "$TEMPER_KEYCHAIN_PATH" \
+            build/temper
+          codesign --verify --strict --verbose=2 build/temper
+
+      - name: Package release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          go run ./cmd/temper-release package \
+            --version "$VERSION" \
+            --binary build/temper \
+            --output dist
+
+      - name: Notarize release archive
+        shell: bash
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          : "${APPLE_ID:?missing APPLE_ID}"
+          : "${APPLE_APP_PASSWORD:?missing APPLE_APP_PASSWORD}"
+          : "${APPLE_TEAM_ID:?missing APPLE_TEAM_ID}"
+          archive="dist/temper_${VERSION}_darwin_arm64.zip"
+          xcrun notarytool submit "$archive" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait \
+            --timeout 30m \
+            --output-format json | tee "$RUNNER_TEMP/temper-notarization.json"
+
+      - name: Verify release from clean extraction
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive_name="temper_${VERSION}_darwin_arm64.zip"
+          archive="dist/$archive_name"
+          expected_entries="$(printf '%s\n' \
+            "temper_${VERSION}_darwin_arm64/temper" \
+            "temper_${VERSION}_darwin_arm64/LICENSE" \
+            "temper_${VERSION}_darwin_arm64/THIRD_PARTY_NOTICES.txt")"
+          actual_entries="$(unzip -Z1 "$archive")"
+          test "$actual_entries" = "$expected_entries"
+
+          (cd dist && shasum -a 256 -c "$archive_name.sha256")
+          extraction_root="$(mktemp -d "$RUNNER_TEMP/temper-release-smoke.XXXXXX")"
+          ditto -x -k "$archive" "$extraction_root"
+          binary="$extraction_root/temper_${VERSION}_darwin_arm64/temper"
+
+          test "$(stat -f '%Lp' "$binary")" = "755"
+          test "$(stat -f '%Lp' "$extraction_root/temper_${VERSION}_darwin_arm64/LICENSE")" = "644"
+          test "$(stat -f '%Lp' "$extraction_root/temper_${VERSION}_darwin_arm64/THIRD_PARTY_NOTICES.txt")" = "644"
+          test "$("$binary" version)" = "temper $VERSION"
+          "$binary" field-kit baseline verify
+          codesign --verify --strict --verbose=2 "$binary"
+
+          assessment_passed=false
+          for attempt in 1 2 3 4 5; do
+            if spctl --assess --type execute --verbose=4 "$binary"; then
+              assessment_passed=true
+              break
+            fi
+            sleep 5
+          done
+          test "$assessment_passed" = "true"
+
+      - name: Preserve verified archive
+        uses: actions/upload-artifact@v7
+        with:
+          path: dist/*.zip
+          archive: false
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Preserve verified checksum
+        uses: actions/upload-artifact@v7
+        with:
+          path: dist/*.sha256
+          archive: false
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Publish GitHub release
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          api_headers=(
+            -H "Accept: application/vnd.github+json"
+            -H "Authorization: Bearer $GITHUB_TOKEN"
+            -H "X-GitHub-Api-Version: 2022-11-28"
+          )
+
+          encoded_tag="$(jq -nr --arg value "$RELEASE_TAG" '$value | @uri')"
+          curl --fail --silent --show-error --location \
+            "${api_headers[@]}" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/git/ref/tags/$encoded_tag" \
+            >/dev/null
+
+          prerelease=false
+          if [[ "$VERSION" == *-* ]]; then
+            prerelease=true
+          fi
+          create_body="$(jq -nc \
+            --arg tag "$RELEASE_TAG" \
+            --argjson prerelease "$prerelease" \
+            '{
+              tag_name: $tag,
+              draft: true,
+              prerelease: $prerelease,
+              generate_release_notes: true
+            }')"
+          release_response="$(curl --fail --silent --show-error --location \
+            "${api_headers[@]}" \
+            -X POST \
+            -d "$create_body" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/releases")"
+          release_id="$(printf '%s' "$release_response" | jq -er '.id')"
+          test "$(printf '%s' "$release_response" | jq -r '.draft')" = "true"
+          test "$(printf '%s' "$release_response" | jq -r '.tag_name')" = "$RELEASE_TAG"
+
+          archive="dist/temper_${VERSION}_darwin_arm64.zip"
+          checksum="$archive.sha256"
+          for asset_path in "$archive" "$checksum"; do
+            test -f "$asset_path"
+            asset_name="$(basename "$asset_path")"
+            encoded_name="$(jq -nr --arg value "$asset_name" '$value | @uri')"
+            content_type="text/plain"
+            if [[ "$asset_path" == *.zip ]]; then
+              content_type="application/zip"
+            fi
+            asset_response="$(curl --fail --silent --show-error --location \
+              "${api_headers[@]}" \
+              -H "Content-Type: $content_type" \
+              --data-binary "@$asset_path" \
+              "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$release_id/assets?name=$encoded_name")"
+            test "$(printf '%s' "$asset_response" | jq -r '.name')" = "$asset_name"
+            test "$(printf '%s' "$asset_response" | jq -r '.state')" = "uploaded"
+          done
+
+          publish_response="$(curl --fail --silent --show-error --location \
+            "${api_headers[@]}" \
+            -X PATCH \
+            -d '{"draft":false}' \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/$release_id")"
+          test "$(printf '%s' "$publish_response" | jq -r '.draft')" = "false"
+          test "$(printf '%s' "$publish_response" | jq -r '.tag_name')" = "$RELEASE_TAG"
+
+      - name: Remove temporary signing material
+        if: always()
+        shell: bash
+        run: |
+          set -u
+          if [[ -n "${TEMPER_KEYCHAIN_PATH:-}" ]]; then
+            security delete-keychain "$TEMPER_KEYCHAIN_PATH" || true
+          fi
+          if [[ -n "${TEMPER_CERTIFICATE_PATH:-}" ]]; then
+            rm -f "$TEMPER_CERTIFICATE_PATH"
+          fi

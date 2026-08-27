@@ -58,7 +58,7 @@ func TestToolProfileValidationRefusesIncompleteCoreOrTransport(t *testing.T) {
 		{name: "invalid result schema", mutate: func(profile *qualification.ToolProfile) { profile.Spec.Transports[0].ResultSchema = "result" }, want: "result_schema"},
 		{name: "invalid description digest", mutate: func(profile *qualification.ToolProfile) { profile.Spec.Transports[0].DescriptionSHA256 = "nope" }, want: "description_sha256"},
 		{name: "applicability mismatch", mutate: func(profile *qualification.ToolProfile) { profile.Applicability.Harnesses = nil }, want: "must exactly match spec.transports harnesses"},
-		{name: "C7 dependency", mutate: func(profile *qualification.ToolProfile) {
+		{name: "qualification dependency", mutate: func(profile *qualification.ToolProfile) {
 			profile.Dependencies = []qualification.ProfileDependency{{
 				Relationship: "runtime", Profile: qualification.Reference{Schema: qualification.ModelRuntimeSchemaV1, ID: "example-runtime", Revision: 1, SHA256: strings.Repeat("a", 64)},
 			}}

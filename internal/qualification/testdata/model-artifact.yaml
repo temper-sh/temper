@@ -87,6 +87,6 @@ spec:
   tokenizer:
     path: tokenizer/tokenizer.json
     state: file
-summary: Fake byte identities for exercising the C7 model-artifact boundary
+summary: Fake byte identities for exercising the qualification model-artifact boundary
 title: Example coder artifact
 what_this_means: This fake artifact is inspectable but not qualified or recommended

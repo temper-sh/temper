@@ -1,4 +1,4 @@
-// Package softwarecmd owns the public C11 command edge for exact software
+// Package softwarecmd owns the public command edge for exact software
 // installation, read-only audit, and provenance-guided removal.
 package softwarecmd
 

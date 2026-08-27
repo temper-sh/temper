@@ -1,171 +1,147 @@
-# Field Kit experiment boundary
+# Field Kit promotion and runtime boundary
 
-Status: owner-approved product boundary, 2026-08-24. This document records
-Temper's side of the contract. Labs owns the detailed promotion rules and
-Field Kit owns its package, catalog, and prompt formats; those schemas are
-designed in their repositories rather than imported here.
+Status: owner runtime revision accepted 2026-08-27.
 
-## Decision
+Field Kit is a reviewed content boundary in Temper's supply chain. It is not a
+second executable. Labs owns editable research, Field Kit retains immutable
+promoted packages, and Temper embeds one reviewed snapshot in each release and
+owns every runtime decision and effect.
 
-Field Kit is a user-facing, agent-operated catalog of current
-machine-dependent experiments. It is no longer a friend-only installer and it
-is not another implementation of Temper.
+```text
+Labs                     Field Kit                    Temper release/runtime
+editable evidence  --->  immutable promotion  --->  embedded verified snapshot
+promotion candidates     packages and history       consent, effects, evidence
+```
 
-The Field Kit root prompt uses a read-only Temper machine probe, evaluates the
-promoted experiment catalog against those facts, and suggests applicable
-experiments with an explanation and estimated cost. The user explicitly opts
-into each experiment. An experiment prompt may then analyze behavior and adapt
-parameters within its reviewed bounds while Temper performs the exact reads
-and effects.
+Normal users install or build only `temper`. Temper never reads a moving Labs
+checkout or fetches a moving Field Kit catalog at runtime. An explicit
+`--catalog` path is a review/development override and receives the same strict
+validation as the embedded snapshot.
 
-The current standalone Bash Field Kit is a behavior oracle for this rebuild,
-not the destination architecture. Its useful experiment semantics are
-extracted into promoted packages; its duplicated installation stack is not.
-Removing or replacing that adjacent repository is a separately authorized
-cross-repository step after the parity gate below.
+## Ownership
 
-## Three owners, two promotions
-
-The boundary is whether a component is deciding what to try, executing a
-declared trial, or accepting a conclusion:
-
-| Owner | Owns | Does not own |
+| Owner | Owns | Must not own |
 |---|---|---|
-| Labs | experiment authoring, adaptive reasoning policy, promotion review, returned raw evidence, and product conclusions | product installation effects or an automatic path into release |
-| Field Kit | the root discovery/consent prompt, immutable promoted experiment packages, current runnable index, per-experiment prompts, and local session reports | mutable Labs state, Temper internals, or qualification decisions |
-| Temper | canonical machine facts, exact software/model/config identities, reversible installation, isolated serving and measurement primitives, and execution provenance | experiment selection, adaptive tuning policy, evidence interpretation, or catalog promotion |
+| Labs | editable experiment definitions, source evidence, promotion review, returned-evidence interpretation, product-promotion decisions | a runtime dependency, user consent, or silent product changes |
+| Field Kit | canonical immutable package/catalog bytes, provenance, hard applicability and advisory relevance declarations, cost/data/consent inputs, stage and protocol identities, evidence requirements, invalidation, pause, retirement, and operator policy | an executable, machine effects, process lifecycle, session mutation, or a moving runtime feed |
+| Temper | embedded-snapshot verification, machine facts, applicability evaluation, exact disclosure, explicit consent, resumable sessions, package materialization, all installation/model/config effects, live protocol implementations, safety stops, evidence, reports, and cleanup | editing Labs research, widening promoted bounds, automatic evidence submission, or turning a run into a recommendation |
 
-There are two distinct promotion paths:
+The Temper binary identity covers the embedded Field Kit bytes. Release
+signing therefore gives users one artifact and one supply-chain identity to
+verify. Any content change that affects execution creates a new package
+revision and a new Temper release snapshot; the runtime accepts only protocol
+identities implemented and reviewed in that release.
 
-1. **Experiment promotion: Labs → Field Kit.** Review establishes that an
-   experiment asks a useful question and is safe, bounded, reproducible, and
-   honest about cost. It does not establish that the tested model,
-   configuration, or tool is good or recommended.
-2. **Product promotion: Labs → Temper and Results.** Review of accumulated
-   evidence may accept a qualification profile for Temper and a sanitized
-   explanatory record for Results. A Field Kit run never performs this
-   promotion itself.
+## Two independent promotion gates
 
-Temper consumes neither moving Labs state nor Field Kit's current experiment
-catalog. Field Kit depends on Temper's stable public surfaces; the dependency
-never points in the other direction.
+1. **Experiment/baseline promotion: Labs → Field Kit.** Review establishes a
+   useful, bounded procedure and freezes exact inputs, applicability, costs,
+   effects, consent, execution declarations, evidence conditions, and
+   limitations. Promotion does not validate the hypothesis or recommend the
+   subject.
+2. **Product promotion: Labs → Temper/Results.** Later evidence review may
+   accept a qualified profile and a public explanation. A Field Kit run never
+   performs this transition.
 
-## One home per experiment
+A baseline freezes an exact prior witness for safe reproduction. An experiment
+asks a separately reviewed bounded decision question. Neither inherits consent
+from the other.
 
-The editable experiment has one authoritative home in Labs. Promotion creates
-an immutable, content-identified snapshot in Field Kit. That snapshot is
-history—exactly what a user ran—not a second editable source. Any change that
-can alter applicability, consent, execution, measurement, or interpretation
-creates a new experiment version, including changes to:
+## One editable home, immutable revisions
 
-- the experiment prompt or research question;
-- machine buckets or applicability predicates;
-- inputs, candidates, parameter bounds, or stop rules;
-- cost estimates or renewed-consent thresholds;
-- measurement procedure or evidence schema; and
-- cleanup, privacy, or invalidation policy.
+Labs is the only editable experiment home. Promotion creates an immutable,
+content-identified Field Kit revision. Any change that can affect
+applicability, consent, execution, measurement, or interpretation creates a
+new revision, including changes to:
 
-The Field Kit index may point to a newer promoted version, pause one, or stop
-offering a retired experiment. Existing run identities continue to reference
-the immutable version they used.
+- prompt, question, inputs, candidates, parameter bounds, or stop rules;
+- machine buckets, hard predicates, or advisory relevance;
+- costs, destinations, writes, privacy, safety, or renewed-consent thresholds;
+- stage order, Temper protocol identity, measurement, or evidence schema; and
+- interruption, keep/restore, cleanup, invalidation, or retirement policy.
 
-## Promoted experiment requirements
+Old revisions remain verifiable. A catalog may activate, pause, retire, or
+supersede them, but it cannot rewrite their bytes. Temper refuses new sessions
+for inactive revisions.
 
-Labs' promotion rules must reject a package unless it declares and passes
-review for at least:
+## Required promoted content
 
-- a precise question and the decision the evidence can inform;
-- immutable experiment identity, version, origin, and content hashes;
-- minimum compatible Temper protocol/binary requirements and exact external
+Promotion rejects a package unless it declares at least:
+
+- immutable identity, revision, origin, content hashes, and exact external
   inputs;
+- a precise purpose and evidence boundary;
 - machine-readable hard applicability predicates and separately labeled
-  advisory relevance signals;
-- versioned bucket definitions rather than bucket names whose meaning can
-  drift;
-- estimated fixed runtime plus separately labeled variable setup/download
-  time, network bytes, temporary and retained disk, memory pressure, service
-  disruption, and any paid-provider exposure;
-- the user choices and data boundaries each consent authorizes;
-- adaptive parameter bounds, maximum attempts and total cost, stop conditions,
-  and thresholds that require renewed consent;
-- the evidence/result shape, required conditions, deviation log, and
-  provenance inputs;
-- interruption, resume, keep-or-restore, and cleanup behavior;
-- local-only output by default, with no telemetry or automatic submission;
-- hermetic validation of metadata, prompt/package identity, selection logic,
-  refusal paths, and cleanup planning; and
+  advisory relevance;
+- fixed runtime plus setup range, network bytes, temporary/retained disk,
+  memory pressure, idle need, service disruption, and paid-provider exposure;
+- user choices, read/write/network boundaries, local-output policy, and
+  renewed-consent conditions;
+- exact ordered stages and a Temper-owned protocol identity for live work;
+- evidence/result shape, required conditions, sensitivity, and explicit export
+  policy;
+- interruption, resume, keep/restore, and marker-guarded cleanup behavior;
+- hermetic metadata/hash/refusal coverage; and
 - invalidation, pause, and retirement triggers.
 
-Promotion qualifies the experiment procedure, not its hypothesis. An
-experiment intended to gather the first witness for a new machine bucket may
-therefore be promoted without a positive result for that bucket, provided its
-mechanics and safety envelope meet the promotion bar and the missing evidence
-is explicit.
+An experiment gathering the first witness for a machine class may be promoted
+when its mechanics and safety envelope pass review and the missing evidence is
+explicit. That is procedure qualification, not a positive result.
 
-## Root prompt and consent flow
+## Temper runtime contract
 
-The Field Kit root prompt is discovery and orchestration, not an ambient
-installer:
+The public surface is `temper field-kit`. For a baseline it:
 
-1. Verify the Field Kit snapshot and the compatible Temper executable.
-2. Ask Temper for canonical machine and local-cache/software facts without
-   mutation.
-3. Apply hard experiment predicates deterministically. The agent may explain
-   advisory relevance and rank what seems useful, but it may not invent
-   eligibility or silently weaken a refusal.
-4. Present each applicable experiment's purpose, applicability reason,
-   estimated time and resources, data boundary, effects, cleanup, and
-   uncertainty in the estimate.
-5. Obtain explicit opt-in for named experiment versions. Discovery alone
-   performs no download, installation, service change, or submission.
-6. Hand one opted-in package and the frozen machine facts to its experiment
-   prompt. Run experiments independently unless a promoted package explicitly
-   declares an exact prerequisite identity.
-7. Write the complete local session report and offer the user a reviewable
-   share/export action. Never upload it automatically.
+1. verifies the embedded catalog, package hashes, referenced material, and
+   release-supported protocol identity;
+2. detects canonical non-identifying machine facts and applies hard predicates
+   deterministically;
+3. renders the exact purpose, evidence, cost, data, effect, and cleanup
+   disclosure without mutation;
+4. requires exact disclosure bytes plus `--consent yes` for one active
+   `ID@REVISION`, a declared outcome, a new dedicated root, and external
+   session path;
+5. binds the executing Temper bytes, catalog/package/material hashes, machine
+   facts, software lock, ownership marker, outcome, and consent time into a
+   resumable canonical session;
+6. materializes the embedded package and machine facts into the dedicated root
+   and advances only the first pending declared stage;
+7. invokes its own public install/fetch/apply/check/bind/probe/remove surfaces
+   and runs only an exact protocol implemented in the binary;
+8. retains failed output without advancing, records successful evidence
+   atomically, and resumes by reconciling the same desired state; and
+9. writes a local report and, for restore, removes only a root with the exact
+   session-bound marker after explicit confirmation.
 
-The agent is allowed to interpret behavior and choose a next attempt only
-inside the promoted envelope. Every attempt records the inputs, observations,
-choice, and rationale. Crossing a model/tool/data-boundary choice, resource
-ceiling, attempt limit, or declared consent scope stops for a new human choice;
-recommendation is never consent.
+Nothing is uploaded automatically. Reports retain structured outcomes,
+identities, hashes, timings, and measurements, not generated model content.
+Crossing promoted bytes, destinations, service scope, cost, safety, or outcome
+requires renewed consent.
 
-## Temper execution and provenance
+`temper probe serve` is the narrow loopback foreground-process primitive used
+by reviewed live protocols. It verifies the exact software lock/receipt and
+rendered generation before launch, uses isolated receipted binaries, owns the
+process group, and supports a no-effect admission dry run. It is not the
+production service lifecycle and does not choose an experiment.
 
-Temper exposes narrow facts and effects that are useful outside any one
-experiment: canonical machine reporting, exact lock resolution or validation,
-software install/check/remove, model artifact verification, isolated config
-rendering, scoped foreground service lifecycle, measurements, and
-provenance-guided cleanup. Exact command names and RESULT lines remain C11
-work; Temper does not embed the Field Kit root prompt or an open-ended AI
-experiment loop.
+`temper-field-kit-binding/v1` remains the pure Temper-material identity: exact
+Temper bytes, canonical machine facts, ordered software lock/receipt
+identities, manifest lock, and rendered generation. The Temper-owned Field Kit
+session adds package, consent, stage, protocol, outcome, and report identity.
 
-The executable `temper-field-kit-binding/v1` is the Temper-material layer of a
-run identity. It binds machine facts, exact Temper bytes, ordered software
-lock/receipt identities, manifest lock, and rendered generation. The promoted
-Field Kit package/session adds its independently owned experiment identity,
-metadata and prompt hashes, consent record, attempts, deviations, observations,
-and report identity. Temper need not parse that moving experiment envelope.
+## Release compilation
 
-This split keeps provenance at its trust boundary: Temper states what it
-executed and observed about its managed material; Field Kit states which
-promoted experiment and adaptive decisions used those facts; Labs states what
-conclusion, if any, the evidence supports.
+Field Kit content is copied into `internal/fieldkit/baseline/builtin` during
+release work and compiled with `go:embed`. Release checks must:
 
-## Replacement gate for the original Field Kit
+- validate both the source catalog and embedded snapshot;
+- compare catalog, package, and referenced material byte for byte;
+- refuse an active package whose protocol identity is not implemented;
+- run hermetic session, interruption, tamper, cleanup, and protocol-unit tests;
+- record catalog/package identities in the Labs compilation record; and
+- keep live downloads and scratch runs behind explicit machine-owner consent.
 
-The original implementation may be removed or archived only after the new
-Field Kit demonstrates, over Temper's public surface:
-
-- read-only machine discovery and deterministic experiment applicability;
-- per-experiment cost explanation and explicit opt-in;
-- one fixed mechanical experiment and one bounded adaptive experiment;
-- exact package, prompt, Temper-material, attempt, and report identities;
-- deviation/conclusion capture and a local exportable evidence packet;
-- interruption handling plus keep-or-restore behavior; and
-- hermetic selection/refusal/cleanup coverage followed by an explicitly
-  authorized scratch round-trip.
-
-Parity protects the useful consent and evidence behavior. It does not require
-preserving the old repository's Bash layout, clone-the-stack installation
-model, command names, or serialization accidents.
+Revision 1's Python runner is retained only inside its immutable retired
+package for audit. It is not a fallback. The active revision uses the
+Temper-owned Go protocol, so neither Python nor a Field Kit binary is part of
+the user dependency closure.

@@ -1,7 +1,8 @@
-# Artifact pinning — a witnessed failure the C2/C3 contracts must prevent
+# Artifact pinning — a witnessed failure the manifest and lock must prevent
 
 Written 2026-08-20 from a live incident on the legacy stack. This is input for
-the manifest (C2) and lock (C3) design, not a decision. The short version: a
+the `temper-manifest/v1` and `temper-lock/v1` design, not a decision. The short
+version: a
 model reference that names a *repository* rather than an *artifact* silently
 changed the served model, and the engine offers no flag that can pin it back.
 

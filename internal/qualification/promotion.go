@@ -11,8 +11,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// ProductPromotionPacket is the immutable Labs review input for one exact C7
-// profile revision. Candidate.Spec is one member of the closed
+// ProductPromotionPacket is the immutable Labs review input for one exact
+// qualification-profile revision. Candidate.Spec is one member of the closed
 // ProductPromotionSpec family.
 type ProductPromotionPacket struct {
 	Schema               string                       `yaml:"schema"`
@@ -86,8 +86,9 @@ type ProductPromotionPublicSource struct {
 	SHA256   string `yaml:"sha256,omitempty"`
 }
 
-// ProductPromotionEvidenceScope carries C7 scope material without its derived
-// key. Temper computes the key while compiling the public profile.
+// ProductPromotionEvidenceScope carries qualification evidence-scope material
+// without its derived key. Temper computes the key while compiling the public
+// profile.
 type ProductPromotionEvidenceScope struct {
 	ArtifactProfile *ScopeReference           `yaml:"artifact_profile,omitempty"`
 	EngineProfile   *ScopeReference           `yaml:"engine_profile,omitempty"`
@@ -119,8 +120,8 @@ type ProductPromotionCandidateCommon struct {
 	InvalidationTriggers []ProfileInvalidationTrigger `yaml:"invalidation_triggers"`
 }
 
-// ProductPromotionSpec is a closed family. It prevents a generic untyped C8
-// payload from bypassing the target C7 schema.
+// ProductPromotionSpec is a closed family. It prevents a generic untyped
+// product-promotion payload from bypassing the target qualification schema.
 type ProductPromotionSpec interface {
 	productPromotionSchema() string
 }
@@ -180,7 +181,8 @@ type productPromotionCandidateDocument[T any] struct {
 	Spec                            T `yaml:"spec"`
 }
 
-// ParseProductPromotionPacket accepts only a canonical, closed C8 packet.
+// ParseProductPromotionPacket accepts only a canonical, closed
+// temper-labs-product-promotion/v1 packet.
 func ParseProductPromotionPacket(data []byte) (ProductPromotionPacket, error) {
 	var header promotionHeader
 	if err := yaml.Unmarshal(data, &header); err != nil {
@@ -213,7 +215,7 @@ func ParseProductPromotionPacket(data []byte) (ProductPromotionPacket, error) {
 			return PromotionActivitySpec{ActivitySpec: spec}
 		})
 	default:
-		return ProductPromotionPacket{}, fmt.Errorf("decode product promotion: target schema %q is not a C7 profile schema", header.Target.Schema)
+		return ProductPromotionPacket{}, fmt.Errorf("decode product promotion: target schema %q is not a qualification profile schema", header.Target.Schema)
 	}
 }
 
@@ -241,7 +243,8 @@ func MarshalProductPromotionPacket(packet ProductPromotionPacket) ([]byte, error
 	}
 }
 
-// Validate enforces the Labs writer envelope and the target's closed C7 body.
+// Validate enforces the Labs writer envelope and the target's closed
+// qualification-profile body.
 func (p ProductPromotionPacket) Validate() error {
 	var problems []string
 	problem := func(format string, args ...any) {
@@ -255,7 +258,7 @@ func (p ProductPromotionPacket) Validate() error {
 	validateProductPromotionSanitization(p, problem)
 	validateProductCatalogConsideration(p.CatalogConsideration, problem)
 	if p.Candidate.Spec == nil {
-		problem("candidate.spec must be one typed C7 body")
+		problem("candidate.spec must be one typed qualification-profile body")
 	} else if p.Candidate.Spec.productPromotionSchema() != p.Target.Schema {
 		problem("candidate.spec schema is %q, want target schema %q", p.Candidate.Spec.productPromotionSchema(), p.Target.Schema)
 	}
@@ -367,7 +370,7 @@ func validateProductPromotionIdentity(packet ProductPromotionPacket, problem fun
 
 func validateProductPromotionTarget(target ProductPromotionTarget, problem func(string, ...any)) {
 	if _, ok := profileKinds[target.Schema]; !ok {
-		problem("target.schema %q is not a C7 profile schema", target.Schema)
+		problem("target.schema %q is not a qualification profile schema", target.Schema)
 	}
 	if !stableIDPattern.MatchString(target.ID) {
 		problem("target.id %q is not a lowercase stable id", target.ID)
@@ -547,7 +550,7 @@ func validateProductPromotionSanitization(packet ProductPromotionPacket, problem
 	if !sanitization.PublicCandidateReviewed {
 		problem("sanitization.public_candidate_reviewed must be true")
 	}
-	wantClasses := []string{"credentials", "machine-identifying-values-outside-the-C7-bucket", "private-corpus-content", "prompts-not-approved-for-publication", "raw-user-content"}
+	wantClasses := []string{"credentials", "machine-identifying-values-outside-the-declared-machine-bucket", "private-corpus-content", "prompts-not-approved-for-publication", "raw-user-content"}
 	if !equalStrings(sanitization.ExcludedClasses, wantClasses) {
 		problem("sanitization.excluded_classes must contain the complete canonical exclusion set")
 	}

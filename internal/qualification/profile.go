@@ -33,7 +33,7 @@ var (
 )
 
 // ProfileEnvelope is the common immutable history and evidence boundary shared
-// by all six C7 profile documents.
+// by all six qualification-profile documents.
 type ProfileEnvelope struct {
 	Schema               string                       `yaml:"schema"`
 	ID                   string                       `yaml:"id"`
@@ -98,7 +98,8 @@ type ProfileInvalidationTrigger struct {
 }
 
 // ProfileEvidence is the typed public evidence inventory. Raw Labs and Field
-// Kit locators have no representation on this side of the C8 boundary.
+// Kit locators have no representation on this side of the product-promotion
+// boundary.
 type ProfileEvidence struct {
 	ID     string                `yaml:"id"`
 	Source ProfileEvidenceSource `yaml:"source"`
@@ -111,8 +112,8 @@ type ProfileEvidenceSource struct {
 	MaterialReference `yaml:",inline"`
 }
 
-// MaterialReference identifies immutable bytes outside C7 without treating
-// their schema as a qualification-document schema.
+// MaterialReference identifies immutable bytes outside the qualification
+// catalog without treating their schema as a qualification-document schema.
 type MaterialReference struct {
 	Schema   string `yaml:"schema"`
 	ID       string `yaml:"id"`

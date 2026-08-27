@@ -1,4 +1,4 @@
-// Package install orchestrates the C6 read -> plan -> prepare -> adapter
+// Package install orchestrates the installation-state read -> plan -> prepare -> adapter
 // effect -> inspect -> receipt -> finalize protocol for one exact software
 // lock and named installation.
 package install

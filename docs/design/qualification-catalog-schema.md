@@ -1,8 +1,9 @@
-# Qualification catalog and profiles — C7
+# Qualification catalog and profiles
 
 Status: **provisionally approved by owner for Temper-only refinement and fake
-fixture implementation**, 2026-08-25. This design settles D1 as separate typed
-documents over one common envelope, but remains open to evidence-driven
+fixture implementation**, 2026-08-25. This design settles the catalog
+representation as separate typed documents over one common envelope, but
+remains open to evidence-driven
 refinement before the v1 surface freezes. It does not seed a catalog row,
 claim that a current configuration is qualified, or authorize the wizard to
 select anything.
@@ -27,8 +28,8 @@ exist. All current catalog fixtures are fake and hermetic.
 
 ## Decision
 
-C7 is a content-addressed catalog index plus six immutable profile document
-kinds:
+The qualification catalog is a content-addressed catalog index plus six
+immutable profile document kinds:
 
 | Profile kind | Schema | Owns |
 |---|---|---|
@@ -53,19 +54,19 @@ views, and compiler internals remain replaceable behind it.
 The catalog joins existing contracts; it does not become another home for
 their facts.
 
-| Fact | One writer/home | C7 representation |
+| Fact | One writer/home | Qualification catalog representation |
 |---|---|---|
 | user selection, selected layouts/tools/harnesses, `preferred` | wizard once, then `manifest.yaml` is the user's | absent; a later explicit projection strips catalog annotations |
 | model artifact resolution installed for one manifest | `manifest.lock.yaml` | an artifact profile owns the reviewed immutable source identity; a manifest lock still owns a user's resolved pins |
-| software policy and tested versions | C4 software-supply catalog | an engine profile references one exact tested C4 identity |
-| desired installed software closure | C5 `software.lock.yaml` | never copied into C7 |
-| observed installed software | C6 receipt/root state | never copied into C7 |
-| experiment procedure, consent, attempts, observations | Labs/Field Kit C12 and session formats | never parsed or copied into C7 |
-| reviewed product/profile conclusion | Labs C8 packet, accepted by Temper release review | exact promotion provenance plus the compiled C7 document |
+| software policy and tested versions | `temper-software-supply/v1` catalog | an engine profile references one exact tested software-supply identity |
+| desired installed software closure | `temper-software-lock/v1` | never copied into qualification catalog |
+| observed installed software | installation receipt and root state | never copied into qualification catalog |
+| experiment procedure, consent, attempts, observations | Labs/Field Kit experiment-promotion and session formats | never parsed or copied into qualification catalog |
+| reviewed product/profile conclusion | Labs product-promotion packet, accepted by Temper release review | exact promotion provenance plus the compiled qualification document |
 | human evidence explanation | Results | a stable public evidence reference, never a live runtime dependency |
 
 Some values intentionally appear as immutable historical snapshots. A runtime
-witness repeats the exact artifact/engine/runtime scope it measured, and a C8
+witness repeats the exact artifact/engine/runtime scope it measured, and a product-promotion
 packet retains the candidate it proposed. Those copies mean “as reviewed then”;
 strict validation makes them agree at compilation time. They are not alternate
 mutable sources.
@@ -74,7 +75,7 @@ mutable sources.
 
 Every profile has stable `id` plus positive integer `revision`. The pair is
 the semantic identity; the SHA-256 of its canonical YAML bytes is the material
-identity. IDs use lowercase components separated by `-` or `.`, as C2 does.
+identity. IDs use lowercase components separated by `-` or `.`, as `temper-manifest/v1` does.
 
 An exact profile reference is always complete:
 
@@ -122,7 +123,8 @@ present, is an exact reference to the previous head with the same schema and
 ID. It may not skip or fork a lineage. Revision 1 has no `supersedes`; every
 later revision names exactly the immediately preceding revision.
 
-C7 records two independent reviewed facts. Qualification describes evidence:
+The qualification catalog records two independent reviewed facts.
+Qualification describes evidence:
 
 - `WATCH`: a recorded candidate whose product case or evidence plan is not yet
   ready to run;
@@ -158,7 +160,7 @@ Lifecycle transitions may stay unchanged, move `EXPERIMENTAL → SUPPORTED`,
 stage to `RETIRED`, or return an active stage to `EXPERIMENTAL`. Reopening a
 `RETIRED` lineage requires `LAB/EXPERIMENTAL`; it cannot jump directly back to
 qualified support. Every revision carries nonempty independent reasons and a
-distinct exact C8 promotion identity.
+distinct exact product-promotion packet identity.
 
 Qualification closure is evaluated from the exact documents in one catalog
 bundle. Every active `QUALIFIED` profile requires every direct dependency to
@@ -175,7 +177,7 @@ same rule, this proves the transitive closure. Lifecycle narrows that closure:
 
 This rule prevents a supported product from quietly acquiring an experimental
 or retiring foundation, while allowing a whole experimental composition to be
-reviewed together. It is applied both by the pure C8 compiler to explicitly
+reviewed together. It is applied both by the pure product-promotion compiler to explicitly
 supplied dependency bytes and by the catalog loader to indexed documents.
 
 The pure transition validator receives the previous and current envelopes plus
@@ -183,12 +185,12 @@ the already-verified SHA-256 of the previous canonical bytes. It requires one
 schema/ID lineage, the immediately following revision, and an exact
 `supersedes` reference before applying both transition tables and their
 combination rules. It performs no
-filesystem discovery or “latest” lookup. The future C8 compiler supplies that
+filesystem discovery or “latest” lookup. The future product-promotion compiler supplies that
 prior material explicitly; the catalog index remains a current projection and
 does not infer history from revision numbers.
 
 An old exact witness does not become false because an engine releases a new
-version. D7 is therefore settled as follows:
+version. The version-invalidation rule is therefore:
 
 - a replacement in the same supported product lineage creates a new profile
   revision, changes the exact engine reference, and starts at `LAB`; the old
@@ -299,9 +301,9 @@ evidence:
 
 promotion:
   schema: temper-labs-product-promotion/v1
-  id: <C8 packet id>
-  revision: <C8 packet revision>
-  sha256: <C8 canonical bytes>
+  id: <product-promotion packet id>
+  revision: <product-promotion packet revision>
+  sha256: <product-promotion canonical bytes>
 
 spec: <the schema-specific body>
 ```
@@ -353,15 +355,17 @@ A general source list with no claim-level join is insufficient because a
 reader must be able to accept, reject, or supersede one measurement without
 trusting every assertion in the profile.
 
-Only public-safe Results or product-promotion identities enter C7. Raw Labs
-paths, private corpora, prompts, user data, and Field Kit session contents stay
-behind C8's review boundary.
+Only public-safe Results or product-promotion packet identities enter the
+qualification catalog. Raw Labs paths, private corpora, prompts, user data,
+and Field Kit session contents stay
+behind the product-promotion review boundary.
 
 For `source.kind: product-promotion`, the exact source identity must match the
-profile's top-level C8 `promotion` identity. `results-record` carries an exact
-versioned public record identity. Raw `field-kit-session/v1` and
+profile's top-level product-promotion reference. `results-record` carries an
+exact versioned public record identity. Raw `field-kit-session/v1` and
 `field-kit-runtime-profile/v1` identities are refused on that public surface;
-C8 may cite them privately and emit only its reviewed public projection.
+Labs product-promotion review may cite them privately and emit only its
+reviewed public projection.
 
 ## Machine buckets
 
@@ -410,8 +414,9 @@ references and invalidation triggers are likewise explicit nonempty canonical
 sets. These constraints keep a partial or open-ended predicate from silently
 matching a machine it was not reviewed to describe.
 
-Field Kit's C12 bucket definitions are independently owned and versioned. A
-same-looking name in the experiment catalog is not a C7 reference and never
+Field Kit's experiment-promotion bucket definitions are independently owned
+and versioned. A
+same-looking name in the experiment catalog is not a qualification reference and never
 joins by string accident.
 
 ## Typed profile bodies
@@ -479,7 +484,7 @@ spec:
       schema: temper-software-supply/v1
       sequence: <exact sequence>
       sha256: <exact catalog bytes>
-    package: <logical C4 package id>
+    package: <logical software-supply package id>
     method: <exact installation method>
     adapter: <exact target adapter>
     target: {os: darwin, arch: arm64}
@@ -508,9 +513,10 @@ spec:
     offline_after_install: true
 ```
 
-The C4 reference establishes tested software identity; C7 adds composed
-serving evidence. The catalog schema, positive sequence, and catalog-byte
-digest identify the exact C4 snapshot. Package, method, target adapter,
+The software-supply reference establishes tested software identity; the
+qualification catalog adds composed serving evidence. The catalog schema,
+positive sequence, and catalog-byte
+digest identify the exact software-supply snapshot. Package, method, target adapter,
 unversioned `darwin/arm64` target, root version, and closure digest then select
 one exact tested row from that snapshot. Engine capabilities are a closed,
 sorted subset of `chat-completions`, `drafter-speculation`, `embeddings`,
@@ -518,12 +524,12 @@ sorted subset of `chat-completions`, `drafter-speculation`, `embeddings`,
 tool-call declarations must agree with that set. Supported tool calls bind
 exact request, response, and parser revisions. The readiness and shutdown
 conditions are executable contracts, not prose, and v1 engines must remain
-offline after installation. An engine has no C7 profile dependency: it never
-copies a C5 lock or claims that a local C6 receipt exists.
+offline after installation. An engine has no qualification profile dependency: it never
+copies a software lock or claims that a local installation receipt exists.
 
 ### Model runtime and performance profile
 
-The runtime body is the catalog form of a C2 layout: output-affecting identity
+The runtime body is the catalog form of a manifest layout: output-affecting identity
 only. Placement, residency, preload, TTL, and `ngl` remain mode facts. That
 later settlement overrides the earlier broad wording that put placement in a
 runtime profile.
@@ -599,11 +605,12 @@ engine capability. Drafter speculation additionally names an exact artifact
 sidecar and requires `drafter-speculation`; MTP requires `mtp-speculation`.
 None of these checks selects or installs the referenced material.
 
-The v1 runtime layout is deliberately the strict C2 coder/rerank surface, but
+The v1 runtime layout is deliberately the strict `temper-manifest/v1` coder/rerank surface, but
 it owns its own immutable types. Its `temper-runtime-layout/v1` contract must
 match the engine declaration, so engine package names never stand in for
 tuning compatibility. A later projection translates a user-chosen qualified
-row into C2; C7 does not import manifest structs or write the user's manifest.
+row into `temper-manifest/v1`; the qualification catalog does not import
+manifest structs or write the user's manifest.
 Placement, residency, preload, TTL, `ngl`, and `preferred` remain mode or
 user-selection facts and cannot appear here.
 
@@ -648,8 +655,9 @@ complete regression disposition for its claimed role. In v1, complete means
 that `task_success` is measured and contains
 `first-attempt-task-success`, while `regressions` is measured and contains
 `known-bad-tasks`, `new-regressions`, and `retained-good-tasks`. The reviewed
-C8 gates decide whether those exact values clear the product bar; C7 refuses
-only absent or structurally incomplete measurements. Other axes may remain
+Product-promotion gates decide whether those exact values clear the product
+bar; the qualification catalog refuses only absent or structurally incomplete
+measurements. Other axes may remain
 explicitly unmeasured. A recommendation may cite only measured observations.
 
 ### Tool
@@ -695,9 +703,9 @@ exact integration revision. Their harness set exactly equals
 `applicability.harnesses`. Permission read/write sets exactly equal the common
 data-boundary sets, and network permission IDs exactly equal its declared
 network purposes; execution permission remains a separate explicit command
-surface. Required and optional backend roles are disjoint. A tool has no C7
-dependency because a mode—not the tool—binds the exact runtimes that furnish
-those roles.
+surface. Required and optional backend roles are disjoint. A tool has no
+qualification-profile dependency because a mode—not the tool—binds the exact
+runtimes that furnish those roles.
 
 Affordance deviations are evidence-bearing facts, not prose exceptions. The
 four failure fields have no silent-success value. Selecting a tool later is
@@ -759,9 +767,9 @@ composition qualified only when an exact qualified mode profile covers it.
 
 The six-kind v1 deliberately has no standalone harness profile. Harness
 executables are user-managed; exact integration revisions and deviations live
-where they are consumed by engine, tool, and mode profiles. If M4 produces a
+where they are consumed by engine, tool, and mode profiles. If the production-mode workstream produces a
 reusable harness entity with independent lifecycle and evidence, that is a
-reviewed C7 schema revision, not an untyped v1 escape hatch.
+reviewed qualification schema revision, not an untyped v1 escape hatch.
 
 ### Activity
 
@@ -831,7 +839,8 @@ carry the measured performance observations cited by its reason. Several members
 share the same bucket/mode/role; none, one, or all may later be selected by the
 user. A recommendation set is never projected into `manifest.yaml`.
 
-The catalog index is release-reviewed Temper data. C7 v1 does not inherit the
+The catalog index is release-reviewed Temper data. Qualification-catalog v1
+does not inherit the
 software catalog's independent update channel, signature files, or active
 pointer. Changing qualification-catalog distribution is a separate surface
 decision; readers still verify every indexed document hash.
@@ -841,7 +850,7 @@ does not read a directory, resolve a moving revision, or fetch content. Files
 absent from the index may remain in the supplied bundle as immutable history,
 but they have no currentness semantics and are not loaded.
 
-## Projection to C2 and read rules
+## Projection to the manifest and read rules
 
 The wizard reads only the exact catalog index selected by its Temper release:
 
@@ -857,7 +866,7 @@ The wizard reads only the exact catalog index selected by its Temper release:
 6. display every applicable recommendation-set member and its measured
    tradeoffs with all controls initially unselected; and
 7. after explicit choices, project only the selected kind-specific `spec`
-   facts into C2, then require the user to choose residency, harness enablement,
+   facts into `temper-manifest/v1`, then require the user to choose residency, harness enablement,
    and at most one `preferred` member.
 
 Projection strips qualification/lifecycle status, recommendation, evidence,
@@ -871,7 +880,7 @@ lifecycle, or active catalog.
 
 ## Validation and refusal matrix
 
-The Phase C validator must reject at least:
+The qualification validator must reject at least:
 
 - an unknown schema, field, qualification/lifecycle status, role,
   relationship, performance state, or data-boundary value;
@@ -895,7 +904,7 @@ The Phase C validator must reject at least:
   is outside applicability, or carries ranking/default/selection semantics;
 - a mode binding to an unselected or unavailable dependency, an activity that
   widens its mode, or any profile field that implies tool/harness consent;
-- a raw/private Labs path or Field Kit session value in a C7 public evidence
+- a raw/private Labs path or Field Kit session value in a public qualification evidence
   reference; and
 - `preferred`, `selected`, `checked`, install, credential, consent, attempt,
   or experiment-prompt fields anywhere the schema does not explicitly own.
@@ -908,7 +917,7 @@ require a later review. The first fixture set will:
 
 1. round-trip one document of every profile kind plus two machine buckets
    through canonical bytes and an exact index;
-2. compile one fake C8 packet into a `LAB` runtime profile without reading
+2. compile one fake product-promotion packet into a `LAB` runtime profile without reading
    Labs, Results, Field Kit, or the network;
 3. carry two `QUALIFIED` coder runtime profiles in one recommendation set,
    preserve distinct speed/context and quality-first performance observations,
@@ -919,9 +928,9 @@ require a later review. The first fixture set will:
    cache, and mode witnesses cannot cross scope;
 6. reject each validation-matrix case, including a mode/activity consent leak;
    and
-7. project a user-chosen subset to the existing strict C2 shape, then show
+7. project a user-chosen subset to the existing strict `temper-manifest/v1` shape, then show
    that an empty explicit choice produces no selection.
 
 No fixture makes a claim about a real model, engine, tool, harness, or machine.
-Seeding reviewed rows remains M2 Phase C item 15 and requires accepted C8
+Seeding reviewed rows remains the catalog-seeding work and requires accepted product-promotion
 inputs.

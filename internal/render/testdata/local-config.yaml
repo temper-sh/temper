@@ -24,6 +24,8 @@ models:
       -ctk q8_0 -ctv q8_0
       -b 512
       -ub 512
+      --spec-type draft-mtp
+      --spec-draft-n-max 3
       --chat-template-file '/temper/artifacts/layouts/coder/dc0bf13d38e973845242c06b8a09ac72b014da701f66e925d2f716ad8a417166/patches/sharp/template.jinja'
       --chat-template-kwargs '{"enable_thinking":false}'
     ttl: 7200

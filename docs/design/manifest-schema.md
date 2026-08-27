@@ -1,4 +1,4 @@
-# `manifest.yaml` — C2 schema (`temper-manifest/v1`)
+# `manifest.yaml` schema (`temper-manifest/v1`)
 
 Parked as a direction on 2026-08-17, reworked on 2026-08-19 to settle the
 layout/mode split, and promoted to the executable v1 contract later that day
@@ -39,12 +39,13 @@ Everything below follows from keeping those two apart.
   preference. Preference and preload are separate choices.
 
   The test case that fixes the line: the 0.6B reranker runs CPU-only beside a
-  resident coder and may use the GPU when none is (legacy FINDINGS #16). That
+  resident coder and may use the GPU when none is, as recorded by the retained
+  legacy reranker co-residency witness. That
   is one layout placed two ways — `ngl` is offload, not identity — so it needs
   no second layout and no per-mode `tuning:` block. Conversely `thinking: off`
   *is* identity: it changes the rendered prompt, and flipping it mid-session
   re-renders history so nothing is a token prefix of what came before, costing
-  a full re-prefill (legacy FINDINGS #27's template mechanism, deliberately).
+  a full re-prefill, matching the retained legacy prefix-stability witness.
   This retires the "per-mode `tuning:` shape" question that was parked here.
 
 - **A mode switch is a full world rebuild with a total plan — there is no
@@ -89,7 +90,8 @@ Everything below follows from keeping those two apart.
 
 - **Tools carry sources** (owner, 2026-08-17): tool entries reference real
   repositories — GitHub or elsewhere, not exclusively ours. Their pins become
-  lock rows when the lock grows its tool section (M2).
+  lock rows when the software/tool qualification surface grows its tool
+  section.
 
 - **Patches carry sources** (owner, same day): HF or GitHub, replacing the
   legacy `patches/*/FETCH` indirection.
@@ -98,14 +100,14 @@ Everything below follows from keeping those two apart.
   2026-08-19): whether a dependency is worth having can depend on the
   machine's resource constraints — the live case is Pi extensions
   (`compaction-guard`, `context-trim`) that matter beside a 16k window and are
-  noise beside a frontier one. The condition lives on the catalog profile (M2
-  envelope) and the wizard clips offers by it; the manifest never encodes
+  noise beside a frontier one. The condition lives on the qualification
+  catalog profile and the wizard clips offers by it; the manifest never encodes
   conditions, it records what was chosen for *this* machine.
 
 - **The catalog is this shape plus metadata** (owner, 2026-08-19). A knowledge
   base of machine profiles stores the same layout structure annotated with
   evidence, measurements, caveats and status; the manifest is the subset a
-  user selected, with the prose stripped. This narrows M2's open "how does a
+  user selected, with the prose stripped. This narrows the open "how does a
   reviewed packet map into the catalog" question: the unit is the layout, and
   projection is annotation-removal rather than translation. It also means a
   machine profile is diffable against a manifest — "what this box was measured
@@ -155,8 +157,9 @@ about the model — which is why it must not appear in the schema.
   compaction into a global slot.
 - MLX and other engines. Each needs an owned launcher and a typed tuning block;
   selecting one before that implementation exists is a refusal.
-- Tool resolution. Tool `source` remains intent until the lock grows its M2
-  tool section. Patch resolution is implemented in M1.
+- Tool resolution. Tool `source` remains intent until the lock grows its
+  qualification-backed tool section. Patch resolution is implemented in the
+  native manifest workflow.
 
 ## Complete v1 example
 
@@ -197,6 +200,8 @@ layouts:
       flash_attention: on
       batch: 512
       ubatch: 512
+      spec_type: draft-mtp
+      spec_draft_n_max: 3
 
   rerank-0.6b:
     display_name: "Qwen3 reranker 0.6B"
@@ -258,9 +263,13 @@ modes:
   they change placement or use.
 - `defaults.gpu_memory_utilization` is greater than zero and at most one. It is
   the user's conservative allocation policy for the preferred GPU-resident
-  coder in the M1 wall-model prediction; it is not rendered as a llama-server
+  coder in the bootstrap wall-model prediction; it is not rendered as a llama-server
   flag or claimed as a measured runtime footprint. See
   [`wall-model.md`](wall-model.md). `defaults.ttl` is zero or greater.
+- Embedded MTP is an explicit paired coder setting: `spec_type: draft-mtp`
+  requires `spec_draft_n_max` from 1 through 16 and renders the corresponding
+  llama.cpp flags. Omitting both fields disables speculative decoding. Other
+  speculative modes remain unsupported in manifest v1.
 - Every mode member references one selected layout and appears in exactly one
   placement list. `preferred: true` is allowed at most once and only on a
   resident coder in a local-foreground mode; it selects Pi's starting model.

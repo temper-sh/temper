@@ -19,13 +19,13 @@ dependencies:
       id: example-coder-artifact
       revision: 1
       schema: temper-qualification-model-artifact/v1
-      sha256: fea132ab6d30dddf9d62ea4c70280dbbb94e7afee9eb8dcfd873ffced6458f2e
+      sha256: 642f215fad4d08c24b1116d99f84af34512f7185b5567f31c194dac07af2f587
     relationship: artifact
   - profile:
       id: example-local-engine
       revision: 1
       schema: temper-qualification-engine/v1
-      sha256: 500ad5654cc0086d0ca2be5dcc8d24763761f8b821fe0dfd5cd8c0a1293b02b1
+      sha256: d81d18e2beb7fd79327e0dd9071250147262582b3e68f1b678db034670b8edee
     relationship: engine
 evidence: []
 id: example-coder-runtime
@@ -52,12 +52,12 @@ spec:
     id: example-coder-artifact
     revision: 1
     schema: temper-qualification-model-artifact/v1
-    sha256: fea132ab6d30dddf9d62ea4c70280dbbb94e7afee9eb8dcfd873ffced6458f2e
+    sha256: 642f215fad4d08c24b1116d99f84af34512f7185b5567f31c194dac07af2f587
   engine_profile:
     id: example-local-engine
     revision: 1
     schema: temper-qualification-engine/v1
-    sha256: 500ad5654cc0086d0ca2be5dcc8d24763761f8b821fe0dfd5cd8c0a1293b02b1
+    sha256: d81d18e2beb7fd79327e0dd9071250147262582b3e68f1b678db034670b8edee
   layout:
     batching:
       batch: 512
@@ -102,6 +102,6 @@ spec:
     throughput:
       reason: Fake fixture has no throughput witness
       state: unmeasured
-summary: Fake artifact and engine composition for exercising the C7 runtime boundary
+summary: Fake artifact and engine composition for exercising the qualification runtime boundary
 title: Example coder runtime
 what_this_means: This fake runtime is inspectable but not qualified or recommended

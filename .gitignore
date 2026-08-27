@@ -5,3 +5,5 @@
 
 # Built binary (go build ./cmd/temper).
 /temper
+/build/
+/dist/

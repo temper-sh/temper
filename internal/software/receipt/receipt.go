@@ -1,4 +1,4 @@
-// Package receipt owns the canonical C6 per-installation observed-history
+// Package receipt owns the canonical per-installation observed-history
 // document. It contains no desired policy and is never removal authority.
 package receipt
 

@@ -5,10 +5,9 @@ Adopted 2026-08-14 as this repository's working product spec. Drafted
 the field kit's first live probe; extended through the 2026-08-13 owner
 discussions (org shape, wizard universe, workflow modes, harness
 integrations, home directory and daemon control). The source draft carries a
-moved-note and remains as drafting history. References of the form "PLAN §N"
-and "FINDINGS #N" resolve in the legacy `local-ai-setup` repo — the evidence
-history Temper Labs will archive; items marked **proposed** still await owner
-adjudication.
+moved-note and remains as drafting history. Durable conclusions below name the
+behavior or evidence directly rather than relying on paragraph numbers from
+that source. Items marked **proposed** still await owner adjudication.
 
 Naming (settled): the binary is `temper`, the org is `temper-sh`. This
 repository is `temper-sh/temper`, the release repo — built clean, it takes
@@ -16,11 +15,12 @@ the name. The evidence side is `temper-sh/labs` (a fresh scaffold created
 2026-08-14 at `../labs`; the legacy `local-ai-setup` repo and its history
 remain the source of existing evidence until Labs' archive migration imports
 it). `temper-sh/results` is the human-readable evidence publication, created
-locally 2026-08-13. `temper-sh/field-kit` remains the public experiment surface
-but its original Bash installer is replaced after parity: Labs promotes
-immutable machine-dependent experiment packages into an agent-operated
-catalog, and those prompts run over the stable base Temper supplies (boundary
-revised by owner 2026-08-24).
+locally 2026-08-13. `temper-sh/field-kit` is the reviewed immutable content
+surface for experiments and baselines. Temper embeds one release-reviewed
+snapshot and owns the public `temper field-kit` runtime, including discovery,
+disclosure, consent, sessions, effects, protocols, evidence, and cleanup
+(ownership revised by owner 2026-08-27). Labs remains the only editable
+experiment source.
 
 The manifest file is **`manifest.yaml`** with **`manifest.lock.yaml`**
 beside it (decided 2026-08-14: it carries the whole wizard selection —
@@ -44,10 +44,10 @@ model, tool, or harness integration.
    stack matched to their hardware without reading a lab notebook. Runs
    the wizard once, gets a manifest they own, applies updates when they
    choose.
-2. **The consenting experiment participant**: asks Field Kit's root agent to
-   inspect their machine through Temper, sees the applicable current
-   experiments with purpose, cost, effects, and cleanup, then opts into named
-   experiments. Their local evidence may be shared with Labs for review; a run
+2. **The consenting experiment participant**: asks Temper to inspect their
+   machine against its embedded reviewed Field Kit snapshot, sees applicable
+   packages with purpose, cost, effects, and cleanup, then opts into named
+   revisions. Their local evidence may be shared with Labs for review; a run
    never becomes a catalog row by itself.
 3. **The AI agent driving either of the above**: first-class. Stable
    RESULT lines, machine-parseable outcomes, an interpretive runbook
@@ -279,7 +279,8 @@ appear, each from a legacy measurement that contradicts the obvious phrasing:
   moves whenever the reserve changes.
 - **Task-level speed, never token-level.** Decode alone separates these two
   layouts by ~2.5× and prefill by ~1.6×, but per finished task the measured
-  spread is 1.2–1.6× (legacy FINDINGS #27). A wizard advertising "2× faster"
+  spread is 1.2–1.6× in the retained legacy task-level speed witness. A wizard
+  advertising "2× faster"
   teaches the mistake the quality bar exists to prevent: the fast layout
   finished 0 of 4 attempts at the hard task class, the slow one 5 of 5.
 - **Context is a threshold, not a dial.** "More/less context" reads as a
@@ -299,7 +300,7 @@ is the one thing that cannot happen.
 What multi-select does not fix: switching is *request*-driven, so a request
 naming the other layout evicts the running one and takes an in-flight turn
 with it. Installing both is what makes that reachable, which is why the mode
-machinery (M4) owns leases and `--request` rather than leaving arbitration to
+production-mode machinery owns leases and `--request` rather than leaving arbitration to
 convention.
 
 **Each mode screen shows a running download total** for the current selection,
@@ -406,8 +407,8 @@ qualifies only Apple Silicon, but this schema and workflow do not make Homebrew
 or macOS the domain abstraction.
 
 **Profile** has one precise catalog meaning: a versioned, evidence-backed
-configuration record. The provisionally approved C7 v1 direction uses six
-typed documents: model artifact, engine, model runtime, tool, mode, and
+configuration record. The provisionally approved qualification-catalog v1
+direction uses six typed documents: model artifact, engine, model runtime, tool, mode, and
 activity. Harness executables remain user-managed; exact integration revisions
 and deviations live on the engine, tool, and mode records that consume them
 unless a later witnessed need earns a standalone kind. A profile declares
@@ -440,7 +441,8 @@ carries client-side settings that are *functions of the selected model's
 window* — the witnessed case is Pi's auto-compaction
 (`reserveTokens`/`keepRecentTokens`): its frontier-sized defaults zero the
 compaction threshold against a 16k local window, which turned the context
-ceiling into stranded sessions (legacy FINDINGS #25). Such settings belong
+ceiling into stranded sessions in the retained legacy compaction witness. Such
+settings belong
 to the profile that selects the model, expressed as derivations (the legacy
 stack derives `reserve = window/8`, `keep = (window − reserve)/3`), never
 constants. Applying or switching a mode re-materializes them for the tightest
@@ -604,8 +606,8 @@ compaction derivation leaves that harness's settings alone in this mode.
 
 ## Surface
 
-Core transforms (PLAN §10's discipline — the CLI transforms artifacts,
-it does not sequence):
+Core transforms follow the artifact-transform discipline: the CLI transforms
+artifacts; it does not sequence them.
 
 - `temper apply` — manifest.yaml + lock + previously hash-verified immutable
   artifact sets → rendered configs. The bootstrap native slice reads a
@@ -617,9 +619,9 @@ it does not sequence):
   as an immutable verified artifact set; there is no implicit fetch-all.
 - `temper update [id]` — re-resolves pins, prints old→new, reports whether the
   new pin leaves the active catalog's tested set, and prints (never runs) the
-  targeted gate. The M1 implementation moves existing rows through one
+  targeted gate. The native implementation moves existing rows through one
   concurrency-safe lock commit and never downloads weights; tested-set reporting joins it with
-  the M2 qualification catalog. There is no locally stored verified/unverified
+  the qualification catalog. There is no locally stored verified/unverified
   state.
 - `temper check` — read-only lock and local-artifact audit plus a labeled
   resident wall-model prediction from live machine allowances and admitted
@@ -657,24 +659,34 @@ Lifecycle:
   model universe, one-by-one tool choices, harness integrations, mode bindings
   and allowances. Writes manifest.yaml once.
 - the experiment execution base (**probe ownership decided 2026-08-14; moved
-  to M2 immediately after the supply catalog on 2026-08-20; Field Kit role
-  revised 2026-08-24**): experiment discovery and prompts belong to Field Kit;
-  there is no open-ended AI `temper probe` orchestrator. Temper installs the
+  immediately after the supply catalog on 2026-08-20; runtime ownership
+  revised 2026-08-27**): Field Kit owns immutable promoted content and Temper
+  owns its execution. There is no open-ended AI `temper probe` orchestrator.
+  The public `temper field-kit` surface verifies the embedded snapshot,
+  detects canonical machine facts, applies hard predicates, renders exact
+  disclosures, records consent, advances resumable stages, runs only
+  release-supported protocol identities, retains evidence, and performs
+  marker-guarded cleanup. The narrow
+  `temper probe serve` command starts one exact receipt-bound,
+  generation-bound, loopback-only foreground router for a Field Kit stage; it
+  does not choose a probe or own production service state. Temper installs the
   exact locked basic requirements and exposes the reversible base the field
   kit consumes — canonical machine facts, provenance, llama-swap and basic
   dependencies, isolated profile rendering, scoped service lifecycle,
   artifact verification, and removal of only what its receipt and the
   root-wide claim state permit. A stable base and multiple experiment
   locks/receipts may coexist below one explicit root.
-  The Field Kit root prompt applies hard machine predicates, explains advisory
-  relevance and estimated costs, and obtains explicit per-experiment consent.
-  Labs-promoted experiment prompts own stages, bounded adaptive
-  tune/deviation/conclude reasoning, session reporting, and keep-or-restore;
+  Labs-promoted content declares stages and bounded adaptive
+  tune/deviation/conclude policy; Temper owns session reporting and
+  keep-or-restore orchestration;
   the Temper-material identity binds the Temper binary, the ordered
   base/experiment installation-lock-receipt set, manifest lock, generation,
   and machine facts.
-  Field Kit separately binds the immutable experiment metadata/prompt,
-  consent, attempts, decisions, observations, and report.
+  The Temper-owned session separately binds immutable Field Kit baseline or
+  experiment metadata/prompt, consent, stages or attempts, decisions,
+  observations, and report. Baselines
+  answer whether one exact tested stack reproduces; experiments answer a
+  bounded decision question and retain their separate promotion gate.
   Re-witnessing after an update is a
   field-kit run against this base.
 - `temper report` — print the current status-snapshot paste-block (probe
@@ -738,20 +750,20 @@ shape, cleanup and interruption behavior, hermetic refusal coverage, and
 invalidation/retirement triggers. Promotion says that the procedure is useful
 and safe to offer; it does not validate the hypothesis, recommend its subject,
 or authorize a product change. The editable experiment remains in Labs and any
-meaningful change creates a new promoted version. The detailed C12 schema and
-promotion implementation live in Labs and Field Kit, not Temper; Temper's
-boundary is specified in
+meaningful change creates a new promoted version. The detailed promotion
+schema and review workflow live in Labs and Field Kit; Temper implements the
+validated runtime consumer described in
 [`design/field-kit-experiment-boundary.md`](design/field-kit-experiment-boundary.md).
 
 **Product promotion** happens only after Labs reviews evidence. Labs keeps
 decisions reproducible without turning exploratory code into product code.
-The provisionally approved Temper-side C8 contract is one canonical Labs
-packet per exact C7 profile revision; Temper's pure compiler retains only
+The provisionally approved Temper-side product-promotion contract is one
+canonical Labs packet per exact qualification-profile revision; Temper's pure compiler retains only
 public-safe claim-level evidence and exact packet identity. It does not read a
 Field Kit session or legacy runtime-profile packet directly, and it cannot
 create recommendation, consent, or selection. See
 [`design/product-promotion-contract.md`](design/product-promotion-contract.md)
-and the provisionally approved typed C7 surface in
+and the provisionally approved typed qualification surface in
 [`design/qualification-catalog-schema.md`](design/qualification-catalog-schema.md).
 Model, tool, harness and mode candidates follow the same two-axis transition
 rules and evidence discipline:
@@ -818,20 +830,15 @@ quality:
 
 - **`temper-sh/temper`** — release: setup + wizard + generator + lock,
   reviewed catalog profiles, acceptance suites, machine-report, README,
-  compact applicability/evidence references, harness adapters and the probe
-  base.
+  compact applicability/evidence references, harness adapters, the embedded
+  Field Kit snapshot, its consent/session runtime, and the probe base.
   It consumes reviewed output; it does not contain exploratory harnesses,
   unresolved candidate research or the full evidence narrative.
-- **`temper-sh/field-kit`** — the user-facing, agent-operated catalog of
-  immutable Labs-promoted machine experiments (owner revision 2026-08-24).
-  Its root prompt probes the machine through Temper, applies versioned
-  applicability/bucket metadata, explains applicable experiments and their
-  estimated costs, and asks the user to opt into named versions. Each promoted
-  experiment owns its bounded adaptive prompt, consent envelope, evidence
-  packet, and keep-or-restore orchestration over Temper's stable execution
-  base. It contains no duplicate installer and consumes no moving Labs state.
-  The current friend-facing Bash implementation is replaced only after the
-  fixed/adaptive parity and scratch gates.
+- **`temper-sh/field-kit`** — immutable Labs-promoted baseline and experiment
+  content (owner runtime revision 2026-08-27). It owns reviewed provenance,
+  applicability, disclosure inputs, bounds, protocol identities, stage
+  declarations, evidence conditions, and retirement history. It contains no
+  executable; Temper embeds a reviewed snapshot and owns the user runtime.
 - **`temper-sh/extensions`** — possible common home for harness-specific
   adapters that are independently useful; whether Pi extensions share it or
   become separate projects remains open. Shared tool logic does not fork here:
@@ -917,33 +924,33 @@ reach the same standard before tool profiles enter the qualification catalog.
 
 ## Milestones (proposed)
 
-- **M0 — legacy generator extraction**, completed as reference work; its
+- **Legacy generator extraction**, completed as reference work; its
   planned product landing was retired 2026-08-19 when the owner chose the
   native manifest directly.
-- **M1 — native manifest + lock + resolve/fetch/apply/update/check**, complete
+- **Native manifest + lock + resolve/fetch/apply/update/check**, complete
   2026-08-20; rendering, pin management, exact artifact materialization,
   receipt/full-hash admission, and the resident wall-model prediction execute
   in Go with no Bash runtime dependency.
-- **M2 — software supply catalog + Field Kit execution base, then the broader
+- **Software supply catalog + Field Kit execution base, then the broader
   qualification catalog**. First model rolling/guarded/constrained package
   policy and exact software locking; next install/check/remove the receipted
   reversible base Labs-promoted Field Kit experiments consume and freeze the
   cross-repository experiment-promotion boundary; then add the six typed model
   artifact, engine, model-runtime, tool, mode, and activity qualification
   profiles plus the separate Labs product-promotion packet.
-- **M3 — wizard TUI** over a curated model universe, individually opt-in tools,
+- **Wizard TUI** over a curated model universe, individually opt-in tools,
   harness integrations and mode bindings.
-- **M4 — production mode state machine + harness qualification** over the
+- **Production mode state machine + harness qualification** over the
   already installed Field Kit base: active mode, service reconciliation,
   leases, harness protocol, and witnessed bindings.
-- **M5 — the split**: Labs/release extraction, Results publication wired into
+- **Release split**: Labs/release extraction, Results publication wired into
   review, and the catalog seeded only with reviewed qualified rows.
 
 ## Open questions (owner)
 
 1. Final public distribution: brew formula vs curl-installer vs release-asset
    binary. A directly supplied checksummed pre-release binary is sufficient
-   for M2 Field Kit work and does not settle this choice.
+   for Field Kit installed-base work and does not settle this choice.
    (The Go-*scope* half that used to fold in here was settled 2026-08-14 —
    the whole CLI is Go; only distribution remains.)
 2. Do `local` and `utility` each have enough complete model + tool + harness
@@ -958,7 +965,7 @@ reach the same standard before tool profiles enter the qualification catalog.
 4. Is remote-provider integration strictly render-only (current direction),
    with credential and foreground-model ownership left to each harness?
 5. Versioning of witnessed rows when engines move: the provisionally approved
-   C7 answer keeps the old witness immutable, supersedes the same product
+   qualification-profile answer keeps the old witness immutable, supersedes the same product
    lineage through a new `LAB/EXPERIMENTAL` revision, and uses a new profile ID when both
    combinations remain deliberately supported. Refine this before the v1
    surface freezes.
@@ -975,7 +982,8 @@ reach the same standard before tool profiles enter the qualification catalog.
    requested posture in isolation.)
 9. Pi `packages` as an adapter distribution channel, plugin packaging for
    Codex/Claude Code, and the standalone CI contract for a shared tool core.
-10. Catalog representation: the provisionally approved C7 answer is six
+10. Catalog representation: the provisionally approved qualification-catalog
+    answer is six
     separate content-addressed typed profile documents plus versioned
     machine-bucket and unordered recommendation-set vocabulary, with no
     standalone harness kind in v1. Refine this before the v1 surface freezes.

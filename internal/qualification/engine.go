@@ -10,7 +10,7 @@ import (
 	softwarecatalog "github.com/temper-sh/temper/internal/software/catalog"
 )
 
-// EngineProfile binds a tested C4 software identity to one closed serving and
+// EngineProfile binds a tested software-supply identity to one closed serving and
 // process contract. It neither copies a software lock nor claims installation.
 type EngineProfile struct {
 	ProfileEnvelope `yaml:",inline"`
