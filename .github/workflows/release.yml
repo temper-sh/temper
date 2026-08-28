@@ -181,15 +181,21 @@ jobs:
           "$binary" field-kit baseline verify
           codesign --verify --strict --verbose=2 "$binary"
 
-          assessment_passed=false
+          notarization_verified=false
           for attempt in 1 2 3 4 5; do
-            if spctl --assess --type execute --verbose=4 "$binary"; then
-              assessment_passed=true
+            if codesign \
+              --verify \
+              --strict \
+              --verbose=2 \
+              --check-notarization \
+              -R="notarized" \
+              "$binary"; then
+              notarization_verified=true
               break
             fi
             sleep 5
           done
-          test "$assessment_passed" = "true"
+          test "$notarization_verified" = "true"
 
       - name: Preserve verified archive
         uses: actions/upload-artifact@v7
