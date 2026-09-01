@@ -7,9 +7,10 @@ it worked once.
 
 ## Boundaries
 
-- This repository ships reviewed configuration and the minimum probe
-  environment. Labs decides and gathers evidence; Results explains it;
-  field-kit executes frozen portable tests.
+- This repository ships reviewed configuration, installers, machine checks,
+  and the minimum isolated probe environment. Labs decides and gathers
+  evidence; Results explains it; Field Kit independently versions and executes
+  frozen portable tests by composing Temper's public primitives.
 - Work arrives only two ways: an **accepted product handoff** from Labs
   (`../labs/product-handoffs/`), or **product engineering planned in
   `docs/PLAN.md`**. Never consume moving Labs state, raw experiment output,
@@ -21,6 +22,11 @@ it worked once.
   launchd at this repo without the user's explicit go-ahead.
 - A recommendation is never consent: no code path may select a model, tool,
   or harness integration the user did not explicitly choose.
+- Field Kit discovery, consent, sessions, protocols, evidence, reports, and
+  cleanup do not belong in Temper code. Temper carries no Field Kit package,
+  session, or protocol runtime. A Field Kit protocol revision must not force a
+  Temper release unless it needs a genuinely new, generally useful machine
+  primitive.
 
 ## Design discipline
 

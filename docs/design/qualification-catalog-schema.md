@@ -1,14 +1,15 @@
 # Qualification catalog and profiles
 
-Status: **provisionally approved by owner for Temper-only refinement and fake
-fixture implementation**, 2026-08-25. This design settles the catalog
+Status: **provisionally approved and amended before wizard freeze**, 2026-08-25,
+amended by owner 2026-08-29. This design settles the catalog
 representation as separate typed documents over one common envelope, but
 remains open to evidence-driven
 refinement before the v1 surface freezes. It does not seed a catalog row,
 claim that a current configuration is qualified, or authorize the wizard to
 select anything.
 
-Current Temper implementation boundary: `internal/qualification` strictly
+Current Temper implementation boundary: `internal/qualification` still
+implements the pre-amendment six-profile fake chain. It strictly
 parses canonical machine-bucket, model-artifact, engine, model-runtime, tool,
 mode, activity, and catalog-index documents. The shared profile envelope,
 dependency-root profiles, composed runtime/mode worlds, and narrowed activity
@@ -22,20 +23,24 @@ escape hatch. Public evidence inventories and versioned canonical scope keys
 are validated for all six profile kinds. Schema-specific `QUALIFIED` gates,
 runtime task-quality completeness, applicability witnesses, evidence-scope
 references, and dependency qualification/lifecycle closure execute over a
-complete fake six-profile chain. Nonempty recommendation sets remain an
-explicit refusal until their performance and applicability projection rules
-exist. All current catalog fixtures are fake and hermetic.
+complete fake six-profile chain. It still uses `coder` as a foreground role
+and folds template identity into the artifact. Those two surfaces are
+superseded by this amendment and must change before recommendation work or the
+wizard consumes them. Nonempty recommendation sets remain an explicit refusal
+until the amended portfolio, option-group, performance, and applicability
+projection rules exist. All current catalog fixtures are fake and hermetic.
 
 ## Decision
 
-The qualification catalog is a content-addressed catalog index plus six
+The qualification catalog is a content-addressed catalog index plus seven
 immutable profile document kinds:
 
 | Profile kind | Schema | Owns |
 |---|---|---|
-| model artifact | `temper-qualification-model-artifact/v1` | exact model, tokenizer, template, quantization, sidecar, and license identity |
+| model artifact | `temper-qualification-model-artifact/v1` | exact base weights, tokenizer, shipped template material, quantization, sidecar, and license identity |
+| model patch | `temper-qualification-model-patch/v1` | an independently versioned patch, transform, output bytes, purpose, compatible exact artifacts, license, and observed interaction behavior |
 | engine | `temper-qualification-engine/v1` | exact tested software identity, serving capabilities, process and service contract |
-| model runtime | `temper-qualification-model-runtime/v1` | one output-affecting layout over exact artifact and engine profiles, plus its performance profile |
+| model runtime | `temper-qualification-model-runtime/v1` | one output-affecting layout over exact artifact, optional selected patch, and engine profiles, plus its performance profile |
 | tool | `temper-qualification-tool/v1` | tool core, transport, schema, permissions, backend role, and harness/model deviations |
 | mode | `temper-qualification-mode/v1` | one witnessed world of exact runtime/tool bindings, placement, residency, and harness integration |
 | activity | `temper-qualification-activity/v1` | a strict tool subset inside one exact mode profile |
@@ -56,8 +61,9 @@ their facts.
 
 | Fact | One writer/home | Qualification catalog representation |
 |---|---|---|
-| user selection, selected layouts/tools/harnesses, `preferred` | wizard once, then `manifest.yaml` is the user's | absent; a later explicit projection strips catalog annotations |
+| user selection, selected layouts/patches/tools/harnesses, local foreground binding | wizard once, then `manifest.yaml` is the user's | absent; a later explicit projection strips catalog annotations |
 | model artifact resolution installed for one manifest | `manifest.lock.yaml` | an artifact profile owns the reviewed immutable source identity; a manifest lock still owns a user's resolved pins |
+| selected patch resolution installed for one manifest | `manifest.lock.yaml` | a model-patch profile owns reviewed source/transform/output identity; the manifest and lock own the user's selected patch and resolved bytes |
 | software policy and tested versions | `temper-software-supply/v1` catalog | an engine profile references one exact tested software-supply identity |
 | desired installed software closure | `temper-software-lock/v1` | never copied into qualification catalog |
 | observed installed software | installation receipt and root state | never copied into qualification catalog |
@@ -81,7 +87,7 @@ An exact profile reference is always complete:
 
 ```yaml
 schema: temper-qualification-model-runtime/v1
-id: example-coder-llamacpp-q4
+id: example-chat-llamacpp-q4
 revision: 3
 sha256: <64 lowercase hexadecimal characters>
 ```
@@ -91,13 +97,14 @@ revision. The catalog index lists the exact documents active in that snapshot.
 References form this acyclic dependency order:
 
 ```text
-machine bucket       model artifact       engine       tool
-                              \             /
-                               model runtime
-                                      \
-                                       mode
-                                         \
-                                          activity
+model artifact ──▶ model patch
+      │                 │
+      └──────┬──────────┘
+             ├── + engine ──▶ model runtime
+             │                    │
+tool ────────┴──────────────────▶ mode ──▶ activity
+
+machine buckets are applicability references from profiles and the index.
 ```
 
 Documents are strict, single-document YAML. Unknown fields, aliases, duplicate
@@ -154,7 +161,12 @@ Valid combinations are deliberately narrow. `EXPERIMENTAL` permits `WATCH`,
 
 Qualification transitions may stay unchanged, move `WATCH → LAB`,
 `WATCH → REJECTED`, `LAB → QUALIFIED`, `LAB → REJECTED`, or return
-`QUALIFIED/REJECTED → LAB`; changed material never inherits qualification.
+`QUALIFIED/REJECTED → LAB`. Changed material never inherits evidence merely
+because its predecessor passed. A narrowly classified routine software
+revision may nevertheless publish a new exact `QUALIFIED` revision when its
+focused shared regression packet supplies the required evidence and finds no
+known or observed regression; that is new evidence for a proportionate gate,
+not inherited status.
 Lifecycle transitions may stay unchanged, move `EXPERIMENTAL → SUPPORTED`,
 `SUPPORTED → DEPRECATED`, reverse `DEPRECATED → SUPPORTED`, move any active
 stage to `RETIRED`, or return an active stage to `EXPERIMENTAL`. Reopening a
@@ -190,29 +202,49 @@ prior material explicitly; the catalog index remains a current projection and
 does not infer history from revision numbers.
 
 An old exact witness does not become false because an engine releases a new
-version. The version-invalidation rule is therefore:
+version. Exact history and current maintenance policy are therefore separate:
 
-- a replacement in the same supported product lineage creates a new profile
-  revision, changes the exact engine reference, and starts at `LAB`; the old
-  revision remains immutable history but is absent from the new index head;
+- a **routine compatible software revision** creates new exact engine and
+  affected runtime/mode revisions. One focused change packet may support all
+  affected profiles when it checks integrity, lifecycle, interfaces,
+  representative portfolio work, and known regressions once. If no regression
+  is known or observed, the new revisions may publish directly as
+  `QUALIFIED/SUPPORTED` and become current; the prior exact revisions remain
+  rollback history;
+- a **material behavior, interface, resource, compatibility, or output change**
+  creates new exact revisions in `LAB/EXPERIMENTAL` until the relevant gates
+  pass;
+- a **known or observed regression** keeps the previous eligible revision
+  current and records the candidate as held back with its exact scope;
 - when release review intentionally offers old and new combinations in
   parallel, the new combination gets a new profile ID rather than forking one
   supersession chain; and
-- retiring or rejecting the old exact combination is a separate reviewed
-  lifecycle/qualification revision, not a side effect of resolving the new
-  engine.
+- retiring or rejecting an old exact combination is an explicit lifecycle or
+  qualification fact, not a side effect of resolving a newer dependency.
+
+One reviewed maintenance decision covers the coherent set of profile revisions
+and generated projections. It does not require separate owner approval for the
+engine, each affected runtime, the catalog index, and generated documentation
+after the declared focused checks pass. Model, patch, tool, and layout choices
+remain explicit user decisions; this automatic-current rule applies to
+maintained compatible software beneath those choices.
 
 The catalog index is the explicit current projection. Revision number alone
-has no currentness or preference semantics.
+has no currentness or preference semantics. A signed active channel selects
+the newest eligible reviewed catalog independently of the Temper binary
+release, using the same rollback/equivocation discipline as software-supply
+catalog activation. Historical measurements remain pinned to their exact
+profiles and dates; a current profile may say that a performance axis has not
+been remeasured rather than copying an old number onto new bytes.
 
 ## Common profile envelope
 
-All six profile schemas have the same envelope and a kind-specific `spec`.
+All seven profile schemas have the same envelope and a kind-specific `spec`.
 This schematic document shows the common fields; angle-bracket values are not
 catalog data.
 
 ```yaml
-schema: <one of the six exact profile schemas>
+schema: <one of the seven exact profile schemas>
 id: <stable profile id>
 revision: <positive integer>
 supersedes:                         # absent on the first revision
@@ -229,7 +261,7 @@ title: <short factual title>
 summary: <evidence-scoped description>
 what_this_means: <one plain-language line for the wizard or check output>
 
-roles: [<stable role ids>]
+service_roles: [<stable tool-consumed service role ids>]
 applicability:
   machine_buckets:
     - schema: temper-qualification-machine-bucket/v1
@@ -279,6 +311,7 @@ evidence:
     scope:
       key: <canonical scope SHA-256>
       artifact_profile: <exact reference when material>
+      patch_profile: <exact reference when a selected patch is material>
       engine_profile: <exact reference when material>
       runtime_profile:
         schema: temper-qualification-model-runtime/v1
@@ -312,6 +345,13 @@ Empty lists are explicit where an empty set is meaningful. A field is absent
 only when the schema says it does not apply. `unmeasured` is a value, never an
 omission pretending to be zero.
 
+`service_roles` is not a list of human uses. It contains only interfaces that
+another selected component must resolve, such as `rerank`, `embed`, or
+`extract`. A conversational model may therefore have an empty service-role
+set while still being eligible as a local foreground. Coding, writing,
+research, and everyday assistance belong to evidence-backed portfolio and
+activity descriptions, not this join field.
+
 ### Applicability is not evidence scope
 
 `applicability` states where release review considers the profile useful.
@@ -324,7 +364,7 @@ machine bucket, runtime revision, mode, or co-resident set.
 For a runtime witness, `scope.key` is the SHA-256 of the canonical tuple:
 
 ```text
-artifact profile ref × engine profile ref × runtime id@revision ×
+artifact profile ref × optional selected patch profile ref × engine profile ref × runtime id@revision ×
 machine-bucket ref × mode × ordered co-resident placements ×
 ordered harness integration revisions × conditions
 ```
@@ -343,9 +383,10 @@ update path, and a mismatch is a refusal. A runtime scope must contain exact
 artifact, engine, self-runtime, applicable machine-bucket, and semantic mode
 dimensions, plus explicit co-resident and harness sets. OS build, wired limit,
 and wired-limit source are observed; power, thermal, and competing load are
-observed or explicitly unmeasured. Static artifact compatibility evidence uses
-the smaller artifact-self scope with every condition explicitly
-`not-applicable`; it cannot support runtime claims.
+observed or explicitly unmeasured. Static artifact or patch compatibility
+evidence uses the smaller self scope with every condition explicitly
+`not-applicable`; patch compatibility also names the exact target artifact. It
+cannot support runtime claims.
 
 ### Evidence follows the claim
 
@@ -453,9 +494,9 @@ spec:
   tokenizer:
     state: file
     path: <exact selected file containing it, including embedded-in-weights>
-  template:
+  shipped_template:
     state: file | not-applicable
-    path: <exact selected file containing it when state is file>
+    path: <exact shipped file containing it when state is file>
   sidecars: [<paths of every projector, drafter, or other sidecar file>]
   declared_download_bytes: <sum of every selected file>
   license:
@@ -467,13 +508,73 @@ spec:
     redistribution: referenced-not-vendored
 ```
 
-All selected files, including sidecars, contribute to identity and the
+All selected base-artifact files, including sidecars and any shipped template,
+contribute to identity and the
 download bill. File and sidecar sets are unique and path-sorted. The required
 `default` tensor class makes the allocation total; named rows are exact
-overrides rather than an advertised average bit label. A tokenizer or template
-embedded in a weights file names that containing file, so embedded metadata is
-still bound to exact bytes. Compatibility may be reused only when every
-referenced byte is identical.
+overrides rather than an advertised average bit label. A tokenizer or shipped
+template embedded in a weights file names that containing file, so embedded
+metadata is still bound to exact bytes. Selecting an external template patch
+does not rewrite this artifact document: the runtime references the
+independently versioned patch and the lock downloads the shared weights once.
+Base-artifact compatibility may be reused only when every referenced byte is
+identical.
+
+### Model patch
+
+A model patch is independently sourced material applied over one or more exact
+base artifacts. V1 earns this profile kind from the existing selectable Qwen
+chat-template patches; it is not a second model artifact and it never contains
+model weights.
+
+```yaml
+spec:
+  purpose: chat-template
+  source:
+    kind: hugging-face | github
+    repository: <immutable repository identity>
+    revision: <exact 40-character upstream commit>
+    path: <canonical relative source path>
+    sha256: <exact fetched source bytes>
+  transform:
+    state: none | built-in
+    id: <exact Temper transform id when built-in>
+  output:
+    path: <canonical file name presented to the engine>
+    sha256: <exact post-transform bytes>
+    size: <exact output bytes>
+  compatible_artifacts: [<exact model-artifact references>]
+  interaction:
+    label: <short user-facing option label>
+    observed_behavior: <evidence-scoped behavior, not a quality rank>
+    preference_scope: user-choice-after-compatibility
+  license:
+    id: <reviewed license identity>
+    source:
+      repository: <exact repository identity>
+      revision: <exact 40-character upstream commit>
+      path: <canonical relative license path>
+    redistribution: referenced-not-vendored
+```
+
+The model-patch envelope depends on every exact artifact named by
+`compatible_artifacts` using the closed relationship `compatible-artifact`.
+The loader proves the references and evidence but never applies the patch.
+Qualification says the patch bytes meet their declared compatibility checks
+for those artifacts; a model-runtime profile still owns live behavior for one
+exact artifact + patch + engine composition.
+
+Source and post-transform output are separate facts. A built-in transform
+binds its semantic ID and resulting hash, so a local correctness repair cannot
+hide beneath an upstream label. Changing source revision, transform, output,
+compatible-artifact set, license, or observed interaction description creates
+a new patch-profile revision. A failure rejects or limits that patch
+composition, not the base model artifact or another patch over it.
+
+When two qualified patches differ only in eligible interaction behavior, the
+catalog records both observations and the wizard leaves the choice to the
+user. `interaction` cannot contain a winner, score, default, selection, or
+claim that preference is model capability.
 
 ### Engine
 
@@ -537,14 +638,19 @@ runtime profile.
 ```yaml
 spec:
   artifact_profile: <exact model-artifact reference>
+  patch_profile: <exact model-patch reference; absent when shipped template or not applicable>
   engine_profile: <exact engine reference>
+  use_claims:
+    - id: <stable portfolio-use id scoped by its evidence question>
+      summary: <work this exact runtime is useful for>
+      evidence: [<document-local evidence ids>]
   layout:
-    role: coder | rerank
+    interface: chat-completions | rerank
     window: <positive raw model window>
-    max_tokens: <positive generation cap below window; coder only>
-    kv: q8 | f16                         # coder only
-    thinking: on | off                   # coder only
-    chat_template: artifact | not-applicable
+    max_tokens: <positive generation cap below window; chat-completions only>
+    kv: q8 | f16                         # chat-completions only
+    thinking: on | off                   # chat-completions only
+    chat_template: shipped | patch | not-applicable
     batching:
       parallel: <positive integer>
       flash_attention: auto | off | on
@@ -596,23 +702,42 @@ observations:
     witness: <document-local evidence id>
 ```
 
-The model-runtime envelope contains exactly two sorted dependencies named
-`artifact` and `engine`; they exactly repeat the body references. The loader
-resolves both by full material identity. A coder runtime requires the artifact
-and engine to claim the coder role, an artifact-owned template file, and the
-engine's `chat-completions` capability. A reranker requires the rerank role and
-engine capability. Drafter speculation additionally names an exact artifact
-sidecar and requires `drafter-speculation`; MTP requires `mtp-speculation`.
-None of these checks selects or installs the referenced material.
+The model-runtime envelope contains sorted dependencies named `artifact` and
+`engine`, plus `template-patch` exactly when `patch_profile` is present. They
+exactly repeat the body references and the loader resolves them by full
+material identity. A `chat-completions` runtime requires the engine capability
+and either an artifact-owned shipped template or one compatible exact
+model-patch profile. A `rerank` runtime requires the `rerank` service role and
+engine capability and has no chat template. Drafter speculation additionally
+names an exact artifact sidecar and requires `drafter-speculation`; MTP
+requires `mtp-speculation`. None of these checks selects or installs the
+referenced material.
 
-The v1 runtime layout is deliberately the strict `temper-manifest/v1` coder/rerank surface, but
-it owns its own immutable types. Its `temper-runtime-layout/v1` contract must
+The base artifact and selected template patch are deliberately separate. Two
+runtime profiles may share exact weights, engine, and tuning while differing
+only by the selected patch. They remain distinct evidence scopes because the
+rendered prompt and behavior differ, but the recommendation view groups them
+as template options beneath one base-model choice. Artifact download and lock
+materialization deduplicate the shared weights.
+
+`use_claims` is where coding, everyday assistance, writing, research, or
+another evidenced purpose belongs. It is not a closed hierarchy of model
+types: IDs name reviewed questions, summaries use ordinary language, and each
+claim cites its evidence. A synthetic capability observation may inform a use
+claim but cannot create one by itself. A `QUALIFIED` runtime has at least one
+use claim supported by the required complete-task and regression evidence;
+failure of one use does not erase unrelated claims.
+
+The amended runtime layout is the qualification-side predecessor of the
+pre-wizard manifest successor; the current executable `temper-manifest/v1`
+coder/rerank surface remains compatibility-only. The qualification layout owns
+its own immutable types. Its runtime-layout contract must
 match the engine declaration, so engine package names never stand in for
 tuning compatibility. A later projection translates a user-chosen qualified
-row into `temper-manifest/v1`; the qualification catalog does not import
-manifest structs or write the user's manifest.
-Placement, residency, preload, TTL, `ngl`, and `preferred` remain mode or
-user-selection facts and cannot appear here.
+row into the reviewed pre-wizard successor manifest; the qualification catalog
+does not import manifest structs or write the user's manifest.
+Placement, residency, preload, TTL, `ngl`, and the user's local foreground
+selection remain mode or manifest facts and cannot appear here.
 
 `task_success` records attempts and first-attempt successes before any token or
 throughput metric. `regressions` records the retained known-good/known-bad task
@@ -651,7 +776,8 @@ canonical nonnegative decimal string. A success-fraction arm contains
 Exactly one arm must match the declared kind.
 
 A `QUALIFIED` runtime requires measured first-attempt task success and a
-complete regression disposition for its claimed role. In v1, complete means
+complete regression disposition for each claimed portfolio use. In v1,
+complete means
 that `task_success` is measured and contains
 `first-attempt-task-success`, while `regressions` is measured and contains
 `known-bad-tasks`, `new-regressions`, and `retained-good-tasks`. The reviewed
@@ -689,8 +815,8 @@ spec:
     executes: [<allowed command classes>]
     network: [<allowed network purposes>]
   backend:
-    required_roles: [<roles the mode must furnish>]
-    optional_roles: [<roles whose absence only narrows behavior>]
+    required_service_roles: [<service roles the mode must furnish>]
+    optional_service_roles: [<service roles whose absence only narrows behavior>]
   failure_semantics:
     invalid_input: refuse
     permission_denied: refuse
@@ -703,9 +829,9 @@ exact integration revision. Their harness set exactly equals
 `applicability.harnesses`. Permission read/write sets exactly equal the common
 data-boundary sets, and network permission IDs exactly equal its declared
 network purposes; execution permission remains a separate explicit command
-surface. Required and optional backend roles are disjoint. A tool has no
+surface. Required and optional backend service roles are disjoint. A tool has no
 qualification-profile dependency because a mode—not the tool—binds the exact
-runtimes that furnish those roles.
+runtimes that furnish those service roles.
 
 Affordance deviations are evidence-bearing facts, not prose exceptions. The
 four failure fields have no silent-success value. Selecting a tool later is
@@ -716,10 +842,12 @@ core/transport/permission combination eligible to be offered.
 
 ```yaml
 spec:
-  foreground: local | harness | none
+  foreground:
+    owner: local | harness | none
+    binding: <binding id; required only for local>
   bindings:
     - id: <document-local binding id>
-      role: <stable role id>
+      service_roles: [<tool-consumed service role ids>]
       runtime_profile: <exact qualified runtime reference>
       placement: resident | on-demand
       ngl:
@@ -734,8 +862,8 @@ spec:
     - id: <user-managed harness id>
       integration_revision: <Temper-owned render/adapter revision>
       required_capabilities: [<exact capabilities>]
-  role_bindings:
-    <role id>: <binding id>
+  service_role_bindings:
+    <service role id>: <binding id>
   wall_model:
     result: fit | does-not-fit | unmeasured | not-applicable
     predicted_resident_mib: <prediction for fit or does-not-fit>
@@ -743,17 +871,19 @@ spec:
     reason: <required only for unmeasured or not-applicable>
 ```
 
-Bindings are unique by both binding ID and exact runtime. `role_bindings` keys
-exactly equal the common role set and each value names a binding with that
-role. A local foreground has a resident coder binding; a harness foreground
-has at least one exact integration. The `none` world has no roles, bindings,
-tools, harnesses, or dependencies, an empty/not-applicable data boundary, and
-a not-applicable wall model. This is the schema-defined exception to the
-otherwise nonempty common role set.
+Bindings are unique by both binding ID and exact runtime.
+`service_role_bindings` keys exactly equal the mode's common service-role set
+and each value names a binding that provides that role. A local foreground
+names one resident `chat-completions` binding directly. It does not discover
+that binding through a `coder` role or by choosing the largest resident. A
+harness foreground omits `binding` and has at least one exact integration. The
+`none` world has no service roles, bindings, tools, harnesses, or dependencies,
+an empty/not-applicable data boundary, and a not-applicable wall model.
 
 Mode dependencies exactly enumerate each distinct runtime and tool reference.
-The loader resolves them all, proves each binding role and applicability,
-requires every active tool's backend roles, and finds an exact harness
+The loader resolves them all, proves each binding interface, service roles,
+and applicability,
+requires every active tool's backend service roles, and finds an exact harness
 transport revision. It also recomputes the sorted union of reads, writes, and
 network uses from every bound runtime and active tool; disagreement with the
 mode data boundary is a refusal.
@@ -765,7 +895,7 @@ install authorization. A user may explicitly choose members from one or more
 applicable catalog offers; render validation may call the resulting
 composition qualified only when an exact qualified mode profile covers it.
 
-The six-kind v1 deliberately has no standalone harness profile. Harness
+The seven-kind v1 deliberately has no standalone harness profile. Harness
 executables are user-managed; exact integration revisions and deviations live
 where they are consumed by engine, tool, and mode profiles. If the production-mode workstream produces a
 reusable harness entity with independent lifecycle and evidence, that is a
@@ -777,19 +907,28 @@ reviewed qualification schema revision, not an untyped v1 escape hatch.
 spec:
   mode_profile: <exact mode reference>
   active_tools: [<exact tool references already present in that mode>]
-  purpose: change | inspect | review | verify
+  purpose:
+    id: <stable activity id such as coding, change, inspect, review, or verify>
+    summary: <what work this selected support helps with>
 ```
 
-An activity profile is valid only when `active_tools` is a strict subset of
+An activity profile is valid only when `active_tools` is a subset of
 the referenced mode's active tools. Its sole dependency is that exact mode
-reference. Roles must exactly match the mode, and foreground, harness, and
-machine-bucket applicability may only narrow the mode's applicability. The
-loader retains every mode runtime binding, includes only the activity's active
-tool subset, and recomputes the sorted union of reads, writes, and network uses.
+reference. Service roles must exactly match the selected tools' needs, and
+foreground, harness, and machine-bucket applicability may only narrow the
+mode's applicability. The loader retains every mode runtime binding, includes
+only the activity's active tool subset, and recomputes the sorted union of
+reads, writes, and network uses.
 Inference and credential ownership remain exactly the mode's. Any disagreement
 with the activity data boundary is a refusal. An activity therefore cannot add
-a tool, runtime, harness, permission, role binding, data destination, or
+a tool, runtime, harness, permission, service-role binding, data destination, or
 credential path.
+
+An activity may be the reason the wizard offered particular Pi extensions or
+tools, but those components must already be individually selected with their
+effects and data boundaries shown. The activity controls exposure and
+configuration for coding or another use; it does not classify the foreground
+model or imply that the model alone supplied the observed improvement.
 
 The referenced mode need not already be `QUALIFIED` while an activity is in
 `WATCH` or `LAB`; once the qualification gate is implemented, a `QUALIFIED`
@@ -823,27 +962,50 @@ recommendation_sets:
     applicability:
       machine_buckets: [<exact bucket references>]
       foreground: local | harness
-      role: <stable role id>
-    explanation: <why these are all sensible tradeoffs>
+    work: <plain-language job or need these choices address>
+    explanation: <why these are all sensible portfolio choices>
     members:
-      - runtime_profile: <exact QUALIFIED runtime reference>
+      - id: <stable model-choice id within this set>
+        base_artifact: <exact QUALIFIED model-artifact reference>
         reason: <evidence-backed reason to consider it>
         strengths: [<measured strengths>]
         costs: [<measured costs or explicit unknowns>]
+        variants:
+          selection: zero-or-one
+          options:
+            - runtime_profile: <exact QUALIFIED runtime reference>
+              labels:
+                template: <user-facing patch label when selectable>
+                runtime: <user-facing engine/tuning label when material>
 ```
 
-Member order is canonical identity order and has no ranking meaning. The
-schema has no `rank`, score, winner, default, selected, checked, or preferred
-field. Every member must be `QUALIFIED/SUPPORTED`, applicable to the set, and
-carry the measured performance observations cited by its reason. Several members may
-share the same bucket/mode/role; none, one, or all may later be selected by the
-user. A recommendation set is never projected into `manifest.yaml`.
+Recommendation is centered on a person's work, not a model role. A compact
+general assistant may therefore be a local foreground choice even when no
+coding-oriented profile fits. Coding is represented by the member runtime's
+evidence-backed use claim and any explicitly selected activity support, not by
+an applicability `role: coder` filter.
 
-The catalog index is release-reviewed Temper data. Qualification-catalog v1
-does not inherit the
-software catalog's independent update channel, signature files, or active
-pointer. Changing qualification-catalog distribution is a separate surface
-decision; readers still verify every indexed document hash.
+Member and variant order is canonical identity order and has no ranking
+meaning. The
+schema has no `rank`, score, winner, default, selected, checked, or preferred
+field. Every member's base artifact and each variant must be
+`QUALIFIED/SUPPORTED`, applicable to the set, and carry the measured
+performance observations cited by its reason. Every variant resolves to the
+member's exact base artifact. Variants with a `template` label select distinct
+compatible model-patch profiles; the loader refuses a second set of weights
+masquerading as a template option. None, one, or several members may later be
+installed, but `selection: zero-or-one` permits no more than one
+variant for that member's mutually exclusive option group. A recommendation
+set is never projected into `manifest.yaml`; only the exact variants the user
+selects are projected.
+
+The catalog index is release-reviewed Temper data distributed through an
+independently signed current channel. The binary owns supported schemas,
+compiled capabilities, and the trust root; the channel owns a monotonic active
+catalog identity; every indexed document remains content addressed. Activation
+may move only to a newer authenticated eligible snapshot and never rewrites a
+user manifest, lock, receipt, or historical profile. The previous active
+snapshot remains available for rollback after a bad publication is detected.
 
 The current pure loader accepts the index bytes and a path-to-bytes bundle; it
 does not read a directory, resolve a moving revision, or fetch content. Files
@@ -852,7 +1014,9 @@ but they have no currentness semantics and are not loaded.
 
 ## Projection to the manifest and read rules
 
-The wizard reads only the exact catalog index selected by its Temper release:
+The wizard reads the exact authenticated active catalog supported by its
+Temper binary, with an embedded reviewed fallback only when no active catalog
+exists:
 
 1. verify index structure and every referenced document digest;
 2. match canonical machine facts to exact bucket predicates;
@@ -863,11 +1027,13 @@ The wizard reads only the exact catalog index selected by its Temper release:
    whose exact dependency closure is present, qualified, supported, and
    applicable;
 5. show unfurnishable modes disabled with the derived refusal reason;
-6. display every applicable recommendation-set member and its measured
-   tradeoffs with all controls initially unselected; and
+6. display every applicable portfolio member and its measured tradeoffs with
+   all controls initially unselected, grouping exact template-patch variants
+   beneath their shared model artifact; and
 7. after explicit choices, project only the selected kind-specific `spec`
-   facts into `temper-manifest/v1`, then require the user to choose residency, harness enablement,
-   and at most one `preferred` member.
+   facts into the pre-wizard successor manifest, then require the user to
+   choose residency, harness enablement, activity-support items, and the one
+   local foreground binding where applicable.
 
 Projection strips qualification/lifecycle status, recommendation, evidence,
 prose, known failures, and promotion metadata. It does not synthesize a
@@ -883,7 +1049,8 @@ lifecycle, or active catalog.
 The qualification validator must reject at least:
 
 - an unknown schema, field, qualification/lifecycle status, role,
-  relationship, performance state, or data-boundary value;
+  relationship, technical interface, service role, performance state, or
+  data-boundary value;
 - a noncanonical document, wrong digest, duplicate identity, missing
   dependency, dependency cycle, or reference to a document absent from the
   index;
@@ -900,8 +1067,10 @@ The qualification validator must reject at least:
 - a runtime performance axis omitted instead of marked unmeasured, a number
   with no definition/witness, or a recommendation reason citing an unmeasured
   value;
-- a recommendation member that is not an exact qualified runtime reference,
-  is outside applicability, or carries ranking/default/selection semantics;
+- a recommendation member or variant that is not an exact qualified
+  artifact/runtime/patch composition, is outside applicability, disguises a
+  second base artifact as a template option, or carries ranking/default/
+  selection semantics;
 - a mode binding to an unselected or unavailable dependency, an activity that
   widens its mode, or any profile field that implies tool/harness consent;
 - a raw/private Labs path or Field Kit session value in a public qualification evidence
@@ -919,17 +1088,21 @@ require a later review. The first fixture set will:
    through canonical bytes and an exact index;
 2. compile one fake product-promotion packet into a `LAB` runtime profile without reading
    Labs, Results, Field Kit, or the network;
-3. carry two `QUALIFIED` coder runtime profiles in one recommendation set,
-   preserve distinct speed/context and quality-first performance observations,
-   and prove neither becomes selected or preferred;
-4. change an engine reference, require a new runtime revision in `LAB`, and
+3. carry a compact everyday-assistant foreground and a larger
+   coding-capable foreground in one machine's portfolio without ranking either
+   or making local availability depend on coding;
+4. group two qualified Qwen runtime profiles over the same exact weights as
+   Froggeric and Sharp template-patch options, prove the weights are referenced
+   once, preserve their distinct interaction/compatibility evidence, and prove
+   neither option becomes selected or the local foreground;
+5. change an engine reference, require a new runtime revision in `LAB`, and
    preserve the old exact witness bytes;
-5. prove static artifact compatibility can be reused while fit, performance,
+6. prove static artifact/patch compatibility can be reused while fit, performance,
    cache, and mode witnesses cannot cross scope;
-6. reject each validation-matrix case, including a mode/activity consent leak;
+7. reject each validation-matrix case, including a mode/activity consent leak;
    and
-7. project a user-chosen subset to the existing strict `temper-manifest/v1` shape, then show
-   that an empty explicit choice produces no selection.
+8. project a user-chosen subset to the reviewed successor manifest shape, then
+   show that an empty explicit choice produces no selection.
 
 No fixture makes a claim about a real model, engine, tool, harness, or machine.
 Seeding reviewed rows remains the catalog-seeding work and requires accepted product-promotion

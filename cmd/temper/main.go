@@ -511,7 +511,6 @@ func usage(writer io.Writer) {
 	fmt.Fprintln(writer, "  temper check --root PATH [options]")
 	fmt.Fprintln(writer, "  temper update [layout-id] [options]")
 	fmt.Fprintln(writer, "  temper machine facts")
-	fmt.Fprintln(writer, "  temper field-kit baseline <verify|inspect|explain|start|status|run|run-next|finish> [options]")
 	fmt.Fprintln(writer, "  temper field-kit bind [options]")
 	fmt.Fprintln(writer, "  temper probe serve [options]")
 	fmt.Fprintln(writer, "  temper software <install|check|remove> [options]")

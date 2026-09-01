@@ -1,12 +1,16 @@
 # Labs product-promotion contract
 
-Status: **Labs writer adopted; Temper compiler and `QUALIFIED` gate validation
-implemented**. Labs adopted the writer on 2026-08-25, and the owner explicitly
+Status: **pre-amendment Labs writer adopted; amendment pending coordinated
+writer/compiler revision**. Labs adopted the writer on 2026-08-25, and the owner explicitly
 re-authorized the semantic-name packet/projection byte refresh on 2026-08-27.
 Hermetic
-generated packets exercise all six target-schema projections plus one complete
-fake qualified runtime; none promotes a real profile. Recommendation and
-release publication effects remain incomplete and fail closed.
+generated packets exercise all six pre-amendment target-schema projections
+plus one complete fake qualified runtime; none promotes a real profile. The
+2026-08-29 qualification amendment adds model patches, service-only roles,
+explicit foreground, use claims, and patch-bearing evidence scope. Those
+changes must land as one coordinated Labs-writer/Temper-compiler byte-contract
+revision before the seven-kind qualification surface freezes. Recommendation
+and release publication effects remain incomplete and fail closed.
 
 ## Implementation map
 
@@ -43,8 +47,8 @@ The boundary exists to preserve three separate authorities:
    support, and the exact candidate product facts it reviewed.
 2. Temper release review decides whether to invoke the compiler and include
    the emitted profile in a qualification-catalog snapshot.
-3. The user alone selects layouts, tools, harness integrations, modes, and a
-   preferred member in `manifest.yaml`.
+3. The user alone selects layouts, tools, harness integrations, modes, and the
+   local foreground binding in `manifest.yaml`.
 
 A packet proposes both a qualification disposition (`WATCH`, `LAB`,
 `QUALIFIED`, or `REJECTED`) and a product lifecycle posture
@@ -144,7 +148,7 @@ revision: <positive integer>
 supersedes: <optional exact prior product-promotion packet reference>
 
 target:
-  schema: <one of the six qualification profile schemas>
+  schema: <one of the seven qualification profile schemas>
   id: <target profile id>
   revision: <target profile revision>
   supersedes: <optional exact prior qualification profile reference>
@@ -187,6 +191,7 @@ evidence:
       # results-record additionally requires schema/id/revision/sha256 here.
     scope:
       artifact_profile: <exact qualification-profile reference when material>
+      patch_profile: <exact model-patch profile reference when material>
       engine_profile: <exact qualification-profile reference when material>
       runtime_profile:
         schema: temper-qualification-model-runtime/v1
@@ -211,7 +216,7 @@ candidate:
   title: <short factual title>
   summary: <evidence-scoped description>
   what_this_means: <one plain-language user line>
-  roles: [<stable role ids>]
+  service_roles: [<stable tool-consumed service role ids>]
   applicability: <qualification-profile applicability block>
   dependencies: [<qualification-profile exact relationship/profile references>]
   data_boundary: <qualification-profile data-boundary block>
@@ -333,6 +338,7 @@ The v1 required gate set is closed by target schema:
 | Target | Required passing gate IDs |
 |---|---|
 | model artifact | `artifact-bytes-pinned`, `artifact-license-review` |
+| model patch | `patch-bytes-pinned`, `patch-compatibility`, `patch-license-review` |
 | engine | `engine-serving-contract`, `engine-software-tested` |
 | model runtime | `runtime-regression-disposition`, `runtime-task-success` |
 | tool | `tool-permission-review`, `tool-transport-contract` |
@@ -397,7 +403,7 @@ The deterministic field mapping is:
 |---|---|
 | `schema`, `id`, `revision`, `supersedes` | `target` |
 | qualification/lifecycle statuses and reasons | `decision` |
-| title, summary, meaning, roles, applicability, dependencies, data boundary, failures, invalidation, typed spec | `candidate`, copied exactly |
+| title, summary, meaning, service roles, applicability, dependencies, data boundary, failures, invalidation, typed spec | `candidate`, copied exactly |
 | evidence IDs, claims, scopes | `evidence`, after accepted-claim and scope validation |
 | public evidence source | exact Results reference or injected packet reference from `evidence.public_source` |
 | `promotion` | injected schema/ID/revision/SHA-256 of the canonical product-promotion packet |

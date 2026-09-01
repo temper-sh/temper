@@ -7,10 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/temper-sh/temper/internal/budget"
 	"github.com/temper-sh/temper/internal/fieldkitcmd"
 	"github.com/temper-sh/temper/internal/machine"
-	"github.com/temper-sh/temper/internal/software"
 )
 
 func TestBindRequiresEveryExplicitInputBeforeReadingTheHost(t *testing.T) {
@@ -35,27 +33,25 @@ func TestBindRequiresEveryExplicitInputBeforeReadingTheHost(t *testing.T) {
 	}
 }
 
-func TestBaselineInspectUsesEmbeddedContentAndDetectedFacts(t *testing.T) {
+func TestBaselineCommandIsNotAvailable(t *testing.T) {
+	called := false
 	command, err := fieldkitcmd.New(
 		func(context.Context) (machine.Facts, error) {
-			return machine.Facts{
-				Schema:        machine.FactsSchemaV1,
-				Target:        software.Target{OS: "darwin", Arch: "arm64", Distribution: "macos", DistributionVersion: "26.0"},
-				HardwareModel: "Mac17,3", Chip: "Apple M5", OSBuild: "25A1",
-				PhysicalMemoryBytes: 34359738368, MetalDeviceMemoryMiB: 26542,
-				MetalDeviceMemorySource: machine.MetalDeviceSourcePredicted,
-				WiredLimitMiB:           24576, WiredLimitSource: budget.WiredSourceLive,
-			}, nil
+			called = true
+			return machine.Facts{}, errors.New("unexpected facts read")
 		},
-		func() ([]byte, error) { return nil, errors.New("binary should not be read") },
+		func() ([]byte, error) {
+			called = true
+			return nil, errors.New("unexpected binary read")
+		},
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var stdout, stderr bytes.Buffer
-	exit := command.Run(context.Background(), []string{"baseline", "inspect"}, &stdout, &stderr)
-	if exit != 0 || stderr.Len() != 0 || !strings.Contains(stdout.String(), "BASELINE applicable qwen38-dynamic-q4xl@3") {
-		t.Fatalf("exit=%d stdout=%q stderr=%q", exit, stdout.String(), stderr.String())
+	exit := command.Run(context.Background(), []string{"baseline", "verify"}, &stdout, &stderr)
+	if exit != 2 || called || stdout.Len() != 0 || !strings.Contains(stderr.String(), `unknown command "baseline"`) {
+		t.Fatalf("exit=%d called=%v stdout=%q stderr=%q", exit, called, stdout.String(), stderr.String())
 	}
 }
 

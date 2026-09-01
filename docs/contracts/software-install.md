@@ -14,9 +14,9 @@ Locks naming another installation adapter refuse without fallback. Its real
 scratch gate now passes in a disposable root, including dry-run purity, exact
 check, and clean repeated install/remove. The canonical
 Temper-to-Field-Kit material identity binding described below is executable as
-a pure schema/builder. Temper now owns the promoted-package session envelope
-around Field Kit content; see
-[`../design/field-kit-experiment-boundary.md`](../design/field-kit-experiment-boundary.md).
+a pure schema/builder. Field Kit owns its question-package sessions around that
+inner Temper material identity; see
+[`../design/field-kit-question-boundary.md`](../design/field-kit-question-boundary.md).
 
 `software install` reconciles one already-resolved `software.lock.yaml` into
 one named installation below an explicit Temper root. It never resolves

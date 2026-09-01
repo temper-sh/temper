@@ -12,6 +12,42 @@ not implement is a refusal, never a partially generated world. The schema can
 grow only through a reviewed revision; unsupported future shapes are not
 silently accepted by v1.
 
+## Pre-wizard successor amendment (2026-08-29)
+
+The executable `temper-manifest/v1` below remains the exact input contract for
+the native renderer and frozen Field Kit compatibility material. Its `coder`
+role and preferred-resident derivation are retained as compatibility facts,
+not as the product model the wizard may freeze.
+
+Before wizard implementation, the successor manifest surface must apply these
+owner decisions:
+
+- `coding` is an evidenced capability and portfolio use, never a layout role;
+- a local mode names its foreground member directly; `main` is that relational
+  selection, not an intrinsic model property;
+- layout kinds describe technical interfaces such as chat completion or
+  reranking, while role bindings remain only for tool-consumed services such
+  as `rerank`, `embed`, or `extract`;
+- activity support contains only tools and harness extensions the user
+  explicitly selected, and may narrow them for coding or another use without
+  reclassifying the foreground model; and
+- independently versioned template patches remain separate patch definitions
+  over shared model weights. The selected patch is part of exact layout and
+  lock identity, while the wizard groups eligible patch variants beneath one
+  model choice.
+
+The successor removes `role: coder`, the rule that local foreground requires a
+resident coder, and the use of `preferred` to discover which resident is the
+foreground. It replaces those with a technical layout interface and one
+explicit mode foreground binding. Compaction derives from that binding. The
+qualification-catalog amendment is the upstream owner of portfolio grouping,
+patch eligibility, and use evidence; the manifest remains only the user's
+selected composition.
+
+No compatibility parser alias should leak into the successor schema. Existing
+v1 bytes continue to parse as v1; the wizard writes only the reviewed successor
+once it is implemented and accepted.
+
 ## The two nouns
 
 - **Layout** = `(model, engine, tuning)`. A servable configuration. It knows
@@ -85,6 +121,10 @@ Everything below follows from keeping those two apart.
   `coder`); each mode binds them or is visibly invalid — never a silent
   substitution. A role-model arrives because a selected tool needs it; the
   user consents to the tool, not to its `ngl` flag.
+
+  This is a retained v1 rule. The pre-wizard successor narrows roles to
+  tool-consumed services and names the foreground directly, as specified in
+  the amendment above.
 
 - **`off` is a mode** — start/stop are mode transitions, not special cases.
 

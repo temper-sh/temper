@@ -15,12 +15,11 @@ the name. The evidence side is `temper-sh/labs` (a fresh scaffold created
 2026-08-14 at `../labs`; the legacy `local-ai-setup` repo and its history
 remain the source of existing evidence until Labs' archive migration imports
 it). `temper-sh/results` is the human-readable evidence publication, created
-locally 2026-08-13. `temper-sh/field-kit` is the reviewed immutable content
-surface for experiments and baselines. Temper embeds one release-reviewed
-snapshot and owns the public `temper field-kit` runtime, including discovery,
-disclosure, consent, sessions, effects, protocols, evidence, and cleanup
-(ownership revised by owner 2026-08-27). Labs remains the only editable
-experiment source.
+locally 2026-08-13. `temper-sh/field-kit` is the independently versioned
+runtime and immutable content surface for participant-useful questions. It owns
+discovery, disclosure, consent, sessions, protocols, evidence, and cleanup;
+Temper supplies stable machine/install/check/bind/probe primitives (ownership
+revised by owner 2026-08-28). Labs remains the only editable investigation source.
 
 The manifest file is **`manifest.yaml`** with **`manifest.lock.yaml`**
 beside it (decided 2026-08-14: it carries the whole wizard selection —
@@ -34,7 +33,8 @@ refuses to pretend. Every recommendation traces to a Labs decision packet, a
 measurement on real hardware, and a concise Results record people can audit
 without reading the lab journal; every number carries the conditions it ran
 under, and anything unmeasured is labeled unmeasured. The wizard offers a
-curated, tested universe of models and individually opt-in tools. Workflow
+curated portfolio of models, exact runtime options, and individually opt-in
+activity support. Workflow
 modes activate subsets of that universe; they never smuggle in an unselected
 model, tool, or harness integration.
 
@@ -44,11 +44,11 @@ model, tool, or harness integration.
    stack matched to their hardware without reading a lab notebook. Runs
    the wizard once, gets a manifest they own, applies updates when they
    choose.
-2. **The consenting experiment participant**: asks Temper to inspect their
-   machine against its embedded reviewed Field Kit snapshot, sees applicable
-   packages with purpose, cost, effects, and cleanup, then opts into named
-   revisions. Their local evidence may be shared with Labs for review; a run
-   never becomes a catalog row by itself.
+2. **The consenting Field Kit participant**: asks Field Kit to inspect their
+   machine through Temper's canonical facts, sees applicable questions with
+   purpose, cost, effects, and cleanup, then opts into a named package revision. Their
+   local evidence may be shared with Labs for review; a run never becomes a
+   catalog row by itself.
 3. **The AI agent driving either of the above**: first-class. Stable
    RESULT lines, machine-parseable outcomes, an interpretive runbook
    (AGENT.md's evidence model), consent gates that stay human, and a
@@ -68,11 +68,11 @@ model, tool, or harness integration.
   mode or profile may only narrow the selected universe; it cannot add a tool,
   install an integration, or widen a data boundary.
 - **Nothing phones home.** Reports are local files a human chooses to
-  paste. No telemetry, ever. (The non-local helper group sends *inference
+  paste. No telemetry, ever. (A harness-owned foreground may send *inference
   requests* to a provider the owner configured — that is the owner's data
   boundary decision, stated on the row, and distinct from telemetry.)
 - **The user's manifest is theirs.** Written once by the wizard, then
-  never mechanically rewritten (ground rule 6). Advisory diffs only.
+  never mechanically rewritten. Advisory diffs only.
 - **No sudo, ever.** Privileged tweaks are printed for the human.
 - **Conditions on every number.** wall / swap / tune label / thermal /
   power / load — measurements without conditions are anecdotes.
@@ -83,7 +83,7 @@ model, tool, or harness integration.
 A machine's configuration is a combination across seven dimensions:
 
 1. selected model universe · 2. selected tool universe · 3. installed harness
-integrations · 4. workflow-mode bindings · 5. per-role engine and tuning ·
+integrations · 4. workflow-mode bindings · 5. per-layout engine and tuning ·
 6. residency strategy · 7. local/cloud routing and fallback.
 
 The bucket axes — RAM × chip generation × memory bandwidth — select a
@@ -119,9 +119,10 @@ actually thought about: *which ways of working do I want*, then *furnish each
 one*. It also makes the machine's limits the first thing on screen rather than
 a disappointment discovered after picking models that do not fit.
 
-The old numbering survives where other documents cite it: former steps 2–4
-(models, tools, harnesses) are now the contents of a mode screen, and former
-step 5 no longer exists as a separate stage.
+The old sequence remains drafting history: models, tools, and harnesses are now
+the contents of a mode screen, and mode assignment is no longer a separate
+stage. Other documents refer to those concepts by name, not by this list's
+coordinates.
 
 ### Screen 1 — the machine, then the modes
 
@@ -131,7 +132,7 @@ step 5 no longer exists as a separate stage.
 
   Which ways of working should be set up?
 
-  [x] local     a local coder does the work; Pi talks to it
+  [x] local     a Temper-managed local model does the foreground work
   [x] utility   your harness brings its own model — Claude Code, Codex, or
                 Pi on a provider you already pay for. Local tools and small
                 specialists stay available
@@ -147,30 +148,40 @@ is the most useful thing on the screen for that user:
 ```
   Apple M2 · 16 GiB · 210 GiB free
 
-  [ ] local     unavailable — no coder layout qualified at 16 GiB
+  [ ] local     unavailable — no foreground layout qualified at 16 GiB
   [x] utility   …
 ```
 
+Local availability is not a coding test. A compact everyday assistant is a
+valid local foreground when that exact profile fits and is qualified for the
+uses it claims. A machine may therefore offer local chat or writing while
+showing coding support as unavailable or weakly evidenced. Model size never
+turns a selected foreground into a helper.
+
 ### Screen 2 — one per chosen mode
 
-Each mode screen carries that mode's members, tools and harnesses. The screens
-differ in shape, which is the point: the utility screen never asks about
-coders, and the local screen never offers GPU placement for a specialist,
-because a resident coder owns the GPU.
+Each mode screen carries that mode's members, activity support and harnesses.
+The screens differ in shape, which is the point: the utility screen never asks
+Temper to choose the harness-owned foreground, and the local screen never
+offers a placement that conflicts with the selected foreground's witnessed
+resource profile.
 
 ```
-  local — a local coder does the work
+  local — a local model does the foreground work
 
-  Coders — recommended for this machine; install any subset, one runs at a time
-  [ ] Qwen3.8 · llama.cpp · plain Q4 · 128k
-      throughput/context: faster controlled decode; largest qualified window
+  Foreground models — portfolio choices for this machine and your selected uses
+  [ ] Compact general assistant
+      responsive everyday chat; coding capability not established
   [ ] Qwen3.8 · llama.cpp · Dynamic 3.0 XL · 100k
-      quality-first: slightly lower perplexity and fuller answers; slower decode
-      Pi starts on: choose after selecting one or more coders
+      stronger evidenced coding use; slower interaction and larger memory use
+      Chat template: ( ) Froggeric  ( ) Sharp
+      Pi starts on: choose after selecting one or more foreground models
 
-  Tools
+  Activity support
+  [ ] coding support   offers reviewed Pi extensions and repository tools;
+                       every extension remains an explicit choice
   [x] project-search   needs a reranker → adds Qwen3-Reranker-0.6B,
-                       CPU here because a coder holds the GPU
+                       CPU here because the foreground model holds the GPU
                        local only, nothing leaves the machine
 
   Harnesses
@@ -181,7 +192,7 @@ because a resident coder owns the GPU.
 ```
   utility — your harness brings the main model
 
-  No local coder resident: ~22 GiB free, so several specialists can be
+  No Temper-managed foreground resident: ~22 GiB free, so several specialists can be
   resident here at once.
 
   Local helper models                            keep loaded?
@@ -200,13 +211,13 @@ because a resident coder owns the GPU.
 
 Rules the screens must follow:
 
-- **"Pi starts on" is how a mode names its preferred resident.** It is a radio
-  beside the coders rather than a separate concept, and it is the manifest's
-  per-member default flag. At most one per mode.
+- **"Pi starts on" names the selected local foreground.** It is a radio beside
+  foreground-capable models rather than a model role, and it writes the
+  successor manifest's explicit mode foreground binding. At most one per mode.
 - **Keep-loaded is asked per model, per mode**, and it is what places the
   member in `resident:` or `on_demand:`. The same reranker is on demand beside
-  a coder and may be resident when nothing else is — which is why the question
-  belongs on the mode screen and not on the model.
+  a large foreground and may be resident when nothing else is—which is why the
+  question belongs on the mode screen and not on the model.
 - **Default to on demand, and show both halves of the trade in the same
   line.** For the reranker the numbers are measured: 1.64 GiB held
   continuously against a 2.4 s cold load inside `project_search`'s 180 s
@@ -216,8 +227,9 @@ Rules the screens must follow:
   download: it is what the machine pays while the user is doing nothing. In
   utility mode it can honestly be 0.0 GiB, which local mode can never say.
 - **Consent is per tool; exposure is per mode.** A tool's first appearance is
-  the full consent question — backend, data boundary, the role-models it drags
-  in. Later appearances are a plain checkbox reading "also here?". A two-mode
+  the full consent question — backend, data boundary, and the service models
+  it brings with it. Later appearances are a plain checkbox reading "also
+  here?". A two-mode
   setup must not re-ask everything, or people stop reading the consequences.
 - **Harness detection is global; enabling is per mode.** Whether Claude Code
   exists on the box is a screen-1 fact; whether it is wired in *this* mode is
@@ -225,20 +237,31 @@ Rules the screens must follow:
 - **The download bill is a union, not a sum of screens.** Choosing
   `project-search` in two modes adds its reranker once. Per-screen totals say
   "this mode"; the preview shows the real number.
+- **Activities offer support; they do not classify the model.** Coding may
+  offer Pi extensions, repository tools, validation, or specialists. Each
+  installable item retains the normal explicit consent and data-boundary
+  display. Selecting coding support does not rewrite the foreground model as a
+  `coder`.
+- **A template patch is an option under its model, not another model.** When
+  Froggeric and Sharp apply to the same exact Qwen weights, the wizard groups
+  them beneath one model choice. It still records the selected patch exactly
+  because compatibility, rendered behavior, and cache reuse may differ.
 
-### The model section of a mode screen selects layouts, not models
+### The model section groups exact layouts into portfolio choices
 
-A model step does not select a *model*. It selects a **layout**: the artifact,
-engine and tuning unit that actually has a context window, a speed, a memory
-shape and a harness derivation. Plain-Q4 Qwen3.8 at 128k and Dynamic 3.0 XL at
-100k are therefore different products even though they share a model family;
-a user choosing between them is choosing a way of working, not merely a model
-name.
+The human choice begins with a model and intended use, while the reproducible
+unit remains a **layout**: base artifact, engine, output-affecting tuning, and
+selected patches. Plain-Q4 Qwen3.8 at 128k and Dynamic 3.0 XL at 100k remain
+different layouts. Froggeric and Sharp over the same weights are selectable
+template-patch variants beneath the same model choice. The catalog and lock
+retain every exact composition; the wizard does not make people pretend that
+each composition is a different base model.
 
 ### Recommendation is a set, not a winner
 
-**Settled 2026-08-20 (owner): Temper may recommend several layouts for the
-same machine, role and mode.** A valid tradeoff is not demoted to “alternative”
+**Settled 2026-08-20 and generalized 2026-08-29 (owner): Temper may recommend
+several portfolio choices or exact layout variants for the same machine, use,
+and mode.** A valid tradeoff is not demoted to “alternative”
 merely because another valid tradeoff exists. The witnessed M5/32 GiB example
 is Qwen3.8 plain Q4 at 128k (more context and faster controlled decode) beside
 Dynamic 3.0 XL at 100k (the modest quality-first profile). Both passed the
@@ -253,11 +276,11 @@ Three catalog concepts stay separate:
   maintained path, `DEPRECATED` preserves existing-user continuity, and
   `RETIRED` ends availability without rewriting historical evidence.
 - **Recommended is applicability:** among qualified rows, this layout is a
-  sensible choice for this machine, mode and job. Zero, one or many layouts may
+  sensible choice for this machine, mode and use. Zero, one or many choices may
   be recommended. Recommendation does not imply a total order or a default.
-- **Selected/preferred is user intent:** only an explicit checkbox puts a
+- **Selected/foreground is user intent:** only an explicit checkbox puts a
   layout in `manifest.yaml`, and only the user's “Pi starts on” radio makes one
-  preferred. A recommendation never checks either control.
+  the local foreground. A recommendation never checks either control.
 
 Each recommended layout carries an evidence-backed **performance profile** in
 its model-runtime qualification record—not a new profile kind and not a scalar
@@ -291,7 +314,8 @@ appear, each from a legacy measurement that contradicts the obvious phrasing:
 
 **Selection means installed, not resident.** A ticked box is *downloaded and
 configured*; residency is the separate keep-loaded question, and in `local`
-only one coder runs at a time whatever is ticked. This is the layout/mode
+only the explicitly selected foreground runs at a time unless a witnessed
+machine layout permits more. This is the layout/mode
 split the manifest models (`docs/design/manifest-schema.md`: layouts say what
 a thing *is*, modes say what is *live*). The screen must state it in-line,
 because two ticked boxes read as "both running" and on a 32 GiB machine that
@@ -330,19 +354,21 @@ the user can still change their mind.
 
 ### Utility mode is where shelved specialists become possible
 
-The wall is mode-relative, and utility mode is the extreme case: with no coder
-resident the GPU budget is free, so several specialists can be resident at
+The wall is mode-relative, and utility mode is the extreme case: with no
+Temper-managed foreground resident the GPU budget is free, so several
+specialists can be resident at
 once. Two models the legacy stack shelved were shelved for co-residency
 reasons alone, not on quality — extraction (retired 2026-08-08 because the
-32 GiB posture is coder-only on the GPU) and vision (parked "pending a
+32 GiB posture gave the Qwen foreground the GPU) and vision (parked "pending a
 placement decision"). Utility mode *is* that placement decision, and it is the
 only place either has a route on a 32 GiB machine.
 
-**`utility`, not `helper`** (renamed 2026-08-19): "helper model" is a *role*
-that appears in any mode — the reranker is in both, and the planned 1–2B
-compactor must run in local mode beside an idle coder, because the 27B's own
-compaction cannot fit at the moment it fires. Naming the mode `helper` would
-collide with the role.
+**`utility`, not `helper`** (renamed 2026-08-19; clarified 2026-08-29): helper
+is a position relative to some other foreground, not a model class or mode.
+The reranker can support either mode, and the planned 1–2B compactor must run
+in local mode beside an idle foreground because the larger model's own
+compaction cannot fit at the moment it fires. `Utility` instead names the
+actual distinction: the harness owns the foreground.
 
 Several large models may be installed and available. By default only one large
 local model is resident or serving at a time; a mode switch unloads before it
@@ -407,9 +433,9 @@ qualifies only Apple Silicon, but this schema and workflow do not make Homebrew
 or macOS the domain abstraction.
 
 **Profile** has one precise catalog meaning: a versioned, evidence-backed
-configuration record. The provisionally approved qualification-catalog v1
-direction uses six typed documents: model artifact, engine, model runtime, tool, mode, and
-activity. Harness executables remain user-managed; exact integration revisions
+configuration record. The pre-wizard qualification-catalog direction now uses
+seven typed documents: model artifact, model patch, engine, model runtime,
+tool, mode, and activity. Harness executables remain user-managed; exact integration revisions
 and deviations live on the engine, tool, and mode records that consume them
 unless a later witnessed need earns a standalone kind. A profile declares
 compatibility, defaults, dependencies, data boundaries, resource placement,
@@ -417,24 +443,36 @@ known failures, regression suite,
 evidence status and witness scope. A profile is advice and configuration, not
 consent. In particular:
 
-- a **model artifact profile** pins weights, the complete quantization recipe
-  (format, layer/tensor precision map, calibration provenance and sidecars),
-  tokenizer, template and immutable provenance once;
+- a **model artifact profile** pins the base weights, complete quantization
+  recipe (format, layer/tensor precision map, calibration provenance and
+  sidecars), tokenizer, shipped template material, and immutable provenance
+  once;
+- a **model-patch profile** pins an independently moving patch source, any
+  local transform, resulting bytes, purpose, license, compatibility evidence,
+  and preference description without duplicating the base weights;
 - an **engine profile** references the exact tested software-supply identity
   and declares API/capability surface, process isolation, service contract and
   known engine-wide failures; the install recipe and resolved dependency
   closure have one home in the software supply catalog and software lock;
-- a **model runtime profile** references an artifact and engine profile and pins
-  output-affecting layout identity—context/KV settings, sampling/thinking,
-  batching and speculation—while exact witness scope records the machine,
-  mode and co-residents;
+- a **model runtime profile** references an artifact, engine, and optional
+  selected patch profile and pins output-affecting layout identity—context/KV
+  settings, sampling/thinking, batching and speculation—while exact witness
+  scope records the machine, mode and co-residents;
 - a **tool profile** pins the tool core, transport, schema/description,
-  backend role, permissions and harness/model affordance deviations;
-- a **mode profile** composes qualified runtime and tool profiles for a job and
-  owns placement, residency, preload, TTL, role bindings, and exact harness
-  integration revisions without overriding output-affecting layout identity;
-- an **activity profile** such as inspect/change/verify/review narrows the
-  active tools inside a mode and never widens them.
+  backend service roles, permissions and harness/model affordance deviations;
+- a **mode profile** composes qualified runtime and tool profiles for a world
+  and owns the explicit foreground binding, placement, residency, preload,
+  TTL, service-role bindings, and exact harness integration revisions without
+  overriding output-affecting layout identity;
+- an **activity profile** such as coding, inspect, change, verify, or review
+  narrows explicitly selected tools and harness support inside a mode and
+  never widens them.
+
+`Coder` is not a catalog role. Coding is an evidenced capability and portfolio
+use of an exact runtime or composition. `Main` is likewise not an intrinsic
+model role: it is the runtime named by a local mode's foreground binding.
+Stable roles remain only for services a tool must resolve, such as `rerank`,
+`embed`, or `extract`.
 
 **Harness client settings are profile derivations (2026-08-17).** A harness
 carries client-side settings that are *functions of the selected model's
@@ -461,8 +499,8 @@ must treat both fields together — a profile that sizes the reserve while
 inheriting a global keep reproduces exactly that thrash.
 
 **The derivation follows the harness's foreground model, not the resident set
-(2026-08-19).** In `local` the foreground is our coder — the narrowest
-resident coder when several are installed together. In `utility` the
+(2026-08-19; terminology corrected 2026-08-29).** In `local` the foreground is
+the explicit local foreground binding. In `utility` the
 foreground belongs to the harness, so the harness's own defaults stand, and
 local members never feed the derivation at all.
 
@@ -479,8 +517,8 @@ answer is "leave it alone".
 
 This is also the sharpest form of the case for per-model settings: with one
 global slot, **a frontier model and an 8k local helper cannot coexist in one
-harness**, whatever value is chosen. Election is safe only while every chat
-model in the mode is a similar-sized coder.
+harness**, whatever value is chosen. Election is safe only while every
+foreground-capable chat model sharing the global slot has a compatible window.
 
 **Per-model resolution is the target, election is the fallback (2026-08-19).**
 Where a client can express settings per model, the renderer emits one set per
@@ -495,9 +533,9 @@ the schema. `docs/design/manifest-schema.md` carries the three-way resolution
 including the local-patch middle option.
 
 Runtime profiles are deliberately plural for one artifact. On the same 32GB
-machine, a reranker may use `-ngl 0` and short TTL in `local` so the large
-coder owns the GPU, then use GPU placement and a longer TTL in `utility` after
-that coder unloads. The lock deduplicates the artifact download but pins each
+machine, a reranker may use `-ngl 0` and short TTL in `local` so the foreground
+model owns the GPU, then use GPU placement and a longer TTL in `utility` after
+that foreground unloads. The lock deduplicates the artifact download but pins each
 runtime-profile revision and rendered-config hash separately.
 
 Where the plurality lives was settled 2026-08-19: **placement is a mode fact,
@@ -517,16 +555,18 @@ An `external-lab` packet is inspectable but cannot enter the generic install
 path. This is the Labs-to-probe handoff format, not a premature decision about
 the qualification catalog's normalized schema and never a consent token.
 
-Compatibility and deterministic template results may be reused when the
-artifact is identical. Fit, stability, cache and performance witnesses may not:
-their evidence key includes artifact revision, engine-profile revision,
-runtime-profile revision, machine bucket, mode and relevant co-residents. A
-mode is qualified only for the exact composed configuration that was tested.
+Compatibility and deterministic template results may be reused only when the
+base artifact and selected patch identities are identical and the evidence
+question permits it. Fit, stability, cache and performance witnesses may not:
+their evidence key includes artifact revision, selected patch revision,
+engine-profile revision, runtime-profile revision, machine bucket, mode and
+relevant co-residents. A mode is qualified only for the exact composed
+configuration that was tested.
 
 Profiles carry independent evidence qualification and product lifecycle.
 Evidence moves through `WATCH → LAB → QUALIFIED` (or `REJECTED`); lifecycle
 moves from `EXPERIMENTAL` toward `SUPPORTED`, `DEPRECATED`, or `RETIRED`. Web
-research alone cannot produce `QUALIFIED`. Any artifact, engine, template,
+research alone cannot produce `QUALIFIED`. Any artifact, model patch, engine, template,
 schema, prompt-policy or meaningful tuning change invalidates the affected
 witness and sends qualification back to `LAB` and lifecycle to `EXPERIMENTAL`
 until its targeted gates pass. Retirement preserves the last evidence status.
@@ -537,23 +577,25 @@ A mode is a **world**: which layouts are served and resident, which tools are
 exposed, which harnesses are wired, and what the harness settings derive to.
 A mode switch rebuilds that world. It cannot install or activate anything
 outside the wizard set. The wall model is mode-relative: unloading a large
-coder returns its allocation to the pool, so a specialist placement that is
-illegal beside a resident coder is legal without one.
+foreground model returns its allocation to the pool, so a specialist
+placement that is illegal beside that resident foreground may be legal
+without it.
 
 **Two modes, plus `off` (owner, 2026-08-19 — replacing the four-template
 table).** The axis that makes a mode is *who owns the foreground model*:
 
 | Mode | Foreground model | Resident set |
 |---|---|---|
-| `local` | ours — a coder layout the user installed | one coder (more where the wall allows), specialists on demand |
-| `utility` | the harness's own: Claude Code, Codex, or Pi on a provider | no coder; specialists may be resident and may use the GPU |
+| `local` | ours — one foreground-capable layout the user installed and selected | the selected foreground (more local models only where the wall allows), specialists as witnessed |
+| `utility` | the harness's own: Claude Code, Codex, or Pi on a provider | no Temper-managed foreground; specialists may be resident and may use the GPU |
 | `off` | none | nothing |
 
 The earlier table listed research/docs, planning, coding and helper as four
 modes. Three of those differed only in *which tools were active* over the same
-resident coder — that is the SPEC's own **activity profile**, "narrows the
+resident foreground — that is the SPEC's own **activity profile**, "narrows the
 active tools inside a mode and never widens them", not a separate world. Only
-helper changed who owns the foreground model, which is what a mode is. Two
+the old helper posture changed who owns the foreground model, which is what a
+mode is. Two
 consequences of collapsing them, both good: the witness cost stops multiplying
 by mode (there are two resource configurations to soak, not four, and tool
 narrowing needs a permissions test rather than a resource witness), and the
@@ -572,16 +614,17 @@ compaction derivation leaves that harness's settings alone in this mode.
 - **One manifest, per-mode layouts — never N manifests.** (Reshaped
   2026-08-14: mode-first, not per-entry overlays — a `modes:` section
   where each mode lists its members and their bindings in one place, so
-  the layout reads at the mode.) A mode's bindings carry model role,
+  the layout reads at the mode.) A mode's bindings carry the explicit
+  foreground selection, technical interface,
   engine, placement, context/tuning flags, group, preload, TTL, presence
   and active tool IDs. The generator renders per-mode artifacts. A render fails if
   a binding references an unselected item or an unqualified combination is
   presented as qualified.
-- **Roles are the stable interface; modes bind roles to models.**
-  Harnesses and extensions speak `rerank`; the mode decides what that
-  maps to (jina vs qwen, GPU vs CPU). A tool declares the role it consumes;
-  missing required roles make that mode invalid or the tool visibly
-  unavailable—never silently substituted.
+- **Service roles are stable joins; foreground is not a role.** Tools and
+  extensions may ask for `rerank`, `embed`, or `extract`; the mode decides
+  which exact runtime supplies that service and where it runs. The mode names
+  its local foreground binding directly. Missing required service roles make
+  the tool invalid or visibly unavailable—never silently substituted.
 - **Switching = swapping the active rendered config.** llama-swap
   already watches its config (2s poll), so the mechanism exists today.
   `temper mode <name>` reports what loads/unloads and the warmup cost
@@ -591,11 +634,11 @@ compaction derivation leaves that harness's settings alone in this mode.
   file in state (harness, mode, expiry — renewed while active).
   `temper mode` honors live leases; `--force` stays human. Idle
   detection lives in the harnesses (temper has no watcher — the
-  no-daemon rule holds): the harness that notices the coder idle runs
-  `temper mode --request helper`, which succeeds only lease-free. Pi
-  switches on coder-model switch the same way.
+  no-daemon rule holds): the harness that notices its foreground idle runs
+  `temper mode --request utility`, which succeeds only lease-free. Pi
+  switches on foreground-model changes the same way.
 - **Witness cost multiplies by mode and harness.** Each shipped binding needs
-  its mechanical soak, real harness protocol tests and role corpus. A template
+  its mechanical soak, real harness protocol tests and intended-use corpus. A template
   may appear as `LAB`, but only qualified bindings are recommended by default.
 - **`off` is a mode.** start/stop/mode form one state machine
   (off ⇄ selected workflow modes): every transition is render + kick,
@@ -629,7 +672,7 @@ artifacts; it does not sequence them.
   hashes. Tested-catalog membership, served-model drift, and advisory wizard
   diff land in later slices.
 - `temper mode <name>` — switch the active rendered posture; reports
-  what loads/unloads and warmup cost (modes, roles, leases, and the
+  what loads/unloads and warmup cost (modes, service bindings, leases, and the
   off-state: their own section above).
 - `temper start` / `stop` / `status` — llama-swap daemon control, i.e.
   the off-mode transitions of the same state machine. `status`
@@ -656,17 +699,17 @@ Lifecycle:
   verified base-lock receipts and keep isolated software below their own named
   installation directories;
 - `temper init` — the wizard described above: deterministic machine checks,
-  model universe, one-by-one tool choices, harness integrations, mode bindings
-  and allowances. Writes manifest.yaml once.
-- the experiment execution base (**probe ownership decided 2026-08-14; moved
+  portfolio choices, exact model/patch options, one-by-one activity-support
+  choices, harness integrations, mode bindings and allowances. Writes
+  manifest.yaml once.
+- the Field Kit execution base (**probe ownership decided 2026-08-14; moved
   immediately after the supply catalog on 2026-08-20; runtime ownership
-  revised 2026-08-27**): Field Kit owns immutable promoted content and Temper
-  owns its execution. There is no open-ended AI `temper probe` orchestrator.
-  The public `temper field-kit` surface verifies the embedded snapshot,
-  detects canonical machine facts, applies hard predicates, renders exact
-  disclosures, records consent, advances resumable stages, runs only
-  release-supported protocol identities, retains evidence, and performs
-  marker-guarded cleanup. The narrow
+  revised 2026-08-28**): Field Kit owns immutable promoted question packages and its
+  independently released Python execution. There is no open-ended AI
+  `temper probe` orchestrator. Field Kit verifies its snapshot, asks Temper for
+  canonical machine facts, applies hard predicates, renders exact disclosures,
+  records consent, advances resumable stages, runs exact package protocols,
+  retains evidence, and performs marker-guarded cleanup. The narrow
   `temper probe serve` command starts one exact receipt-bound,
   generation-bound, loopback-only foreground router for a Field Kit stage; it
   does not choose a probe or own production service state. Temper installs the
@@ -674,19 +717,18 @@ Lifecycle:
   kit consumes — canonical machine facts, provenance, llama-swap and basic
   dependencies, isolated profile rendering, scoped service lifecycle,
   artifact verification, and removal of only what its receipt and the
-  root-wide claim state permit. A stable base and multiple experiment
+  root-wide claim state permit. A stable base and multiple question-specific
   locks/receipts may coexist below one explicit root.
   Labs-promoted content declares stages and bounded adaptive
-  tune/deviation/conclude policy; Temper owns session reporting and
+  tune/deviation/conclude policy; Field Kit owns session reporting and
   keep-or-restore orchestration;
   the Temper-material identity binds the Temper binary, the ordered
   base/experiment installation-lock-receipt set, manifest lock, generation,
   and machine facts.
-  The Temper-owned session separately binds immutable Field Kit baseline or
-  experiment metadata/prompt, consent, stages or attempts, decisions,
-  observations, and report. Baselines
-  answer whether one exact tested stack reproduces; experiments answer a
-  bounded decision question and retain their separate promotion gate.
+  The Field Kit-owned session separately binds immutable question-package
+  metadata/prompt, consent, stages or attempts, decisions, observations, and
+  report. Each package asks one bounded participant-useful question and retains
+  its separate promotion gate.
   Re-witnessing after an update is a
   field-kit run against this base.
 - `temper report` — print the current status-snapshot paste-block (probe
@@ -726,8 +768,8 @@ The software lock does not claim installation, the receipt does not select an
 update policy, and the manifest lock does not duplicate either. Probe results
 remain separate local artifacts (`report.md`, `provenance.txt`). Results
 contains sanitized conclusions, machine tables and detailed records—not Labs'
-raw journal—and is never a runtime dependency. A promoted Field Kit experiment
-is an immutable snapshot of a Labs-authored experiment, not a second mutable
+raw journal—and is never a runtime dependency. A promoted Field Kit question
+package is an immutable snapshot of a Labs-authored investigation, not a second mutable
 source. Its local session packet is a signed-by-hash transport back into Labs
 review; it does not skip review, become a Results recommendation, or become a
 qualification-catalog row itself.
@@ -742,18 +784,18 @@ receipt, and there is no background updater.
 
 ## Labs qualification workflow
 
-Labs has two independent promotion gates. **Experiment promotion** publishes an
-immutable package into Field Kit only after review of its question, exact
+Labs has two independent promotion gates. **Question-package promotion** publishes
+an immutable package into Field Kit only after review of its useful question, exact
 inputs, machine predicates and versioned buckets, estimated resources, consent
 and data boundaries, bounded adaptive prompt, stop/re-consent rules, evidence
 shape, cleanup and interruption behavior, hermetic refusal coverage, and
 invalidation/retirement triggers. Promotion says that the procedure is useful
 and safe to offer; it does not validate the hypothesis, recommend its subject,
-or authorize a product change. The editable experiment remains in Labs and any
+or authorize a product change. The editable investigation remains in Labs and any
 meaningful change creates a new promoted version. The detailed promotion
-schema and review workflow live in Labs and Field Kit; Temper implements the
-validated runtime consumer described in
-[`design/field-kit-experiment-boundary.md`](design/field-kit-experiment-boundary.md).
+schema, review workflow, and validated runtime consumer live in Labs and Field
+Kit; Temper implements the stable host primitives described in
+[`design/field-kit-question-boundary.md`](design/field-kit-question-boundary.md).
 
 **Product promotion** happens only after Labs reviews evidence. Labs keeps
 decisions reproducible without turning exploratory code into product code.
@@ -768,7 +810,7 @@ and the provisionally approved typed qualification surface in
 Model, tool, harness and mode candidates follow the same two-axis transition
 rules and evidence discipline:
 
-1. **Intake / `WATCH`.** Record the question, intended roles/modes, discovery
+1. **Intake / `WATCH`.** Record the question, intended uses/modes, discovery
    sources, official artifact locations, release state and re-check triggers.
 2. **Pin / `LAB`.** Resolve exact revisions and hashes; decompose every layer
    that can affect the result. For models this includes weights, the actual
@@ -782,7 +824,7 @@ rules and evidence discipline:
 4. **Integration witnesses.** Exercise the real engine and streamed harness
    request shape. Run each materially different runtime profile—including
    placement/tuning/co-resident variants—under its actual machine conditions.
-5. **Role A/B.** Hold unrelated layers fixed; score first-attempt task success,
+5. **Use/composition A/B.** Hold unrelated layers fixed; score first-attempt task success,
    correct selection/arguments, recovery and unnecessary calls before tokens or
    speed. Community templates, prompts, fine-tunes and tool descriptions are
    separate arms wherever possible; unavoidable confounds are declared.
@@ -802,10 +844,10 @@ profile identity, provenance, corrections/retractions, conflicting runs,
 sanitization and every affected publication surface. A symmetrical
 `prompts/add-tool.md` is planned next. The prompts produce dossiers, test plans
 and publication candidates, never permission to install or promote. Profile
-variants prevent false global conclusions: one model artifact can qualify CPU
-and GPU specialist placements or different performance tunings independently,
-and one tool can qualify different affordance surfaces for Pi, Codex and
-Claude Code.
+variants prevent false global conclusions: one base model artifact can qualify
+different performance tunings or selectable template patches independently;
+a specialist can qualify CPU and GPU placements; and one tool can qualify
+different affordance surfaces for Pi, Codex and Claude Code.
 
 ## Home (**proposed** 2026-08-08): `~/.temper`
 
@@ -830,15 +872,14 @@ quality:
 
 - **`temper-sh/temper`** — release: setup + wizard + generator + lock,
   reviewed catalog profiles, acceptance suites, machine-report, README,
-  compact applicability/evidence references, harness adapters, the embedded
-  Field Kit snapshot, its consent/session runtime, and the probe base.
+  compact applicability/evidence references, harness adapters, stable Field
+  Kit machine/install/check/bind primitives, and the isolated probe base.
   It consumes reviewed output; it does not contain exploratory harnesses,
   unresolved candidate research or the full evidence narrative.
-- **`temper-sh/field-kit`** — immutable Labs-promoted baseline and experiment
-  content (owner runtime revision 2026-08-27). It owns reviewed provenance,
-  applicability, disclosure inputs, bounds, protocol identities, stage
-  declarations, evidence conditions, and retirement history. It contains no
-  executable; Temper embeds a reviewed snapshot and owns the user runtime.
+- **`temper-sh/field-kit`** — independently released runtime plus immutable
+  Labs-promoted question packages. It owns reviewed provenance, applicability, disclosure,
+  consent, sessions, protocols, evidence, reports, export, cleanup, and
+  retirement history while composing Temper's public primitives.
 - **`temper-sh/extensions`** — possible common home for harness-specific
   adapters that are independently useful; whether Pi extensions share it or
   become separate projects remains open. Shared tool logic does not fork here:
@@ -903,7 +944,7 @@ intentional difference is reviewed.
 
 Labs-bar for a promotable packet: exact revisions and hashes; artifact-layer
 decomposition; deterministic regression fixtures; real harness/API tests;
-role-corpus first-attempt results; machine conditions and raw artifacts;
+portfolio-use first-attempt results; machine conditions and raw artifacts;
 declared thresholds/stop conditions; license and data-boundary review; known
 confounds; and a minimal proposed profile. The model prompt in
 `prompts/add-model.md` is the first concrete intake template. Tool intake must
@@ -935,8 +976,8 @@ reach the same standard before tool profiles enter the qualification catalog.
   qualification catalog**. First model rolling/guarded/constrained package
   policy and exact software locking; next install/check/remove the receipted
   reversible base Labs-promoted Field Kit experiments consume and freeze the
-  cross-repository experiment-promotion boundary; then add the six typed model
-  artifact, engine, model-runtime, tool, mode, and activity qualification
+  cross-repository experiment-promotion boundary; then add the seven typed
+  model-artifact, model-patch, engine, model-runtime, tool, mode, and activity qualification
   profiles plus the separate Labs product-promotion packet.
 - **Wizard TUI** over a curated model universe, individually opt-in tools,
   harness integrations and mode bindings.
@@ -964,12 +1005,10 @@ reach the same standard before tool profiles enter the qualification catalog.
    directly.
 4. Is remote-provider integration strictly render-only (current direction),
    with credential and foreground-model ownership left to each harness?
-5. Versioning of witnessed rows when engines move: the provisionally approved
-   qualification-profile answer keeps the old witness immutable, supersedes the same product
-   lineage through a new `LAB/EXPERIMENTAL` revision, and uses a new profile ID when both
-   combinations remain deliberately supported. Refine this before the v1
-   surface freezes.
-6. llama-swap mechanics the modes design leans on: role aliases
+5. Qualification current-channel signing and publication reuse the
+   software-supply trust/rollback mechanics in the amended design; the exact
+   transport and bootstrap fixture still need implementation before freeze.
+6. llama-swap mechanics the modes design leans on: service-role aliases
    (checkable), and config-reload behavior under in-flight requests
    (witnessable — a mode-switch-under-load probe measurement).
 7. Lease semantics: is an advisory state file with expiry enough for
@@ -983,7 +1022,7 @@ reach the same standard before tool profiles enter the qualification catalog.
 9. Pi `packages` as an adapter distribution channel, plugin packaging for
    Codex/Claude Code, and the standalone CI contract for a shared tool core.
 10. Catalog representation: the provisionally approved qualification-catalog
-    answer is six
-    separate content-addressed typed profile documents plus versioned
-    machine-bucket and unordered recommendation-set vocabulary, with no
-    standalone harness kind in v1. Refine this before the v1 surface freezes.
+    answer is seven separate content-addressed typed profile documents plus
+    versioned machine-bucket and unordered portfolio-recommendation vocabulary,
+    with no standalone harness kind in v1. Refine this before the v1 surface
+    freezes.

@@ -178,7 +178,6 @@ jobs:
           test "$(stat -f '%Lp' "$extraction_root/temper_${VERSION}_darwin_arm64/LICENSE")" = "644"
           test "$(stat -f '%Lp' "$extraction_root/temper_${VERSION}_darwin_arm64/THIRD_PARTY_NOTICES.txt")" = "644"
           test "$("$binary" version)" = "temper $VERSION"
-          "$binary" field-kit baseline verify
           codesign --verify --strict --verbose=2 "$binary"
 
           notarization_verified=false

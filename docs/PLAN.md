@@ -19,9 +19,9 @@ The org has four working repos plus the legacy one:
 |---|---|---|
 | `../labs` | authors experiments, promotes bounded experiments, decides, and gathers evidence | reviewed profile packets, accepted product handoffs, and Field Kit compilation records |
 | `../results` | explains reviewed evidence to people | nothing at runtime; shared evidence identifiers |
-| `../field-kit` | immutable Labs-promoted baseline/experiment content embedded into Temper releases | reviewed catalog/package bytes; no runtime executable |
+| `../field-kit` | independently versioned Labs-promoted baseline/experiment runtime and immutable content | compatibility requirements for Temper's stable host primitives; no embedded protocol bytes |
 | `../local-ai-setup` (legacy) | running reference implementation + evidence history | behavior reference and optional comparison oracle; no runtime component lands here |
-| **this repo** | ships reviewed configuration, embedded Field Kit content/runtime, and the minimum probe environment | — |
+| **this repo** | ships reviewed configuration, exact machine/install/check primitives, and the minimum probe environment | — |
 
 Work enters this repo through exactly two doors:
 
@@ -164,12 +164,12 @@ follows the one-writer rule.
 | C4 | software supply records for Temper-managed packages: logical package, portable installation method, target-adapter definition, adapter-native package recipe/version scheme, selection policy, constraints, and tested-version evidence | release review | software resolver, installer, `check` | M2 phase A |
 | C5 | `software.lock.yaml`: exact target/method/adapter/provider closure, immutable catalog and/or experiment provenance, and required base-lock identities | explicit catalog resolution/update or explicit experiment-lock generation | installer, `check`, Field Kit Temper-material binding | M2 phase A |
 | C6 | named installation receipt plus root-wide software state: observed closure/base receipts and current prepared operations/shared claims | installer around inspected effects and receipt commit | `check`, uninstall, Field Kit Temper-material binding | M2 phase B |
-| C7 | qualification profiles (model artifact, engine, model runtime, tool, mode, activity) + independent evidence qualification (`WATCH/LAB/QUALIFIED/REJECTED`) and product lifecycle (`EXPERIMENTAL/SUPPORTED/DEPRECATED/RETIRED`) | release review | wizard, `check`, render validation | M2 phase C; two-axis surface approved 2026-08-25 in `docs/design/qualification-catalog-schema.md` |
+| C7 | qualification profiles (model artifact, model patch, engine, model runtime, tool, mode, activity) + independent evidence qualification (`WATCH/LAB/QUALIFIED/REJECTED`) and product lifecycle (`EXPERIMENTAL/SUPPORTED/DEPRECATED/RETIRED`) | release review | wizard, `check`, render validation | M2 phase C; two-axis surface approved 2026-08-25 and portfolio/foreground/patch composition amended 2026-08-29 in `docs/design/qualification-catalog-schema.md` |
 | C8 | Labs product-promotion packet | Labs review | the qualification-catalog compiler | M2 phase C; approved Labs writer adoption and first pure Temper compiler slice implemented 2026-08-25; semantic-name byte-contract refresh re-adopted 2026-08-27; see `docs/design/product-promotion-contract.md` |
 | C9 | state dir: active mode, leases | `mode`/`start`/`stop` | `mode`, `status`, cooperating harnesses | M4 |
-| C10 | Temper-owned Field Kit runtime: embedded snapshot validation, machine applicability, exact disclosure/consent, resumable sessions, reversible effects, supported live protocols, evidence/reporting, cleanup, and ordered material binding | `temper field-kit` plus Temper's software/model/config/probe verbs | consenting users and agents; Labs imports explicitly exported reviewed packets | M2 phase B, designed with Field Kit content |
+| C10 | Stable Temper host for Field Kit: canonical machine facts, exact software/artifact install/check/remove, rendering, ordered material binding, and one receipt/generation-bound loopback process primitive | Temper's machine/software/model/config/bind/probe verbs | independently released Field Kit runtime | M2 phase B |
 | C11 | CLI verb surface: verbs, exit codes, RESULT lines, machine-parseable outcomes | this plan → per-verb design docs | humans and agents | grows M1 → M4 |
-| C12 | Labs-to-Field-Kit promotion: immutable identity, machine applicability/buckets, consent and cost inputs, bounded adaptive policy, stage/protocol declarations, evidence shape, and invalidation/retirement policy | Labs review; Field Kit retains canonical content | Temper's release compiler/runtime reads only its embedded reviewed snapshot | M2 phase B, co-designed across Labs, Field Kit, and Temper |
+| C12 | Labs-to-Field-Kit promotion: immutable identity, machine applicability/buckets, consent and cost inputs, bounded adaptive policy, stage/protocol declarations, evidence shape, and invalidation/retirement policy | Labs review; Field Kit retains canonical content and executes it | Field Kit runtime; Temper is only the stable machine host | M2 phase B, co-designed across Labs, Field Kit, and Temper |
 
 ## 3. Milestones
 
@@ -305,15 +305,16 @@ base.
 > the user to opt into named experiments. Per-experiment prompts may adapt
 > within reviewed limits while Temper supplies stable mechanical execution and
 > provenance. Experiment promotion is not product/profile promotion. See
-> `docs/design/field-kit-experiment-boundary.md`.
+> `docs/design/field-kit-question-boundary.md`.
 
-> **Field Kit runtime ownership revised by owner 2026-08-27.** Field Kit is
-> promotion content, not a Go package or a user executable. Temper embeds one
-> release-reviewed snapshot and owns `temper field-kit`: validation,
-> applicability, disclosure, consent, resumable sessions, all effects, live
-> protocols, evidence, reporting, and cleanup. Labs remains the editable
-> source and Field Kit retains immutable promoted history. Normal users build
-> or install only Temper.
+> **Field Kit runtime ownership revised by owner 2026-08-28, superseding the
+> 2026-08-27 embedding decision.** Field Kit is an independently versioned
+> Python runtime and immutable promotion repository. It owns validation,
+> applicability, disclosure, consent, resumable sessions, protocols, evidence,
+> reporting, export, and cleanup. Temper owns reusable machine facts and exact
+> install/check/bind/probe primitives. Protocol changes do not require a
+> Temper release, and Field Kit package, session, and protocol bytes do not
+> live in this repository.
 
 > The software-supply catalog is **an independently published, signed database
 > of tested software versions**; the qualification catalog separately records tested composed
@@ -492,15 +493,14 @@ base.
 
 #### Phase B — Field Kit execution base immediately after
 
-6. *(design + build, revised and complete 2026-08-27)* Freeze C10 and the
-   Field Kit-facing parts of C11: `temper field-kit`, exact exit/output
-   behavior, embedded snapshot validation, applicability, disclosure,
-   consent, stage/session/report identity, supported protocol dispatch, and
-   marker-guarded cleanup. Temper owns this runtime and composes canonical
-   machine facts, software installation, model fetch/verification, isolated
-   rendering, material binding, foreground service lifecycle, and removal.
-   Field Kit retains immutable promoted content; Labs alone promotes it under
-   C12.
+6. *(design + build, revised and complete 2026-08-28)* Freeze C10 as the
+   reusable Temper host: canonical machine facts, software installation,
+   model fetch/verification, isolated rendering, material binding, foreground
+   process admission, checks, and scoped removal. Field Kit independently owns
+   catalog validation, applicability, disclosure, consent, sessions, protocol
+   dispatch, evidence, reports, export, and marker-guarded cleanup. Labs alone
+   promotes source work under C12. Temper contains no Field Kit catalog,
+   question package, session, or protocol runtime.
 
    The Temper-side surface is approved and concrete in
    `docs/contracts/software-install.md`: the `temper software install`
@@ -511,9 +511,9 @@ base.
    plus internal keyed-adapter orchestration through prepared intent, observed
    receipt, and finalized claims, are now hermetically executable. The frozen
    read-only check surface is implemented as a pure drift analyzer plus a thin
-   lock/store/adapter reader. The old standalone Field Kit is retired as a
-   runtime; its active content is compiled into Temper and its historical
-   revision remains verifiable without becoming a fallback.
+   lock/store/adapter reader. Field Kit revision 4 now composes these stable
+   public verbs from its standard-library Python runtime; protocol changes no
+   longer alter Temper.
 7. *(design + build)* Install only from an already-resolved software lock and
    compute the complete plan plus pre-existing state before any effect.
    Every installation runs through the adapter family; CLI orchestration never
@@ -557,64 +557,71 @@ base.
    machine facts, binary and manifest-lock byte identities, rendered-generation
    identity, and the caller-ordered lock/receipt set. Every requirement must
    identify an earlier supplied receipt and copies that receipt's complete
-   recursive identity. Temper's canonical Field Kit session additionally
-   binds the promoted package version, metadata/prompt hashes, exact embedded
-   package material, consent, stages or attempts, decisions, observations,
-   outcome, protocol, and report. Choosing the final public
+   recursive identity. Field Kit's canonical session additionally binds the
+   promoted package version, metadata/prompt/runner hashes, Python runtime,
+   consent, stages or attempts, decisions, observations, outcome, protocol,
+   and report. Choosing the final public
    Homebrew/curl/release channel remains M5/D4. Neither this root nor its
    services point at the live consumer home or legacy service.
 
-11. *(design + baseline build — complete 2026-08-27; experiment promotion
-    pending)* Freeze
-    the ownership and minimum promotion semantics of C12 in
-    `docs/design/field-kit-experiment-boundary.md`. Labs is the single editable
-    home for experiment definitions; a Field Kit package is an immutable
-    promoted snapshot. Promotion must cover hard applicability and versioned
-    buckets, advisory relevance, cost and data boundaries, consent, bounded
-    adaptivity, evidence/provenance, cleanup, hermetic validation, and
-    invalidation/retirement. It certifies a safe and useful experiment, not a
-    positive hypothesis or product recommendation. Field Kit is now a
-    content-only promotion repository and the old separate runtime is retired.
-    Temper embeds revision 3 of the immutable Qwen Dynamic package and owns
-    exact disclosure/consent, generated external session/report paths,
-    materialized package identity, resumable multi-stage or one-stage
-    execution, the reviewed Go live protocol, keep-or-restore, and local
-    reporting. Revisions 1 and 2 remain immutable but retired. Temper's
-    supporting `probe serve` is receipt-bound, generation-bound, loopback-only,
-    foreground-only, and deliberately not the production lifecycle. Its
-    cross-repository contract and fake-executor round-trip pass; the 17.6 GB
-    portable live run remains explicitly unrun. Fixed and bounded-adaptive
-    experiment packages remain future C12 promotions over the same runtime.
+11. *(design — revised and complete 2026-08-28; question-package promotion
+    pending)* Freeze the ownership and minimum promotion semantics of C12 in
+    `docs/design/field-kit-question-boundary.md`. Labs is the single editable
+    home for investigation definitions; a Field Kit question package is an
+    immutable promoted snapshot. Promotion must cover the useful question,
+    hard applicability and versioned buckets, advisory relevance, cost and
+    data boundaries, consent, bounded adaptivity, evidence/provenance, cleanup,
+    hermetic validation, and invalidation. It certifies a safe and useful
+    procedure, not a positive hypothesis or product recommendation. Field Kit
+    owns exact disclosure/consent, external session/evidence/report paths,
+    materialized package identity, resumable execution, Python protocols,
+    keep-or-restore, and local reporting. Temper's supporting `probe serve` is
+    receipt-bound, generation-bound, loopback-only, foreground-only, and
+    deliberately not the production lifecycle.
 
 #### Phase C — broader qualification catalog resumes
 
-12. *(decide, D1; design — provisionally approved by owner 2026-08-25;
-    refinement remains open before v1 freeze)* Define C7 as separate typed
-    profile documents over
-    a common envelope for model artifact, engine, model runtime, tool, mode,
-    and activity. The envelope carries exact pins, status, witness scope key
-    (artifact revision × engine-profile revision × runtime-profile revision ×
-    machine bucket × mode × co-residents), dependencies, known failures, data
-    boundary, invalidation triggers, applicability, roles, and a "what this
-    means for you" line. Applicability says where a profile is useful; witness
-    scope says where evidence exists. Runtime profiles remain plural per
-    artifact because fit, stability, cache, and performance evidence may vary.
-    Recommendation is a plural, consent-neutral projection over qualified and
-    applicable rows, not a status and not a ranking: zero, one or many layouts
-    may be recommended for the same machine/mode/role. Each model-runtime row
-    carries a structured performance profile covering task success/regressions,
-    time-to-solution/tool use, raw throughput, qualified context, memory and
-    cache behavior with conditions and unmeasured axes explicit. The schema
-    must distinguish catalog recommendation from the manifest's user-owned
-    selection and `preferred` member flag.
+12. *(decide, D1/D22/D23; design — provisionally approved by owner 2026-08-25
+    and amended 2026-08-29; refinement remains open before v1 freeze)* Define
+    C7 as separate typed profile documents over a common envelope for model
+    artifact, model patch, engine, model runtime, tool, mode, and activity.
+    The envelope carries exact pins, status, witness scope key (artifact
+    revision × optional selected patch revision × engine-profile revision ×
+    runtime-profile revision × machine bucket × mode × co-residents),
+    dependencies, known failures, data boundary, invalidation triggers,
+    applicability, tool-consumed service roles, and a "what this means for
+    you" line. Applicability says where a profile is useful; witness scope says
+    where evidence exists. Runtime profiles remain plural per artifact because
+    selected patches, fit, stability, cache, and performance evidence may vary.
+
+    `Coder` is removed as a catalog role. Coding is an evidence-backed use;
+    `main` is the local mode's explicit foreground binding; activities compose
+    only explicitly selected tools and harness extensions around that
+    foreground. Recommendation is a plural, consent-neutral portfolio
+    projection over qualified and applicable rows, not a status and not a
+    ranking: zero, one or many model choices may be recommended for the same
+    machine/mode/work question. Exact runtime variants over one base artifact
+    are grouped beneath that model choice, so Froggeric and Sharp can be
+    offered as template-patch options without duplicating or relabeling the
+    shared Qwen weights. Each runtime row carries a structured performance
+    profile covering task success/regressions, time-to-solution/tool use, raw
+    throughput, qualified context, memory and cache behavior with conditions
+    and unmeasured axes explicit. The schema must distinguish catalog
+    recommendation from the manifest's user-owned selection and foreground
+    binding.
     The provisionally approved contract is
     [`docs/design/qualification-catalog-schema.md`](design/qualification-catalog-schema.md):
-    six content-addressed typed profile documents, immutable supersession and
+    seven content-addressed typed profile documents, immutable supersession and
     status history, separately versioned machine-bucket vocabulary, and
-    unordered catalog-level recommendation sets. It proposes the D7 rule that
-    changed material returns through `LAB/EXPERIMENTAL`, while deliberately parallel
-    supported combinations use separate profile IDs.
-    Temper refinement currently implements the exact-reference and index
+    unordered catalog-level portfolio recommendation sets. The amended D7 rule
+    preserves exact history while allowing a routine compatible software
+    revision to become current directly after one focused shared regression
+    packet; material behavior changes return through `LAB/EXPERIMENTAL`, and
+    deliberately parallel supported combinations use separate profile IDs.
+    The qualification catalog receives an independently signed current channel
+    so software currency does not wait for a Temper binary release.
+
+    Temper refinement currently implements the pre-amendment exact-reference and index
     surface plus strict machine-bucket, model-artifact, engine, model-runtime,
     tool, mode, and activity documents. The pure loader verifies canonical
     bytes,
@@ -633,13 +640,17 @@ base.
     transitions. Tool
     core/transport/permission/backend/failure identity is closed and
     consent-neutral. Exact composed mode worlds remain distinct from user
-    selection. All six typed document kinds are executable against fake
+    selection. All six pre-amendment typed document kinds are executable against fake
     hermetic fixtures. Schema-specific `QUALIFIED` packet gates, public
     applicability/evidence completeness, runtime task-quality requirements,
     and exact dependency qualification/lifecycle closure now pass a complete
-    fake six-profile chain and refuse weakened variants. Recommendation
-    content remains an explicit refusal pending its performance and
-    applicability cross-document rules.
+    fake six-profile chain and refuse weakened variants. That implementation
+    is retained evidence, not the surface to freeze: model-patch identity,
+    technical interfaces, explicit foreground binding, service-only roles,
+    use claims, activity support, the signed current channel, and grouped
+    portfolio options must land before recommendation projection resumes.
+    Recommendation content remains an explicit refusal pending those amended
+    cross-document rules.
     The fixtures remain fake and do not seed a qualification row.
 13. *(design/build, with Labs — writer adoption explicitly authorized by owner
     and first compiler slice complete 2026-08-25)* Define
@@ -661,7 +672,9 @@ base.
     wrong, duplicate, or unused dependency/bucket documents and performs no
     adjacent-repository or filesystem discovery. Exact prior packet and target-
     profile bytes are required for independent supersession-chain validation.
-    Hermetic generated packets cover all six target kinds; the refreshed fake
+    Hermetic generated packets currently cover all six pre-amendment target
+    kinds; model-patch packets and the amended envelope are the next coordinated
+    Labs/Temper byte-contract revision. The refreshed fake
     model-artifact pair is the independent Labs/Temper byte-for-byte golden.
     The compiler now enforces the closed target-specific `QUALIFIED` gate set,
     complete runtime task quality, bounded confounds, and exact dependency
@@ -669,13 +682,18 @@ base.
     `field-kit-runtime-profile/v1` is the exploratory-witness special case;
     `external-lab` packets stay inspectable but outside the generic install
     path.
-14. *(build; qualification/closure slice complete 2026-08-25)* Extend
+14. *(build; pre-amendment qualification/closure slice complete 2026-08-25;
+    amendment implementation next)* Extend
     validation with status-machine legality, witness-scope completeness,
     applicability, and consent-neutrality (no row selects itself). Immutable
     status edges, qualified applicability witnesses, exact evidence-scope
     references, task-quality gates, and dependency closure are implemented.
-    The remaining slice is recommendation/performance projection and its
-    no-selection acceptance fixture.
+    Before recommendation/performance projection, replace the fake coder-role
+    chain with the seven-kind amended chain, update the Labs packet/compiler
+    golden once, and add focused fixtures for routine-software currentness,
+    lower-tier local foreground, activity-support consent, and shared-weight
+    template-patch choices. Then implement portfolio recommendation projection
+    and its no-selection acceptance fixture.
 15. *(build)* After accepted C8 packets exist, seed the reviewed current
     posture as narrowly scoped `QUALIFIED` rows and compile a native-MTP
     candidate as a consent-neutral `LAB` row. It remains opt-in, non-default,
@@ -703,28 +721,34 @@ real scratch round-trip through one promoted fixed experiment and one promoted
 bounded-adaptive experiment is on-demand, announced, and run only with explicit
 authorization. Those experiment promotions are incremental evidence gates,
 not prerequisites for the already completed single-runtime ownership change.
-Phase C round-trips a fake packet into a wizard-readable row and rejects every
-illegal fixture.
+Phase C round-trips every amended profile kind into a wizard-readable portfolio
+choice, proves service-role and foreground separation, preserves exact patch
+composition, exercises routine-current/holdback/material-change software
+paths, and rejects every illegal fixture.
 
 **Dependencies:** M1 for phases A and B. Phase C is required by M3. Labs-side
 parity (`add-tool` intake) is tracked in Labs and does not block the installed
-base. **Decisions:** D1 and D7 are provisionally accepted for Temper-only
+base. **Decisions:** D1, D7, D22, and D23 are provisionally accepted for Temper-only
 fake-fixture implementation and remain refinable before v1 freezes. D14 fixes
 the Phase A method/adapter boundary. D4 does not block a checksummed pre-release
-Temper binary with its embedded Field Kit snapshot.
+Temper binary; Field Kit compatibility is exercised by the independently
+released Field Kit test suite against its declared minimum Temper version.
 
 ### M3 — wizard
 
-**Goal:** the choice surface — the spec's seven steps, advisory on re-run.
+**Goal:** the portfolio choice surface, advisory on re-run.
 
 1. *(build)* The TUI foundation: bubbletea/huh over the catalog reader
    (D2 resolved — §4). Distribution (D4) is worth deciding by here so the
    toolchain and release shape stop being hypothetical.
-2. *(build)* The flow per spec, **reordered modes-first 2026-08-19**:
+2. *(build)* The flow per spec, **reordered modes-first 2026-08-19 and
+   portfolio-centered 2026-08-29**:
    detect hardware/allowances and choose the modes → one screen per chosen
-   mode (its models, its tools one-by-one with backend, data-boundary and
-   dependency consequences shown before selection, its harnesses, and
-   keep-loaded per model) → preview (downloads, disk, memory, mode
+   mode (model choices grouped by evidenced use, exact runtime/template-patch
+   options beneath each model, activity support and its tools one-by-one with
+   backend, data-boundary and dependency consequences shown before selection,
+   harnesses, explicit local foreground, and keep-loaded per model) → preview
+   (downloads, disk, memory, mode
    transitions, external data paths) → write `manifest.yaml` once, render,
    probe. Tools start unselected; recommendations are explanations, never
    checked boxes.
@@ -737,12 +761,14 @@ Temper binary with its embedded Field Kit snapshot.
    offers; consent is per tool but exposure is per mode, so a tool's first
    appearance is the full consequences question and later ones are a plain
    checkbox; harness *detection* is global while *enabling* is per mode;
-   and the download figure is a union across modes, so per-screen totals
+   and the download figure is a union across modes and shared weights, so per-screen totals
    must be labelled "this mode" or the preview total will not match what a
-   user adds up. A model screen shows every applicable recommended layout in
-   its comparison group, explains the material performance-profile tradeoffs,
-   and leaves every checkbox and preferred-model radio to explicit user input;
-   it never picks a catalog “winner.”
+   user adds up. A model screen shows every applicable portfolio member,
+   explains the material performance-profile tradeoffs, groups exact patch
+   variants beneath shared weights, and leaves every checkbox, option radio,
+   and foreground choice to explicit user input; it never picks a catalog
+   “winner.” Local is furnishable when any qualified foreground model fits,
+   not only when a coding use is qualified.
 3. *(build)* Advisory re-run: manifest present → print divergence from the
    current bucket recommendation, stop. No interactive stage under
    `--dry-run`, no second-run mutation — "written once" buys both.
@@ -754,9 +780,13 @@ Temper binary with its embedded Field Kit snapshot.
 **Acceptance:** the wizard on a fixture machine profile produces a manifest
 that `apply` renders byte-identically to its hand-written equivalent; a
 consent audit finds no path from recommendation to selection without an
-explicit choice; a fixture with two co-recommended coder layouts displays both
-tradeoff profiles, permits installing either or both, and chooses neither by
-default; re-run is advisory only.
+explicit choice; a modest-machine fixture offers a compact general assistant
+as the local foreground without a coding claim; a larger-machine fixture lets
+that same lower-tier choice remain foreground even when a stronger coding
+option fits; a coding activity offers but does not silently select Pi
+extensions; a Qwen fixture presents Froggeric and Sharp as template-patch
+options over one exact weight artifact; plural model choices display their
+tradeoffs and choose neither by default; re-run is advisory only.
 **Dependencies:** M2 Phase C (the qualification catalog is what it browses),
 M1.
 **Decisions:** D3 (where the wizard writes), D8 (remote providers
@@ -774,10 +804,10 @@ cooperation over the already installed and receipted base.
 binding ships as qualified)*:
 
 - llama-swap config-reload under in-flight requests: does `--watch-config`
-  unload a resident coder cleanly, or does the switch need an explicit
+  unload a resident foreground cleanly, or does the switch need an explicit
   unload call? Measure, don't assume.
 - mode-switch latency and warmup cost, per the render diff's prediction.
-- role-alias mechanics (harnesses speak `rerank`; the mode binds it).
+- service-role alias mechanics (tools speak `rerank`; the mode binds it).
 - lease semantics under two live cooperating harnesses.
 
 Work items:
@@ -788,7 +818,7 @@ Work items:
    `start`/`stop`/`status` as the off-mode transitions of the same state
    machine. `mode --request <name>` is the harness-facing form: it
    succeeds only lease-free and never preempts — the verb a harness calls
-   when it notices its coder idle; `--force` stays human-only (item 2).
+   when it notices its foreground idle; `--force` stays human-only (item 2).
    `status` distinguishes job loaded / process alive / answering
    with residency; `stop` prints the wired memory it freed. The target render
    remains the M1 pure function of `(manifest, mode, machine)`; no incremental
@@ -798,12 +828,14 @@ Work items:
    human-only. Idle detection lives in harnesses — no watcher here, the
    no-daemon rule holds. The harness side of the cooperation — renewing
    the lease while active, calling `mode --request` on idle or on a
-   coder-model switch (Pi's case) — ships with each harness adapter, and
+   foreground-model switch (Pi's case) — ships with each harness adapter, and
    its protocol test is part of the two-live-harnesses prerequisite above.
 3. *(design + build)* Ship harness adapters as clients of the mode/lease
-   protocol. Roles remain the stable harness interface and each selected mode
-   owns the role→runtime binding; a missing required role is invalid or visibly
-   unavailable, never silently substituted. Adapter packaging remains D10.
+   protocol. Foreground selection is a direct mode binding; service roles
+   remain stable tool interfaces and each selected mode owns the
+   service-role→runtime binding. A missing required service role is invalid or
+   visibly unavailable, never silently substituted. Adapter packaging remains
+   D10.
 4. *(build)* Add the consumer status snapshot (`report`) and reconcile
    production service state without absorbing Field Kit packet/report
    generation. Re-witnessing after a software or model update remains a Field
@@ -913,27 +945,29 @@ or CI dependency.
 
 | # | Decision | Blocks | Current lean |
 |---|---|---|---|
-| D1 | Qualification-catalog representation: typed documents vs normalized graph | M2 Phase C | **provisionally approved 2026-08-25:** six content-addressed typed documents plus catalog-level bucket/recommendation vocabulary; refine before v1 freeze (`docs/design/qualification-catalog-schema.md`) |
+| D1 | Qualification-catalog representation: typed documents vs normalized graph | M2 Phase C | **provisionally approved 2026-08-25; amended 2026-08-29:** seven content-addressed typed documents, including independently versioned model patches, plus catalog-level bucket/portfolio-recommendation vocabulary; refine before v1 freeze (`docs/design/qualification-catalog-schema.md`) |
 | D2 | Language | — | **resolved 2026-08-14: the whole CLI is Go; completed 2026-08-19 for the first `apply` slice by starting native rendering in M1** (§4) |
 | D3 | Adopt `~/.temper` as the machine-identity home | M3 (wizard write location); M1 schemas stay location-neutral; M2 Field Kit work uses an explicit isolated root | spec proposes yes |
 | D4 | Final public distribution: brew vs curl-installer vs release asset (including prebuilt darwin/arm64 vs build-at-setup) | M5 | **resolved 2026-08-27 (owner): begin with a prebuilt Developer ID-signed and Apple-notarized macOS ARM64 GitHub release asset plus SHA-256; generate linked-module notices into the asset so the source tree stays 0BSD-only; Homebrew/curl remain post-alpha options** |
 | D5 | Mode-posture soaks as Labs-promoted Field Kit experiment packages (Temper only guarantees the base can render and serve the requested posture in isolation) | M4 qualification | open — a Field Kit/Labs question (spec Q8) |
 | D6 | Advisory lease file with expiry sufficient; `--force` human-only | M4 | leaning yes on both (spec Q7) |
-| D7 | Witnessed-row versioning on engine update: invalidate vs fork | M2 Phase C schema design | **provisionally approved 2026-08-25:** immutable old witness; same product lineage supersedes through a new `LAB/EXPERIMENTAL` revision, while deliberately parallel support gets a new profile ID; refine before v1 freeze (`docs/design/qualification-catalog-schema.md`) |
+| D7 | Witnessed-row versioning on engine update: invalidate vs fork | M2 Phase C schema design | **amended 2026-08-29:** immutable old witness always remains; a routine compatible software revision may become the new exact `QUALIFIED/SUPPORTED` head after one focused shared regression packet, a material change returns through `LAB/EXPERIMENTAL`, a regression holds the prior current revision, and deliberate parallel support gets a new profile ID (`docs/design/qualification-catalog-schema.md`) |
 | D8 | Remote-provider integration strictly render-only | M3 | leaning yes (spec Q4) |
 | D9 | Qualification-catalog contribution flow for Field Kit witnesses | post-M5 | Labs review and explicit product promotion; submission transport remains open |
 | D10 | Pi `packages` / Codex / Claude Code plugin packaging as distribution channels | M4 adapters | open (spec Q9) |
-| D11 | Which modes ship as qualified v1 | M4/M5 | **narrowed 2026-08-19**: the four candidates collapse to `local` + `utility` (+ `off`) — a mode is who owns the foreground model; tool narrowing is an activity, not a world. Still evidence-driven (spec Q2) |
+| D11 | Which modes ship as qualified v1 | M4/M5 | **narrowed 2026-08-19 and clarified 2026-08-29**: `local` + `utility` (+ `off`) describe foreground ownership, never task or model class; local needs an explicit qualified foreground, not a coder; tool narrowing is an activity, not a world. Still evidence-driven (spec Q2) |
 | D12 | Development locus stance (§0: legacy remains the live reference, native product work is here, live cutover at M5) | — | **resolved 2026-08-19:** extracted Bash stays legacy-side; no compatibility/runtime landing; M1 starts native here |
 | D13 | Who records `witness: verified` — a small `attest` verb vs some other mechanism; `check` must stay a pure read | M1 verbs | **closed 2026-08-18**: nobody — no local verified state at all; signed catalog snapshots carry tested-version evidence and `check` derives status by comparison |
 | D14 | Installation portability boundary: hard-coded providers vs portable methods with target adapters | M2 Phase A | **resolved 2026-08-20 (owner):** every method is a keyed adapter family; `system-package` is portable intent, Homebrew is only the current macOS adapter, and the exact target adapter is catalog-declared and locked |
-| D15 | Must one applicable model layout win the recommendation, or can several qualified tradeoffs be co-recommended? | M2 Phase C / M3 | **resolved 2026-08-20 (owner): recommendation is a consent-neutral set, not a ranking; several layouts may be recommended with distinct performance profiles, while selection and preference remain explicit user choices** |
+| D15 | Must one applicable model layout win the recommendation, or can several qualified tradeoffs be co-recommended? | M2 Phase C / M3 | **resolved 2026-08-20 and generalized 2026-08-29:** recommendation is a consent-neutral portfolio set, not a ranking; several model choices may be recommended with distinct performance profiles, exact patch/runtime variants group beneath shared weights, and selection, foreground, and preference remain explicit user choices |
 | D16 | Where the uv adapter's Python implementation/version/ABI selection lives | M2 Phase A uv resolver; non-default `rapid-mlx` and `mlx-dspark` | **resolved 2026-08-20 (owner): Python is an adapter-native logical dependency (`python-runtime`/`cpython`) constrained by each application recipe; uv selects an exact managed interpreter and records its version, build revision, immutable artifact, and target-bound closure identity in the software lock. Ambient Python and machine target facts never supply it** |
 | D17 | Whether Temper owns Node and harness executables | future Node-based managed package only | **resolved for current scope 2026-08-20 (owner): no Node adapter or runtime now; Pi and other harness executables are user-managed, while Temper may render/check an explicitly selected integration. Preserve the generic adapter boundary and revisit only for a concrete Temper-managed Node package** |
 | D18 | Ownership of shared environment/model-source tools | M2 Phase A/Phase B bootstrap and receipt | **resolved 2026-08-20 (owner): on macOS, Homebrew may install and own the shared `uv` and `hf` executables. uv owns exact isolated Python runtimes and application closures below that layer. Artifact downloads through `hf` must use locked revisions; llama.cpp's moving `-hf` selector remains forbidden. The catalog supplies policy, the software lock supplies exact desired tool identities, and the receipt supplies observed installed identities instead of Temper accepting ambient PATH state** |
 | D19 | Experiment-specific and run-time-generated software locks; ownership when installations share provider packages | M2 Phase A/B, Field Kit/Labs consumers | **resolved 2026-08-21 (owner): a lock records independent immutable catalog and experiment provenance and may require exact base-lock receipts; installation consumes the frozen lock without a catalog read. One explicit root holds many named base/experiment installations. Per-installation receipts are history; one root-wide state document atomically owns prepared intent and reference-aware shared claims, so one experiment cannot remove a package another still uses. Field Kit's Temper-material binding carries the ordered installation lock/receipt set** |
 | D20 | Use Temper as the craft skills' first real-work canary through 1.0 | no product milestone; phase closeout documentation only | **resolved 2026-08-21 (owner): record an evidence-linked skill field note after M1 and each M2 phase/M3/M4/M5; propose narrow improvements or no change; never turn the secondary objective into synthetic product work or an ungated model eval** |
-| D21 | Field Kit's promotion role and runtime ownership | M2 Phase B boundary; Labs/Field Kit/Temper | **resolved 2026-08-24 and revised by owner 2026-08-27: Labs is the editable source and promotes immutable bounded packages into Field Kit; Field Kit is content and history, not a user executable; Temper embeds one reviewed snapshot and owns applicability, disclosure, consent, sessions, mechanics, live protocols, evidence, reports, and cleanup through `temper field-kit`. Temper never reads moving Labs state. Experiment promotion and product/profile promotion remain separate gates; the old standalone runtime is retired and its historical package remains verifiable** |
+| D21 | Field Kit's promotion role and runtime ownership | M2 Phase B boundary; Labs/Field Kit/Temper | **resolved 2026-08-24 and revised by owner 2026-08-28: Labs is the editable source and promotes immutable bounded question packages into Field Kit; Field Kit is an independently versioned Python runtime owning applicability, disclosure, consent, sessions, protocols, evidence, reports, export, and cleanup; Temper owns stable machine/install/check/bind/probe primitives. Protocol changes do not require a Temper release, and no Field Kit runtime bytes live in Temper. Question-package promotion and product/profile promotion remain separate gates** |
+| D22 | Is `coder` a model/runtime role, and what makes a model main? | M2 Phase C / M3 / M4 | **resolved 2026-08-29:** remove `coder` from the product schema; coding is an evidenced use, main is the mode's explicit foreground binding, and stable roles remain only for tool-consumed services such as rerank/embed/extract. Activities may compose explicitly selected Pi extensions and tools without reclassifying the foreground model |
+| D23 | How do independently moving chat templates over shared weights appear? | M2 Phase C / M3 | **resolved 2026-08-29:** template sources are exact model-patch profiles; the runtime binds artifact + optional patch + engine/tuning, while the wizard groups eligible Froggeric/Sharp-style variants beneath one model choice and deduplicates the weights. Compatibility gates the patch composition; eligible interaction behavior remains user preference |
 
 ## 7. Now / next
 
@@ -968,13 +1002,12 @@ or CI dependency.
    boundaries. No `exact-tested` row is published yet. The Field Kit-facing
    C10/C11 install surface is frozen. The signed Pages tree still requires the
    owner's explicit publication action; no code path publishes it implicitly.
-2. **M2 Phase B — Field Kit runtime complete 2026-08-27:** C10/C11 and the
-   baseline portion of C12 are implemented under the final ownership boundary
-   in `docs/design/field-kit-experiment-boundary.md`. Temper now embeds the
-   reviewed content snapshot and owns the single `temper field-kit` runtime;
-   Field Kit is content-only and the old separate binary is retired. Future
-   fixed and bounded-adaptive experiment packages use this same runtime and
-   retain their own explicitly authorized scratch gates.
+2. **M2 Phase B — Field Kit host complete; runtime independent:** C10/C11 are
+   implemented under `docs/design/field-kit-question-boundary.md`. Temper
+   exposes the stable machine/install/check/bind/probe host. Field Kit owns the
+   independent Python runtime; fixed and bounded-adaptive question packages
+   change Field Kit without rebuilding Temper and retain their own explicitly
+   authorized scratch gates.
    The Temper-side C5/C6/C10/C11 surface is approved. Generic lock validation
    and the pure planner now cover direct/catalog-backed experiment provenance,
    base-receipt requirements, named isolated roots, prepared recovery, and
@@ -998,31 +1031,29 @@ or CI dependency.
    integrated through exact host detection and hermetic command-level
    install/check/remove/second-run coverage. The announced and authorized real
    adapter scratch round-trip now passes with the exact reviewed v251 and
-   b10566 assets. Cross-repository baseline compilation now passes for exact
-   Qwen Dynamic b10636/v251/Froggeric bytes: Field Kit owns immutable promoted
-   catalog/package bytes, while Temper owns embedded validation, applicability,
-   disclosure, consent, package materialization, target-lock compilation,
-   resumable execution, the Go live protocol, outcome, and report. Revisions 1
-   and 2 are retired; active revision 3 explicitly authorizes Temper's
-   commit-per-stage `run` convenience and requires no Python or adjacent
-   checkout. An effect-free contract check accepted the compiled software lock
-   and manifest.
-   Remaining Field Kit work is future experiment promotion plus explicitly
-   authorized live evidence; neither reopens runtime ownership.
+   b10566 assets. Field Kit independently validates and materializes its
+   packages, compiles target locks, owns resumable execution and Python
+   protocols, and calls only the stable Temper host. Hermetic Field Kit tests cover catalog
+   tamper refusal, applicability, keep/restore, retained external evidence, and
+   deterministic export. Remaining work is productizing Field Kit bundle/
+   Python installation plus future experiment promotion and explicitly
+   authorized live evidence; none requires embedding protocol bytes in Temper.
 3. **Release distribution — artifact-ready 2026-08-27:** D4 is resolved and
    the first macOS ARM64 channel is implemented. A release-only Go command
    cross-builds a versioned binary and deterministically packages its 0BSD
    license plus exact linked-module notices. CI covers formatting, tests, vet,
-   race checks, and the embedded Field Kit snapshot. A strict-SemVer tag
+   and race checks. A strict-SemVer tag
    workflow imports a short-lived Developer ID identity, signs with hardened
    runtime and timestamp, notarizes, verifies checksum/archive shape/version/
-   signature/Gatekeeper/Field Kit from a clean extraction, and publishes only
+   signature and Gatekeeper admission from a clean extraction, and publishes only
    after every gate passes. Local unsigned build/package/second-run smoke
    passes. Repository signing/notarization secrets and an explicit tag push
-   remain external release actions; no release or live baseline run has been
+   remain external release actions; no live question-package run has been
    performed.
 4. **M2 Phase C — qualification catalog:** the C7 typed-document and
-   Temper-side C8 product-promotion surfaces are provisionally approved.
+   Temper-side C8 product-promotion surfaces are provisionally approved; the
+   owner amended their portfolio, foreground, patch, and software-currentness
+   semantics on 2026-08-29 before wizard freeze.
    The first C7 executable slice now strictly parses, canonically encodes,
    hashes, validates, and matches immutable machine-bucket documents against
    canonical Temper machine facts using a fake hermetic fixture. Its exact
@@ -1039,20 +1070,25 @@ or CI dependency.
    qualification/lifecycle edges are also validated without a moving-history
    lookup. The tool
    dependency root is typed and loaded with exact permission/data-boundary
-   agreement, and mode worlds now verify role, placement, harness, and active
-   boundary composition. Activity profiles resolve an exact mode and prove
-   strict tool, applicability, role, and data-boundary narrowing. The complete
-   six-kind C7 document chain therefore runs over fake hermetic fixtures.
+   agreement, and mode worlds now verify the old role, placement, harness, and
+   active boundary composition. Activity profiles resolve an exact mode and
+   prove strict tool, applicability, role, and data-boundary narrowing. The
+   complete six-kind pre-amendment C7 document chain therefore runs over fake
+   hermetic fixtures.
    The explicitly authorized Labs C8 writer adoption and first Temper compiler
    slice completed on 2026-08-25. The owner re-authorized the semantic-name
    packet/public-profile byte refresh on 2026-08-27, and the exact Labs and
    Temper copies match. Private locators remain packet-side.
-   All six compiler fixtures and qualification/dependency closure validation
-   are complete. Next add the plural recommendation/performance projection and
-   reviewed seed rows. The first two-layout fixture should preserve co-recommended
-   speed/context and quality-first coder layouts rather than manufacture one
-   global winner. No real native-MTP row exists until Labs supplies an accepted
-   C8 packet.
+   All six pre-amendment compiler fixtures and qualification/dependency closure
+   validation are complete. Next implement the seven-kind amended chain and
+   coordinated packet golden: model patches, technical runtime interfaces,
+   explicit foreground, service-only roles, evidenced uses, activity support,
+   signed current catalog selection, and routine software adoption. Its first
+   portfolio fixtures are the lower-tier everyday foreground, plural
+   speed/context/quality choices without a winner, and Froggeric/Sharp options
+   over shared Qwen weights. Only then add recommendation/performance
+   projection and reviewed seed rows. No real native-MTP row exists until Labs
+   supplies an accepted C8 packet.
 5. **M1 — complete and accepted locally:** keep the dated current-posture
    manifest/lock fixture and its field-to-config acceptance test current while
    this path remains isolated from the running service; the wall-model contract

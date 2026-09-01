@@ -120,7 +120,7 @@ func materialize(t *testing.T) fixture {
 	lock := softwarelock.Document{
 		Schema: softwarelock.SchemaV1,
 		Provenance: softwarelock.Provenance{Experiment: &softwarelock.ExperimentIdentity{
-			Schema: "field-kit-baseline/v1", ID: "qwen38-dynamic", DefinitionSHA256: strings.Repeat("d", 64),
+			Schema: "field-kit-question-package/v1", ID: "qwen38-dynamic", DefinitionSHA256: strings.Repeat("d", 64),
 		}},
 		Target: target, Resolved: "2026-08-27",
 		Selections: map[string]softwarelock.Selection{

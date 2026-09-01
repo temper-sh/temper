@@ -41,7 +41,7 @@ func TestRunDispatchesFieldKitHelpWithoutReadingMachineOrBinary(t *testing.T) {
 	exit := runWithDependencies(context.Background(), []string{"field-kit", "help"}, &stdout, &stderr, dependencies{
 		newFieldKit: func() (fieldkitcmd.Command, error) { return command, nil },
 	})
-	if exit != 0 || called || stderr.Len() != 0 || !strings.Contains(stdout.String(), "temper field-kit bind") {
+	if exit != 0 || called || stderr.Len() != 0 || !strings.Contains(stdout.String(), "temper field-kit bind") || strings.Contains(stdout.String(), "baseline") {
 		t.Fatalf("exit = %d, called = %v, stdout = %q, stderr = %q", exit, called, stdout.String(), stderr.String())
 	}
 }

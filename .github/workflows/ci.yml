@@ -44,9 +44,3 @@ jobs:
 
       - name: Race test
         run: go test -race -count=1 ./...
-
-      - name: Verify embedded Field Kit snapshot
-        shell: bash
-        run: |
-          set -euo pipefail
-          go run ./cmd/temper field-kit baseline verify

@@ -53,7 +53,7 @@ syntax as the owner of a product rule.
 
 | Executable | Role | Wiring boundary |
 |---|---|---|
-| `cmd/temper` | User-facing CLI for manifest/lock, artifacts, rendering, checks, software lifecycle, Field Kit, probes, and catalog update | Constructs upstream readers, machine detectors, the compiled software adapter family, Field Kit/probe commands, catalog trust, and catalog transport |
+| `cmd/temper` | User-facing CLI for manifest/lock, artifacts, rendering, checks, software lifecycle, machine facts, Field Kit host primitives, probes, and catalog update | Constructs upstream readers, machine detectors, the compiled software adapter family, Field Kit binding/probe commands, catalog trust, and catalog transport |
 | `cmd/temper-catalog` | Release-only catalog signing and verification tool | Constructs signing/verification capabilities; private seed bytes enter only through stdin |
 | `cmd/temper-release` | Maintainer-only deterministic binary/archive builder | Cross-builds the version-injected macOS ARM64 binary, discovers the linked module graph, collects root license/notice bytes, and conditionally commits the release ZIP and checksum; it never signs, notarizes, or publishes |
 
@@ -79,9 +79,8 @@ check, removal, or catalog policy.
 | `temper software install` | `software/install` through `softwarecmd` | `software/lockfile`, `installplan`, `receipt`, `rootstate` | receipt/state stores; compiled installation adapter effects | `docs/contracts/software-install.md` |
 | `temper software check` | `software/check` through `softwarecmd` | `software/lockfile`, `checkplan`, `receipt`, `rootstate` | stores and provider inspection; no writes | `docs/contracts/software-install.md` |
 | `temper software remove` | `software/remove` through `softwarecmd` | `software/lockfile`, `removeplan`, `receipt`, `rootstate` | prepared authority, compiled adapter removal, receipt/state commits | `docs/contracts/software-install.md` |
-| `temper field-kit baseline ...` | `internal/fieldkitcmd` | `fieldkit/baseline`, `fieldkit/baselinerun`, `fieldkit/catalog`, `fieldkitprotocol` | embedded package reads, canonical machine detection, atomic session/evidence commits, existing Temper command effects | `docs/contracts/field-kit.md` |
 | `temper probe serve` | `internal/probecmd` | exact software receipt/lock and rendered-generation admission | foreground loopback process group; dry-run is read-only | `docs/contracts/probe-serve.md` |
-| Field Kit material binding | `internal/fieldkitbinding` | manifest/software locks, receipts, canonical machine facts | none; callers supply already-read bytes and documents | `docs/design/field-kit-experiment-boundary.md` |
+| `temper field-kit bind` | `internal/fieldkitcmd` + `internal/fieldkitbinding` | manifest/software locks, receipts, canonical machine facts | explicitly named Temper state; pure binding after reads | `docs/contracts/field-kit.md` |
 | Qualification documents | `internal/qualification` | exact references/index, common profile/evidence envelope, canonical witness-scope keys, independent immutable qualification/lifecycle transitions, machine buckets, model artifacts, engines, model runtimes/performance, tools, modes, activities, and exact bundle loading | read-only reuse of software-supply target/catalog constants; callers supply index/document bytes and canonical facts, and all parsing, hashing, validation, loading, transition/composition checks, and matching are pure | `docs/design/qualification-catalog-schema.md` |
 
 An internal package not listed as a public operation is usually a decision or
@@ -107,24 +106,18 @@ it is executable in a test.
 | `internal/machine` | Read-only host target, hardware, and memory facts |
 | `internal/datadir` | Validation of the explicit isolated Temper root boundary |
 
-### Field Kit promotion runtime
+### Field Kit host primitives
 
 | Package | Kind | Owns |
 |---|---|---|
-| `internal/fieldkit/baseline` | pure catalog + embedded bytes | strict canonical catalog/package validation, v1/v2 retirement history, v3 protocol/orchestration identity, referenced-material hashes, and the `go:embed` release snapshot |
-| `internal/fieldkit/catalog` | pure policy | promoted predicates, advisory relevance, costs, and strict machine-facts projection shared by baseline/experiment content |
-| `internal/fieldkit/baselinerun` | pure document/planner + atomic session store | consented session schema, owned-root marker, target software-lock compilation, ordered stages, evidence transitions, and exact Temper/protocol invocations |
-| `internal/fieldkit/session` | pure document + atomic store | bounded promoted-experiment session envelope retained for the future non-baseline slice |
-| `internal/fieldkitcmd` | orchestrator/command edge | embedded/default selection, disclosure and consent gates, root/package materialization, stage execution, validation, reporting, and restore |
-| `internal/fieldkitprotocol` | controlled effect boundary | exact reviewed live-protocol identities, loopback HTTP exercise, resource safety stops, foreground probe lifecycle, sanitized report hashes, and no generated-content retention |
+| `internal/fieldkitcmd` | stable command edge | reads explicitly named Temper material and emits the canonical binding |
 | `internal/fieldkitbinding` | pure identity | exact executing material across machine, binary, locks, receipts, and rendered generation |
 | `internal/probecmd` | controlled effect boundary | admission and process-group lifecycle for one exact receipt/generation-bound loopback router |
 | `internal/releaseartifact` | pure release document | strict release SemVer, deterministic ZIP names/order/modes/timestamps/checksum, and stable third-party notice rendering |
 
-Field Kit source content lives in the adjacent repository, but it is not read
-at runtime. Release work copies reviewed canonical bytes under
-`internal/fieldkit/baseline/builtin`; parity and unsupported-protocol refusals
-are release gates.
+Current Field Kit source and runtime live in the adjacent repository and call
+only public Temper primitives. Field Kit catalogs, question packages, sessions,
+protocols, evidence, and reports are not copied into this repository.
 
 Release assets are assembled only by `cmd/temper-release` under
 `docs/contracts/release.md`. The command refuses non-ARM64 Mach-O input,
@@ -228,11 +221,7 @@ caller-owned.
 | Active catalog | `software/catalog/active` | `catalogupdate`; exact digest plus newline in a regular file |
 | Installation receipt | `software/installations/<id>/installation-receipt.yaml` | `receiptstore`; canonical conditional commit/removal |
 | Root software authority | `software/state.yaml` | `statestore`; each prepared/finalized operation or claim transition commits here atomically |
-| Field Kit package snapshot | `field-kit/package/` | `fieldkitcmd`; copied from the exact embedded package at consent time and verified before every stage |
-| Field Kit machine/software inputs | `field-kit/machine.yaml`, `field-kit/software.lock.yaml` | `fieldkitcmd`; canonical consented bytes, then read-only stage inputs |
-| Field Kit ownership marker | `.temper-field-kit-owner.json` | `fieldkitcmd`; canonical session-bound marker required before root restoration |
-| Field Kit evidence | `field-kit/stages/`, `field-kit/binding.yaml`, `field-kit/protocol-report.json`, `field-kit/protocol/` | `fieldkitcmd`/`fieldkitprotocol`; atomic structured local evidence below the dedicated root |
-| Field Kit session/report | generated, caller-overridable paths beside and outside the dedicated root | `fieldkitcmd`; resumable canonical session and final local report survive restore |
+| Current Field Kit state | owned by the adjacent Field Kit runtime outside this repository | Field Kit invokes Temper stores only through public root-explicit verbs |
 
 No state path in this table points at the live legacy installation before the
 release cutover gate.

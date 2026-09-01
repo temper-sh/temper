@@ -1,127 +1,75 @@
-# `temper field-kit` contract
+# Temper host contract for Field Kit
 
-Status: active pre-release baseline surface, 2026-08-27.
+Status: active pre-release host surface, revised by owner 2026-08-28.
 
-`temper field-kit` executes release-reviewed promotion content embedded in the
-Temper binary. It never reads Labs or an adjacent Field Kit checkout by
-default. `--catalog PATH` and `--facts PATH` are explicit development/review
-overrides and receive strict canonical validation.
+Temper is Field Kit's installer and machine checker. Field Kit is the
+independently versioned user runtime. New discovery, consent, session,
+protocol, evidence, reporting, export, and cleanup behavior lands in
+`temper-sh/field-kit`, not in this binary.
 
-## Read-only commands
+## Stable host primitives
 
-```text
-temper field-kit baseline verify [--catalog PATH]
-temper field-kit baseline inspect [--facts PATH] [--catalog PATH]
-temper field-kit baseline explain ID@REV [--facts PATH] [--catalog PATH]
-```
-
-- `verify` validates catalog/package/reference hashes and refuses any active
-  package whose exact runtime protocol identity is not supported by this
-  Temper release.
-- `inspect` detects canonical local machine facts unless overridden, lists
-  inactive packages, and evaluates active hard applicability plus advisory
-  relevance without mutation.
-- `explain` requires one active applicable exact revision and writes the exact
-  consent disclosure. It performs no download, installation, service start,
-  cleanup, session write, or upload.
-
-Success returns exit 0. Invalid syntax returns 2. Validation, applicability,
-or read failure returns 1.
-
-## Guided user workflow
+A Field Kit release may compose only these public Temper commands:
 
 ```text
-temper field-kit baseline run ID@REV --root NEW_PATH \
-  [--outcome keep|restore] [--session PATH] [--report PATH] \
-  [--facts PATH] [--temper PATH] [--catalog PATH]
+temper machine facts
+temper software install --root PATH --installation ID --lock PATH
+temper software check --root PATH --installation ID --lock PATH
+temper software remove --root PATH --installation ID --lock PATH
+temper fetch LAYOUT --root PATH --manifest PATH --lock PATH
+temper apply --root PATH --manifest PATH --lock PATH --mode NAME
+temper check --root PATH --manifest PATH --lock PATH --mode NAME --verify
+temper field-kit bind --root PATH --manifest-lock PATH --generation SHA256 \
+  --installation ID=SOFTWARE_LOCK
+temper probe serve --root PATH --installation ID --software-lock PATH \
+  --generation SHA256 --listen LOOPBACK
 ```
 
-This is the normal user-facing entry point. For a new root, Temper validates
-the active applicable package, prints the exact disclosure, prompts for a
-keep-or-restore outcome when omitted, and requires exact `yes` consent before
-creating anything. It then starts the session, advances the declared stages,
-and finishes the report. Restore asks for a second exact `yes` immediately
-before marker-guarded root removal.
+Their existing contracts remain authoritative. In summary:
 
-The session and report default to `NEW_PATH.session.json` and
-`NEW_PATH.report.md`. Rerunning the same command discovers that session,
-verifies its baseline, root, and optional outcome, and resumes from the first
-pending stage. The low-level commands below remain the automation, audit, and
-recovery surface.
+- `machine facts` is a read-only canonical `temper-machine-facts/v1`
+  document.
+- software install/check/remove accepts a complete exact lock, operates only
+  below the explicit Temper root, and uses receipts and ownership claims.
+- fetch/apply/check operate on exact manifests and locks below the explicit
+  root; full check streams selected artifacts against their hashes.
+- bind returns the pure `temper-field-kit-binding/v1` identity over Temper,
+  machine facts, locks, receipts, and rendered generation.
+- probe serve admits one receipt-bound generation and owns one foreground,
+  loopback-only process group. It does not choose or interpret a protocol.
 
-## Low-level consent and session start
+Field Kit invokes exact argv directly. It must not use a shell, infer the live
+legacy root, call an internal package, or parse human prose when a stable
+`RESULT` or schema field exists.
 
-```text
-temper field-kit baseline start \
-  --baseline ID@REV \
-  --root NEW_PATH \
-  --disclosure PATH \
-  --outcome keep|restore \
-  --consent yes \
-  [--session PATH] [--id ID] [--facts PATH] [--temper PATH] \
-  [--at UTC_RFC3339] [--catalog PATH]
-```
+## Ownership of orchestration
 
-The command refuses before creating a root or session unless consent is
-exactly `yes`. It then requires an active applicable revision, disclosure bytes
-identical to the current exact explanation, a clean new dedicated root, and a
-new session path outside that root. By default, the session is
-`NEW_PATH.session.json` and its stable ID combines the baseline ID with the
-consent timestamp. The executing binary, detected facts, and current UTC time
-are also defaults; override flags exist for controlled placement,
-deterministic review, and tests.
+Field Kit owns:
 
-Start atomically binds a canonical session to the catalog/package/material,
-machine facts, executing Temper bytes, compiled software lock, disclosure,
-outcome, consent time, and root ownership marker. It materializes the exact
-package and machine facts below the new root. A session commit failure removes
-only that newly created root.
+1. validating its independently released catalog and package bytes;
+2. detecting applicability from `temper machine facts`;
+3. rendering disclosure and collecting exact consent;
+4. creating and conditionally committing its external resumable session;
+5. ordering and invoking the stable Temper primitives;
+6. running package-owned Python protocols and applying their bounded stop rules;
+7. retaining sanitized evidence and rendering reports;
+8. explicit local export; and
+9. second-confirmation, marker-guarded keep/restore cleanup.
 
-## Resumable execution
+Temper does not validate a moving Field Kit catalog or protocol. Field Kit
+binds its own package/runner identities alongside the Temper material binding.
 
-```text
-temper field-kit baseline status --session PATH [--baseline ID@REV] [--catalog PATH]
-temper field-kit baseline run --session PATH [--baseline ID@REV] [--catalog PATH]
-temper field-kit baseline run-next --session PATH [--baseline ID@REV] [--catalog PATH]
-```
+## Release and compatibility rule
 
-The session carries its exact baseline ID and revision, so these commands infer
-the selector. Optional `--baseline` is a consistency assertion and is refused
-if it differs. A newer embedded catalog may retire a revision without
-stranding an existing session: execution still requires the retained package
-with the exact session-bound package hash.
+A Field Kit package, protocol, disclosure, session schema, report, or export
+change creates only a Field Kit revision/release. A Temper release is warranted
+only when Field Kit needs a new generally useful machine effect or when an
+existing primitive contract must make an incompatible change.
 
-`status` is read-only. `run` is the normal path for a package that explicitly
-declares `temper-multi-stage/v1`; it advances all remaining stages in order.
-`run-next` advances exactly one stage and remains the inspection/recovery path.
-Both verify every consented immutable input before each stage, invoke only the
-exact Temper operation or supported built-in protocol, validate stable output,
-write local evidence, and conditionally commit that one session transition
-before another stage can begin. Failure or interruption writes diagnostic
-output below the dedicated root and does not advance the failed stage. Rerun
-retries that convergent first pending stage. Packages predating the multi-stage
-declaration are refused by `run` and remain operable through `run-next`.
+Field Kit records the exact Temper binary hash and version in each session. A
+Field Kit release declares and tests its minimum compatible Temper version. A
+new Temper version must retain these primitive contracts or make the
+incompatibility explicit before release.
 
-The active baseline stages are install, fetch, apply, software check, artifact
-check, material binding, live protocol, and outcome. The live protocol owns a
-loopback foreground process group and stops on timeout, process failure,
-thermal/performance warning, or at least 512 MiB swap growth. Its report retains
-structured outcomes and hashes, not generated response content.
-
-## Finish and restore
-
-```text
-temper field-kit baseline finish \
-  --session PATH [--baseline ID@REV] [--report PATH] \
-  [--confirm-restore yes] [--catalog PATH]
-```
-
-Finish requires all stages to have succeeded and writes the final report
-outside the dedicated root. Its default is `NEW_PATH.report.md` beside that
-root. A `restore` outcome additionally requires exact `--confirm-restore yes`
-and a valid session-bound ownership marker before removing the dedicated root.
-The external session and report remain. A `keep` outcome retains the exact
-root.
-
-No command uploads evidence. Export and Labs review are separate explicit
-actions.
+No command uploads evidence. Product/profile promotion remains a separate Labs
+and Temper review.
