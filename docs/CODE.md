@@ -102,6 +102,8 @@ it is executable in a test.
 | `internal/patch` | Pinned patch-source parsing and deterministic patch application |
 | `internal/artifactset` | Immutable content-addressed layout-set identity and verification |
 | `internal/render` | Pure construction of the complete llama-swap/Pi configuration bundle |
+| `internal/render/engine` | Closed pure engine-launch family, typed adapters, specialized command builders, and safe llama-swap shell serialization |
+| `internal/runtimeconfig` | Canonical generation-owned, receipt-resolved executable requirements shared by render and probe |
 | `internal/budget` | Pure resident-wall arithmetic |
 | `internal/machine` | Read-only host target, hardware, and memory facts |
 | `internal/datadir` | Validation of the explicit isolated Temper root boundary |
@@ -134,6 +136,7 @@ workflow-only decisions stay with the use case.
 | Package | Owns |
 |---|---|
 | `internal/software` | Provider-neutral shared values such as targets, candidates, and artifacts |
+| `software/archive` | Shared bounded tar.gz inspection, safe extraction, and canonical installed-tree inventory for isolated adapters |
 | `software/catalog` | Strict software-supply catalog parsing and validation |
 | `software/version` | Closed SemVer/PEP 440/opaque/git version semantics |
 | `software/policy` | Pure catalog recipe and constraint policy |
@@ -155,13 +158,19 @@ stays in member packages:
 - `adapter/homebrew` translates Homebrew metadata and controlled process
   behavior.
 - `adapter/uv` translates version-matched uv/PEP 751 data into an exact managed
-  Python closure.
+  Python closure and installs that locked closure into an inspected immutable
+  environment using its exact managed runtime and local hashed wheelhouse.
 - `adapter/upstreamrelease` resolves, installs, inspects, and removes isolated
   verified release archives.
 
-The production `temper` installation-effect family currently wires only
-`upstreamrelease`. Existing resolver code or tests do not authorize a CLI
-fallback to Homebrew, uv, or an ambient tool.
+Both isolated effect members delegate tar.gz path, bound, mode, link, hash,
+extraction, and tree-inventory semantics to `software/archive`. They do not
+share an installed interpreter or publication lifecycle.
+
+The production `temper` installation-effect family wires the isolated
+`upstreamrelease` and `uv` members. Existing resolver code or tests do not
+authorize a CLI fallback to Homebrew, an unknown adapter, ambient Python, or
+an ambient package index.
 
 To add a member, implement the existing narrow adapter role in its own
 package, add its descriptor to compiled capability validation, and wire the

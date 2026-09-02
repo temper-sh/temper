@@ -42,6 +42,34 @@ func TestInspectReturnsTheAdmittedModelSize(t *testing.T) {
 	}
 }
 
+func TestSnapshotSetPassesTheWholeModelDirectoryAndSumsEveryFile(t *testing.T) {
+	root := t.TempDir()
+	data := map[string][]byte{
+		"model/config.json":       []byte("config"),
+		"model/model.safetensors": []byte("weights"),
+		"model/tokenizer.json":    []byte("tokenizer"),
+	}
+	names := []string{"config.json", "model.safetensors", "tokenizer.json"}
+	entry := lockfile.Entry{Repo: "owner/model", Revision: strings.Repeat("1", 40), Resolved: "2026-09-02"}
+	for _, name := range names {
+		entry.Files = append(entry.Files, lockfile.File{Name: name, SHA256: hash(data["model/"+name])})
+	}
+	layout := manifest.Layout{Model: manifest.Model{Repo: "owner/model", Format: "mlx-safetensors", Files: names}}
+	set, err := artifactset.New(root, "large", layout, entry, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	materialize(t, set, data)
+	inspection, err := set.InspectContent(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantBytes := int64(len("config") + len("weights") + len("tokenizer"))
+	if inspection.ModelBytes != wantBytes || set.ModelPath() != filepath.Join(set.Path(), "model") {
+		t.Fatalf("inspection=%#v modelPath=%q", inspection, set.ModelPath())
+	}
+}
+
 func TestVerifyDistinguishesAnAbsentSet(t *testing.T) {
 	set, _ := fixtureSet(t, t.TempDir())
 	err := set.Verify()

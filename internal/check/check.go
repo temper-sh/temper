@@ -244,7 +244,7 @@ func predictBudget(document manifest.Document, mode manifest.Mode, machine budge
 		layout := document.Layouts[member.Layout]
 		residents = append(residents, budget.Resident{
 			ID:       member.Layout,
-			Holder:   member.Preferred && layout.Role == "coder",
+			Holder:   member.Layout == document.ForegroundLayout(mode) && layout.TechnicalInterface() == "chat-completions",
 			GPU:      gpu,
 			ModelMiB: modelMiB,
 		})

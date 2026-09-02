@@ -1,4 +1,4 @@
-# `manifest.yaml` schema (`temper-manifest/v1`)
+# `manifest.yaml` schemas (`temper-manifest/v1` and `temper-manifest/v2`)
 
 Parked as a direction on 2026-08-17, reworked on 2026-08-19 to settle the
 layout/mode split, and promoted to the executable v1 contract later that day
@@ -190,13 +190,168 @@ How those reach the client depends on what the client can express:
 rendering concern, a property of the target client's capability, not a fact
 about the model — which is why it must not appear in the schema.
 
+## Engine launcher evolution
+
+The renderer's launch surface is a closed engine family. A layout supplies
+semantic serving intent plus exactly one typed engine-tuning variant. The
+selected engine adapter validates that it can reproduce those semantics and
+maps them into private engine options; a separate engine-specific command
+builder produces the process launch specification. The shared llama-swap
+command serializer is the final step. It owns shell quoting and the deliberate
+`${PORT}` placeholder, not engine flags.
+
+This boundary has the following invariants:
+
+- Engine identities describe the actual process/API contract, not a package's
+  module name or one of its dependencies. `rapid-mlx`, raw `mlx-vlm`, and
+  Apple-Silicon `vllm-metal` are distinct even where their MLX dependencies
+  overlap. Generic `vllm` is not a sufficient identity for Temper's
+  `darwin/arm64` qualification surface.
+- Common layout fields state semantic facts such as the effective window,
+  output limit, thinking default, selected template, modality, and speculation
+  contract. Engine mechanics such as llama.cpp batch/ubatch/checkpoints,
+  MLX KV schemes, or vLLM scheduler and memory controls live only in their
+  typed engine block. No raw argument list or free-form tuning map is accepted.
+- An adapter refuses a requested semantic it cannot reproduce. Similar names
+  are not equivalence: Rapid-MLX's reasoning profile is not llama.cpp's
+  `--reasoning`; MLX-VLM's `--max-kv-size` is not assumed to be an architectural
+  context limit; and a default that requests may override is not claimed as an
+  enforced policy.
+- A process launch specification carries its executable and typed argument
+  words. Before an engine with environment-driven offline or telemetry
+  controls is admitted, the specification also gains explicit typed
+  environment assignments. Ambient environment and unchecked shell fragments
+  are never part of the contract.
+- Readiness, shutdown, and "what artifact did you actually load?" are reads,
+  separate from the pure launcher. Engine-specific status parsers may interpret
+  llama.cpp `/props`, MLX-VLM `/health`, or vLLM `/v1/models`, but the status
+  orchestrator compares their normalized observation with the lock and refuses
+  a mismatch.
+
+The executable `temper-manifest/v2` slice implements the tagged tuning union,
+complete selected snapshot files, explicit local-only launch environment,
+runtime executable handoff, and hermetic command/refusal coverage for
+`llama-server`, `rapid-mlx`, raw `mlx-vlm`, and Apple-Silicon `vllm-metal`.
+Existing v1 documents remain valid and v1 stays llama-server-only. V2 makes
+these engines syntactically selectable for experiments; every new engine
+remains `EXPERIMENTAL`, not recommended or quality-qualified.
+
+V2 applies the pre-wizard successor decisions as follows:
+
+- `model.file` becomes a sorted, duplicate-free `model.files` snapshot plus
+  `format: gguf|mlx-safetensors|safetensors`. GGUF selects exactly one file;
+  directory-backed engines receive the immutable `model/` directory. Resolve
+  pins all files at one repository revision, fetch commits all of them as one
+  set, and the wall model sums their recorded sizes.
+- `role: coder` is removed. `interface: chat-completions|reranking` describes
+  the technical API and `modalities: [text]` or `[text, image]` describes
+  admitted input. A mode names its exact resident foreground layout. V2 does
+  not derive foreground from `preferred`.
+- A mode's `services` map binds tool-consumed roles such as `rerank` to an
+  exact member implementing the required technical interface. Coding remains
+  an evidenced use rather than a role.
+- Exactly one of `llama:`, `rapid_mlx:`, `mlx_vlm:`, or `vllm_metal:` is
+  present and it must match `engine`. Common chat fields remain `window`,
+  `max_tokens`, `thinking`, `speculation: {method: none|mtp, max_tokens: N}`,
+  optional selected `chat_template`, and `modalities`; engine mechanics cannot
+  leak into another variant. MLX-VLM currently refuses MTP because its drafter
+  surface needs an additional explicitly locked artifact.
+
+The first v2 tuning surface is deliberately closed:
+
+- `llama:` owns `kv`, parallelism, flash attention, batch/ubatch, context
+  checkpoints, and RAM prompt cache. The common MTP contract maps to
+  llama.cpp's `draft-mtp` spelling. Only llama-server accepts Temper template
+  patches or member `ngl`.
+- `rapid_mlx:` owns sequence/admission and prefill/completion batch bounds,
+  engine GPU-memory utilization, prefix-cache state, optional cache MiB,
+  `bf16|int8|int4` KV, `pflash: off|auto|always`, an explicit reasoning parser
+  when thinking is on. Text-only selection emits
+  `--no-mllm`; multimodal selection emits `--mllm` and requires PFlash off.
+- `mlx_vlm:` owns sequence count, prefill step, vision-cache size, optional
+  `3.5|4|8`-bit KV scheme/group, and optional `max_kv_size`. The last field is
+  a KV token-capacity control and is never derived from or represented as the
+  architectural context window. Thinking-on uses the server's explicit
+  default control; thinking-off preserves its explicit false default.
+- `vllm_metal:` owns sequence and batched-token bounds, engine GPU-memory
+  utilization, `auto|bfloat16|float16` KV, and prefix-cache state. The first
+  admitted surface is text-only and sets paged attention explicitly. MTP
+  requires one sequence and cannot be combined with prefix caching until the
+  upstream hybrid-model corruption report is cleared by qualification. Its
+  vLLM chat-template kwargs are an upstream vLLM control and are not confused
+  with llama.cpp's removed workaround.
+
+Every Python-engine member receives `HF_HUB_OFFLINE=1`, telemetry/implicit
+token suppression, and no-tracking environment. Rapid-MLX additionally uses
+its own telemetry opt-out. vLLM-Metal additionally pins paged attention,
+automatic Metal memory-fraction delegation, and vLLM usage-stat opt-outs.
+Rapid uses `/health/ready`; raw MLX-VLM uses `useModelName` to rewrite the
+forwarded API model to the one exact local snapshot, preventing its dynamic
+loader from treating the layout alias as a remote model ID.
+
+Remaining work before any of these engines can be called `SUPPORTED`:
+
+1. publish reviewed exact uv application recipes. The compiled uv installation
+   member can materialize a caller-supplied locked CPython and wheel closure,
+   while the probe requires its matching receipt and refuses ambient or
+   manually discovered Python executables. vLLM-Metal additionally needs a
+   typed supply path for its paired upstream vLLM/vLLM-Metal GitHub release
+   wheels and exact pinned MLX-LM source dependency. That path must either
+   admit a reviewed prebuilt wheel for the source pin or model a bounded source
+   build; it must not loosen the generic uv member to arbitrary URLs or VCS;
+2. revise qualification runtime layouts to the same engine-neutral semantic
+   surface, then produce model-family × engine-version × machine-bucket
+   evidence for streaming, tools, sampling, memory, context, and shutdown; and
+3. add engine-specific served-artifact observation (`/props`, `/health`, or
+   `/v1/models`) and compare it with the manifest lock before a status path
+   claims that the intended artifact is loaded.
+
+The 2026-09-02 research inputs are
+[Rapid-MLX 0.13.3](https://github.com/raullenchai/Rapid-MLX/releases/tag/v0.13.3),
+[MLX-VLM 0.6.17](https://github.com/Blaizzy/mlx-vlm/releases/tag/v0.6.17),
+[vLLM-Metal 0.28.0](https://github.com/vllm-project/vllm-metal/releases/tag/v0.28.0).
+These versions harden the boundary; they are not pins, recommendations, or
+consent to install or select those engines.
+
+The same-day launch-surface check loaded the Rapid-MLX parser directly from
+the exact 0.13.3 source tag and accepted the adapter's text-only, thinking-off,
+cache-disabled command plus its multimodal, thinking-on, MTP alternative. It
+also loaded MLX-VLM's exact 0.6.17 CLI and observed the adapter's complete
+argument-to-server-environment mapping with socket startup replaced by a test
+capture. Neither check downloaded weights or started an engine, and both used
+already-present Python dependencies; they are parser-compatibility evidence,
+not installed-closure or model-runtime qualification. vLLM-Metal was not
+installed, so its launch surface remains documentation-reviewed only.
+
+Qualification must also disposition upstream watch items rather than treating
+CLI compatibility as runtime quality. At the researched revisions these
+include MLX-VLM reports about
+[streaming tool results](https://github.com/Blaizzy/mlx-vlm/issues/1850),
+[sampling/seed behavior](https://github.com/Blaizzy/mlx-vlm/issues/1818),
+[strict loading of a text checkpoint](https://github.com/Blaizzy/mlx-vlm/issues/1958),
+and [multimodal cross-thread execution](https://github.com/Blaizzy/mlx-vlm/issues/1591),
+plus a vLLM-Metal report of a
+[nonzero-temperature token corruption symptom](https://github.com/vllm-project/vllm-metal/issues/622).
+vLLM 0.28.0 also has an open report of
+[silent output corruption when MTP and prefix caching are combined on hybrid
+models](https://github.com/vllm-project/vllm/issues/53912). Because the manifest
+does not claim enough architecture knowledge to distinguish affected models,
+the vLLM-Metal adapter refuses that combination; experiments may select either
+MTP or prefix caching until a qualified closure clears the interaction.
+These are investigation inputs, not Temper conclusions. The qualification
+packet must reproduce or clear them on the exact candidate closure and target
+model before promotion. Rapid-MLX PFlash is explicitly output-altering, so
+`auto` and `always` require retrieval/tool/context-quality evidence separate
+from an `off` profile even when throughput improves.
+
 ## Deferred beyond v1
 
 - Utility modes whose foreground model belongs to a harness. Their renderer
   must preserve provider-owned client settings rather than deriving local
   compaction into a global slot.
-- MLX and other engines. Each needs an owned launcher and a typed tuning block;
-  selecting one before that implementation exists is a refusal.
+- Additional engines and tuning controls. Each needs a typed adapter, exact
+  software/runtime identity, artifact compatibility, and qualification; raw
+  flags and placeholder variants remain refusals.
 - Tool resolution. Tool `source` remains intent until the lock grows its
   qualification-backed tool section. Patch resolution is implemented in the
   native manifest workflow.
@@ -242,6 +397,8 @@ layouts:
       ubatch: 512
       spec_type: draft-mtp
       spec_draft_n_max: 3
+      context_checkpoints: 16
+      prompt_cache_ram_mib: 0
 
   rerank-0.6b:
     display_name: "Qwen3 reranker 0.6B"
@@ -301,6 +458,12 @@ modes:
   preserves llama.cpp's hardware-dependent default without pretending it is
   disabled. `ttl`, `ngl`, `preferred` and `preload` are member facts because
   they change placement or use.
+- `llama.context_checkpoints` and `llama.prompt_cache_ram_mib` are optional
+  nonnegative integers. Omission preserves the qualified engine default;
+  explicit `prompt_cache_ram_mib: 0` disables the RAM prompt cache and must not
+  collapse into omission. Temper deliberately does not expose llama.cpp's `-1`
+  unlimited-cache sentinel. Coder `thinking` renders as the supported
+  `--reasoning on|off` option rather than template-parser implementation detail.
 - `defaults.gpu_memory_utilization` is greater than zero and at most one. It is
   the user's conservative allocation policy for the preferred GPU-resident
   coder in the bootstrap wall-model prediction; it is not rendered as a llama-server

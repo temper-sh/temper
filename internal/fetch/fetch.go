@@ -170,21 +170,25 @@ func publish(ctx context.Context, materialization plan, source upstream.Reader) 
 	defer func() { _ = os.RemoveAll(stage) }()
 
 	var receiptFiles []artifactset.Record
-	model := materialization.entry.Files[0]
-	modelPath := filepath.ToSlash(filepath.Join("model", model.Name))
-	modelReader, err := source.Open(ctx, materialization.entry.Repo, materialization.entry.Revision, model.Name)
-	if err != nil {
-		return fmt.Errorf("fetch model: %w", err)
+	for _, model := range materialization.entry.Files {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		modelPath := filepath.ToSlash(filepath.Join("model", model.Name))
+		modelReader, err := source.Open(ctx, materialization.entry.Repo, materialization.entry.Revision, model.Name)
+		if err != nil {
+			return fmt.Errorf("fetch model %q: %w", model.Name, err)
+		}
+		modelSize, err := writeStream(ctx, stage, modelPath, model.SHA256, modelReader)
+		closeErr := modelReader.Close()
+		if err != nil {
+			return fmt.Errorf("fetch model %q: %w", model.Name, err)
+		}
+		if closeErr != nil {
+			return fmt.Errorf("close model download %q: %w", model.Name, closeErr)
+		}
+		receiptFiles = append(receiptFiles, artifactset.Record{Path: modelPath, SHA256: model.SHA256, Size: modelSize})
 	}
-	modelSize, err := writeStream(ctx, stage, modelPath, model.SHA256, modelReader)
-	closeErr := modelReader.Close()
-	if err != nil {
-		return fmt.Errorf("fetch model: %w", err)
-	}
-	if closeErr != nil {
-		return fmt.Errorf("close model download: %w", closeErr)
-	}
-	receiptFiles = append(receiptFiles, artifactset.Record{Path: modelPath, SHA256: model.SHA256, Size: modelSize})
 
 	if materialization.patchID != "" {
 		if err := ctx.Err(); err != nil {

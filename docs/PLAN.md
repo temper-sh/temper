@@ -285,6 +285,63 @@ gofmt + go vet + table tests throughout.
 **Dependencies:** none for the first slice. **Decisions:** D3 any time before
 M3.
 
+#### Engine launch boundary and frozen-profile compatibility
+
+Implemented 2026-09-02 as product maintenance on the executable manifest/render
+surface. The immediate slice keeps `temper-manifest/v1` llama-server-only but
+replaces the renderer's inline flag assembly with a closed pure engine-launch
+family: semantic request -> owned engine adapter -> private engine command
+builder -> safely quoted llama-swap command. The llama tuning block gains
+optional context-checkpoint and prompt-cache-RAM fields, and `thinking` renders
+through llama.cpp's supported `--reasoning on|off` surface. Hermetic tests pin
+omission versus explicit zero and the complete frozen Field Kit command.
+The full Go suite and `go vet ./...` pass with the extracted launch family.
+
+At completion this slice did not make another engine selectable. The successor
+work was recorded under "Engine launcher evolution" in
+`docs/design/manifest-schema.md`; the immediately following experimental slice
+implements the launch half while retaining the qualification and observed-
+identity work as explicit promotion gates.
+
+#### Experimental Apple-Silicon engine launch slice
+
+Implemented 2026-09-02 by owner direction so Field Kit can run explicitly
+selected experiments on larger-memory devices. This slice promotes the reviewed engine
+launcher evolution into an executable successor manifest without changing the
+live service or selecting an engine for the user:
+
+1. retain source-compatible parsing for existing `temper-manifest/v1`
+   documents, while adding a successor schema whose layouts use a technical
+   interface, explicit modalities, an exact mode foreground layout, complete
+   snapshot file lists,
+   and exactly one typed engine-tuning block;
+2. add closed adapters and private command builders for `rapid-mlx`, raw
+   `mlx-vlm`, and Apple-Silicon `vllm-metal`, with loopback binding, one local
+   artifact set per member, explicit offline/no-telemetry environment, exact
+   readiness routing, and refusal for semantics an engine cannot reproduce;
+3. materialize, inspect, budget, update, and render complete multi-file model
+   snapshots through the existing immutable lock/artifact-set boundary;
+4. render a canonical runtime-requirements artifact so `probe serve` locates
+   every required executable from the validated software receipt instead of
+   hard-coding llama.cpp; and
+5. pin hermetic schema, command, artifact, render, and probe outcomes for every
+   admitted engine; and
+6. compile the uv installation member: it downloads the exact managed CPython
+   and wheel artifacts already named by a software lock, safely extracts the
+   runtime, installs the local hash-required wheelhouse without dependency
+   resolution, and publishes/audits/removes one immutable isolated environment.
+
+The engine lifecycle remains `EXPERIMENTAL`: implementation is not a quality
+claim, recommendation, installation consent, or live cutover. Runtime-backed
+qualification must separately cover the recorded upstream version, exact
+software closure, model family, streaming/tool behavior, sampling, memory,
+readiness, observed loaded-artifact identity, and shutdown. Published uv-based
+application recipes, vLLM-Metal's typed supply path for its paired GitHub
+wheels and pinned source dependency, and engine-specific observed-identity
+probes remain separate required product work where they are not already
+present; the launch surface reports those gaps rather than falling back to
+ambient software.
+
 ### M2 — software supply catalog + Field Kit execution base
 
 **Goal:** a consenting Mac can resolve, install, identify, verify, and remove

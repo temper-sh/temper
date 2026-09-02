@@ -4,6 +4,8 @@ package huggingface
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,9 +20,10 @@ import (
 )
 
 const (
-	defaultBaseURL = "https://huggingface.co"
-	metadataLimit  = 32 << 20
-	metadataWait   = 30 * time.Second
+	defaultBaseURL    = "https://huggingface.co"
+	metadataLimit     = 32 << 20
+	snapshotFileLimit = 64 << 20
+	metadataWait      = 30 * time.Second
 )
 
 var (
@@ -33,6 +36,112 @@ type Config struct {
 	BaseURL    string
 	Token      string
 	HTTPClient *http.Client
+}
+
+// ResolveSnapshot binds every selected file to one observed main revision.
+// LFS objects use the repository's authoritative SHA-256; small Git-backed
+// metadata is downloaded at that immutable revision and hashed directly.
+func (c *Client) ResolveSnapshot(ctx context.Context, repo string, files []string) (upstream.SnapshotPin, error) {
+	if !repoPattern.MatchString(repo) {
+		return upstream.SnapshotPin{}, fmt.Errorf("resolve %q: repository must be owner/name", repo)
+	}
+	if len(files) == 0 {
+		return upstream.SnapshotPin{}, fmt.Errorf("resolve %s: snapshot files must not be empty", repo)
+	}
+	seen := map[string]bool{}
+	for _, file := range files {
+		if err := validateFile(file); err != nil {
+			return upstream.SnapshotPin{}, fmt.Errorf("resolve %q: %w", repo, err)
+		}
+		if seen[file] {
+			return upstream.SnapshotPin{}, fmt.Errorf("resolve %s: snapshot repeats %q", repo, file)
+		}
+		seen[file] = true
+	}
+
+	metadata, err := c.readMetadata(ctx, repo)
+	if err != nil {
+		return upstream.SnapshotPin{}, err
+	}
+	byName := make(map[string]sibling, len(metadata.Siblings))
+	for _, candidate := range metadata.Siblings {
+		if _, exists := byName[candidate.Name]; exists {
+			return upstream.SnapshotPin{}, fmt.Errorf("resolve %s: metadata repeats %q", repo, candidate.Name)
+		}
+		byName[candidate.Name] = candidate
+	}
+
+	pin := upstream.SnapshotPin{Revision: metadata.SHA, Files: make([]upstream.SnapshotFilePin, 0, len(files))}
+	for _, file := range files {
+		selected, ok := byName[file]
+		if !ok {
+			return upstream.SnapshotPin{}, fmt.Errorf("resolve %s/%s: selected file is absent at main", repo, file)
+		}
+		hash := ""
+		if selected.LFS != nil && sha256Pattern.MatchString(selected.LFS.SHA256) {
+			hash = selected.LFS.SHA256
+		} else {
+			hash, err = c.hashSnapshotFile(ctx, repo, metadata.SHA, file)
+			if err != nil {
+				return upstream.SnapshotPin{}, err
+			}
+		}
+		pin.Files = append(pin.Files, upstream.SnapshotFilePin{Name: file, SHA256: hash})
+	}
+	return pin, nil
+}
+
+func (c *Client) readMetadata(ctx context.Context, repo string) (modelInfo, error) {
+	metadataCtx, cancel := context.WithTimeout(ctx, metadataWait)
+	defer cancel()
+	endpoint := c.baseURL + "/api/models/" + escapePath(repo) + "?blobs=true"
+	request, err := c.request(metadataCtx, http.MethodGet, endpoint)
+	if err != nil {
+		return modelInfo{}, err
+	}
+	response, err := c.http.Do(request)
+	if err != nil {
+		return modelInfo{}, fmt.Errorf("resolve %s metadata: %w", repo, err)
+	}
+	defer response.Body.Close()
+	if err := requireSuccess(response, "resolve "+repo+" metadata"); err != nil {
+		return modelInfo{}, err
+	}
+	body, err := io.ReadAll(io.LimitReader(response.Body, metadataLimit+1))
+	if err != nil {
+		return modelInfo{}, fmt.Errorf("read %s metadata: %w", repo, err)
+	}
+	if len(body) > metadataLimit {
+		return modelInfo{}, fmt.Errorf("read %s metadata: response exceeds %d bytes", repo, metadataLimit)
+	}
+	var metadata modelInfo
+	if err := json.Unmarshal(body, &metadata); err != nil {
+		return modelInfo{}, fmt.Errorf("decode %s metadata: %w", repo, err)
+	}
+	if !revisionPattern.MatchString(metadata.SHA) {
+		return modelInfo{}, fmt.Errorf("resolve %s: upstream returned an invalid main revision", repo)
+	}
+	return metadata, nil
+}
+
+func (c *Client) hashSnapshotFile(ctx context.Context, repo, revision, file string) (string, error) {
+	reader, err := c.Open(ctx, repo, revision, file)
+	if err != nil {
+		return "", fmt.Errorf("resolve %s/%s small file: %w", repo, file, err)
+	}
+	hash := sha256.New()
+	written, copyErr := io.Copy(hash, io.LimitReader(reader, snapshotFileLimit+1))
+	closeErr := reader.Close()
+	if copyErr != nil {
+		return "", fmt.Errorf("resolve %s/%s small file: %w", repo, file, copyErr)
+	}
+	if closeErr != nil {
+		return "", fmt.Errorf("resolve %s/%s small file close: %w", repo, file, closeErr)
+	}
+	if written > snapshotFileLimit {
+		return "", fmt.Errorf("resolve %s/%s: non-LFS file exceeds %d bytes", repo, file, snapshotFileLimit)
+	}
+	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
 type Client struct {

@@ -1,8 +1,8 @@
 # Software supply and lock design
 
-Status: **approved by owner**, extended through 2026-08-24 for experiment
-locks, layered installations, and the uv reader. The executable shared
-software-supply
+Status: **approved by owner**, extended through 2026-09-02 for experiment
+locks, layered installations, and the uv reader/isolated installer. The
+executable shared software-supply
 resolver now consumes this surface: strict catalog/lock parsing and validation,
 normalized target selection, compiled adapter descriptor matching,
 provider-neutral candidate closures, SemVer/PEP 440 policy selection, closure
@@ -15,8 +15,9 @@ returned by software resolution without being persisted. The deterministic
 installer/inspector/remover are executable; their archive and effect contracts
 are covered hermetically and the real isolated lifecycle passes through the
 public software commands. The bounded uv reader now translates exact managed
-Python and wheel closures; concrete installation members for shared Homebrew
-bootstrap tools and isolated uv environments remain pending. The internal signed
+Python and wheel closures, and its compiled isolated installation member
+materializes and audits those exact locks. A concrete installation member for
+shared Homebrew bootstrap tools remains pending. The internal signed
 channel/catalog verification, immutable store, rollback and equivocation
 policy, capability gate, dry-run, and active-pointer transaction are now
 executable and hermetically tested; a read-only consumer verifies the active
@@ -60,9 +61,10 @@ lock/store/adapter reader are executable as well. Provenance-guided removal now
 has a pure planner, a serialized active-to-retiring final-release transition,
 conditional receipt deletion, keyed adapter orchestration, and explicit-rerun
 recovery. The public commands and packet binding are executable on the Temper
-side. The first concrete isolated member is the `upstream-release` adapter;
-its public composition and real scratch gate pass. Field Kit-side stage
-integration and the remaining concrete adapters remain.
+side. The concrete isolated members are `upstream-release` and `uv`; the
+release member's public real scratch gate and both members' hermetic lifecycle
+gates pass. Field Kit-side stage integration and the shared Homebrew adapter
+remain.
 
 ## Facts and their owners
 
@@ -675,6 +677,13 @@ download for that locked locator, permits at most five HTTPS-only redirects,
 and owns no retry, cache, credentials, or release discovery. Hermetic tests
 inject the archive bytes and never use the network.
 
+`upstream-release` and `uv` share one provider-neutral internal tar.gz
+primitive. It owns archive-root stripping, path and link safety, entry/byte
+bounds, normalized modes, file hashes, extraction revalidation, and canonical
+installed-tree inventory. This is code reuse, not runtime sharing: Field Kit's
+standard-library interpreter and every engine environment retain independent
+locks, receipts, destinations, atomic generations, and removal authority.
+
 Its effect member publishes
 `<installation>/upstream-release/<scope>/current/payload`. It downloads into a
 private stage, verifies compressed size and SHA-256 before parsing, and then
@@ -734,6 +743,36 @@ Hermetic tests inject all command and HTTP output, cover selection and lock
 validation, and never invoke uv, PyPI, or the network. A future uv protocol
 series is refused until its version output, managed-Python schema, and pylock
 projection are reviewed together.
+
+The compiled uv installation member consumes that exact lock without repeating
+resolution. For each isolated scope it downloads and hashes the selected
+python-build-standalone `install_only_stripped.tar.gz` plus every locked wheel,
+retains those artifacts, safely extracts the single `python/` root with bounded
+entries and bytes through the shared archive primitive, and invokes only pip
+bundled inside that exact runtime. Pip
+receives a local wheelhouse, an exact-version requirements file with all locked
+SHA-256 values, `--require-hashes`, `--no-index`, `--no-deps`, no bytecode/cache,
+and a minimal controlled environment. No ambient Python, pip, uv, user site,
+configuration, cache, or index participates in installation.
+
+The environment is built in an unpublished generation so generated console
+scripts retain their final absolute interpreter path. A canonical private
+marker records the complete unit closure, retained downloads, and every
+installed path/type/mode/size/hash/link target. Only an atomic relative
+`current` symlink rename publishes it. Inspection re-hashes both source
+artifacts and the complete installed tree, rejects unsafe ancestry or extra
+generations, and reports all units in the scope exact or all non-exact.
+Failed repair leaves the previous current generation selected; removal deletes
+only the prepared uv scope. Different uv scopes remain independently
+reconcilable even when one software lock contains several Python engines.
+
+The generic uv member intentionally accepts only `files.pythonhosted.org`
+wheels. vLLM-Metal is not an exception hidden inside that member: its official
+installer coordinates a vLLM core wheel and vLLM-Metal wheel from GitHub
+releases, while the plugin metadata also pins an MLX-LM Git source revision.
+A future typed supply path must bind that release pair and either a reviewed
+prebuilt wheel or bounded build result for the source pin. It must not grant
+all uv applications generic GitHub-wheel or VCS installation authority.
 
 Each installer must meet the same semantic contract:
 
@@ -1025,8 +1064,9 @@ reviewed package-method selections:
 10. dry-run writes nothing; a concurrent lock change refuses; a clean second
     resolution preserves the original bytes and date.
 
-Live Homebrew/`uv` execution, network reads, installation, and Field Kit runs
-are later announced, on-demand gates. None is authorized by this document.
+Live Homebrew execution, real-network uv application installation, and Field
+Kit runs remain separately announced, on-demand gates. None is authorized by
+this document; the compiled uv lifecycle is exercised hermetically only.
 
 The foundation implementation covers deterministic target-adapter selection,
 declared-but-unbuilt and descriptor mismatch refusals, candidate/version
@@ -1036,7 +1076,8 @@ store transaction is also executable with injected hermetic keys and sources.
 The Homebrew provider protocol/translator and controlled non-shell process edge
 are executable. The selected `upstream-release` resolver, production HTTPS
 reader, and isolated effect member are executable and hermetically exercised.
-The bounded production catalog HTTPS source and the real release-adapter
-scratch gate are complete. Production trust/bootstrap bytes, the channel root,
-public catalog-command wiring, and the reviewed uv surface remain deliberate
-release-facing steps.
+The bounded uv resolver and isolated install/inspect/repair/remove member are
+also executable against exact wheel-only locks. The bounded production catalog
+HTTPS source and the real release-adapter scratch gate are complete. Publishing
+reviewed application recipes, the shared Homebrew effect member, and live
+engine qualification remain deliberate release-facing steps.

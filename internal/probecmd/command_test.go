@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/temper-sh/temper/internal/probecmd"
+	"github.com/temper-sh/temper/internal/runtimeconfig"
 	"github.com/temper-sh/temper/internal/software"
 	"github.com/temper-sh/temper/internal/software/installplan"
 	softwarelock "github.com/temper-sh/temper/internal/software/lockfile"
@@ -70,6 +71,139 @@ func TestServeDryRunHasNoProcessEffect(t *testing.T) {
 	}
 }
 
+func TestPlanRefusesAGenerationEngineAbsentFromTheExactReceipt(t *testing.T) {
+	fixture := materialize(t)
+	data, err := runtimeconfig.Marshal(runtimeconfig.Document{
+		Schema: runtimeconfig.SchemaV1,
+		Requirements: []runtimeconfig.Requirement{
+			{Package: "llama-swap", RelativeExecutable: "llama-swap"},
+			{Package: "rapid-mlx", RelativeExecutable: "bin/rapid-mlx"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(fixture.root, "rendered", "generations", fixture.generation, "runtime", "requirements.json")
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err = probecmd.Plan(probecmd.Options{
+		Root: fixture.root, Installation: "field-kit-qwen", SoftwareLockPath: fixture.lockPath,
+		Generation: fixture.generation, Listen: "127.0.0.1:8080",
+	})
+	if err == nil || !strings.Contains(err.Error(), `no "rapid-mlx" selection`) {
+		t.Fatalf("Plan() error = %v", err)
+	}
+}
+
+func TestPlanUsesReceiptedUVEngineFromItsExactEnvironment(t *testing.T) {
+	fixture := materialize(t)
+	lockData, err := os.ReadFile(fixture.lockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lock, err := softwarelock.Parse(lockData)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const (
+		pythonUnit = "uv:rapid-mlx:cpython"
+		engineUnit = "uv:rapid-mlx:rapid-mlx"
+	)
+	pythonArtifact := software.Artifact{Locator: "https://example.invalid/cpython.tar.gz", SHA256: strings.Repeat("1", 64), Size: 1}
+	wheelArtifact := software.Artifact{Locator: "https://example.invalid/rapid_mlx.whl", SHA256: strings.Repeat("2", 64), Size: 1}
+	lock.Selections["rapid-mlx"] = softwarelock.Selection{
+		Provenance: softwarelock.ProvenanceExperiment, Method: "python-environment", Adapter: "uv",
+		RecipeRevision: "field-kit/v1", RootUnit: engineUnit,
+	}
+	lock.Units[pythonUnit] = softwarelock.Unit{
+		Adapter: "uv", Scope: "rapid-mlx", NativeName: "cpython", Version: "3.13.7", Revision: "20260814",
+		Dependencies: []string{}, Artifacts: []software.Artifact{pythonArtifact},
+	}
+	lock.Units[engineUnit] = softwarelock.Unit{
+		Adapter: "uv", Scope: "rapid-mlx", NativeName: "rapid-mlx", Version: "0.13.3",
+		Dependencies: []string{pythonUnit}, Artifacts: []software.Artifact{wheelArtifact},
+	}
+	lockData, err = softwarelock.Marshal(lock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(fixture.lockPath, lockData, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	scopeRoot := filepath.Join(fixture.root, "software", "installations", "field-kit-qwen", "uv", "rapid-mlx")
+	generationRoot := filepath.Join(scopeRoot, "generations", "fixture")
+	environment := filepath.Join(generationRoot, "environment")
+	engine := filepath.Join(environment, "bin", "rapid-mlx")
+	if err := os.MkdirAll(filepath.Dir(engine), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(engine, []byte("fixture"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join("generations", "fixture"), filepath.Join(scopeRoot, "current")); err != nil {
+		t.Fatal(err)
+	}
+
+	store, err := receiptstore.Read(fixture.root, "field-kit-qwen")
+	if err != nil {
+		t.Fatal(err)
+	}
+	receiptDocument := store.Document
+	digest, err := lock.SemanticDigest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	receiptDocument.SoftwareLockDigest = digest
+	receiptDocument.Selections["rapid-mlx"] = receipt.Selection{
+		Provenance: softwarelock.ProvenanceExperiment, Method: "python-environment", Adapter: "uv",
+		RecipeRevision: "field-kit/v1", RootUnit: engineUnit,
+	}
+	receiptDocument.Units[pythonUnit] = receipt.Unit{
+		Adapter: "uv", Scope: "rapid-mlx", NativeName: "cpython", Version: "3.13.7", Revision: "20260814",
+		Dependencies: []string{}, Artifacts: []software.Artifact{pythonArtifact}, Location: environment, Ownership: installplan.OwnershipTemperAdded,
+	}
+	receiptDocument.Units[engineUnit] = receipt.Unit{
+		Adapter: "uv", Scope: "rapid-mlx", NativeName: "rapid-mlx", Version: "0.13.3",
+		Dependencies: []string{pythonUnit}, Artifacts: []software.Artifact{wheelArtifact}, Location: environment, Ownership: installplan.OwnershipTemperAdded,
+	}
+	if err := store.Commit(context.Background(), receiptDocument); err != nil {
+		t.Fatal(err)
+	}
+
+	requirements, err := runtimeconfig.Marshal(runtimeconfig.Document{
+		Schema: runtimeconfig.SchemaV1,
+		Requirements: []runtimeconfig.Requirement{
+			{Package: "llama-swap", RelativeExecutable: "llama-swap"},
+			{Package: "rapid-mlx", RelativeExecutable: "bin/rapid-mlx"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	requirementsPath := filepath.Join(fixture.root, "rendered", "generations", fixture.generation, "runtime", "requirements.json")
+	if err := os.WriteFile(requirementsPath, requirements, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	invocation, err := probecmd.Plan(probecmd.Options{
+		Root: fixture.root, Installation: "field-kit-qwen", SoftwareLockPath: fixture.lockPath,
+		Generation: fixture.generation, Listen: "127.0.0.1:8080",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolvedEngine, err := filepath.EvalSymlinks(engine)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := invocation.Environment; len(got) != 1 || !strings.HasPrefix(got[0], "PATH="+filepath.Dir(resolvedEngine)+string(os.PathListSeparator)) {
+		t.Fatalf("environment = %q", got)
+	}
+}
+
 func TestServeRefusesDriftAndNonLoopbackBeforeProcessEffect(t *testing.T) {
 	fixture := materialize(t)
 	tests := []struct {
@@ -112,6 +246,23 @@ func materialize(t *testing.T) fixture {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(config, []byte("models: {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	requirements, err := runtimeconfig.Marshal(runtimeconfig.Document{
+		Schema: runtimeconfig.SchemaV1,
+		Requirements: []runtimeconfig.Requirement{
+			{Package: "llama-cpp", RelativeExecutable: "llama-server"},
+			{Package: "llama-swap", RelativeExecutable: "llama-swap"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	requirementsPath := filepath.Join(root, "rendered", "generations", generation, "runtime", "requirements.json")
+	if err := os.MkdirAll(filepath.Dir(requirementsPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(requirementsPath, requirements, 0o644); err != nil {
 		t.Fatal(err)
 	}
 

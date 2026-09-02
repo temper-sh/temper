@@ -29,6 +29,7 @@ import (
 	resolveverb "github.com/temper-sh/temper/internal/resolve"
 	"github.com/temper-sh/temper/internal/software/adapter"
 	"github.com/temper-sh/temper/internal/software/adapter/upstreamrelease"
+	"github.com/temper-sh/temper/internal/software/adapter/uv"
 	"github.com/temper-sh/temper/internal/software/catalogsource"
 	"github.com/temper-sh/temper/internal/software/catalogtrust"
 	"github.com/temper-sh/temper/internal/software/catalogupdate"
@@ -413,11 +414,15 @@ func newSoftwareCommand() (softwarecmd.Command, error) {
 	if err != nil {
 		return softwarecmd.Command{}, err
 	}
-	member, err := upstreamrelease.NewInstallationAdapter(reader)
+	releaseMember, err := upstreamrelease.NewInstallationAdapter(reader)
 	if err != nil {
 		return softwarecmd.Command{}, err
 	}
-	family, err := adapter.NewInstallationFamily(member)
+	uvMember, err := uv.NewInstallationAdapter(reader, uv.PipInstaller{})
+	if err != nil {
+		return softwarecmd.Command{}, err
+	}
+	family, err := adapter.NewInstallationFamily(releaseMember, uvMember)
 	if err != nil {
 		return softwarecmd.Command{}, err
 	}
@@ -429,7 +434,7 @@ func newSoftwareCommand() (softwarecmd.Command, error) {
 	if err != nil {
 		return softwarecmd.Command{}, err
 	}
-	capabilities, err := adapter.NewRegistry(upstreamrelease.Descriptor())
+	capabilities, err := adapter.NewRegistry(upstreamrelease.Descriptor(), uv.Descriptor())
 	if err != nil {
 		return softwarecmd.Command{}, err
 	}

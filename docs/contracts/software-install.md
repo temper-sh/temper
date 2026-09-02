@@ -1,18 +1,17 @@
 # `temper software install` — exact layered software installations
 
-Status: approved installed-base surface, updated 2026-08-24. Software-lock
+Status: approved installed-base surface, revised 2026-09-02. Software-lock
 provenance, the pure installation/claim planner, strict canonical installation
 receipt/root-state
 documents and stores, and internal keyed-adapter effect orchestration are
 executable. The read-only check analyzer/reader and provenance-guided removal
 planner, retiring-authority state machine, receipt release, adapter effect
 orchestration, and recovery path are executable as well. The public verbs now
-detect the exact macOS host target and compose the first concrete isolated
-member, `upstream-release`, which resolves exact catalog assets and implements
-archive-backed install, inspection, and removal behind an injected transport.
-Locks naming another installation adapter refuse without fallback. Its real
-scratch gate now passes in a disposable root, including dry-run purity, exact
-check, and clean repeated install/remove. The canonical
+detect the exact macOS host target and compose two concrete isolated members:
+`upstream-release` for reviewed release archives and `uv` for exact managed-
+Python/wheel closures. Locks naming another installation adapter refuse
+without fallback. Their hermetic scratch gates cover dry-run purity, exact
+check, failed replacement, drift repair, and clean repeated install/remove. The canonical
 Temper-to-Field-Kit material identity binding described below is executable as
 a pure schema/builder. Field Kit owns its question-package sessions around that
 inner Temper material identity; see
@@ -84,6 +83,32 @@ validated, extracted, and synced before one atomic relative `current` symlink
 rename. A pre-commit failure leaves the prior pointer unchanged. Prepared
 receipt authority permits whole-scope repair; removal targets the scope
 directory, refuses symlinked ancestors, and cannot reach a sibling scope.
+
+The compiled `uv` adapter uses the parallel isolated shape:
+
+```text
+<installation>/uv/<scope>/
+  current -> generations/<immutable generation>
+  generations/<immutable generation>/
+    environment/                     # receipt location and runnable Python environment
+    .temper/artifacts/               # exact runtime archive and validly named wheels
+    .temper/requirements.txt         # exact versions plus every allowed wheel hash
+    .temper/unit.json                # canonical closure/artifact/tree marker
+```
+
+It accepts one uv-resolved wheel-only scope with one exact managed CPython
+runtime. The same internal archive boundary used by `upstream-release` owns
+bounded inspection, safe extraction, and canonical tree inventory; the
+adapters retain separate receipts and publication lifecycles. Runtime
+extraction rejects traversal, special files, privileged modes, duplicate paths,
+and unsafe links. Installation invokes only
+pip bundled in that locked runtime against the local retained wheelhouse with
+hashes required, dependency resolution and indexes disabled, and no ambient
+Python/package-manager settings. The environment is built at its final
+unpublished path so console-script interpreter paths remain valid, then the
+same atomic relative-pointer commit publishes it. Inspection re-hashes the
+retained artifacts and every installed file; a failed repair leaves the old
+pointer selected. Multiple uv scopes remain independent.
 
 Each lock `requires` zero or more base software-lock semantic digests. The
 caller supplies exactly one canonical receipt for every required digest with

@@ -1,6 +1,6 @@
 # `temper apply` — first native contract
 
-Status: executable pre-release contract, revised 2026-08-20.
+Status: executable pre-release contract, revised 2026-09-02.
 
 `apply` turns one reviewed manifest, one exact lock, one fully materialized
 selected mode, and optional harness bases into a complete content-addressed
@@ -51,15 +51,26 @@ The render is a pure function of:
   -> ordered artifact bytes
 ```
 
-The first schema revision supports `llama-server`, `foreground: local` and
-`foreground: none`, and the Pi harness. Unknown fields and unsupported values
-are refusals. A selected layout must have a matching lock row, exact model
-file, and every selected patch hash.
+Manifest v1 supports `llama-server`, `foreground: local` and `foreground:
+none`. Manifest v2 adds explicitly selected experimental `rapid-mlx`, raw
+`mlx-vlm`, and Apple-Silicon `vllm-metal` layouts, technical interfaces,
+modalities, and an exact foreground layout. Unknown fields and unsupported
+values are refusals. A selected layout must have a matching lock row, its
+complete exact model file set, and every selected patch hash.
+
+Engine launch construction is a closed pure family. The renderer passes
+semantic layout facts and exactly one typed engine-tuning block to the selected
+adapter; that adapter refuses unsupported combinations and maps accepted input
+into its private command builder. A shared final
+serializer owns shell quoting and the deliberate llama-swap `${PORT}`
+placeholder. No manifest value is appended as an unchecked shell fragment,
+and an unimplemented engine has no placeholder adapter.
 
 The local mode produces:
 
 ```text
 llama-swap/config.yaml
+runtime/requirements.json # always; exact receipted executables for probe
 pi/models.json          # only when Pi is selected
 pi/settings.json        # only when Pi is selected
 ```
@@ -115,6 +126,13 @@ startup preload; `preload` is a separate explicit member choice. The
 flash-attention enum preserves `auto` as distinct from `off`. The paired
 `llama.spec_type: draft-mtp` and `llama.spec_draft_n_max` fields render exact
 embedded-MTP flags; omitted fields render no speculative-decoding behavior.
+The optional nonnegative `llama.context_checkpoints` and
+`llama.prompt_cache_ram_mib` fields render `--ctx-checkpoints` and
+`--cache-ram` respectively. Omission preserves the qualified engine default;
+an explicit `prompt_cache_ram_mib: 0` is retained and disables the RAM prompt
+cache. Coder `thinking: on|off` renders through llama.cpp's supported
+`--reasoning on|off` option; the deprecated `--chat-template-kwargs`
+thinking override is never emitted.
 
 ## Deliberately outside this slice
 
@@ -123,3 +141,6 @@ embedded-MTP flags; omitted fields render no speculative-decoding behavior.
 - copying configs into consumer-owned homes;
 - kicking or querying llama-swap or launchd;
 - selecting a model, tool, harness, or mode on the user's behalf.
+- resolving or inventing a Python engine's software lock or consent; the uv
+  installer consumes only an exact caller-supplied wheel-only lock;
+- claiming experimental engine quality or observed loaded-artifact identity.

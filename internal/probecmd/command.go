@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/temper-sh/temper/internal/datadir"
+	"github.com/temper-sh/temper/internal/runtimeconfig"
 	"github.com/temper-sh/temper/internal/software/installplan"
 	"github.com/temper-sh/temper/internal/software/lockstore"
 	"github.com/temper-sh/temper/internal/software/receipt"
@@ -151,24 +152,39 @@ func Plan(options Options) (Invocation, error) {
 		return Invocation{}, fmt.Errorf("validate software receipt: %w", err)
 	}
 
-	routerLocation, err := selectionLocation(installed.Document, "llama-swap")
+	generationRoot := filepath.Join(root, "rendered", "generations", options.Generation)
+	requirementsPath := filepath.Join(generationRoot, "runtime", "requirements.json")
+	if err := regularFile(requirementsPath, false); err != nil {
+		return Invocation{}, fmt.Errorf("runtime requirements: %w", err)
+	}
+	requirementsData, err := os.ReadFile(requirementsPath)
+	if err != nil {
+		return Invocation{}, fmt.Errorf("read runtime requirements: %w", err)
+	}
+	requirements, err := runtimeconfig.Parse(requirementsData)
 	if err != nil {
 		return Invocation{}, err
-	}
-	engineLocation, err := selectionLocation(installed.Document, "llama-cpp")
-	if err != nil {
-		return Invocation{}, err
-	}
-	router, err := executableAt(root, options.Installation, routerLocation, "llama-swap")
-	if err != nil {
-		return Invocation{}, fmt.Errorf("router executable: %w", err)
-	}
-	engine, err := executableAt(root, options.Installation, engineLocation, "llama-server")
-	if err != nil {
-		return Invocation{}, fmt.Errorf("engine executable: %w", err)
 	}
 
-	config := filepath.Join(root, "rendered", "generations", options.Generation, "llama-swap", "config.yaml")
+	router := ""
+	var executableDirectories []string
+	for _, requirement := range requirements.Requirements {
+		location, err := selectionLocation(installed.Document, requirement.Package)
+		if err != nil {
+			return Invocation{}, err
+		}
+		executable, err := executableAt(root, options.Installation, location, requirement.RelativeExecutable)
+		if err != nil {
+			return Invocation{}, fmt.Errorf("package %q executable: %w", requirement.Package, err)
+		}
+		if requirement.Package == "llama-swap" {
+			router = executable
+		} else if !containsString(executableDirectories, filepath.Dir(executable)) {
+			executableDirectories = append(executableDirectories, filepath.Dir(executable))
+		}
+	}
+
+	config := filepath.Join(generationRoot, "llama-swap", "config.yaml")
 	if err := regularFile(config, false); err != nil {
 		return Invocation{}, fmt.Errorf("rendered config: %w", err)
 	}
@@ -176,7 +192,7 @@ func Plan(options Options) (Invocation, error) {
 		Path:      router,
 		Arguments: []string{"--config", config, "--listen", options.Listen},
 		Environment: []string{
-			"PATH=" + filepath.Dir(engine) + string(os.PathListSeparator) + "/usr/bin:/bin:/usr/sbin:/sbin",
+			"PATH=" + strings.Join(append(executableDirectories, "/usr/bin", "/bin", "/usr/sbin", "/sbin"), string(os.PathListSeparator)),
 		},
 	}, nil
 }
@@ -186,7 +202,7 @@ func selectionLocation(document receipt.Document, packageID string) (string, err
 	if !ok {
 		return "", fmt.Errorf("software receipt has no %q selection", packageID)
 	}
-	if selection.Adapter != "upstream-release" {
+	if selection.Adapter != "upstream-release" && selection.Adapter != "uv" {
 		return "", fmt.Errorf("software selection %q uses unsupported adapter %q", packageID, selection.Adapter)
 	}
 	unit, ok := document.Units[selection.RootUnit]
@@ -196,9 +212,9 @@ func selectionLocation(document receipt.Document, packageID string) (string, err
 	return unit.Location, nil
 }
 
-func executableAt(root, installation, location, name string) (string, error) {
-	if filepath.Base(name) != name || name == "." {
-		return "", errors.New("executable name is invalid")
+func executableAt(root, installation, location, relative string) (string, error) {
+	if relative == "" || filepath.IsAbs(relative) || filepath.Clean(relative) != relative || relative == "." || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return "", errors.New("executable relative path is invalid")
 	}
 	resolvedLocation, err := filepath.EvalSymlinks(location)
 	if err != nil {
@@ -212,7 +228,7 @@ func executableAt(root, installation, location, name string) (string, error) {
 	if !strictlyBelow(resolvedInstallationRoot, resolvedLocation) {
 		return "", errors.New("resolved installation location escapes its named installation")
 	}
-	path, err := filepath.EvalSymlinks(filepath.Join(location, name))
+	path, err := filepath.EvalSymlinks(filepath.Join(location, relative))
 	if err != nil {
 		return "", err
 	}
@@ -223,6 +239,15 @@ func executableAt(root, installation, location, name string) (string, error) {
 		return "", err
 	}
 	return path, nil
+}
+
+func containsString(values []string, wanted string) bool {
+	for _, value := range values {
+		if value == wanted {
+			return true
+		}
+	}
+	return false
 }
 
 func regularFile(path string, executable bool) error {

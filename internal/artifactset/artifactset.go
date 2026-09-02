@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -44,11 +45,12 @@ type Record struct {
 // Set is the exact artifact identity selected by one manifest layout and lock
 // entry. Its fields stay private so callers cannot weaken its invariants.
 type Set struct {
-	root     string
-	layoutID string
-	digest   string
-	model    string
-	files    []File
+	root        string
+	layoutID    string
+	digest      string
+	models      []string
+	modelTarget string
+	files       []File
 }
 
 // Inspection contains trusted local facts exposed only after the immutable
@@ -69,15 +71,20 @@ func New(root, layoutID string, layout manifest.Layout, entry lockfile.Entry, pa
 	if entry.Repo != layout.Model.Repo {
 		return Set{}, fmt.Errorf("layout %q repo drift: manifest has %q, lock has %q", layoutID, layout.Model.Repo, entry.Repo)
 	}
-	if len(entry.Files) != 1 || entry.Files[0].Name != layout.Model.File {
-		return Set{}, fmt.Errorf("layout %q selected model file drift: manifest has %q", layoutID, layout.Model.File)
+	selected := layout.ModelFiles()
+	if len(entry.Files) != len(selected) {
+		return Set{}, fmt.Errorf("layout %q selected model file set drift", layoutID)
 	}
-
-	model := filepath.ToSlash(filepath.Join("model", layout.Model.File))
-	files := []File{{
-		Path:   model,
-		SHA256: entry.Files[0].SHA256,
-	}}
+	models := make([]string, 0, len(selected))
+	files := make([]File, 0, len(selected)+1)
+	for index, name := range selected {
+		if entry.Files[index].Name != name {
+			return Set{}, fmt.Errorf("layout %q selected model file set drift at %q", layoutID, name)
+		}
+		model := filepath.ToSlash(filepath.Join("model", name))
+		models = append(models, model)
+		files = append(files, File{Path: model, SHA256: entry.Files[index].SHA256})
+	}
 	if layout.ChatTemplate == "" {
 		if len(entry.Patches) != 0 {
 			return Set{}, fmt.Errorf("layout %q selected patch drift: manifest selects no patch", layoutID)
@@ -96,7 +103,11 @@ func New(root, layoutID string, layout manifest.Layout, entry lockfile.Entry, pa
 		})
 	}
 	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
-	return Set{root: root, layoutID: layoutID, digest: entry.Digest(), model: model, files: files}, nil
+	modelTarget := "model"
+	if layout.ModelFormat() == "gguf" {
+		modelTarget = models[0]
+	}
+	return Set{root: root, layoutID: layoutID, digest: entry.Digest(), models: models, modelTarget: modelTarget, files: files}, nil
 }
 
 // Path returns the immutable artifact-set directory.
@@ -106,6 +117,12 @@ func (s Set) Path() string {
 
 // Digest returns the lock entry's content-derived artifact-set identity.
 func (s Set) Digest() string { return s.digest }
+
+// ModelPath is the exact GGUF file or complete snapshot directory passed to
+// the selected engine.
+func (s Set) ModelPath() string {
+	return filepath.Join(s.Path(), filepath.FromSlash(s.modelTarget))
+}
 
 // Files returns a defensive copy of the set's expected data files.
 func (s Set) Files() []File { return append([]File(nil), s.files...) }
@@ -207,7 +224,15 @@ func (s Set) Inspect() (Inspection, error) {
 	if err := verifyShape(target, sizes); err != nil {
 		return Inspection{}, fmt.Errorf("artifact set is malformed: %w", err)
 	}
-	return Inspection{ModelBytes: sizes[s.model]}, nil
+	var modelBytes int64
+	for _, model := range s.models {
+		size := sizes[model]
+		if size > math.MaxInt64-modelBytes {
+			return Inspection{}, errors.New("artifact model size exceeds supported range")
+		}
+		modelBytes += size
+	}
+	return Inspection{ModelBytes: modelBytes}, nil
 }
 
 // VerifyContent performs routine receipt and shape verification, then streams

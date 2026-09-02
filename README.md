@@ -296,9 +296,24 @@ go run ./cmd/temper software remove \
   --dry-run
 ```
 
-The public binary currently compiles only the reviewed `upstream-release`
-installation member. A lock naming Homebrew, uv, or another unbuilt installer
-is refused; Temper never falls back to a different method or adapter.
+The public binary compiles the reviewed isolated `upstream-release` and `uv`
+installation members. The uv member materializes only a lock-selected managed
+CPython archive and exact hashed wheel closure inside a Temper-owned immutable
+environment; it does not discover ambient Python, pip, uv, indexes, or caches.
+A shared internal archive primitive supplies the validation, safe extraction,
+and tree inventory used by both isolated members; their installed runtimes,
+receipts, and lifecycles remain independent.
+A lock naming Homebrew or another unbuilt installer is refused, and Temper
+never falls back to a different method or adapter.
+
+The renderer separately accepts experimental `temper-manifest/v2` launch
+layouts for Rapid-MLX, raw MLX-VLM, and vLLM-Metal. `probe serve` still requires
+every rendered executable in an exact matching installation receipt. Rapid-MLX
+and MLX-VLM can therefore run only after an explicitly supplied exact
+wheel-only uv software lock is installed and receipted. vLLM-Metal's paired
+GitHub release wheels and pinned source dependency do not fit that PyPI-only
+supply contract yet, so its launch contract is renderable but not yet
+materializable through Temper.
 
 Remove `--dry-run` from `apply` to create an immutable generation under that
 root. Its dry-run still requires the selected artifact sets because Temper

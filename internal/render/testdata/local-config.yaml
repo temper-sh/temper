@@ -13,13 +13,15 @@ models:
   "coder":
     name: "Coder"
     cmd: >
-      llama-server --port ${PORT}
+      llama-server --host 127.0.0.1 --port ${PORT}
       -m '/temper/artifacts/layouts/coder/dc0bf13d38e973845242c06b8a09ac72b014da701f66e925d2f716ad8a417166/model/coder.gguf'
       --offline
       --no-mmproj
       --jinja
       --parallel 1
       -c 24576
+      --ctx-checkpoints 16
+      --cache-ram 0
       -fa on
       -ctk q8_0 -ctv q8_0
       -b 512
@@ -27,12 +29,12 @@ models:
       --spec-type draft-mtp
       --spec-draft-n-max 3
       --chat-template-file '/temper/artifacts/layouts/coder/dc0bf13d38e973845242c06b8a09ac72b014da701f66e925d2f716ad8a417166/patches/sharp/template.jinja'
-      --chat-template-kwargs '{"enable_thinking":false}'
+      --reasoning off
     ttl: 7200
   "rerank-0.6b":
     name: "Reranker"
     cmd: >
-      llama-server --port ${PORT}
+      llama-server --host 127.0.0.1 --port ${PORT}
       -m '/temper/artifacts/layouts/rerank-0.6b/579042d3daa42d1299b04e528c4d985aaa9046830a46798610b03be8cbe9cd51/model/reranker.gguf'
       --offline
       --no-mmproj

@@ -45,14 +45,18 @@ func ResolveLayouts(ctx context.Context, document manifest.Document, ids []strin
 		if !ok {
 			return nil, fmt.Errorf("resolve layout %q: manifest layout does not exist", id)
 		}
-		pin, err := source.Resolve(ctx, layout.Model.Repo, layout.Model.File)
+		pin, err := resolveModel(ctx, source, layout.Model.Repo, layout.ModelFiles())
 		if err != nil {
 			return nil, fmt.Errorf("resolve layout %q: %w", id, err)
+		}
+		files := make([]lockfile.File, 0, len(pin.Files))
+		for _, file := range pin.Files {
+			files = append(files, lockfile.File{Name: file.Name, SHA256: file.SHA256})
 		}
 		entry := lockfile.Entry{
 			Repo:     layout.Model.Repo,
 			Revision: pin.Revision,
-			Files:    []lockfile.File{{Name: layout.Model.File, SHA256: pin.SHA256}},
+			Files:    files,
 			Resolved: resolvedDate,
 		}
 		if layout.ChatTemplate != "" {
@@ -78,8 +82,14 @@ func ValidateSelection(id string, layout manifest.Layout, entry lockfile.Entry) 
 	if entry.Repo != layout.Model.Repo {
 		return fmt.Errorf("layout %q repo drift: manifest has %q, lock has %q", id, layout.Model.Repo, entry.Repo)
 	}
-	if len(entry.Files) != 1 || entry.Files[0].Name != layout.Model.File {
-		return fmt.Errorf("layout %q selected model file drift: manifest has %q", id, layout.Model.File)
+	wanted := layout.ModelFiles()
+	if len(entry.Files) != len(wanted) {
+		return fmt.Errorf("layout %q selected model file set drift", id)
+	}
+	for index, file := range wanted {
+		if entry.Files[index].Name != file {
+			return fmt.Errorf("layout %q selected model file set drift at %q", id, file)
+		}
 	}
 	if layout.ChatTemplate == "" {
 		if len(entry.Patches) != 0 {
@@ -87,6 +97,45 @@ func ValidateSelection(id string, layout manifest.Layout, entry lockfile.Entry) 
 		}
 	} else if len(entry.Patches) != 1 || entry.Patches[0].Name != layout.ChatTemplate {
 		return fmt.Errorf("layout %q selected patch drift: manifest has %q", id, layout.ChatTemplate)
+	}
+	return nil
+}
+
+func resolveModel(ctx context.Context, source upstream.Reader, repo string, files []string) (upstream.SnapshotPin, error) {
+	if batch, ok := source.(upstream.SnapshotReader); ok {
+		pin, err := batch.ResolveSnapshot(ctx, repo, files)
+		if err != nil {
+			return upstream.SnapshotPin{}, err
+		}
+		if err := validateSnapshotPin(files, pin); err != nil {
+			return upstream.SnapshotPin{}, err
+		}
+		return pin, nil
+	}
+	pin := upstream.SnapshotPin{Files: make([]upstream.SnapshotFilePin, 0, len(files))}
+	for _, file := range files {
+		resolved, err := source.Resolve(ctx, repo, file)
+		if err != nil {
+			return upstream.SnapshotPin{}, err
+		}
+		if pin.Revision == "" {
+			pin.Revision = resolved.Revision
+		} else if pin.Revision != resolved.Revision {
+			return upstream.SnapshotPin{}, errors.New("repository main moved while resolving the model snapshot")
+		}
+		pin.Files = append(pin.Files, upstream.SnapshotFilePin{Name: file, SHA256: resolved.SHA256})
+	}
+	return pin, validateSnapshotPin(files, pin)
+}
+
+func validateSnapshotPin(wanted []string, pin upstream.SnapshotPin) error {
+	if pin.Revision == "" || len(pin.Files) != len(wanted) {
+		return errors.New("upstream returned an incomplete model snapshot pin")
+	}
+	for index, file := range wanted {
+		if pin.Files[index].Name != file || pin.Files[index].SHA256 == "" {
+			return fmt.Errorf("upstream model snapshot pin does not match %q", file)
+		}
 	}
 	return nil
 }

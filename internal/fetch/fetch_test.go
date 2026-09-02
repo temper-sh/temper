@@ -105,6 +105,79 @@ func TestRunPublishesExactLayoutSetAndSecondRunIsClean(t *testing.T) {
 	}
 }
 
+func TestRunPublishesEveryFileInAV2Snapshot(t *testing.T) {
+	directory := t.TempDir()
+	manifestData := `schema: temper-manifest/v2
+defaults: {ttl: 300, gpu_memory_utilization: 0.9}
+layouts:
+  large:
+    display_name: Large
+    model:
+      repo: owner/model
+      format: mlx-safetensors
+      files: [config.json, model.safetensors, tokenizer.json]
+    engine: rapid-mlx
+    interface: chat-completions
+    modalities: [text]
+    window: 32768
+    max_tokens: 4096
+    thinking: off
+    speculation: {method: none}
+    rapid_mlx:
+      max_num_seqs: 1
+      max_concurrent_requests: 1
+      prefill_batch_size: 1
+      completion_batch_size: 1
+      gpu_memory_utilization: 0.9
+      prefix_cache: off
+      kv_cache_dtype: bf16
+      pflash: off
+tools: {}
+modes:
+  local:
+    foreground: large
+    members:
+      resident: [{layout: large}]
+      on_demand: []
+`
+	manifestPath := filepath.Join(directory, "manifest.yaml")
+	if err := os.WriteFile(manifestPath, []byte(manifestData), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	values := map[string]string{"config.json": "config", "model.safetensors": "weights", "tokenizer.json": "tokens"}
+	entry := lockfile.Entry{Repo: "owner/model", Revision: modelRevision, Resolved: "2026-09-02"}
+	for _, name := range []string{"config.json", "model.safetensors", "tokenizer.json"} {
+		digest := sha256.Sum256([]byte(values[name]))
+		entry.Files = append(entry.Files, lockfile.File{Name: name, SHA256: hex.EncodeToString(digest[:])})
+	}
+	lockData, err := lockfile.Marshal(lockfile.Document{Schema: lockfile.SchemaV1, Entries: map[string]lockfile.Entry{"large": entry}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lockPath := filepath.Join(directory, "manifest.lock.yaml")
+	if err := os.WriteFile(lockPath, lockData, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sourceFiles := map[string]string{}
+	for name, value := range values {
+		sourceFiles["owner/model@"+modelRevision+"/"+name] = value
+	}
+	root := filepath.Join(directory, "root")
+	result, err := fetch.Run(context.Background(), fetch.Options{
+		ManifestPath: manifestPath, LockPath: lockPath, Root: root, Layout: "large",
+	}, &fakeSource{files: sourceFiles})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Changed || len(result.Files) != 4 {
+		t.Fatalf("result = %#v", result)
+	}
+	base := filepath.Join(root, "artifacts", "layouts", "large", entry.Digest(), "model")
+	for name, value := range values {
+		assertFile(t, filepath.Join(base, name), value)
+	}
+}
+
 func TestDryRunDoesNotDownloadOrCreateRoot(t *testing.T) {
 	directory := t.TempDir()
 	manifestPath, lockPath, _ := writeInputs(t, directory, false, "weights")

@@ -29,6 +29,8 @@ layouts:
       flash_attention: on
       batch: 512
       ubatch: 512
+      context_checkpoints: 16
+      prompt_cache_ram_mib: 0
 
   rerank-qwen3-0.6b:
     display_name: "Qwen3 reranker 0.6B"

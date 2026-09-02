@@ -9,6 +9,7 @@ import (
 	"github.com/temper-sh/temper/internal/lockfile"
 	"github.com/temper-sh/temper/internal/manifest"
 	"github.com/temper-sh/temper/internal/render"
+	"github.com/temper-sh/temper/internal/runtimeconfig"
 	"gopkg.in/yaml.v3"
 )
 
@@ -35,13 +36,14 @@ func TestBuildMapsManifestFactsToConcreteConfig(t *testing.T) {
 			name:     "coder layout owns engine and prompt tuning",
 			artifact: "llama-swap/config.yaml",
 			contains: []string{
-				"--parallel 1\n      -c 24576\n      -fa on",
+				"--parallel 1\n      -c 24576\n      --ctx-checkpoints 16\n      --cache-ram 0\n      -fa on",
 				"-ctk q8_0 -ctv q8_0",
 				"-b 512\n      -ub 512",
 				"--spec-type draft-mtp\n      --spec-draft-n-max 3",
 				"--chat-template-file '/temper/artifacts/layouts/coder/dc0bf13d38e973845242c06b8a09ac72b014da701f66e925d2f716ad8a417166/patches/sharp/template.jinja'",
-				`--chat-template-kwargs '{"enable_thinking":false}'`,
+				"--reasoning off",
 			},
+			notContain: []string{"--chat-template-kwargs"},
 		},
 		{
 			name:     "member placement owns ttl offload and routing",
@@ -108,6 +110,68 @@ func TestBuildIsDeterministic(t *testing.T) {
 	}
 }
 
+func TestBuildV2RendersEverySelectedEngineThroughItsAdapter(t *testing.T) {
+	document, err := manifest.Parse([]byte(renderV2Manifest))
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := []lockfile.File{
+		{Name: "config.json", SHA256: strings.Repeat("a", 64)},
+		{Name: "model.safetensors", SHA256: strings.Repeat("b", 64)},
+		{Name: "tokenizer.json", SHA256: strings.Repeat("c", 64)},
+	}
+	locked := lockfile.Document{Schema: lockfile.SchemaV1, Entries: map[string]lockfile.Entry{}}
+	for _, item := range []struct{ id, revision string }{{"mlx", "d"}, {"rapid", "e"}, {"vllm", "f"}} {
+		locked.Entries[item.id] = lockfile.Entry{
+			Repo: document.Layouts[item.id].Model.Repo, Revision: strings.Repeat(item.revision, 40),
+			Files: append([]lockfile.File(nil), files...), Resolved: "2026-09-02",
+		}
+	}
+	bundle, err := render.Build(render.Inputs{
+		Manifest: document, Lock: locked, Mode: "large", Root: "/temper",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := string(artifact(t, bundle, "llama-swap/config.yaml"))
+	for _, wanted := range []string{
+		"rapid-mlx --no-telemetry serve",
+		"checkEndpoint: \"/health/ready\"", "HF_HUB_OFFLINE=1",
+		"mlx_vlm.server --host 127.0.0.1 --port ${PORT}", "useModelName:",
+		"vllm serve", "VLLM_METAL_USE_PAGED_ATTENTION=1",
+	} {
+		if !strings.Contains(config, wanted) {
+			t.Errorf("config does not contain %q:\n%s", wanted, config)
+		}
+	}
+	if strings.Contains(config, "mlx_vlm.server --max-model-len") {
+		t.Fatalf("MLX-VLM received a false context flag:\n%s", config)
+	}
+
+	requirements, err := runtimeconfig.Parse(artifact(t, bundle, "runtime/requirements.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantPackages := []string{"llama-swap", "mlx-vlm", "rapid-mlx", "vllm-metal"}
+	for _, packageID := range wantPackages {
+		found := false
+		for _, requirement := range requirements.Requirements {
+			found = found || requirement.Package == packageID
+		}
+		if !found {
+			t.Errorf("runtime requirements omit %q: %#v", packageID, requirements.Requirements)
+		}
+	}
+	models := string(artifact(t, bundle, "pi/models.json"))
+	if !strings.Contains(models, `"input": [`) || !strings.Contains(models, `"image"`) {
+		t.Fatalf("Pi did not receive selected image modality:\n%s", models)
+	}
+	settings := string(artifact(t, bundle, "pi/settings.json"))
+	if !strings.Contains(settings, `"defaultModel": "rapid"`) || !strings.Contains(settings, `"reserveTokens": 16384`) {
+		t.Fatalf("Pi did not derive settings from explicit v2 foreground:\n%s", settings)
+	}
+}
+
 func TestLlamaSwapConfigGolden(t *testing.T) {
 	bundle := buildFixture(t, "local")
 	want, err := os.ReadFile("testdata/local-config.yaml")
@@ -139,8 +203,8 @@ func TestArtifactsAreSyntacticallyValid(t *testing.T) {
 
 func TestOffModeRendersAnEmptyWorld(t *testing.T) {
 	bundle := buildFixture(t, "off")
-	if len(bundle.Artifacts) != 1 {
-		t.Fatalf("off rendered %d artifacts, want only llama-swap config", len(bundle.Artifacts))
+	if len(bundle.Artifacts) != 2 {
+		t.Fatalf("off rendered %d artifacts, want config and runtime requirements", len(bundle.Artifacts))
 	}
 	config := string(artifact(t, bundle, "llama-swap/config.yaml"))
 	if !strings.Contains(config, "models: {}") {
@@ -148,6 +212,10 @@ func TestOffModeRendersAnEmptyWorld(t *testing.T) {
 	}
 	if strings.Contains(config, "routing:") || strings.Contains(config, "hooks:") {
 		t.Fatalf("off config contains live-world sections:\n%s", config)
+	}
+	requirements := string(artifact(t, bundle, "runtime/requirements.json"))
+	if !strings.Contains(requirements, `"package": "llama-swap"`) || strings.Contains(requirements, `"package": "llama-cpp"`) {
+		t.Fatalf("off runtime requirements are not router-only:\n%s", requirements)
 	}
 }
 
@@ -237,6 +305,81 @@ func artifact(t *testing.T, bundle render.Bundle, path string) []byte {
 	return nil
 }
 
+const renderV2Manifest = `schema: temper-manifest/v2
+defaults: {ttl: 1800, gpu_memory_utilization: 0.9}
+layouts:
+  rapid:
+    display_name: Rapid large
+    model:
+      repo: org/rapid
+      format: mlx-safetensors
+      files: [config.json, model.safetensors, tokenizer.json]
+    engine: rapid-mlx
+    interface: chat-completions
+    modalities: [text]
+    window: 131072
+    max_tokens: 8192
+    thinking: off
+    speculation: {method: none}
+    rapid_mlx:
+      max_num_seqs: 2
+      max_concurrent_requests: 2
+      prefill_batch_size: 1
+      completion_batch_size: 2
+      gpu_memory_utilization: 0.95
+      prefix_cache: on
+      cache_memory_mib: 0
+      kv_cache_dtype: bf16
+      pflash: off
+  mlx:
+    display_name: MLX vision
+    model:
+      repo: org/mlx
+      format: mlx-safetensors
+      files: [config.json, model.safetensors, tokenizer.json]
+    engine: mlx-vlm
+    interface: chat-completions
+    modalities: [text, image]
+    window: 65536
+    max_tokens: 4096
+    thinking: on
+    speculation: {method: none}
+    mlx_vlm:
+      max_num_seqs: 1
+      prefill_step_size: 2048
+      vision_cache_size: 8
+  vllm:
+    display_name: vLLM large
+    model:
+      repo: org/vllm
+      format: safetensors
+      files: [config.json, model.safetensors, tokenizer.json]
+    engine: vllm-metal
+    interface: chat-completions
+    modalities: [text]
+    window: 65536
+    max_tokens: 4096
+    thinking: off
+    speculation: {method: none}
+    vllm_metal:
+      max_num_seqs: 1
+      max_num_batched_tokens: 4096
+      gpu_memory_utilization: 0.9
+      kv_cache_dtype: bfloat16
+      prefix_cache: off
+tools: {}
+modes:
+  large:
+    foreground: rapid
+    harnesses: [pi]
+    members:
+      resident:
+        - {layout: rapid}
+      on_demand:
+        - {layout: mlx}
+        - {layout: vllm}
+`
+
 func parseManifest(t *testing.T) manifest.Document {
 	t.Helper()
 	document, err := manifest.Parse([]byte(manifestFixture))
@@ -274,7 +417,7 @@ layouts:
     kv: q8
     thinking: off
     chat_template: sharp
-    llama: {parallel: 1, flash_attention: on, batch: 512, ubatch: 512, spec_type: draft-mtp, spec_draft_n_max: 3}
+    llama: {parallel: 1, flash_attention: on, batch: 512, ubatch: 512, spec_type: draft-mtp, spec_draft_n_max: 3, context_checkpoints: 16, prompt_cache_ram_mib: 0}
   rerank-0.6b:
     display_name: Reranker
     model: {repo: org/Reranker, file: reranker.gguf}

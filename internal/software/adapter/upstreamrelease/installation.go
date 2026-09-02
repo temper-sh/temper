@@ -1,8 +1,6 @@
 package upstreamrelease
 
 import (
-	"archive/tar"
-	"compress/gzip"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -20,6 +18,7 @@ import (
 
 	"github.com/temper-sh/temper/internal/software"
 	"github.com/temper-sh/temper/internal/software/adapter"
+	softwarearchive "github.com/temper-sh/temper/internal/software/archive"
 	"github.com/temper-sh/temper/internal/software/installplan"
 	softwarelock "github.com/temper-sh/temper/internal/software/lockfile"
 	"github.com/temper-sh/temper/internal/software/removeplan"
@@ -336,352 +335,34 @@ type installationMarker struct {
 	Entries    []installedEntry    `json:"entries"`
 }
 
-type installedEntry struct {
-	Path   string `json:"path"`
-	Type   string `json:"type"`
-	Mode   uint32 `json:"mode"`
-	Size   int64  `json:"size,omitempty"`
-	SHA256 string `json:"sha256,omitempty"`
-	Target string `json:"target,omitempty"`
-}
-
-type archiveEntry struct {
-	installedEntry
-	source string
-}
+type installedEntry = softwarearchive.Entry
+type archiveEntry = softwarearchive.Entry
 
 func readArchiveManifest(ctx context.Context, archivePath string, artifact software.Artifact) ([]archiveEntry, error) {
-	file, err := os.Open(archivePath)
-	if err != nil {
-		return nil, fmt.Errorf("open staged release archive: %w", err)
-	}
-	defer file.Close()
-	gzipReader, err := gzip.NewReader(file)
-	if err != nil {
-		return nil, fmt.Errorf("open release gzip stream: %w", err)
-	}
-	defer gzipReader.Close()
-	tarReader := tar.NewReader(gzipReader)
-	entries := map[string]archiveEntry{}
-	var unpacked int64
-	headers := 0
-	for {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		header, err := tarReader.Next()
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
-			return nil, fmt.Errorf("read release tar stream: %w", err)
-		}
-		headers++
-		if headers > artifact.InstalledEntries+1 {
-			return nil, errors.New("release archive exceeds locked manifest bounds")
-		}
-		if header.Mode < 0 || header.Mode&0o7000 != 0 {
-			return nil, fmt.Errorf("release archive path %q has privileged mode bits", header.Name)
-		}
-		relative, included, err := archiveRelative(header.Name, artifact.ArchiveRoot, header.Typeflag == tar.TypeDir)
-		if err != nil {
-			return nil, err
-		}
-		if !included {
-			continue
-		}
-		if _, exists := entries[relative]; exists {
-			return nil, fmt.Errorf("release archive repeats path %q", relative)
-		}
-		if len(entries) >= artifact.InstalledEntries {
-			return nil, errors.New("release archive exceeds locked installed entry count")
-		}
-		entry := archiveEntry{source: header.Name}
-		entry.Path = relative
-		switch header.Typeflag {
-		case tar.TypeReg, tar.TypeRegA:
-			if header.Size < 0 || unpacked > artifact.UnpackedSize-header.Size {
-				return nil, errors.New("release archive exceeds locked unpacked size")
-			}
-			unpacked += header.Size
-			hash := sha256.New()
-			written, err := io.Copy(hash, tarReader)
-			if err != nil || written != header.Size {
-				return nil, fmt.Errorf("read release archive file %q", relative)
-			}
-			entry.Type, entry.Mode, entry.Size, entry.SHA256 = "file", normalizedFileMode(header.Mode), header.Size, hex.EncodeToString(hash.Sum(nil))
-		case tar.TypeDir:
-			if header.Size != 0 {
-				return nil, fmt.Errorf("release archive directory %q has file content", relative)
-			}
-			entry.Type, entry.Mode = "directory", 0o755
-		case tar.TypeSymlink:
-			if header.Size != 0 {
-				return nil, fmt.Errorf("release archive symlink %q has file content", relative)
-			}
-			if !safeSymlink(relative, header.Linkname) {
-				return nil, fmt.Errorf("release archive symlink %q has unsafe target %q", relative, header.Linkname)
-			}
-			entry.Type, entry.Mode, entry.Target = "symlink", 0o777, header.Linkname
-		default:
-			return nil, fmt.Errorf("release archive path %q has unsupported tar type %d", relative, header.Typeflag)
-		}
-		entries[relative] = entry
-	}
-	if unpacked != artifact.UnpackedSize {
-		return nil, fmt.Errorf("release archive unpacked size is %d, want %d", unpacked, artifact.UnpackedSize)
-	}
-	if len(entries) == 0 {
-		return nil, errors.New("release archive payload is empty")
-	}
-	var trailing [1]byte
-	if count, trailingErr := gzipReader.Read(trailing[:]); count != 0 || !errors.Is(trailingErr, io.EOF) {
-		if trailingErr != nil && !errors.Is(trailingErr, io.EOF) {
-			return nil, fmt.Errorf("finish release gzip stream: %w", trailingErr)
-		}
-		return nil, errors.New("release archive has trailing decompressed content")
-	}
-	addImplicitDirectories(entries)
-	if len(entries) != artifact.InstalledEntries {
-		return nil, fmt.Errorf("release archive installed entry count is %d, want %d", len(entries), artifact.InstalledEntries)
-	}
-	if err := validateArchiveParents(entries); err != nil {
-		return nil, err
-	}
-	result := make([]archiveEntry, 0, len(entries))
-	for _, entry := range entries {
-		result = append(result, entry)
-	}
-	sort.Slice(result, func(i, j int) bool { return result[i].Path < result[j].Path })
-	return result, nil
+	return softwarearchive.InspectTarGz(ctx, archivePath, releaseArchiveSpec(artifact))
 }
 
 func extractArchive(ctx context.Context, archivePath string, artifact software.Artifact, payloadPath string, expected []archiveEntry) error {
-	if err := os.Mkdir(payloadPath, 0o755); err != nil {
-		return fmt.Errorf("create release payload stage: %w", err)
-	}
-	byPath := make(map[string]archiveEntry, len(expected))
-	for _, entry := range expected {
-		byPath[entry.Path] = entry
-		if entry.Type == "directory" {
-			if err := os.MkdirAll(filepath.Join(payloadPath, filepath.FromSlash(entry.Path)), 0o755); err != nil {
-				return fmt.Errorf("create release archive directory %q: %w", entry.Path, err)
-			}
-		}
-	}
-	file, err := os.Open(archivePath)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	gzipReader, err := gzip.NewReader(file)
-	if err != nil {
-		return err
-	}
-	defer gzipReader.Close()
-	tarReader := tar.NewReader(gzipReader)
-	var symlinks []archiveEntry
-	for {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		header, err := tarReader.Next()
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
-			return err
-		}
-		relative, included, err := archiveRelative(header.Name, artifact.ArchiveRoot, header.Typeflag == tar.TypeDir)
-		if err != nil || !included {
-			if err != nil {
-				return err
-			}
-			continue
-		}
-		entry := byPath[relative]
-		switch entry.Type {
-		case "file":
-			destination := filepath.Join(payloadPath, filepath.FromSlash(relative))
-			if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
-				return err
-			}
-			output, err := os.OpenFile(destination, os.O_WRONLY|os.O_CREATE|os.O_EXCL, fs.FileMode(entry.Mode))
-			if err != nil {
-				return err
-			}
-			hash := sha256.New()
-			written, copyErr := io.Copy(io.MultiWriter(output, hash), tarReader)
-			syncErr, closeErr := output.Sync(), output.Close()
-			if copyErr != nil || syncErr != nil || closeErr != nil || written != entry.Size || hex.EncodeToString(hash.Sum(nil)) != entry.SHA256 {
-				return fmt.Errorf("extract release archive file %q", relative)
-			}
-		case "symlink":
-			symlinks = append(symlinks, entry)
-		}
-	}
-	for _, entry := range symlinks {
-		destination := filepath.Join(payloadPath, filepath.FromSlash(entry.Path))
-		if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
-			return err
-		}
-		if err := os.Symlink(entry.Target, destination); err != nil {
-			return fmt.Errorf("create release archive symlink %q: %w", entry.Path, err)
-		}
-	}
-	return nil
+	return softwarearchive.ExtractTarGz(ctx, archivePath, payloadPath, releaseArchiveSpec(artifact), expected)
 }
 
 func scanPayload(ctx context.Context, payloadPath string) ([]installedEntry, error) {
-	var result []installedEntry
-	err := filepath.WalkDir(payloadPath, func(current string, entry fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if current == payloadPath {
-			return nil
-		}
-		relative, err := filepath.Rel(payloadPath, current)
-		if err != nil {
-			return err
-		}
-		item := installedEntry{Path: filepath.ToSlash(relative)}
-		info, err := os.Lstat(current)
-		if err != nil {
-			return err
-		}
-		switch {
-		case info.Mode().IsRegular():
-			item.Type, item.Mode, item.Size = "file", uint32(info.Mode().Perm()), info.Size()
-			hash, err := hashFile(ctx, current)
-			if err != nil {
-				return err
-			}
-			item.SHA256 = hash
-		case info.IsDir():
-			item.Type, item.Mode = "directory", uint32(info.Mode().Perm())
-		case info.Mode()&os.ModeSymlink != 0:
-			item.Type, item.Mode = "symlink", 0o777
-			item.Target, err = os.Readlink(current)
-			if err != nil {
-				return err
-			}
-		default:
-			return fmt.Errorf("installed release path %q has unsupported file type", item.Path)
-		}
-		result = append(result, item)
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	sort.Slice(result, func(i, j int) bool { return result[i].Path < result[j].Path })
-	return result, nil
+	return softwarearchive.ScanTree(ctx, payloadPath, "installed release payload")
 }
 
-func archiveRelative(name, root string, directory bool) (string, bool, error) {
-	cleanedName := strings.TrimSuffix(name, "/")
-	for strings.HasPrefix(cleanedName, "./") {
-		cleanedName = strings.TrimPrefix(cleanedName, "./")
+func releaseArchiveSpec(artifact software.Artifact) softwarearchive.TarGzSpec {
+	return softwarearchive.TarGzSpec{
+		Root: artifact.ArchiveRoot, MaxEntries: artifact.InstalledEntries, ExactEntries: artifact.InstalledEntries,
+		MaxUnpackedBytes: artifact.UnpackedSize, ExactUnpackedBytes: artifact.UnpackedSize, Label: "release archive",
 	}
-	if cleanedName == "." && root == "." && directory {
-		return "", false, nil
-	}
-	if !safeArchivePath(cleanedName, false) {
-		return "", false, fmt.Errorf("release archive path %q is unsafe", name)
-	}
-	if root == "." {
-		return cleanedName, true, nil
-	}
-	if cleanedName == root {
-		if !directory {
-			return "", false, fmt.Errorf("release archive root %q is not a directory", root)
-		}
-		return "", false, nil
-	}
-	prefix := root + "/"
-	if !strings.HasPrefix(cleanedName, prefix) {
-		return "", false, fmt.Errorf("release archive path %q is outside archive root %q", name, root)
-	}
-	return strings.TrimPrefix(cleanedName, prefix), true, nil
 }
 
 func safeArchivePath(value string, allowDot bool) bool {
-	if value == "" || strings.HasPrefix(value, "/") || strings.Contains(value, "\\") || strings.ContainsRune(value, '\x00') || path.Clean(value) != value {
-		return false
-	}
-	if value == "." {
-		return allowDot
-	}
-	return value != ".." && !strings.HasPrefix(value, "../")
-}
-
-func safeSymlink(relative, target string) bool {
-	if target == "" || strings.HasPrefix(target, "/") || strings.Contains(target, "\\") || strings.ContainsRune(target, '\x00') {
-		return false
-	}
-	resolved := path.Clean(path.Join(path.Dir(relative), target))
-	return resolved != ".." && !strings.HasPrefix(resolved, "../") && !strings.HasPrefix(resolved, "/")
-}
-
-func normalizedFileMode(mode int64) uint32 {
-	if mode&0o111 != 0 {
-		return 0o755
-	}
-	return 0o644
-}
-
-func addImplicitDirectories(entries map[string]archiveEntry) {
-	paths := make([]string, 0, len(entries))
-	for value := range entries {
-		paths = append(paths, value)
-	}
-	for _, value := range paths {
-		for parent := path.Dir(value); parent != "."; parent = path.Dir(parent) {
-			if _, exists := entries[parent]; !exists {
-				entries[parent] = archiveEntry{installedEntry: installedEntry{Path: parent, Type: "directory", Mode: 0o755}}
-			}
-		}
-	}
-}
-
-func validateArchiveParents(entries map[string]archiveEntry) error {
-	for value, entry := range entries {
-		for parent := path.Dir(value); parent != "."; parent = path.Dir(parent) {
-			if entries[parent].Type != "directory" {
-				return fmt.Errorf("release archive path %q has non-directory parent %q", value, parent)
-			}
-		}
-		if entry.Type == "symlink" {
-			target := path.Clean(path.Join(path.Dir(value), entry.Target))
-			if _, exists := entries[target]; !exists {
-				return fmt.Errorf("release archive symlink %q targets missing path %q", value, target)
-			}
-			seen := map[string]bool{value: true}
-			for entries[target].Type == "symlink" {
-				if seen[target] {
-					return fmt.Errorf("release archive symlink %q belongs to a cycle", value)
-				}
-				seen[target] = true
-				target = path.Clean(path.Join(path.Dir(target), entries[target].Target))
-				if _, exists := entries[target]; !exists {
-					return fmt.Errorf("release archive symlink %q resolves through missing path %q", value, target)
-				}
-			}
-		}
-	}
-	return nil
+	return softwarearchive.ValidPath(value, allowDot)
 }
 
 func markerEntries(entries []archiveEntry) []installedEntry {
-	result := make([]installedEntry, len(entries))
-	for index, entry := range entries {
-		result[index] = entry.installedEntry
-	}
-	return result
+	return append([]installedEntry(nil), entries...)
 }
 
 func marshalMarker(marker installationMarker) ([]byte, error) {

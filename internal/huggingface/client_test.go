@@ -2,6 +2,8 @@ package huggingface_test
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -55,6 +57,34 @@ func TestResolveRefusesFileWithoutLFSSHA256(t *testing.T) {
 	_, err = client.Resolve(context.Background(), "owner/model", "model.gguf")
 	if err == nil || !strings.Contains(err.Error(), "no authoritative LFS SHA-256") {
 		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestResolveSnapshotPinsLFSAndHashesSmallGitFilesAtOneRevision(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/api/models/owner/model":
+			io.WriteString(writer, `{"sha":"`+testRevision+`","siblings":[{"rfilename":"config.json"},{"rfilename":"model.safetensors","lfs":{"sha256":"`+testSHA+`"}}]}`)
+		case "/owner/model/resolve/" + testRevision + "/config.json":
+			io.WriteString(writer, `{"model_type":"fixture"}`)
+		default:
+			t.Fatalf("unexpected request %q", request.URL.String())
+		}
+	}))
+	defer server.Close()
+	client, err := huggingface.New(huggingface.Config{BaseURL: server.URL, HTTPClient: server.Client()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pin, err := client.ResolveSnapshot(context.Background(), "owner/model", []string{"config.json", "model.safetensors"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256([]byte(`{"model_type":"fixture"}`))
+	wantSmall := hex.EncodeToString(digest[:])
+	if pin.Revision != testRevision || len(pin.Files) != 2 || pin.Files[0].Name != "config.json" || pin.Files[0].SHA256 != wantSmall || pin.Files[1].SHA256 != testSHA {
+		t.Fatalf("ResolveSnapshot() = %#v", pin)
 	}
 }
 

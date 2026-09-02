@@ -123,7 +123,7 @@ func Run(ctx context.Context, options Options, source upstream.Reader) (Result, 
 		if changed {
 			result.Changed = true
 			replacements[id] = newEntry
-			entryResult.Gates = gatesFor(id, document.Layouts[id].Role)
+			entryResult.Gates = gatesFor(id, document.Layouts[id].QualificationRole())
 		}
 		result.Entries = append(result.Entries, entryResult)
 	}

@@ -25,12 +25,15 @@ One layout is one commit unit:
 
 ```text
 <root>/artifacts/layouts/<layout-id>/<entry-digest>/
-  model/<selected-file>
+  model/<every-selected-file>
   patches/<patch-id>/<output-file>
   receipt.json
 ```
 
-The entry digest covers repo, revision, selected file hashes and patch hashes;
+For v1 GGUF layouts that is one file. V2 directory-backed MLX/safetensors
+layouts enumerate a complete sorted snapshot; the engine receives only that
+immutable local directory. The entry digest covers repo, revision, every
+selected file hash and patch hashes;
 the human-only `resolved` date is excluded. The renderer uses paths inside this
 immutable set.
 
