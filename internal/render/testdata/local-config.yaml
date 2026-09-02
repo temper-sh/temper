@@ -12,6 +12,8 @@ hooks:
 models:
   "coder":
     name: "Coder"
+    capabilities:
+      context: 24576
     cmd: >
       llama-server --host 127.0.0.1 --port ${PORT}
       -m '/temper/artifacts/layouts/coder/dc0bf13d38e973845242c06b8a09ac72b014da701f66e925d2f716ad8a417166/model/coder.gguf'
@@ -33,6 +35,8 @@ models:
     ttl: 7200
   "rerank-0.6b":
     name: "Reranker"
+    capabilities:
+      context: 4096
     cmd: >
       llama-server --host 127.0.0.1 --port ${PORT}
       -m '/temper/artifacts/layouts/rerank-0.6b/579042d3daa42d1299b04e528c4d985aaa9046830a46798610b03be8cbe9cd51/model/reranker.gguf'

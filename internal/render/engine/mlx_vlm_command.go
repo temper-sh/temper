@@ -32,5 +32,6 @@ func mlxVLMCommand(options mlxVLMOptions) (Command, error) {
 		Environment:   offlineEnvironment(),
 		CheckEndpoint: "/health",
 		UseModelName:  options.modelPath,
+		ContextWindow: options.contextWindow,
 	})
 }

@@ -105,6 +105,7 @@ type Runtime struct {
 	Environment   []EnvironmentAssignment
 	CheckEndpoint string
 	UseModelName  string
+	ContextWindow int
 }
 
 // Command is an exact, safely serialized command for a process supervisor.

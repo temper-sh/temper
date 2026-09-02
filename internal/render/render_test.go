@@ -36,6 +36,7 @@ func TestBuildMapsManifestFactsToConcreteConfig(t *testing.T) {
 			name:     "coder layout owns engine and prompt tuning",
 			artifact: "llama-swap/config.yaml",
 			contains: []string{
+				"capabilities:\n      context: 24576",
 				"--parallel 1\n      -c 24576\n      --ctx-checkpoints 16\n      --cache-ram 0\n      -fa on",
 				"-ctk q8_0 -ctv q8_0",
 				"-b 512\n      -ub 512",
@@ -142,6 +143,21 @@ func TestBuildV2RendersEverySelectedEngineThroughItsAdapter(t *testing.T) {
 	} {
 		if !strings.Contains(config, wanted) {
 			t.Errorf("config does not contain %q:\n%s", wanted, config)
+		}
+	}
+	var rendered struct {
+		Models map[string]struct {
+			Capabilities struct {
+				Context int `yaml:"context"`
+			} `yaml:"capabilities"`
+		} `yaml:"models"`
+	}
+	if err := yaml.Unmarshal([]byte(config), &rendered); err != nil {
+		t.Fatal(err)
+	}
+	for model, want := range map[string]int{"rapid": 131072, "mlx": 65536, "vllm": 65536} {
+		if got := rendered.Models[model].Capabilities.Context; got != want {
+			t.Errorf("model %q context capability = %d, want %d", model, got, want)
 		}
 	}
 	if strings.Contains(config, "mlx_vlm.server --max-model-len") {

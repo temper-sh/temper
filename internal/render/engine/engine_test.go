@@ -47,6 +47,7 @@ func TestBuildMapsLlamaServerSemanticsToAnExactCommand(t *testing.T) {
 	assertCommand(t, command, want, engine.Runtime{
 		Requirement:   engine.RuntimeRequirement{Package: "llama-cpp", RelativeExecutable: "llama-server"},
 		CheckEndpoint: "/health",
+		ContextWindow: 24576,
 	})
 }
 
@@ -124,7 +125,7 @@ func TestBuildMapsRapidMLXSemanticsToAnExactCommand(t *testing.T) {
 		t.Fatalf("Build() lines =\n%q\nwant\n%q", command.Lines(), want)
 	}
 	runtime := command.Runtime()
-	if runtime.Requirement.Package != engine.RapidMLX || runtime.CheckEndpoint != "/health/ready" || !hasEnvironment(runtime, "HF_HUB_OFFLINE", "1") || !hasEnvironment(runtime, "RAPID_MLX_TELEMETRY", "0") {
+	if runtime.Requirement.Package != engine.RapidMLX || runtime.CheckEndpoint != "/health/ready" || runtime.ContextWindow != 131072 || !hasEnvironment(runtime, "HF_HUB_OFFLINE", "1") || !hasEnvironment(runtime, "RAPID_MLX_TELEMETRY", "0") {
 		t.Fatalf("Build() runtime = %#v", runtime)
 	}
 }
@@ -162,6 +163,9 @@ func TestBuildMapsMLXVLMSemanticsWithoutPretendingMaxKVIsContext(t *testing.T) {
 	if command.Runtime().UseModelName != "/temper/model/vision" {
 		t.Fatalf("MLX-VLM did not pin the forwarded model name: %#v", command.Runtime())
 	}
+	if command.Runtime().ContextWindow != 65536 {
+		t.Fatalf("MLX-VLM did not preserve the advertised context contract: %#v", command.Runtime())
+	}
 }
 
 func TestBuildMapsVLLMMetalSemanticsToAnExactCommand(t *testing.T) {
@@ -195,7 +199,7 @@ func TestBuildMapsVLLMMetalSemanticsToAnExactCommand(t *testing.T) {
 		t.Fatalf("Build() lines =\n%q\nwant\n%q", command.Lines(), want)
 	}
 	runtime := command.Runtime()
-	if !hasEnvironment(runtime, "VLLM_METAL_USE_PAGED_ATTENTION", "1") || !hasEnvironment(runtime, "VLLM_NO_USAGE_STATS", "1") {
+	if runtime.ContextWindow != 65536 || !hasEnvironment(runtime, "VLLM_METAL_USE_PAGED_ATTENTION", "1") || !hasEnvironment(runtime, "VLLM_NO_USAGE_STATS", "1") {
 		t.Fatalf("Build() runtime = %#v", runtime)
 	}
 }

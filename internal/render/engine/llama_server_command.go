@@ -56,5 +56,6 @@ func llamaServerCommand(options llamaServerOptions) (Command, error) {
 	}, Runtime{
 		Requirement:   RuntimeRequirement{Package: "llama-cpp", RelativeExecutable: "llama-server"},
 		CheckEndpoint: "/health",
+		ContextWindow: options.window,
 	})
 }

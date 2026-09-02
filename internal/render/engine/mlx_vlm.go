@@ -7,6 +7,7 @@ import (
 
 type mlxVLMOptions struct {
 	modelPath       string
+	contextWindow   int
 	maxTokens       int
 	thinking        string
 	maxNumSeqs      int
@@ -25,6 +26,7 @@ func buildMLXVLM(request Request) (Command, error) {
 	tuning := *request.MLXVLM
 	return mlxVLMCommand(mlxVLMOptions{
 		modelPath:       request.ModelPath,
+		contextWindow:   request.Window,
 		maxTokens:       request.MaxTokens,
 		thinking:        request.Thinking,
 		maxNumSeqs:      tuning.MaxNumSeqs,

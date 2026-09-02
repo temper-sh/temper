@@ -191,15 +191,20 @@ func renderLlamaSwap(defaults manifest.Defaults, members []resolvedMember) ([]by
 	for _, member := range members {
 		fmt.Fprintf(&output, "  %s:\n", strconv.Quote(member.ID))
 		fmt.Fprintf(&output, "    name: %s\n", strconv.Quote(member.Layout.DisplayName))
-		output.WriteString("    cmd: >\n")
 		command, err := engine.Build(engineRequest(member))
 		if err != nil {
 			return nil, nil, fmt.Errorf("render layout %q command: %w", member.ID, err)
 		}
+		runtime := command.Runtime()
+		if runtime.ContextWindow <= 0 {
+			return nil, nil, fmt.Errorf("render layout %q command: engine omitted the effective context window", member.ID)
+		}
+		output.WriteString("    capabilities:\n")
+		fmt.Fprintf(&output, "      context: %d\n", runtime.ContextWindow)
+		output.WriteString("    cmd: >\n")
 		for _, argumentLine := range command.Lines() {
 			fmt.Fprintf(&output, "      %s\n", argumentLine)
 		}
-		runtime := command.Runtime()
 		if len(runtime.Environment) > 0 {
 			output.WriteString("    env:\n")
 			for _, assignment := range runtime.Environment {

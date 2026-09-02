@@ -293,7 +293,10 @@ replaces the renderer's inline flag assembly with a closed pure engine-launch
 family: semantic request -> owned engine adapter -> private engine command
 builder -> safely quoted llama-swap command. The llama tuning block gains
 optional context-checkpoint and prompt-cache-RAM fields, and `thinking` renders
-through llama.cpp's supported `--reasoning on|off` surface. Hermetic tests pin
+through llama.cpp's supported `--reasoning on|off` surface. The renderer also
+derives llama-swap's declared context capability from the adapter-accepted
+layout window so the selected effective window is available through
+`/v1/models`. Hermetic tests pin
 omission versus explicit zero and the complete frozen Field Kit command.
 The full Go suite and `go vet ./...` pass with the extracted launch family.
 
@@ -330,6 +333,14 @@ live service or selecting an engine for the user:
    and wheel artifacts already named by a software lock, safely extracts the
    runtime, installs the local hash-required wheelhouse without dependency
    resolution, and publishes/audits/removes one immutable isolated environment.
+
+The shared context-listing contract applies to all admitted engines. Every
+adapter returns its accepted effective window to the llama-swap renderer, which
+refuses to emit a model without one. llama-server and vLLM-Metal additionally
+map it to a native context-limit flag. Rapid-MLX and MLX-VLM advertise the
+selected window but receive no fabricated flag because their reviewed launch
+surfaces do not provide an equivalent control; MLX-VLM `max_kv_size` remains a
+separate cache-capacity setting. Adapter and render tests pin these distinctions.
 
 The engine lifecycle remains `EXPERIMENTAL`: implementation is not a quality
 claim, recommendation, installation consent, or live cutover. Runtime-backed

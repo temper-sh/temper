@@ -54,5 +54,6 @@ func rapidMLXCommand(options rapidMLXOptions) (Command, error) {
 			EnvironmentAssignment{Name: "RAPID_MLX_TELEMETRY", Value: "0"},
 		),
 		CheckEndpoint: "/health/ready",
+		ContextWindow: options.contextWindow,
 	})
 }

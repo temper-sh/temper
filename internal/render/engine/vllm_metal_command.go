@@ -42,5 +42,6 @@ func vllmMetalCommand(options vllmMetalOptions) (Command, error) {
 			EnvironmentAssignment{Name: "VLLM_NO_USAGE_STATS", Value: "1"},
 		),
 		CheckEndpoint: "/health",
+		ContextWindow: options.window,
 	})
 }

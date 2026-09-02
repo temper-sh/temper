@@ -8,6 +8,7 @@ import (
 type rapidMLXOptions struct {
 	layoutID              string
 	modelPath             string
+	contextWindow         int
 	multimodal            bool
 	maxTokens             int
 	maxNumSeqs            int
@@ -33,6 +34,7 @@ func buildRapidMLX(request Request) (Command, error) {
 	return rapidMLXCommand(rapidMLXOptions{
 		layoutID:              request.LayoutID,
 		modelPath:             request.ModelPath,
+		contextWindow:         request.Window,
 		multimodal:            len(request.Modalities) == 2,
 		maxTokens:             request.MaxTokens,
 		maxNumSeqs:            tuning.MaxNumSeqs,

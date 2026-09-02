@@ -66,6 +66,16 @@ serializer owns shell quoting and the deliberate llama-swap `${PORT}`
 placeholder. No manifest value is appended as an unchecked shell fragment,
 and an unimplemented engine has no placeholder adapter.
 
+Each engine adapter returns the validated layout `window` that it accepted.
+The shared renderer refuses an omitted value and declares it as
+`capabilities.context`, so the OpenAI-compatible `/v1/models` context metadata
+comes from the same manifest fact for every engine. llama-server and
+vLLM-Metal also receive that value through their native context-limit flags.
+The pinned Rapid-MLX and MLX-VLM launch surfaces have no equivalent flag, so
+Temper advertises the selected effective-window contract without inventing an
+engine option or confusing MLX-VLM's `max_kv_size` with context. Temper does
+not infer unrelated tool or modality capability claims.
+
 The local mode produces:
 
 ```text
