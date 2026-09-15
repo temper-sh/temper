@@ -210,3 +210,17 @@ failure-boundary tests.
 
 No fine-tuning or model evaluation was relevant. The problem was distribution,
 authority, and effect ownership rather than learned model behavior.
+
+## Additive V3 execution-lock slice (2026-09-13)
+
+Data modeling kept portable compatibility, exact release material and observed
+machine facts separate. The real Qwen install/bind/probe witness exposed a
+remaining exact-host comparison in the binding reader; a contract test now
+covers compatible locks across observed macOS versions while preserving legacy
+exact-host refusal. Code organization and unit design kept compilation pure in
+`internal/catalog`, publication in the command layer, and runtime effects in
+their existing owners. Reliable effects guided non-replacing file publication
+and exact partial-export repair; testing covered those outcomes before the
+isolated runtime witness. Field Kit consumes a public export contract rather
+than copying the graph compiler. No craft-skill change is warranted from this
+single slice; the compatibility reader incident is the concrete seam to watch.

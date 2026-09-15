@@ -50,6 +50,40 @@ func llamaServerCommand(options llamaServerOptions) (Command, error) {
 	if options.ngl != nil {
 		groups = append(groups, []commandWord{knownWord("-ngl"), knownWord(strconv.Itoa(*options.ngl))})
 	}
+	if c := options.controls; c != nil {
+		if options.maxTokens > 0 {
+			groups = append(groups, []commandWord{knownWord("--predict"), knownWord(strconv.Itoa(options.maxTokens))})
+		}
+		if c.CheckpointMinStep != nil {
+			groups = append(groups, []commandWord{knownWord("--checkpoint-min-step"), knownWord(strconv.Itoa(*c.CheckpointMinStep))})
+		}
+		groups = append(groups,
+			[]commandWord{knownWord("--cache-reuse"), knownWord(strconv.Itoa(c.CacheReuse))},
+			[]commandWord{knownWord("--reasoning-effort"), knownWord(c.ReasoningEffort)},
+			[]commandWord{knownWord(llamaBooleanFlag(c.PreserveReasoning, "--reasoning-preserve", "--no-reasoning-preserve"))},
+			[]commandWord{knownWord(llamaBooleanFlag(c.ContextShift, "--context-shift", "--no-context-shift"))},
+			[]commandWord{knownWord(llamaBooleanFlag(c.CachePrompt, "--cache-prompt", "--no-cache-prompt"))},
+			[]commandWord{knownWord("--fit"), knownWord(c.Fit)},
+			[]commandWord{knownWord("--threads"), knownWord(strconv.Itoa(c.Threads))},
+			[]commandWord{knownWord("--threads-batch"), knownWord(strconv.Itoa(c.ThreadsBatch))},
+			[]commandWord{knownWord("--load-mode"), knownWord(c.LoadMode)},
+		)
+	}
+	if s := options.sampling; s != nil {
+		for _, pair := range []struct {
+			name  string
+			value float64
+		}{
+			{"--temp", s.Temperature}, {"--top-p", s.TopP}, {"--min-p", s.MinP},
+			{"--repeat-penalty", s.RepeatPenalty}, {"--presence-penalty", s.PresencePenalty},
+		} {
+			groups = append(groups, []commandWord{knownWord(pair.name), knownWord(strconv.FormatFloat(pair.value, 'g', -1, 64))})
+		}
+		groups = append(groups,
+			[]commandWord{knownWord("--top-k"), knownWord(strconv.Itoa(s.TopK))},
+			[]commandWord{knownWord("--seed"), knownWord(strconv.Itoa(s.Seed))},
+		)
+	}
 	return commandFromLaunch(launchSpec{
 		executable:     knownWord("llama-server"),
 		argumentGroups: groups,
@@ -58,4 +92,11 @@ func llamaServerCommand(options llamaServerOptions) (Command, error) {
 		CheckEndpoint: "/health",
 		ContextWindow: options.window,
 	})
+}
+
+func llamaBooleanFlag(enabled bool, positive, negative string) string {
+	if enabled {
+		return positive
+	}
+	return negative
 }

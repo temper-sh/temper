@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	patchsource "github.com/temper-sh/temper/internal/patch"
+	"github.com/temper-sh/temper/internal/render/engine"
 	"gopkg.in/yaml.v3"
 )
 
@@ -46,22 +47,23 @@ type Patch struct {
 }
 
 type Layout struct {
-	DisplayName  string           `yaml:"display_name"`
-	Model        Model            `yaml:"model"`
-	Engine       string           `yaml:"engine"`
-	Role         string           `yaml:"role,omitempty"`
-	Interface    string           `yaml:"interface,omitempty"`
-	Modalities   []string         `yaml:"modalities,omitempty"`
-	Window       int              `yaml:"window"`
-	MaxTokens    int              `yaml:"max_tokens,omitempty"`
-	KV           string           `yaml:"kv,omitempty"`
-	Thinking     string           `yaml:"thinking,omitempty"`
-	Speculation  *Speculation     `yaml:"speculation,omitempty"`
-	ChatTemplate string           `yaml:"chat_template,omitempty"`
-	Llama        *LlamaTuning     `yaml:"llama,omitempty"`
-	RapidMLX     *RapidMLXTuning  `yaml:"rapid_mlx,omitempty"`
-	MLXVLM       *MLXVLMTuning    `yaml:"mlx_vlm,omitempty"`
-	VLLMMetal    *VLLMMetalTuning `yaml:"vllm_metal,omitempty"`
+	DisplayName  string                   `yaml:"display_name"`
+	Model        Model                    `yaml:"model"`
+	Engine       string                   `yaml:"engine"`
+	Role         string                   `yaml:"role,omitempty"`
+	Interface    string                   `yaml:"interface,omitempty"`
+	Modalities   []string                 `yaml:"modalities,omitempty"`
+	Window       int                      `yaml:"window"`
+	MaxTokens    int                      `yaml:"max_tokens,omitempty"`
+	KV           string                   `yaml:"kv,omitempty"`
+	Thinking     string                   `yaml:"thinking,omitempty"`
+	Speculation  *Speculation             `yaml:"speculation,omitempty"`
+	ChatTemplate string                   `yaml:"chat_template,omitempty"`
+	Llama        *LlamaTuning             `yaml:"llama,omitempty"`
+	RapidMLX     *RapidMLXTuning          `yaml:"rapid_mlx,omitempty"`
+	MLXVLM       *MLXVLMTuning            `yaml:"mlx_vlm,omitempty"`
+	VLLMMetal    *VLLMMetalTuning         `yaml:"vllm_metal,omitempty"`
+	Sampling     *engine.SamplingDefaults `yaml:"sampling,omitempty"`
 }
 
 type Model struct {
@@ -77,15 +79,16 @@ type Speculation struct {
 }
 
 type LlamaTuning struct {
-	KV                 string `yaml:"kv,omitempty"`
-	Parallel           int    `yaml:"parallel"`
-	FlashAttention     string `yaml:"flash_attention"`
-	Batch              int    `yaml:"batch"`
-	UBatch             int    `yaml:"ubatch"`
-	SpecType           string `yaml:"spec_type,omitempty"`
-	SpecDraftNMax      int    `yaml:"spec_draft_n_max,omitempty"`
-	ContextCheckpoints *int   `yaml:"context_checkpoints,omitempty"`
-	PromptCacheRAMMiB  *int   `yaml:"prompt_cache_ram_mib,omitempty"`
+	KV                 string                      `yaml:"kv,omitempty"`
+	Parallel           int                         `yaml:"parallel"`
+	FlashAttention     string                      `yaml:"flash_attention"`
+	Batch              int                         `yaml:"batch"`
+	UBatch             int                         `yaml:"ubatch"`
+	SpecType           string                      `yaml:"spec_type,omitempty"`
+	SpecDraftNMax      int                         `yaml:"spec_draft_n_max,omitempty"`
+	ContextCheckpoints *int                        `yaml:"context_checkpoints,omitempty"`
+	PromptCacheRAMMiB  *int                        `yaml:"prompt_cache_ram_mib,omitempty"`
+	Controls           *engine.LlamaServerControls `yaml:"controls,omitempty"`
 }
 
 type RapidMLXTuning struct {
@@ -175,6 +178,25 @@ func Parse(data []byte) (Document, error) {
 }
 
 func (d Document) Validate() error {
+	var problems []string
+	for _, id := range sortedKeys(d.Layouts) {
+		layout := d.Layouts[id]
+		if layout.Sampling != nil {
+			if layout.Engine != engine.LlamaServer {
+				problems = append(problems, fmt.Sprintf("layout %q explicit sampling requires llama-server", id))
+			} else if err := layout.Sampling.Validate(); err != nil {
+				problems = append(problems, fmt.Sprintf("layout %q: %v", id, err))
+			}
+		}
+		if layout.Llama != nil && layout.Llama.Controls != nil {
+			if err := layout.Llama.Controls.Validate(); err != nil {
+				problems = append(problems, fmt.Sprintf("layout %q: %v", id, err))
+			}
+		}
+	}
+	if len(problems) != 0 {
+		return &ValidationError{Problems: problems}
+	}
 	switch d.Schema {
 	case SchemaV1:
 		return d.validateV1()
@@ -617,8 +639,8 @@ func validateV2EngineTuning(id string, layout Layout, problem func(string, ...an
 		if tuning.PromptCacheRAMMiB != nil && *tuning.PromptCacheRAMMiB < 0 {
 			problem("layout %q llama.prompt_cache_ram_mib must be zero or greater", id)
 		}
-		if layout.Interface == "chat-completions" && tuning.KV != "q8" && tuning.KV != "f16" {
-			problem("layout %q llama.kv %q must be q8 or f16 for chat completions", id, tuning.KV)
+		if layout.Interface == "chat-completions" && tuning.KV != "q4" && tuning.KV != "q8" && tuning.KV != "f16" {
+			problem("layout %q llama.kv %q must be q4, q8 or f16 for chat completions", id, tuning.KV)
 		}
 		if layout.Interface == "reranking" && tuning.KV != "" {
 			problem("layout %q reranking interface cannot declare llama.kv", id)

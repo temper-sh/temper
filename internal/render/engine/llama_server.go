@@ -20,7 +20,10 @@ type llamaServerOptions struct {
 	specType           string
 	specDraftNMax      int
 	reasoning          string
+	maxTokens          int
 	ngl                *int
+	controls           *LlamaServerControls
+	sampling           *SamplingDefaults
 }
 
 func buildLlamaServer(request Request) (Command, error) {
@@ -42,6 +45,8 @@ func buildLlamaServer(request Request) (Command, error) {
 		specType:           request.Speculation,
 		specDraftNMax:      request.SpeculativeTokens,
 		ngl:                request.NGL,
+		controls:           request.LlamaServer.Controls,
+		sampling:           request.Sampling,
 	}
 	if options.specType == "mtp" {
 		options.specType = "draft-mtp"
@@ -50,8 +55,12 @@ func buildLlamaServer(request Request) (Command, error) {
 	}
 	if request.Interface == InterfaceChatCompletions {
 		options.reasoning = request.Thinking
+		options.maxTokens = request.MaxTokens
 		options.kv = "f16"
-		if request.KVCache == "q8" {
+		switch request.KVCache {
+		case "q4":
+			options.kv = "q4_0"
+		case "q8":
 			options.kv = "q8_0"
 		}
 	}
@@ -90,6 +99,16 @@ func validateLlamaServerRequest(request Request) error {
 	if request.NGL != nil && *request.NGL < 0 {
 		return errors.New("llama-server ngl must be zero or greater")
 	}
+	if c := tuning.Controls; c != nil {
+		if err := c.Validate(); err != nil {
+			return err
+		}
+	}
+	if s := request.Sampling; s != nil {
+		if err := s.Validate(); err != nil {
+			return err
+		}
+	}
 
 	switch request.Speculation {
 	case "none":
@@ -112,8 +131,8 @@ func validateLlamaServerRequest(request Request) error {
 		if request.MaxTokens <= 0 || request.MaxTokens >= request.Window {
 			return errors.New("llama-server coder max tokens must be greater than zero and below window")
 		}
-		if request.KVCache != "q8" && request.KVCache != "f16" {
-			return fmt.Errorf("llama-server KV cache %q must be q8 or f16", request.KVCache)
+		if request.KVCache != "q4" && request.KVCache != "q8" && request.KVCache != "f16" {
+			return fmt.Errorf("llama-server KV cache %q must be q4, q8 or f16", request.KVCache)
 		}
 		if request.Thinking != "on" && request.Thinking != "off" {
 			return fmt.Errorf("llama-server coder thinking %q must be on or off", request.Thinking)

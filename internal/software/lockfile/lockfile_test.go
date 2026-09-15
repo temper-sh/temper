@@ -5,9 +5,47 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/temper-sh/temper/internal/software"
 	"github.com/temper-sh/temper/internal/software/catalog"
 	softwarelock "github.com/temper-sh/temper/internal/software/lockfile"
 )
+
+func TestPortableTargetIsExplicitAndChangesLockIdentity(t *testing.T) {
+	document, err := softwarelock.Parse(validLock(strings.Repeat("d", 64)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	document.Target = software.Target{OS: "darwin", Arch: "arm64"}
+	host := software.Target{OS: "darwin", Arch: "arm64", Distribution: "macos", DistributionVersion: "26.6.1"}
+	if document.SupportsHost(host) {
+		t.Fatal("old exact lock silently gained portable semantics")
+	}
+	exact, err := document.SemanticDigest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	document.TargetMode = "compatible"
+	if !document.SupportsHost(host) {
+		t.Fatal("explicit portable lock rejected compatible host")
+	}
+	if document.SupportsHost(software.Target{OS: "linux", Arch: "arm64"}) {
+		t.Fatal("portable lock accepted another OS")
+	}
+	if document.SupportsHost(software.Target{OS: "darwin", Arch: "amd64"}) {
+		t.Fatal("portable lock accepted another architecture")
+	}
+	portable, err := document.SemanticDigest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if portable == exact {
+		t.Fatal("target compatibility did not enter lock identity")
+	}
+	document.Target = host
+	if err := document.Validate(); err == nil {
+		t.Fatal("portable lock accepted observed host distribution fields")
+	}
+}
 
 func TestParseAndValidateAgainstExactCatalogSnapshot(t *testing.T) {
 	catalogBytes := validCatalog()

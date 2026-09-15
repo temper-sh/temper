@@ -6,8 +6,8 @@ to run.
 
 **Alpha (September 2026):** Temper is usable today by collaborators with a
 reviewed configuration file or Field Kit experiment. It is not yet a general
-setup tool: the guided model-selection wizard and the first public Field Kit
-experiment are still in development.
+setup tool: the guided model-selection wizard is still in development and
+Field Kit questions are in qualification.
 
 ## Why this is useful
 
@@ -117,6 +117,10 @@ status and refusal rules.
 will present one bounded question, disclose the exact time, storage, network,
 and cleanup effects, record consent, and use Temper for machine facts,
 installation, artifact checks, rendering, and an isolated model process.
+For experiments that require an exact rendered token count, Field Kit can also
+ask Temper to run the tokenizer from the receipted llama.cpp installation
+against the manifest-locked model. Temper returns token IDs; Field Kit still
+owns prompt construction, probe placement, grading, and search policy.
 
 Field Kit owns questions, sessions, protocols, evidence, reports, and cleanup
 choices. Temper owns the stable machine and runtime primitives beneath them.
@@ -124,10 +128,10 @@ Keeping the two releases separate lets an experiment improve without changing
 the installer, while the exact Temper binary and installed material remain
 part of every run's identity.
 
-No participant question is public yet. Until one completes qualification,
-installing Temper lets you inspect the machine and use reviewed explicit
-workflows, but it does not offer a ready-made model experiment or choose a
-setup for you.
+Temper `0.1.0-alpha.7` supplies the execution-lock commands required by the
+[Field Kit collaborator alpha](https://github.com/temper-sh/field-kit).
+Its experiments require an explicit qualification plan and machine-owner
+consent. No question has completed external-machine qualification yet.
 
 ## Learn more
 

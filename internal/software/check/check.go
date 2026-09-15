@@ -56,7 +56,7 @@ func Run(ctx context.Context, options Options, adapters adapter.InstallationFami
 		return Result{}, fmt.Errorf("software lock %q does not exist", options.LockPath)
 	}
 	desired := desiredSnapshot.Document
-	if options.HostTarget != (software.Target{}) && desired.Target != options.HostTarget {
+	if options.HostTarget != (software.Target{}) && !desired.SupportsHost(options.HostTarget) {
 		return Result{}, fmt.Errorf("software lock target %s does not match host target %s", desired.Target, options.HostTarget)
 	}
 	effectModels, err := adapters.EffectModels(desired)

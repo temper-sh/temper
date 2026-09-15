@@ -21,7 +21,16 @@ discovery, disclosure, consent, sessions, protocols, evidence, and cleanup;
 Temper supplies stable machine/install/check/bind/probe primitives (ownership
 revised by owner 2026-08-28). Labs remains the only editable investigation source.
 
-The manifest file is **`manifest.yaml`** with **`manifest.lock.yaml`**
+An additive local V3 path, implemented 2026-09-13, accepts an explicitly supplied
+catalog and selection and compiles a self-contained execution lock. Its five
+records are Artifact, Patch, Engine, Layout and Profile; Results retains public
+portfolio assessment. [The execution-lock contract](contracts/execution-lock.md)
+owns this narrow compiler/export surface and the refreshed llama-server controls.
+It feeds the existing primitives and does not replace their manifest workflow,
+publish a catalog, or activate a service. Signed catalog selection and broader
+engine closures remain separate work.
+
+The existing manifest file is **`manifest.yaml`** with **`manifest.lock.yaml`**
 beside it (decided 2026-08-14: it carries the whole wizard selection —
 tools, harness integrations and mode bindings, not just models — so
 `models.yaml` misnamed it; the legacy repo's `models.yaml` keeps its name).
@@ -712,7 +721,11 @@ Lifecycle:
   retains evidence, and performs marker-guarded cleanup. The narrow
   `temper probe serve` command starts one exact receipt-bound,
   generation-bound, loopback-only foreground router for a Field Kit stage; it
-  does not choose a probe or own production service state. Temper installs the
+  does not choose a probe or own production service state. The sibling
+  `temper probe tokenize` command admits the tokenizer from one exact software
+  receipt and one manifest-locked GGUF, reads rendered prompt bytes from
+  standard input, and returns canonical token IDs without starting inference.
+  It owns no prompt, grading, or search policy. Temper installs the
   exact locked basic requirements and exposes the reversible base the field
   kit consumes — canonical machine facts, provenance, llama-swap and basic
   dependencies, isolated profile rendering, scoped service lifecycle,

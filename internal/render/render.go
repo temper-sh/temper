@@ -281,6 +281,7 @@ func engineRequest(member resolvedMember) engine.Request {
 		RapidMLX:          rapidMLXTuning(layout.RapidMLX),
 		MLXVLM:            mlxVLMTuning(layout.MLXVLM),
 		VLLMMetal:         vllmMetalTuning(layout.VLLMMetal),
+		Sampling:          layout.Sampling,
 	}
 }
 
@@ -292,6 +293,7 @@ func llamaServerTuning(tuning *manifest.LlamaTuning) *engine.LlamaServerTuning {
 		Parallel: tuning.Parallel, FlashAttention: tuning.FlashAttention,
 		Batch: tuning.Batch, UBatch: tuning.UBatch, ContextCheckpoints: tuning.ContextCheckpoints,
 		PromptCacheRAMMiB: tuning.PromptCacheRAMMiB,
+		Controls:          tuning.Controls,
 	}
 }
 

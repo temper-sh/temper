@@ -3,6 +3,8 @@ package probecmd_test
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -10,6 +12,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/temper-sh/temper/internal/artifactset"
+	"github.com/temper-sh/temper/internal/lockfile"
+	"github.com/temper-sh/temper/internal/manifest"
 	"github.com/temper-sh/temper/internal/probecmd"
 	"github.com/temper-sh/temper/internal/runtimeconfig"
 	"github.com/temper-sh/temper/internal/software"
@@ -22,6 +27,19 @@ import (
 type recordingRunner struct {
 	called     bool
 	invocation probecmd.Invocation
+}
+
+type tokenizerRunner struct {
+	called     bool
+	invocation probecmd.Invocation
+	output     string
+}
+
+func (r *tokenizerRunner) Run(_ context.Context, invocation probecmd.Invocation, stdout, _ io.Writer) error {
+	r.called = true
+	r.invocation = invocation
+	_, _ = io.WriteString(stdout, r.output)
+	return nil
 }
 
 func (r *recordingRunner) Run(_ context.Context, invocation probecmd.Invocation, _, _ io.Writer) error {
@@ -68,6 +86,51 @@ func TestServeDryRunHasNoProcessEffect(t *testing.T) {
 	}, &stdout, &stderr)
 	if exit != 0 || runner.called || stderr.Len() != 0 || !strings.Contains(stdout.String(), "ready-to-start") {
 		t.Fatalf("exit=%d called=%v stdout=%q stderr=%q", exit, runner.called, stdout.String(), stderr.String())
+	}
+}
+
+func TestTokenizeUsesReceiptedBinaryAndLockedGGUF(t *testing.T) {
+	fixture := materialize(t)
+	model := materializeTokenizerInputs(t, fixture)
+	runner := &tokenizerRunner{output: "[101,202]\n"}
+	command, err := probecmd.NewWithInput(runner, bytes.NewReader([]byte("exact rendered prompt")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	exit := command.Run(context.Background(), []string{
+		"tokenize", "--root", fixture.root, "--installation", "field-kit-qwen",
+		"--software-lock", fixture.lockPath, "--manifest", model.manifestPath,
+		"--lock", model.lockPath, "--layout", "qwen-exact",
+	}, &stdout, &stderr)
+	if exit != 0 || stderr.Len() != 0 || !runner.called {
+		t.Fatalf("exit=%d called=%v stdout=%q stderr=%q", exit, runner.called, stdout.String(), stderr.String())
+	}
+	if stdout.String() != "[101,202]\n" || string(runner.invocation.Input) != "exact rendered prompt" {
+		t.Fatalf("stdout=%q input=%q", stdout.String(), runner.invocation.Input)
+	}
+	if runner.invocation.Path != model.tokenizer {
+		t.Fatalf("tokenizer path = %q, want %q", runner.invocation.Path, model.tokenizer)
+	}
+	wantArguments := "-m " + model.model + " --stdin --ids --no-bos --offline --log-disable"
+	if strings.Join(runner.invocation.Arguments, " ") != wantArguments {
+		t.Fatalf("arguments = %q, want %q", runner.invocation.Arguments, wantArguments)
+	}
+}
+
+func TestTokenizeRefusesNonJSONArrayOutput(t *testing.T) {
+	fixture := materialize(t)
+	model := materializeTokenizerInputs(t, fixture)
+	runner := &tokenizerRunner{output: "token 101\n"}
+	command, _ := probecmd.NewWithInput(runner, strings.NewReader("prompt"))
+	var stdout, stderr bytes.Buffer
+	exit := command.Run(context.Background(), []string{
+		"tokenize", "--root", fixture.root, "--installation", "field-kit-qwen",
+		"--software-lock", fixture.lockPath, "--manifest", model.manifestPath,
+		"--lock", model.lockPath, "--layout", "qwen-exact",
+	}, &stdout, &stderr)
+	if exit != 1 || stdout.Len() != 0 || !strings.Contains(stderr.String(), "invalid token IDs") {
+		t.Fatalf("exit=%d stdout=%q stderr=%q", exit, stdout.String(), stderr.String())
 	}
 }
 
@@ -231,6 +294,93 @@ func TestServeRefusesDriftAndNonLoopbackBeforeProcessEffect(t *testing.T) {
 
 type fixture struct {
 	root, lockPath, generation, config, router, engine string
+}
+
+type tokenizerFixture struct {
+	manifestPath, lockPath, model, tokenizer string
+}
+
+func materializeTokenizerInputs(t *testing.T, fixture fixture) tokenizerFixture {
+	t.Helper()
+	tokenizer := filepath.Join(filepath.Dir(fixture.engine), "llama-tokenize")
+	if err := os.WriteFile(tokenizer, []byte("fixture tokenizer"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	workspace := filepath.Dir(fixture.lockPath)
+	manifestPath := filepath.Join(workspace, "manifest.yaml")
+	manifestData := []byte(`schema: temper-manifest/v1
+defaults:
+  ttl: 1800
+  gpu_memory_utilization: 0.85
+layouts:
+  qwen-exact:
+    display_name: Exact Qwen fixture
+    model:
+      repo: example/Qwen
+      file: model.gguf
+    engine: llama-server
+    role: coder
+    window: 4096
+    max_tokens: 512
+    kv: q8
+    thinking: off
+    llama:
+      parallel: 1
+      flash_attention: on
+      batch: 512
+      ubatch: 512
+modes:
+  field-kit:
+    foreground: local
+    tools: []
+    harnesses: []
+    members:
+      resident:
+        - layout: qwen-exact
+          preferred: true
+      on_demand: []
+`)
+	if err := os.WriteFile(manifestPath, manifestData, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	document, err := manifest.Parse(manifestData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	modelData := []byte("fixture model")
+	modelHash := fmt.Sprintf("%x", sha256.Sum256(modelData))
+	entry := lockfile.Entry{
+		Repo: "example/Qwen", Revision: strings.Repeat("1", 40), Resolved: "2026-09-02",
+		Files: []lockfile.File{{Name: "model.gguf", SHA256: modelHash}},
+	}
+	modelLock := lockfile.Document{Schema: lockfile.SchemaV1, Entries: map[string]lockfile.Entry{"qwen-exact": entry}}
+	lockData, err := lockfile.Marshal(modelLock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lockPath := filepath.Join(workspace, "manifest.lock.yaml")
+	if err := os.WriteFile(lockPath, lockData, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	set, err := artifactset.New(fixture.root, "qwen-exact", document.Layouts["qwen-exact"], entry, document.Patches)
+	if err != nil {
+		t.Fatal(err)
+	}
+	model := set.ModelPath()
+	if err := os.MkdirAll(filepath.Dir(model), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(model, modelData, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	receiptData, err := set.Receipt([]artifactset.Record{{Path: "model/model.gguf", SHA256: modelHash, Size: int64(len(modelData))}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(set.Path(), "receipt.json"), receiptData, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return tokenizerFixture{manifestPath: manifestPath, lockPath: lockPath, model: model, tokenizer: tokenizer}
 }
 
 func materialize(t *testing.T) fixture {

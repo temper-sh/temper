@@ -70,6 +70,8 @@ check, removal, or catalog policy.
 
 | Operation | Orchestrator | Decisions and schemas | Reads/effects | Contract |
 |---|---|---|---|---|
+| `temper catalog compile` | `internal/catalogcmd` | `catalog`: five records, selection, closure, scoped digests and execution lock | explicit local file reads; atomic lock publication without replacement | `docs/contracts/execution-lock.md` |
+| `temper execution export` | `internal/catalogcmd` | `catalog`: self-contained lock validation and compatibility projections | exact derived input publication; idempotent partial-export recovery | `docs/contracts/execution-lock.md` |
 | `temper resolve` | `internal/resolve` | `manifest`, `lockfile`, `pinning` | `upstream`/`huggingface`; `lockstore` atomic commit | `docs/contracts/resolve.md` |
 | `temper update` | `internal/update` | `manifest`, `lockfile`, `pinning`, update gates | `upstream`/`huggingface`; `lockstore` atomic commit | `docs/contracts/update.md` |
 | `temper fetch` | `internal/fetch` | `manifest`, `lockfile`, `artifactset`, `patch` | upstream byte reads; immutable artifact-set publication | `docs/contracts/fetch.md` |
@@ -80,6 +82,7 @@ check, removal, or catalog policy.
 | `temper software check` | `software/check` through `softwarecmd` | `software/lockfile`, `checkplan`, `receipt`, `rootstate` | stores and provider inspection; no writes | `docs/contracts/software-install.md` |
 | `temper software remove` | `software/remove` through `softwarecmd` | `software/lockfile`, `removeplan`, `receipt`, `rootstate` | prepared authority, compiled adapter removal, receipt/state commits | `docs/contracts/software-install.md` |
 | `temper probe serve` | `internal/probecmd` | exact software receipt/lock and rendered-generation admission | foreground loopback process group; dry-run is read-only | `docs/contracts/probe-serve.md` |
+| `temper probe tokenize` | `internal/probecmd` | exact software receipt/lock and manifest-locked GGUF admission | one offline tokenizer subprocess; reads prompt bytes from stdin | `docs/contracts/probe-tokenize.md` |
 | `temper field-kit bind` | `internal/fieldkitcmd` + `internal/fieldkitbinding` | manifest/software locks, receipts, canonical machine facts | explicitly named Temper state; pure binding after reads | `docs/contracts/field-kit.md` |
 | Qualification documents | `internal/qualification` | exact references/index, common profile/evidence envelope, canonical witness-scope keys, independent immutable qualification/lifecycle transitions, machine buckets, model artifacts, engines, model runtimes/performance, tools, modes, activities, and exact bundle loading | read-only reuse of software-supply target/catalog constants; callers supply index/document bytes and canonical facts, and all parsing, hashing, validation, loading, transition/composition checks, and matching are pure | `docs/design/qualification-catalog-schema.md` |
 
@@ -114,7 +117,7 @@ it is executable in a test.
 |---|---|---|
 | `internal/fieldkitcmd` | stable command edge | reads explicitly named Temper material and emits the canonical binding |
 | `internal/fieldkitbinding` | pure identity | exact executing material across machine, binary, locks, receipts, and rendered generation |
-| `internal/probecmd` | controlled effect boundary | admission and process-group lifecycle for one exact receipt/generation-bound loopback router |
+| `internal/probecmd` | controlled effect boundary | admission and process lifecycle for one exact receipt/generation-bound loopback router or one exact receipt/model-bound offline tokenizer |
 | `internal/releaseartifact` | pure release document | strict release SemVer, deterministic ZIP names/order/modes/timestamps/checksum, and stable third-party notice rendering |
 
 Current Field Kit source and runtime live in the adjacent repository and call

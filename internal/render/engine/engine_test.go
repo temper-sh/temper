@@ -86,6 +86,30 @@ func TestBuildMapsRerankingSemanticsToAnExactCommand(t *testing.T) {
 	}
 }
 
+func TestBuildMapsKVCacheFormatToBothKeyAndValue(t *testing.T) {
+	for _, test := range []struct{ selected, native string }{
+		{"q4", "q4_0"}, {"q8", "q8_0"}, {"f16", "f16"},
+	} {
+		t.Run(test.selected, func(t *testing.T) {
+			request := validLlamaServerRequest()
+			request.KVCache = test.selected
+			command, err := engine.Build(request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := "-ctk " + test.native + " -ctv " + test.native
+			if !strings.Contains(strings.Join(command.Lines(), "\n"), want) {
+				t.Fatalf("Build() = %q, want %q", command.Lines(), want)
+			}
+		})
+	}
+	request := validLlamaServerRequest()
+	request.KVCache = "q5"
+	if _, err := engine.Build(request); err == nil {
+		t.Fatal("unsupported KV cache format was accepted")
+	}
+}
+
 func TestBuildMapsRapidMLXSemanticsToAnExactCommand(t *testing.T) {
 	cache := 0
 	request := engine.Request{

@@ -13,6 +13,7 @@ A Field Kit release may compose only these public Temper commands:
 
 ```text
 temper machine facts
+temper execution export --lock PATH --out PATH --json
 temper software install --root PATH --installation ID --lock PATH
 temper software check --root PATH --installation ID --lock PATH
 temper software remove --root PATH --installation ID --lock PATH
@@ -23,12 +24,19 @@ temper field-kit bind --root PATH --manifest-lock PATH --generation SHA256 \
   --installation ID=SOFTWARE_LOCK
 temper probe serve --root PATH --installation ID --software-lock PATH \
   --generation SHA256 --listen LOOPBACK
+temper probe tokenize --root PATH --installation ID --software-lock PATH \
+  --manifest PATH --lock PATH --layout ID < rendered-prompt.bin
 ```
 
 Their existing contracts remain authoritative. In summary:
 
 - `machine facts` is a read-only canonical `temper-machine-facts/v1`
   document.
+- `execution export` is the additive development preparation surface described
+  in [the execution-lock contract](execution-lock.md). It validates a shipped
+  self-contained lock and returns exact derived inputs for the existing
+  primitives. Field Kit does not compile catalog facts in Python. Released
+  question revisions keep their existing inputs and minimum Temper versions.
 - software install/check/remove accepts a complete exact lock, operates only
   below the explicit Temper root, and uses receipts and ownership claims.
 - fetch/apply/check operate on exact manifests and locks below the explicit
@@ -37,6 +45,9 @@ Their existing contracts remain authoritative. In summary:
   machine facts, locks, receipts, and rendered generation.
 - probe serve admits one receipt-bound generation and owns one foreground,
   loopback-only process group. It does not choose or interpret a protocol.
+- probe tokenize admits the exact receipted llama.cpp tokenizer and immutable
+  GGUF selected by a manifest lock, then returns canonical token IDs for caller
+  bytes without loading an inference server or choosing a context target.
 
 Field Kit invokes exact argv directly. It must not use a shell, infer the live
 legacy root, call an internal package, or parse human prose when a stable

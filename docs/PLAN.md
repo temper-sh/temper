@@ -1,5 +1,13 @@
 # Temper — execution plan
 
+V3 consolidation note (2026-09-03): the current implementation and live-safety
+constraints in this file remain authoritative until cutover. New V3 product
+engineering follows Local AI V3's
+[`REQUIREMENTS.md`](../../v3/REQUIREMENTS.md) and the additive catalog section
+below. The older milestone material is retained as implementation history and
+current-path safety, not as a requirement to reproduce its qualification,
+promotion, mode, or registry architecture in the reset.
+
 Created 2026-08-14. This is the product repository's working plan: what gets
 built, in what order, where each piece is developed, and what gates it.
 Sources: [SPEC.md](SPEC.md) (the adopted product spec, milestones M0–M5),
@@ -353,6 +361,80 @@ probes remain separate required product work where they are not already
 present; the launch surface reports those gaps rather than falling back to
 ambient software.
 
+#### Additive V3 catalog and execution-lock proof
+
+Implemented locally on 2026-09-13 and updated on 2026-09-15 under the owner's
+Qwen refresh and overnight optimization request.
+The current product-engineering input is
+the consolidated Local AI V3
+[`REQUIREMENTS.md`](../../v3/REQUIREMENTS.md#runtime-vocabulary-and-catalog),
+with sequence in its [`PLAN.md`](../../v3/PLAN.md#prove-the-temper-catalog-and-engine-closures-additively)
+and detailed specimens in [`docs/design/v3-catalog-plan.md`](design/v3-catalog-plan.md).
+
+The [execution-lock contract](contracts/execution-lock.md) now exposes local
+`catalog compile` and `execution export` commands. Artifact, Patch, Engine,
+Layout and Profile records compile into a self-contained selected closure,
+with separate record, material and execution digests. The first slice supports
+exact llama.cpp/macOS ARM64 archives and text chat, with no speculation or
+embedded MTP; incomplete Rapid closures and unsupported adapters are refused.
+Existing install, fetch, apply, check, binding and probe commands consume four
+derived compatibility inputs. Typed sampling and explicit llama controls retain
+the measured settings without caller-authored shell fragments.
+
+The Qwen refresh exercised an isolated non-thinking Q4/MTP specimen through
+software install/check, artifact fetch, apply/check, unchanged replay, material
+binding, exact tokenization and a loopback inference request. The portable-target
+test exposed an old exact-host comparison in Field Kit binding; it now uses the
+software lock's explicit compatibility mode while retaining actual machine facts
+and exact receipt validation. The original exact-host mode remains unchanged.
+The live llama-swap process was observed unchanged across the witness.
+
+The [maintained specimen](../catalog/qwen38-m5-refresh.json) selects the
+15 September medium-thinking Q4/Frog v22.5 baseline on llama.cpp v0.4.1/b10964.
+It retains 14 checkpoints at explicit minimum spacing 8,192, uses 2,048 MiB of
+extra RAM cache, and omits prior reasoning while keeping delivered answers.
+The optional typed `checkpoint_min_step` preserves omission versus explicit
+zero through compile, lock, export and rendering; negative values are refused.
+For explicit llama controls, the profile's output limit now reaches the native
+server as `--predict`, so a request without an output override receives the
+declared 4,096-token budget. Explicit requests can still override it.
+
+The new isolated witness passed exact rendered-setting comparison,
+install/check, fetch, apply/verify, unchanged replay, binding and receipt-bound
+tokenization. A no-override request confirmed the active 4,096-token budget and
+sampling defaults; native history rendering confirmed omitted prior reasoning.
+The running native executable and arguments matched the measured composition,
+apart from research trace verbosity. The first probe expected a trace line at
+normal logging and failed; its observation remains preserved separately from
+the corrected witness. Both owned probes exited cleanly with no additional
+swap or safety stop, and the live router and configuration were unchanged.
+The final Go 1.27.1 `go test -race ./...` run and build passed. Recompilation
+reproduced Field Kit's checked-in lock byte-for-byte.
+
+Field Kit ships that compiled lock as maintainer preparation and has a
+Python-free static-runtime bootstrap alongside the existing path. The prepared
+installation and tools remain in `~/.local/share/temper-qwen38-refresh-2026-09-13/`;
+the new installation is `qwen-optimized-2026-09-15`, with `bin/temper-optimized`
+and `inputs-2026-09-15/`. The prior binary, inputs, software installation and
+runtime generation remain available, with both compiled locks archived by hash.
+The local README provides verification and isolated-probe commands.
+The [refresh investigation](../../v3/labs/workstreams/qwen-baseline-refresh/README.md)
+owns the measured capability and context results; product smoke checks do not
+establish model quality or machine fit.
+
+The additive V3 command surface is included in `0.1.0-alpha.7`. Participant qualification on applicable
+hardware, broader engine closures and any live-service cutover remain separate
+work. Results retains portfolio ownership; no extra Qualification record or
+retirement of an existing runtime path is required for this local proof.
+
+The V3 Field Kit machine-package extraction on 2026-09-15 exposed a missing
+typed Q4 KV-cache path. The llama adapter and manifest-v2 validator now accept
+`q4`, rendering `q4_0` for both K and V. Focused race tests cover rendering and
+the compiled-lock/exported-manifest round trip; Field Kit's updated runner
+compiled/exported all 18 allowed context/cache variants. b10964's native help
+lists both Q4 options. This is parser and preparation evidence; no Q4 model run,
+external-machine qualification or live-service change occurred in this update.
+
 ### M2 — software supply catalog + Field Kit execution base
 
 **Goal:** a consenting Mac can resolve, install, identify, verify, and remove
@@ -564,14 +646,16 @@ base.
 6. *(design + build, revised and complete 2026-08-28)* Freeze C10 as the
    reusable Temper host: canonical machine facts, software installation,
    model fetch/verification, isolated rendering, material binding, foreground
-   process admission, checks, and scoped removal. Field Kit independently owns
+   process admission, receipt-bound offline tokenization, checks, and scoped
+   removal. Field Kit independently owns
    catalog validation, applicability, disclosure, consent, sessions, protocol
    dispatch, evidence, reports, export, and marker-guarded cleanup. Labs alone
    promotes source work under C12. Temper contains no Field Kit catalog,
    question package, session, or protocol runtime.
 
    The Temper-side surface is approved and concrete in
-   `docs/contracts/software-install.md`: the `temper software install`
+   `docs/contracts/software-install.md`, `docs/contracts/probe-serve.md`, and
+   `docs/contracts/probe-tokenize.md`: the `temper software install`
    invocation and output, named base/experiment installations, C5 experiment
    provenance and base requirements, C6 receipt/root state, prepared recovery,
    shared claims, and ordered packet identity are specified. C5 validation and
@@ -645,7 +729,10 @@ base.
     materialized package identity, resumable execution, Python protocols,
     keep-or-restore, and local reporting. Temper's supporting `probe serve` is
     receipt-bound, generation-bound, loopback-only, foreground-only, and
-    deliberately not the production lifecycle.
+    deliberately not the production lifecycle. The separate `probe tokenize`
+    primitive runs only the receipted llama.cpp tokenizer against a
+    manifest-locked GGUF and returns canonical token IDs; Field Kit retains
+    exact-context construction and protocol policy.
 
 #### Phase C — broader qualification catalog resumes
 

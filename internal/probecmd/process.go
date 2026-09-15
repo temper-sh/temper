@@ -1,6 +1,7 @@
 package probecmd
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -18,6 +19,7 @@ func (ProcessRunner) Run(ctx context.Context, invocation Invocation, stdout, std
 	command := exec.CommandContext(ctx, invocation.Path, invocation.Arguments...)
 	command.Stdout = stdout
 	command.Stderr = stderr
+	command.Stdin = bytes.NewReader(invocation.Input)
 	command.Env = append([]string(nil), invocation.Environment...)
 	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	command.Cancel = func() error {
@@ -35,7 +37,7 @@ func (ProcessRunner) Run(ctx context.Context, invocation Invocation, stdout, std
 		if ctx.Err() != nil {
 			return nil
 		}
-		return fmt.Errorf("foreground router exited: %w", err)
+		return fmt.Errorf("probe process exited: %w", err)
 	}
 	return nil
 }

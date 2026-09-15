@@ -20,6 +20,7 @@ import (
 
 	applyverb "github.com/temper-sh/temper/internal/apply"
 	"github.com/temper-sh/temper/internal/budget"
+	"github.com/temper-sh/temper/internal/catalogcmd"
 	checkverb "github.com/temper-sh/temper/internal/check"
 	fetchverb "github.com/temper-sh/temper/internal/fetch"
 	"github.com/temper-sh/temper/internal/fieldkitcmd"
@@ -54,7 +55,7 @@ func run(ctx context.Context, arguments []string, stdout, stderr io.Writer) int 
 		detectFacts:   machine.DetectFacts,
 		newSoftware:   newSoftwareCommand,
 		newProbe: func() (probecmd.Command, error) {
-			return probecmd.New(probecmd.ProcessRunner{})
+			return probecmd.NewWithInput(probecmd.ProcessRunner{}, os.Stdin)
 		},
 		newFieldKit: func() (fieldkitcmd.Command, error) {
 			return fieldkitcmd.New(machine.DetectFacts, fieldkitcmd.ReadExecutingBinary)
@@ -85,7 +86,7 @@ func runWithUpstream(ctx context.Context, arguments []string, stdout, stderr io.
 		detectFacts:   machine.DetectFacts,
 		newSoftware:   newSoftwareCommand,
 		newProbe: func() (probecmd.Command, error) {
-			return probecmd.New(probecmd.ProcessRunner{})
+			return probecmd.NewWithInput(probecmd.ProcessRunner{}, os.Stdin)
 		},
 		newFieldKit: func() (fieldkitcmd.Command, error) {
 			return fieldkitcmd.New(machine.DetectFacts, fieldkitcmd.ReadExecutingBinary)
@@ -105,6 +106,8 @@ func runWithDependencies(ctx context.Context, arguments []string, stdout, stderr
 	case "help", "--help", "-h":
 		usage(stdout)
 		return 0
+	case "catalog", "execution":
+		return catalogcmd.Run(ctx, arguments, stdout, stderr)
 	case "apply":
 		return runApply(ctx, arguments[1:], stdout, stderr)
 	case "resolve":
@@ -518,7 +521,10 @@ func usage(writer io.Writer) {
 	fmt.Fprintln(writer, "  temper machine facts")
 	fmt.Fprintln(writer, "  temper field-kit bind [options]")
 	fmt.Fprintln(writer, "  temper probe serve [options]")
+	fmt.Fprintln(writer, "  temper probe tokenize [options]")
 	fmt.Fprintln(writer, "  temper software <install|check|remove> [options]")
+	fmt.Fprintln(writer, "  temper catalog compile --catalog FILE --selection FILE --target darwin/arm64 --out FILE [--dry-run]")
+	fmt.Fprintln(writer, "  temper execution export --lock FILE --out DIRECTORY [--dry-run]")
 	fmt.Fprintln(writer, "  temper version")
 	fmt.Fprintln(writer, "  temper help")
 }

@@ -155,6 +155,42 @@ type installationFixture struct {
 	ID          string
 }
 
+func TestPortableLockBindsObservedMachineWithoutChangingLockIdentity(t *testing.T) {
+	installation := makeInstallation(t, "portable-runtime", nil)
+	installation.Lock.Target = software.Target{OS: "darwin", Arch: "arm64"}
+	installation.Lock.TargetMode = "compatible"
+	lockDigest, err := installation.Lock.SemanticDigest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	installed, err := receipt.Parse(installation.ReceiptData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	installed.Target = installation.Lock.Target
+	installed.SoftwareLockDigest = lockDigest
+	installation.ReceiptData, err = receipt.Marshal(installed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inputs := validInputs(t, []installationFixture{installation})
+	for _, version := range []string{"15.6", "26.6.1"} {
+		inputs.Machine.Target.DistributionVersion = version
+		bound, err := fieldkitbinding.Build(inputs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if bound.Machine.Target.DistributionVersion != version || bound.Installations[0].SoftwareLockDigest != lockDigest {
+			t.Fatal("binding confused observed machine identity with portable desired software")
+		}
+	}
+	inputs = validInputs(t, []installationFixture{makeInstallation(t, "exact-host", nil)})
+	inputs.Machine.Target.DistributionVersion = "26.6.1"
+	if _, err := fieldkitbinding.Build(inputs); err == nil || !strings.Contains(err.Error(), "target differs") {
+		t.Fatalf("old exact-host semantics changed: %v", err)
+	}
+}
+
 func makeInstallation(t *testing.T, id string, requirements []installationFixture) installationFixture {
 	t.Helper()
 	target := machineFacts().Target

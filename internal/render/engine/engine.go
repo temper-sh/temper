@@ -39,6 +39,7 @@ type Request struct {
 	RapidMLX          *RapidMLXTuning
 	MLXVLM            *MLXVLMTuning
 	VLLMMetal         *VLLMMetalTuning
+	Sampling          *SamplingDefaults
 }
 
 // LlamaServerTuning is the typed llama.cpp-only tuning variant.
@@ -49,6 +50,33 @@ type LlamaServerTuning struct {
 	UBatch             int
 	ContextCheckpoints *int
 	PromptCacheRAMMiB  *int
+	Controls           *LlamaServerControls
+}
+
+// LlamaServerControls makes output-affecting defaults explicit for refreshed
+// engine layouts. A nil block preserves the existing launch contract.
+type LlamaServerControls struct {
+	CheckpointMinStep *int   `yaml:"checkpoint_min_step,omitempty" json:"checkpoint_min_step,omitempty"`
+	CacheReuse        int    `yaml:"cache_reuse" json:"cache_reuse"`
+	ReasoningEffort   string `yaml:"reasoning_effort" json:"reasoning_effort"`
+	PreserveReasoning bool   `yaml:"preserve_reasoning" json:"preserve_reasoning"`
+	ContextShift      bool   `yaml:"context_shift" json:"context_shift"`
+	CachePrompt       bool   `yaml:"cache_prompt" json:"cache_prompt"`
+	Fit               string `yaml:"fit" json:"fit"`
+	Threads           int    `yaml:"threads" json:"threads"`
+	ThreadsBatch      int    `yaml:"threads_batch" json:"threads_batch"`
+	LoadMode          string `yaml:"load_mode" json:"load_mode"`
+}
+
+// SamplingDefaults are server defaults; an explicit request may override them.
+type SamplingDefaults struct {
+	Temperature     float64 `yaml:"temperature" json:"temperature"`
+	TopK            int     `yaml:"top_k" json:"top_k"`
+	TopP            float64 `yaml:"top_p" json:"top_p"`
+	MinP            float64 `yaml:"min_p" json:"min_p"`
+	RepeatPenalty   float64 `yaml:"repeat_penalty" json:"repeat_penalty"`
+	PresencePenalty float64 `yaml:"presence_penalty" json:"presence_penalty"`
+	Seed            int     `yaml:"seed" json:"seed"`
 }
 
 // RapidMLXTuning is the typed Rapid-MLX-only tuning variant.
@@ -129,6 +157,9 @@ func (c Command) Runtime() Runtime {
 
 // Build dispatches one fresh request to its owned engine adapter.
 func Build(request Request) (Command, error) {
+	if request.Sampling != nil && request.Engine != LlamaServer {
+		return Command{}, errors.New("explicit sampling defaults currently require llama-server")
+	}
 	switch request.Engine {
 	case LlamaServer, RapidMLX, MLXVLM, VLLMMetal:
 	default:

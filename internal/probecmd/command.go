@@ -1,10 +1,12 @@
-// Package probecmd launches one receipt-bound llama-swap process in the
-// foreground for an explicitly isolated probe. It does not own production
-// service state, launchd, ports, or recovery policy.
+// Package probecmd exposes receipt-bound, non-policy probe primitives: one
+// foreground llama-swap process and one offline GGUF tokenizer invocation.
+// It does not own production service state, launchd, ports, or protocol policy.
 package probecmd
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -17,7 +19,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/temper-sh/temper/internal/artifactset"
 	"github.com/temper-sh/temper/internal/datadir"
+	"github.com/temper-sh/temper/internal/lockfile"
+	"github.com/temper-sh/temper/internal/manifest"
 	"github.com/temper-sh/temper/internal/runtimeconfig"
 	"github.com/temper-sh/temper/internal/software/installplan"
 	"github.com/temper-sh/temper/internal/software/lockstore"
@@ -32,6 +37,7 @@ type Invocation struct {
 	Path        string
 	Arguments   []string
 	Environment []string
+	Input       []byte
 }
 
 // Runner is deliberately narrower than os/exec so command tests can prove
@@ -42,13 +48,23 @@ type Runner interface {
 
 type Command struct {
 	runner Runner
+	stdin  io.Reader
 }
 
 func New(runner Runner) (Command, error) {
+	return NewWithInput(runner, strings.NewReader(""))
+}
+
+// NewWithInput constructs the probe command with an explicit input stream.
+// Only the non-generating tokenizer primitive consumes it.
+func NewWithInput(runner Runner, stdin io.Reader) (Command, error) {
 	if runner == nil {
 		return Command{}, errors.New("probe process runner is required")
 	}
-	return Command{runner: runner}, nil
+	if stdin == nil {
+		return Command{}, errors.New("probe input stream is required")
+	}
+	return Command{runner: runner, stdin: stdin}, nil
 }
 
 func (c Command) Run(ctx context.Context, arguments []string, stdout, stderr io.Writer) int {
@@ -59,6 +75,8 @@ func (c Command) Run(ctx context.Context, arguments []string, stdout, stderr io.
 	switch arguments[0] {
 	case "serve":
 		return c.runServe(ctx, arguments[1:], stdout, stderr)
+	case "tokenize":
+		return c.runTokenize(ctx, arguments[1:], stdout, stderr)
 	case "help", "--help", "-h":
 		usage(stdout)
 		return 0
@@ -67,6 +85,189 @@ func (c Command) Run(ctx context.Context, arguments []string, stdout, stderr io.
 		usage(stderr)
 		return 2
 	}
+}
+
+const maxTokenizeInputBytes = 64 << 20
+const maxTokenizeOutputBytes = 64 << 20
+
+type cappedBuffer struct {
+	buffer    bytes.Buffer
+	remaining int
+	exceeded  bool
+}
+
+func (w *cappedBuffer) Write(value []byte) (int, error) {
+	accepted := len(value)
+	if accepted > w.remaining {
+		accepted = w.remaining
+		w.exceeded = true
+	}
+	if accepted > 0 {
+		_, _ = w.buffer.Write(value[:accepted])
+		w.remaining -= accepted
+	}
+	// Report the complete write so an oversized child cannot turn the bounded
+	// evidence capture itself into an unbounded diagnostic stream.
+	return len(value), nil
+}
+
+func (c Command) runTokenize(ctx context.Context, arguments []string, stdout, stderr io.Writer) int {
+	flags := flag.NewFlagSet("temper probe tokenize", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	root := flags.String("root", "", "explicit Temper data root")
+	installation := flags.String("installation", "", "exact software installation id")
+	softwareLock := flags.String("software-lock", "software.lock.yaml", "exact software lock path")
+	manifestPath := flags.String("manifest", "manifest.yaml", "exact manifest path")
+	lockPath := flags.String("lock", "manifest.lock.yaml", "exact manifest lock path")
+	layout := flags.String("layout", "", "exact GGUF layout id")
+	flags.Usage = func() { usage(stderr) }
+	if err := flags.Parse(arguments); err != nil {
+		return 2
+	}
+	if flags.NArg() != 0 || *root == "" || *installation == "" || *layout == "" {
+		fmt.Fprintln(stderr, "temper probe tokenize: --root, --installation, and --layout are required")
+		return 2
+	}
+	input, err := io.ReadAll(io.LimitReader(c.stdin, maxTokenizeInputBytes+1))
+	if err != nil {
+		fmt.Fprintf(stderr, "temper probe tokenize: read input: %v\n", err)
+		return 1
+	}
+	if len(input) > maxTokenizeInputBytes {
+		fmt.Fprintf(stderr, "temper probe tokenize: input exceeds %d bytes\n", maxTokenizeInputBytes)
+		return 1
+	}
+	invocation, err := PlanTokenize(TokenizeOptions{
+		Root: *root, Installation: *installation, SoftwareLockPath: *softwareLock,
+		ManifestPath: *manifestPath, LockPath: *lockPath, Layout: *layout, Input: input,
+	})
+	if err != nil {
+		fmt.Fprintf(stderr, "temper probe tokenize: %v\n", err)
+		return 1
+	}
+	raw := cappedBuffer{remaining: maxTokenizeOutputBytes}
+	var childStderr bytes.Buffer
+	if err := c.runner.Run(ctx, invocation, &raw, &childStderr); err != nil {
+		if childStderr.Len() > 0 {
+			_, _ = stderr.Write(childStderr.Bytes())
+		}
+		fmt.Fprintf(stderr, "temper probe tokenize: %v\n", err)
+		return 1
+	}
+	if raw.exceeded {
+		fmt.Fprintf(stderr, "temper probe tokenize: tokenizer output exceeds %d bytes\n", maxTokenizeOutputBytes)
+		return 1
+	}
+	var ids []int
+	decoder := json.NewDecoder(bytes.NewReader(raw.buffer.Bytes()))
+	if err := decoder.Decode(&ids); err != nil {
+		fmt.Fprintf(stderr, "temper probe tokenize: tokenizer returned invalid token IDs: %v\n", err)
+		return 1
+	}
+	for _, id := range ids {
+		if id < 0 {
+			fmt.Fprintln(stderr, "temper probe tokenize: tokenizer returned a negative token ID")
+			return 1
+		}
+	}
+	if err := requireJSONEOF(decoder); err != nil {
+		fmt.Fprintf(stderr, "temper probe tokenize: tokenizer returned invalid token IDs: %v\n", err)
+		return 1
+	}
+	encoded, err := json.Marshal(ids)
+	if err != nil {
+		fmt.Fprintf(stderr, "temper probe tokenize: encode token IDs: %v\n", err)
+		return 1
+	}
+	_, _ = stdout.Write(append(encoded, '\n'))
+	return 0
+}
+
+type TokenizeOptions struct {
+	Root             string
+	Installation     string
+	SoftwareLockPath string
+	ManifestPath     string
+	LockPath         string
+	Layout           string
+	Input            []byte
+}
+
+// PlanTokenize resolves one receipted llama-tokenize binary and the exact
+// immutable GGUF selected by the supplied manifest and lock.
+func PlanTokenize(options TokenizeOptions) (Invocation, error) {
+	root, err := datadir.Resolve(options.Root)
+	if err != nil {
+		return Invocation{}, err
+	}
+	locked, err := lockstore.Read(options.SoftwareLockPath)
+	if err != nil {
+		return Invocation{}, fmt.Errorf("read software lock: %w", err)
+	}
+	if !locked.Exists() {
+		return Invocation{}, fmt.Errorf("software lock %q does not exist", options.SoftwareLockPath)
+	}
+	installed, err := receiptstore.Read(root, options.Installation)
+	if err != nil {
+		return Invocation{}, fmt.Errorf("read software receipt: %w", err)
+	}
+	if !installed.Exists() {
+		return Invocation{}, fmt.Errorf("software installation %q has no receipt", options.Installation)
+	}
+	if err := installed.Document.ValidateAgainst(locked.Document, installplan.Installation{ID: options.Installation, Root: root}); err != nil {
+		return Invocation{}, fmt.Errorf("validate software receipt: %w", err)
+	}
+
+	manifestData, err := os.ReadFile(options.ManifestPath)
+	if err != nil {
+		return Invocation{}, fmt.Errorf("read manifest: %w", err)
+	}
+	document, err := manifest.Parse(manifestData)
+	if err != nil {
+		return Invocation{}, err
+	}
+	lockData, err := os.ReadFile(options.LockPath)
+	if err != nil {
+		return Invocation{}, fmt.Errorf("read manifest lock: %w", err)
+	}
+	modelLock, err := lockfile.Parse(lockData)
+	if err != nil {
+		return Invocation{}, err
+	}
+	layout, ok := document.Layouts[options.Layout]
+	if !ok {
+		return Invocation{}, fmt.Errorf("layout %q is not declared in the manifest", options.Layout)
+	}
+	if layout.ModelFormat() != "gguf" || layout.Engine != "llama-server" {
+		return Invocation{}, fmt.Errorf("layout %q must select a GGUF llama-server model", options.Layout)
+	}
+	entry, ok := modelLock.Entry(options.Layout)
+	if !ok {
+		return Invocation{}, fmt.Errorf("layout %q has no lock entry", options.Layout)
+	}
+	set, err := artifactset.New(root, options.Layout, layout, entry, document.Patches)
+	if err != nil {
+		return Invocation{}, err
+	}
+	if err := set.Verify(); err != nil {
+		return Invocation{}, fmt.Errorf("verify artifact set: %w", err)
+	}
+	location, err := selectionLocation(installed.Document, "llama-cpp")
+	if err != nil {
+		return Invocation{}, err
+	}
+	executable, err := executableAt(root, options.Installation, location, "llama-tokenize")
+	if err != nil {
+		return Invocation{}, fmt.Errorf("package %q executable: %w", "llama-cpp", err)
+	}
+	return Invocation{
+		Path: executable,
+		Arguments: []string{
+			"-m", set.ModelPath(), "--stdin", "--ids", "--no-bos", "--offline", "--log-disable",
+		},
+		Environment: []string{"PATH=/usr/bin:/bin:/usr/sbin:/sbin"},
+		Input:       append([]byte(nil), options.Input...),
+	}, nil
 }
 
 func (c Command) runServe(ctx context.Context, arguments []string, stdout, stderr io.Writer) int {
@@ -250,6 +451,17 @@ func containsString(values []string, wanted string) bool {
 	return false
 }
 
+func requireJSONEOF(decoder *json.Decoder) error {
+	var extra any
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return errors.New("multiple JSON values are not allowed")
+		}
+		return err
+	}
+	return nil
+}
+
 func regularFile(path string, executable bool) error {
 	info, err := os.Lstat(path)
 	if err != nil {
@@ -287,4 +499,5 @@ func strictlyBelow(root, path string) bool {
 func usage(writer io.Writer) {
 	fmt.Fprintln(writer, "usage:")
 	fmt.Fprintln(writer, "  temper probe serve --root PATH --installation ID --generation SHA256 [--software-lock PATH] [--listen 127.0.0.1:PORT] [--dry-run]")
+	fmt.Fprintln(writer, "  temper probe tokenize --root PATH --installation ID --layout ID [--software-lock PATH] [--manifest PATH] [--lock PATH] < rendered-prompt.bin")
 }

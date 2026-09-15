@@ -1,0 +1,6 @@
+{
+  "schema": "temper-selection/v1",
+  "profile": "qwen3.8-27b-q4xl-local",
+  "tools": [],
+  "integrations": []
+}

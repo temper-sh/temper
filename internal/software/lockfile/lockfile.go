@@ -40,6 +40,7 @@ type Document struct {
 	Provenance Provenance                `yaml:"provenance"`
 	Requires   []InstallationRequirement `yaml:"requires"`
 	Target     software.Target           `yaml:"target"`
+	TargetMode string                    `yaml:"target_mode,omitempty"`
 	Resolved   string                    `yaml:"resolved"`
 	Selections map[string]Selection      `yaml:"selections"`
 	Units      map[string]Unit           `yaml:"units"`
@@ -180,6 +181,12 @@ func (d Document) Validate() error {
 	}
 	if err := d.Target.Validate(); err != nil {
 		problem("target: %v", err)
+	}
+	if d.TargetMode != "" && d.TargetMode != "compatible" {
+		problem("target_mode must be omitted for exact binding or compatible")
+	}
+	if d.TargetMode == "compatible" && (d.Target.OS != "darwin" || d.Target.Arch != "arm64" || d.Target.Distribution != "" || d.Target.DistributionVersion != "") {
+		problem("compatible target currently requires portable darwin/arm64 without observed distribution fields")
 	}
 	if _, err := time.Parse("2006-01-02", d.Resolved); err != nil {
 		problem("resolved %q must be YYYY-MM-DD", d.Resolved)
@@ -443,6 +450,7 @@ func (d Document) SemanticDigest() (string, error) {
 		Provenance: d.Provenance,
 		Requires:   canonicalRequirements(d.Requires),
 		Target:     d.Target,
+		TargetMode: d.TargetMode,
 		Selections: cloneSelections(d.Selections),
 		Units:      canonicalUnits(d.Units),
 	}
@@ -486,8 +494,19 @@ type digestDocument struct {
 	Provenance Provenance                `json:"provenance"`
 	Requires   []InstallationRequirement `json:"requires"`
 	Target     software.Target           `json:"target"`
+	TargetMode string                    `json:"target_mode,omitempty"`
 	Selections map[string]Selection      `json:"selections"`
 	Units      map[string]Unit           `json:"units"`
+}
+
+// SupportsHost preserves exact target binding for old locks. Compatibility is
+// explicit new lock intent; the host's observed OS version is not substituted
+// into, and cannot change, a portable installation identity.
+func (d Document) SupportsHost(host software.Target) bool {
+	if d.TargetMode == "compatible" {
+		return d.Target.Matches(host)
+	}
+	return d.Target == host
 }
 
 type closureDigestDocument struct {

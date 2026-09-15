@@ -81,7 +81,7 @@ func Run(ctx context.Context, options Options, adapters adapter.InstallationFami
 	if err != nil {
 		return Result{}, err
 	}
-	if options.HostTarget != (software.Target{}) && desired.Target != options.HostTarget {
+	if options.HostTarget != (software.Target{}) && !desired.SupportsHost(options.HostTarget) {
 		return Result{}, fmt.Errorf("software lock target %s does not match host target %s", desired.Target, options.HostTarget)
 	}
 	effectModels, err := adapters.EffectModels(desired)

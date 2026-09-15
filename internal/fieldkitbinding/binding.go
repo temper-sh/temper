@@ -141,7 +141,7 @@ func Build(inputs Inputs) (Document, error) {
 		if err := receipted.ValidateAgainst(input.Lock, installation); err != nil {
 			return Document{}, fmt.Errorf("field-kit binding installation %q: %w", receipted.Installation, err)
 		}
-		if input.Lock.Target != inputs.Machine.Target || receipted.Target != inputs.Machine.Target {
+		if !input.Lock.SupportsHost(inputs.Machine.Target) {
 			return Document{}, fmt.Errorf("field-kit binding installation %q target differs from machine facts", receipted.Installation)
 		}
 		if root == "" {

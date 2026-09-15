@@ -196,6 +196,20 @@ jobs:
           done
           test "$notarization_verified" = "true"
 
+          inputs_root="$(mktemp -d "$RUNNER_TEMP/temper-execution-smoke.XXXXXX")"
+          "$binary" catalog compile \
+            --catalog catalog/qwen38-m5-refresh.json \
+            --selection catalog/qwen38-m5-refresh.selection.json \
+            --target darwin/arm64 --out "$inputs_root/execution.lock.json"
+          "$binary" execution export --lock "$inputs_root/execution.lock.json" \
+            --out "$inputs_root/inputs" --dry-run --json
+          test ! -e "$inputs_root/inputs"
+          "$binary" execution export --lock "$inputs_root/execution.lock.json" \
+            --out "$inputs_root/inputs" --json
+          "$binary" execution export --lock "$inputs_root/execution.lock.json" \
+            --out "$inputs_root/inputs" --json > "$inputs_root/replay.json"
+          test "$(jq -r '.changed' "$inputs_root/replay.json")" = "false"
+
       - name: Preserve verified archive
         uses: actions/upload-artifact@v7
         with:
