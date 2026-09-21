@@ -26,6 +26,7 @@ const SchemaV1 = "temper-software-lock/v1"
 const (
 	ProvenanceCatalog    = "catalog"
 	ProvenanceExperiment = "experiment"
+	ProvenanceExecution  = "execution"
 )
 
 var (
@@ -41,7 +42,7 @@ type Document struct {
 	Requires   []InstallationRequirement `yaml:"requires"`
 	Target     software.Target           `yaml:"target"`
 	TargetMode string                    `yaml:"target_mode,omitempty"`
-	Resolved   string                    `yaml:"resolved"`
+	Resolved   string                    `yaml:"resolved,omitempty"`
 	Selections map[string]Selection      `yaml:"selections"`
 	Units      map[string]Unit           `yaml:"units"`
 }
@@ -52,6 +53,13 @@ type Document struct {
 type Provenance struct {
 	Catalog    *CatalogIdentity    `yaml:"catalog,omitempty" json:"catalog,omitempty"`
 	Experiment *ExperimentIdentity `yaml:"experiment,omitempty" json:"experiment,omitempty"`
+	Execution  *ExecutionIdentity  `yaml:"execution,omitempty" json:"execution,omitempty"`
+}
+
+type ExecutionIdentity struct {
+	Schema  string `yaml:"schema" json:"schema"`
+	Profile string `yaml:"profile" json:"profile"`
+	SHA256  string `yaml:"sha256" json:"sha256"`
 }
 
 type CatalogIdentity struct {
@@ -144,8 +152,13 @@ func (d Document) Validate() error {
 	if d.Schema != SchemaV1 {
 		problem("schema is %q, want %q", d.Schema, SchemaV1)
 	}
-	if d.Provenance.Catalog == nil && d.Provenance.Experiment == nil {
-		problem("provenance must contain catalog, experiment, or both")
+	if d.Provenance.Catalog == nil && d.Provenance.Experiment == nil && d.Provenance.Execution == nil {
+		problem("provenance must identify a catalog, experiment or execution lock")
+	}
+	if identity := d.Provenance.Execution; identity != nil {
+		if identity.Schema != "temper-execution-lock/v2" || !idPattern.MatchString(identity.Profile) || !sha256Pattern.MatchString(identity.SHA256) {
+			problem("provenance.execution requires a v2 execution lock, profile and SHA-256")
+		}
 	}
 	if identity := d.Provenance.Catalog; identity != nil {
 		if identity.Schema != catalog.SchemaV1 {
@@ -188,8 +201,10 @@ func (d Document) Validate() error {
 	if d.TargetMode == "compatible" && (d.Target.OS != "darwin" || d.Target.Arch != "arm64" || d.Target.Distribution != "" || d.Target.DistributionVersion != "") {
 		problem("compatible target currently requires portable darwin/arm64 without observed distribution fields")
 	}
-	if _, err := time.Parse("2006-01-02", d.Resolved); err != nil {
-		problem("resolved %q must be YYYY-MM-DD", d.Resolved)
+	if d.Resolved != "" || d.Provenance.Execution == nil {
+		if _, err := time.Parse("2006-01-02", d.Resolved); err != nil {
+			problem("resolved %q must be YYYY-MM-DD", d.Resolved)
+		}
 	}
 	if len(d.Selections) == 0 {
 		problem("selections must not be empty")
@@ -204,6 +219,10 @@ func (d Document) Validate() error {
 			problem("selection id %q is not a lowercase stable id", id)
 		}
 		switch selection.Provenance {
+		case ProvenanceExecution:
+			if d.Provenance.Execution == nil {
+				problem("selection %q has execution provenance but no execution identity", id)
+			}
 		case ProvenanceCatalog:
 			if d.Provenance.Catalog == nil {
 				problem("selection %q has catalog provenance but the lock has no catalog identity", id)
@@ -213,7 +232,7 @@ func (d Document) Validate() error {
 				problem("selection %q has experiment provenance but the lock has no experiment identity", id)
 			}
 		default:
-			problem("selection %q provenance %q must be catalog or experiment", id, selection.Provenance)
+			problem("selection %q provenance %q must be catalog, experiment or execution", id, selection.Provenance)
 		}
 		if !idPattern.MatchString(selection.Method) {
 			problem("selection %q method %q is not a lowercase stable id", id, selection.Method)

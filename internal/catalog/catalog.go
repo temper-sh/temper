@@ -1,5 +1,6 @@
 // Package catalog compiles explicit local catalog choices into portable,
-// self-contained execution locks. It performs no I/O or version resolution.
+// self-contained execution locks. Compilation is pure; software discovery is
+// a separate read through ResolveSoftware.
 package catalog
 
 import (
@@ -16,13 +17,20 @@ import (
 
 	"github.com/temper-sh/temper/internal/render/engine"
 	"github.com/temper-sh/temper/internal/software"
+	"github.com/temper-sh/temper/internal/software/adapter/upstreamrelease"
 	softwarelock "github.com/temper-sh/temper/internal/software/lockfile"
 	"gopkg.in/yaml.v3"
 )
 
-const Schema = "temper-catalog/v1"
-const SelectionSchema = "temper-selection/v1"
-const LockSchema = "temper-execution-lock/v1"
+const Schema = "temper-catalog/v2"
+const SelectionSchema = "temper-selection/v2"
+const LockSchema = "temper-execution-lock/v2"
+
+// V1 is retained only for already-issued Field Kit inputs. New authored
+// catalogs use sources and resolved releases, without installer bookkeeping.
+const legacySchema = "temper-catalog/v1"
+const legacySelectionSchema = "temper-selection/v1"
+const legacyLockSchema = "temper-execution-lock/v1"
 
 var idPattern = regexp.MustCompile(`^[a-z0-9]+(?:[.-][a-z0-9]+)*$`)
 var repoPattern = regexp.MustCompile(`^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$`)
@@ -66,13 +74,17 @@ type Patch struct {
 	License             string   `yaml:"license" json:"license"`
 }
 
-// Supply is one exact installation closure, using the existing installer
-// contract. Complete release archives include the executable and its dylibs.
+// Supply separates an upstream source from its resolved release. Complete
+// archives include the executable and its libraries. Installer rows are derived.
 type Supply struct {
-	Package   string                       `yaml:"package" json:"package"`
-	Target    software.Target              `yaml:"target" json:"target"`
-	Selection softwarelock.Selection       `yaml:"selection" json:"selection"`
-	Units     map[string]softwarelock.Unit `yaml:"units" json:"units"`
+	Package  string                        `yaml:"package" json:"package"`
+	Target   software.Target               `yaml:"target" json:"target"`
+	Source   *upstreamrelease.GitHubSource `yaml:"source,omitempty" json:"source,omitempty"`
+	Release  *upstreamrelease.Release      `yaml:"release,omitempty" json:"release,omitempty"`
+	Versions *Versions                     `yaml:"versions,omitempty" json:"versions,omitempty"`
+	// Legacy V1 compatibility; forbidden in V2 authoring.
+	Selection *softwarelock.Selection      `yaml:"selection,omitempty" json:"selection,omitempty"`
+	Units     map[string]softwarelock.Unit `yaml:"units,omitempty" json:"units,omitempty"`
 }
 
 type Engine struct {
@@ -119,10 +131,11 @@ type Layout struct {
 	RequestDefaults     RequestDefaults `yaml:"request_defaults" json:"request_defaults"`
 	Speculation         Speculation     `yaml:"speculation" json:"speculation"`
 	EngineConfig        LlamaConfig     `yaml:"engine_config" json:"engine_config"`
+	EngineVersions      *Versions       `yaml:"engine_versions,omitempty" json:"engine_versions,omitempty"`
 }
 
 type Binding struct {
-	ID             string `yaml:"id" json:"id"`
+	ID             string `yaml:"id,omitempty" json:"id,omitempty"` // V1 only; layout is the binding identity.
 	Layout         string `yaml:"layout" json:"layout"`
 	Route          string `yaml:"route" json:"route"`
 	Residency      string `yaml:"residency" json:"residency"`
@@ -138,8 +151,8 @@ type Profile struct {
 type Selection struct {
 	Schema       string   `yaml:"schema" json:"schema"`
 	Profile      string   `yaml:"profile" json:"profile"`
-	Tools        []string `yaml:"tools" json:"tools"`
-	Integrations []string `yaml:"integrations" json:"integrations"`
+	Tools        []string `yaml:"tools,omitempty" json:"tools,omitempty"`               // V1 only.
+	Integrations []string `yaml:"integrations,omitempty" json:"integrations,omitempty"` // V1 only.
 }
 
 func decode(data []byte, into any) error {
@@ -178,17 +191,20 @@ func ParseSelection(data []byte) (Selection, error) {
 }
 
 func (s Selection) Validate() error {
-	if s.Schema != SelectionSchema || !idPattern.MatchString(s.Profile) {
-		return errors.New("selection requires temper-selection/v1 and a stable profile id")
+	if (s.Schema != SelectionSchema && s.Schema != legacySelectionSchema) || !idPattern.MatchString(s.Profile) {
+		return errors.New("selection requires a supported schema and a stable profile id")
 	}
 	if len(s.Tools) != 0 || len(s.Integrations) != 0 {
 		return errors.New("this catalog slice has no supported optional tools or integrations")
+	}
+	if s.Schema == SelectionSchema && (s.Tools != nil || s.Integrations != nil) {
+		return errors.New("v2 selection contains only schema and profile")
 	}
 	return nil
 }
 
 func (d Document) Validate() error {
-	if d.Schema != Schema {
+	if d.Schema != Schema && d.Schema != legacySchema {
 		return fmt.Errorf("catalog schema must be %s", Schema)
 	}
 	if _, err := time.Parse("2006-01-02", d.Date); err != nil {
@@ -200,7 +216,7 @@ func (d Document) Validate() error {
 	if d.Runtime.Router.Package != "llama-swap" {
 		return errors.New("runtime router must supply llama-swap")
 	}
-	if err := d.Runtime.Router.validate(d.Date); err != nil {
+	if err := d.Runtime.Router.validate(d.Date, d.Schema == legacySchema); err != nil {
 		return fmt.Errorf("router: %w", err)
 	}
 	for id, a := range d.Artifacts {
@@ -235,7 +251,10 @@ func (d Document) Validate() error {
 		if e.Supply.Package != "llama-cpp" || !slices.Equal(e.Interfaces, []string{engine.InterfaceChatCompletions}) || !slices.Equal(e.Modalities, []string{"text"}) {
 			return fmt.Errorf("engine %q requires the text chat llama-cpp closure", id)
 		}
-		if err := e.Supply.validate(d.Date); err != nil {
+		if e.Supply.Versions != nil {
+			return fmt.Errorf("engine %q version requirements belong to the consuming layout", id)
+		}
+		if err := e.Supply.validate(d.Date, d.Schema == legacySchema); err != nil {
 			return fmt.Errorf("engine %q: %w", id, err)
 		}
 	}
@@ -253,6 +272,12 @@ func (d Document) Validate() error {
 		}
 		if l.EngineConfig.Kind != e.Adapter {
 			return fmt.Errorf("layout %q engine config does not match its adapter", id)
+		}
+		if d.Schema == legacySchema && l.EngineVersions != nil {
+			return fmt.Errorf("layout %q: v1 cannot carry version policy", id)
+		}
+		if err := l.EngineVersions.validate(); err != nil {
+			return fmt.Errorf("layout %q: %w", id, err)
 		}
 		if len(l.Patches) > 1 {
 			return fmt.Errorf("layout %q supports one template patch", id)
@@ -289,8 +314,11 @@ func (d Document) Validate() error {
 		var engineID string
 		for _, b := range p.Bindings {
 			l, ok := d.Layouts[b.Layout]
-			if !ok || !idPattern.MatchString(b.ID) || seenBindings[b.ID] || seenLayouts[b.Layout] {
+			if !ok || seenLayouts[b.Layout] {
 				return fmt.Errorf("profile %q has an unknown layout or duplicate binding", id)
+			}
+			if (d.Schema == legacySchema && (!idPattern.MatchString(b.ID) || seenBindings[b.ID])) || (d.Schema == Schema && b.ID != "") {
+				return fmt.Errorf("profile %q: binding IDs belong only to v1; v2 uses the layout identity", id)
 			}
 			seenBindings[b.ID] = true
 			seenLayouts[b.Layout] = true
@@ -335,11 +363,17 @@ func safePath(p string) bool {
 	return p != "" && p != "." && p != ".." && !strings.HasPrefix(p, "../") && !strings.HasPrefix(p, "/") && !strings.ContainsAny(p, "\\\r\n\x00") && path.Clean(p) == p
 }
 
-func (s Supply) validate(date string) error {
+func (s Supply) validate(date string, legacy bool) error {
 	if s.Target.OS != "darwin" || s.Target.Arch != "arm64" || s.Target.Distribution != "" || s.Target.DistributionVersion != "" {
 		return errors.New("release compatibility must be darwin/arm64; observed OS versions belong to machine evidence")
 	}
-	if !idPattern.MatchString(s.Package) || s.Selection.Provenance != softwarelock.ProvenanceExperiment || s.Selection.Method != "release-artifact" || s.Selection.Adapter != "upstream-release" {
+	if !legacy {
+		return s.validateSource()
+	}
+	if s.Source != nil || s.Release != nil || s.Versions != nil {
+		return errors.New("v1 supply cannot carry v2 source fields")
+	}
+	if !idPattern.MatchString(s.Package) || s.Selection == nil || s.Selection.Provenance != softwarelock.ProvenanceExperiment || s.Selection.Method != "release-artifact" || s.Selection.Adapter != "upstream-release" {
 		return errors.New("local catalog supply requires an exact experiment-provenance release-artifact closure")
 	}
 	if len(s.Units) != 1 {
@@ -356,7 +390,7 @@ func (s Supply) validate(date string) error {
 	}
 	d := softwarelock.Document{Schema: softwarelock.SchemaV1, Target: s.Target, Resolved: date,
 		Provenance: softwarelock.Provenance{Experiment: &softwarelock.ExperimentIdentity{Schema: Schema, ID: "local-catalog", DefinitionSHA256: strings.Repeat("0", 64)}},
-		Selections: map[string]softwarelock.Selection{s.Package: s.Selection}, Units: s.Units}
+		Selections: map[string]softwarelock.Selection{s.Package: *s.Selection}, Units: s.Units}
 	return d.Validate()
 }
 

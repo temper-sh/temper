@@ -32,7 +32,6 @@ type Unit struct {
 	Ownership      installplan.Ownership
 	Location       string
 	SharedClaim    string
-	RetireShared   bool
 	RequirePresent bool
 }
 
@@ -58,7 +57,6 @@ type PreparedUnit struct {
 	Ownership      installplan.Ownership
 	Location       string
 	RemoveProvider bool
-	RetireShared   bool
 	SharedClaim    string
 }
 
@@ -199,7 +197,7 @@ func Build(desired softwarelock.Document, installation installplan.Installation,
 				continue
 			}
 			shared, ok := state.Shared.Units[recorded.SharedClaim]
-			if !ok || shared.Lifecycle != installplan.SharedActive || !matchesShared(shared, locked, recorded) {
+			if !ok || !matchesShared(shared, locked, recorded) {
 				return Plan{}, fmt.Errorf("shared removal unit %q disagrees with active root-state authority", unitID)
 			}
 			claim, ok := shared.Claims[installation.ID]
@@ -211,10 +209,6 @@ func Build(desired softwarelock.Document, installation installplan.Installation,
 					return Plan{}, fmt.Errorf("shared removal unit %q is missing while other claims remain", unitID)
 				}
 				unit.RequirePresent = true
-			} else if shared.Acquisition == installplan.OwnershipTemperAdded {
-				unit.Action = ActionRemove
-				unit.Execute = actual.Present
-				unit.RetireShared = true
 			}
 			planned.Units = append(planned.Units, unit)
 		}
@@ -263,21 +257,18 @@ func buildPrepared(desired softwarelock.Document, installation installplan.Insta
 			}
 			unit := Unit{
 				ID: unitID, Action: ActionPreserve, Ownership: stored.Ownership, Location: stored.Location,
-				SharedClaim: stored.SharedClaim, RetireShared: stored.RetireShared,
+				SharedClaim: stored.SharedClaim,
+			}
+			if intent.EffectModel == installplan.EffectShared && stored.RemoveProvider {
+				return Plan{}, fmt.Errorf("prepared removal unit %q cannot remove system-managed software", unitID)
 			}
 			if stored.RemoveProvider {
 				unit.Action = ActionRemove
 				unit.Execute = actual.Present
 			}
-			if stored.SharedClaim != "" && !stored.RetireShared {
+			if stored.SharedClaim != "" {
 				if shared, ok := state.Shared.Units[stored.SharedClaim]; ok && len(shared.Claims) > 0 {
 					unit.RequirePresent = true
-				}
-			}
-			if stored.RetireShared {
-				shared, ok := state.Shared.Units[stored.SharedClaim]
-				if !ok || shared.Lifecycle != installplan.SharedRetiring || len(shared.Claims) != 0 {
-					return Plan{}, fmt.Errorf("prepared removal unit %q lost its retiring shared authority", unitID)
 				}
 			}
 			if unit.RequirePresent && !actual.Present {
@@ -294,7 +285,7 @@ func buildPrepared(desired softwarelock.Document, installation installplan.Insta
 }
 
 // VerifyPostState proves that every prepared provider action reached its
-// absolute postcondition before the receipt and retiring authority are removed.
+// absolute postcondition before the installation receipt is removed.
 func VerifyPostState(desired softwarelock.Document, plan Plan, observed installplan.Observation) error {
 	if err := validateObservation(desired, plan.Installation, observed); err != nil {
 		return err

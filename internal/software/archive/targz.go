@@ -55,7 +55,16 @@ func InspectTarGz(ctx context.Context, archivePath string, spec TarGzSpec) ([]En
 		return nil, fmt.Errorf("open %s: %w", spec.label(), err)
 	}
 	defer file.Close()
-	compressed, err := gzip.NewReader(file)
+	return InspectTarGzStream(ctx, file, spec)
+}
+
+// InspectTarGzStream validates a bounded input stream without staging a file.
+// The caller owns the compressed byte limit and transport integrity check.
+func InspectTarGzStream(ctx context.Context, input io.Reader, spec TarGzSpec) ([]Entry, error) {
+	if err := validateSpec(spec); err != nil {
+		return nil, err
+	}
+	compressed, err := gzip.NewReader(input)
 	if err != nil {
 		return nil, fmt.Errorf("open %s gzip stream: %w", spec.label(), err)
 	}

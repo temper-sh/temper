@@ -17,6 +17,7 @@ import (
 	softwarelock "github.com/temper-sh/temper/internal/software/lockfile"
 	"github.com/temper-sh/temper/internal/software/receiptstore"
 	removeverb "github.com/temper-sh/temper/internal/software/remove"
+	"github.com/temper-sh/temper/internal/software/removeplan"
 	"github.com/temper-sh/temper/internal/software/rootstate"
 	"github.com/temper-sh/temper/internal/software/statestore"
 )
@@ -84,7 +85,7 @@ func TestRunDryRunExactRemovalAndSecondRunClean(t *testing.T) {
 	}
 }
 
-func TestRunReleasesOneSharedClaimWithoutRemovalThenRetiresTheLast(t *testing.T) {
+func TestRunRetainsSharedSoftwareAfterEveryInstallationIsRemoved(t *testing.T) {
 	parent := t.TempDir()
 	root := filepath.Join(parent, "temper-root")
 	desired := removeLock(t, "homebrew", "system-package", "system")
@@ -111,7 +112,7 @@ func TestRunReleasesOneSharedClaimWithoutRemovalThenRetiresTheLast(t *testing.T)
 	state, _ := statestore.Read(root)
 	key := installplan.SharedUnitKey("homebrew", "system", "tool")
 	shared := state.Document.SharedUnits[key]
-	if shared.Lifecycle != installplan.SharedActive || len(shared.Claims) != 1 {
+	if len(shared.Claims) != 1 {
 		t.Fatalf("shared authority after first release = %#v", shared)
 	}
 	if _, ok := shared.Claims["experiment-b"]; !ok {
@@ -125,7 +126,7 @@ func TestRunReleasesOneSharedClaimWithoutRemovalThenRetiresTheLast(t *testing.T)
 	if err != nil {
 		t.Fatalf("remove last claimant: %v", err)
 	}
-	if last.Effects != 1 || last.Claims != 1 || fake.removeCalls != 1 || len(fake.observed) != 0 {
+	if last.Effects != 0 || last.Claims != 1 || fake.removeCalls != 0 || len(fake.observed) != 1 {
 		t.Fatalf("last removal = %#v, remove calls = %d provider = %#v", last, fake.removeCalls, fake.observed)
 	}
 	state, _ = statestore.Read(root)
@@ -221,7 +222,18 @@ func TestRunReconcilesAnUnknownCompletedRemovalWithoutRepeatingIt(t *testing.T) 
 	}
 }
 
-func TestRetiringSharedGenerationRefusesANewClaimUntilRemovalFinalizes(t *testing.T) {
+func TestAdapterBoundaryRefusesSystemRemovalEvenWithAConstructedPlan(t *testing.T) {
+	fake := newRemoveAdapter("homebrew", "system-package", installplan.EffectShared)
+	family := removeFamily(t, fake)
+	desired := removeLock(t, "homebrew", "system-package", "system")
+	group := removeplan.Group{ID: "homebrew:system", Adapter: "homebrew", Scope: "system", EffectModel: installplan.EffectShared}
+	err := family.Remove(context.Background(), desired.Target, installplan.Installation{ID: "probe", Root: t.TempDir()}, group, desired.Units)
+	if err == nil || fake.removeCalls != 0 {
+		t.Fatalf("system removal reached provider: err=%v calls=%d", err, fake.removeCalls)
+	}
+}
+
+func TestRetainedSystemSoftwareCanBeReusedAfterLastInstallationRemoval(t *testing.T) {
 	parent := t.TempDir()
 	root := filepath.Join(parent, "temper-root")
 	desired := removeLock(t, "homebrew", "system-package", "system")
@@ -230,30 +242,16 @@ func TestRetiringSharedGenerationRefusesANewClaimUntilRemovalFinalizes(t *testin
 	family := removeFamily(t, fake)
 	now := time.Date(2026, 8, 24, 13, 0, 0, 0, time.UTC)
 	installOne(t, family, lockPath, root, "experiment-a", now)
-	fake.failAfterRemoveOnce = true
-
 	_, err := removeverb.Run(context.Background(), removeverb.Options{
-		LockPath: lockPath, Root: root, Installation: "experiment-a", InvocationID: "remove-retiring", LeaseDuration: time.Minute,
+		LockPath: lockPath, Root: root, Installation: "experiment-a", InvocationID: "remove-a",
 		Now: func() time.Time { return now.Add(time.Second) },
 	}, family)
-	if err == nil || !strings.Contains(err.Error(), "outcome unknown") {
-		t.Fatalf("remove error = %v, want unknown outcome", err)
+	if err != nil {
+		t.Fatal(err)
 	}
-	state, _ := statestore.Read(root)
-	key := installplan.SharedUnitKey("homebrew", "system", "tool")
-	if state.Document.SharedUnits[key].Lifecycle != installplan.SharedRetiring {
-		t.Fatalf("shared state = %#v", state.Document.SharedUnits[key])
-	}
-
-	_, err = installverb.Run(context.Background(), installverb.Options{
-		LockPath: lockPath, Root: root, Installation: "experiment-b", InvocationID: "claim-retiring",
-		LeaseDuration: time.Minute, Now: func() time.Time { return now.Add(2 * time.Second) },
-	}, family)
-	if err == nil || !strings.Contains(err.Error(), "retiring") {
-		t.Fatalf("claim retiring generation error = %v", err)
-	}
-	if receipt, _ := receiptstore.Read(root, "experiment-b"); receipt.Exists() {
-		t.Fatal("refused claimant received a receipt")
+	installOne(t, family, lockPath, root, "experiment-b", now.Add(2*time.Second))
+	if fake.removeCalls != 0 || fake.installCalls != 1 || len(fake.observed) != 1 {
+		t.Fatalf("retained package was changed: installs=%d removals=%d state=%#v", fake.installCalls, fake.removeCalls, fake.observed)
 	}
 }
 

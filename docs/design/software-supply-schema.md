@@ -1,6 +1,17 @@
 # Software supply and lock design
 
-Status: **approved by owner**, extended through 2026-09-02 for experiment
+Status: **HISTORICAL DESIGN — superseded in part by the 2026-09-21 cleanup**.
+
+Current authoring and latest/tested selection follow the
+[execution-lock contract](../contracts/execution-lock.md); current installation,
+recovery and system-package retention follow the
+[software-install contract](../contracts/software-install.md). The unused
+generic resolver, tested-status pipeline, bootstrap reader and Homebrew graph
+reader described below were removed. Signing/publication utilities remain
+separate from the maintained V3 catalog. No old removal or exact-only policy
+below authorizes new implementation.
+
+Historical status: approved by owner, extended through 2026-09-02 for experiment
 locks, layered installations, and the uv reader/isolated installer. The
 executable shared software-supply
 resolver now consumes this surface: strict catalog/lock parsing and validation,
@@ -58,7 +69,7 @@ root-state, CLI output, and packet-identity surface are in
 documents, derived-path conditional atomic stores, and internal keyed-adapter
 install orchestration are now executable. The read-only check analyzer and
 lock/store/adapter reader are executable as well. Provenance-guided removal now
-has a pure planner, a serialized active-to-retiring final-release transition,
+had a pure planner and a shared final-release transition (removed in the cleanup),
 conditional receipt deletion, keyed adapter orchestration, and explicit-rerun
 recovery. The public commands and packet binding are executable on the Temper
 side. The concrete isolated members are `upstream-release` and `uv`; the
@@ -79,7 +90,7 @@ remain.
 | exact tested evidence | supply catalog recipe evidence | signed catalog knowledge; local files never claim verification |
 | exact desired closure, resolution provenance, required base lock identities | `software.lock.yaml` | portable resolution snapshot; says nothing about actual installation |
 | per-installation observed closure and relation | installation receipt | historical proof; never inferred from desired state |
-| current shared acquisition, lifecycle, claims, and prepared operations | root-wide software state | one concurrency/removal authority across base and experiment receipts |
+| current shared version/use and prepared operations | root-wide software state | installation, version checks, concurrency and recovery; never system-package deletion |
 
 The lock snapshots every immutable resolution input that applies. Catalog
 provenance records a catalog snapshot when one participated; experiment
@@ -626,7 +637,7 @@ The family provides narrow roles so reads and effects do not become one opaque
 | reconciliation inspector | read | after interruption/unknown outcome, observe provider state before any retry |
 | reconciliation decision | pure | desired + before/after observations → complete/continue/refuse classification |
 | verifier | read | observed post-state → provider-neutral receipt evidence |
-| removal planner | pure | receipt + exact observation + shared authority → preserve/release/retire plan or refusal |
+| removal planner | pure | receipt + exact observation + shared usage → retain system packages, release usage and clean private installations |
 | remover | side effect | execute only prepared absolute removals; never infer ownership or resolution |
 
 The adapter translates vendor output at the edge into Temper-owned values:

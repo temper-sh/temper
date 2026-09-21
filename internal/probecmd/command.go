@@ -38,6 +38,8 @@ type Invocation struct {
 	Arguments   []string
 	Environment []string
 	Input       []byte
+	EnginePath  string
+	Supervision *Supervision
 }
 
 // Runner is deliberately narrower than os/exec so command tests can prove
@@ -278,6 +280,7 @@ func (c Command) runServe(ctx context.Context, arguments []string, stdout, stder
 	softwareLock := flags.String("software-lock", "software.lock.yaml", "exact software lock path")
 	generation := flags.String("generation", "", "exact rendered generation digest")
 	listen := flags.String("listen", "127.0.0.1:8080", "loopback listen address")
+	statusFile := flags.String("status-file", "", "new file for owned process identities and shutdown status")
 	dryRun := flags.Bool("dry-run", false, "validate the complete invocation without starting a process")
 	flags.Usage = func() { usage(stderr) }
 	if err := flags.Parse(arguments); err != nil {
@@ -295,6 +298,13 @@ func (c Command) runServe(ctx context.Context, arguments []string, stdout, stder
 	if err != nil {
 		fmt.Fprintf(stderr, "temper probe serve: %v\n", err)
 		return 1
+	}
+	if *statusFile != "" {
+		invocation.Supervision = &Supervision{StatusPath: *statusFile, Root: *root, Installation: *installation, Generation: *generation, Listen: *listen}
+		if err := invocation.Supervision.Validate(); err != nil {
+			fmt.Fprintln(stderr, err)
+			return 1
+		}
 	}
 	if *dryRun {
 		fmt.Fprintf(stdout, "RESULT probe-serve ready-to-start installation=%s generation=%s listen=%s\n", *installation, *generation, *listen)
@@ -368,6 +378,7 @@ func Plan(options Options) (Invocation, error) {
 	}
 
 	router := ""
+	enginePath := ""
 	var executableDirectories []string
 	for _, requirement := range requirements.Requirements {
 		location, err := selectionLocation(installed.Document, requirement.Package)
@@ -383,6 +394,9 @@ func Plan(options Options) (Invocation, error) {
 		} else if !containsString(executableDirectories, filepath.Dir(executable)) {
 			executableDirectories = append(executableDirectories, filepath.Dir(executable))
 		}
+		if requirement.Package == "llama-cpp" {
+			enginePath = executable
+		}
 	}
 
 	config := filepath.Join(generationRoot, "llama-swap", "config.yaml")
@@ -390,8 +404,9 @@ func Plan(options Options) (Invocation, error) {
 		return Invocation{}, fmt.Errorf("rendered config: %w", err)
 	}
 	return Invocation{
-		Path:      router,
-		Arguments: []string{"--config", config, "--listen", options.Listen},
+		Path:       router,
+		EnginePath: enginePath,
+		Arguments:  []string{"--config", config, "--listen", options.Listen},
 		Environment: []string{
 			"PATH=" + strings.Join(append(executableDirectories, "/usr/bin", "/bin", "/usr/sbin", "/sbin"), string(os.PathListSeparator)),
 		},
@@ -498,6 +513,6 @@ func strictlyBelow(root, path string) bool {
 
 func usage(writer io.Writer) {
 	fmt.Fprintln(writer, "usage:")
-	fmt.Fprintln(writer, "  temper probe serve --root PATH --installation ID --generation SHA256 [--software-lock PATH] [--listen 127.0.0.1:PORT] [--dry-run]")
+	fmt.Fprintln(writer, "  temper probe serve --root PATH --installation ID --generation SHA256 [--software-lock PATH] [--listen 127.0.0.1:PORT] [--status-file PATH] [--dry-run]")
 	fmt.Fprintln(writer, "  temper probe tokenize --root PATH --installation ID --layout ID [--software-lock PATH] [--manifest PATH] [--lock PATH] < rendered-prompt.bin")
 }

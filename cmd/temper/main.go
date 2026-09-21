@@ -107,6 +107,11 @@ func runWithDependencies(ctx context.Context, arguments []string, stdout, stderr
 		usage(stdout)
 		return 0
 	case "catalog", "execution":
+		if arguments[0] == "execution" && len(arguments) > 1 && arguments[1] != "export" {
+			return catalogcmd.Runtime(ctx, arguments[1:], stdout, stderr, func(ctx context.Context, args []string, out, err io.Writer) int {
+				return runWithDependencies(ctx, args, out, err, deps)
+			})
+		}
 		return catalogcmd.Run(ctx, arguments, stdout, stderr)
 	case "apply":
 		return runApply(ctx, arguments[1:], stdout, stderr)
@@ -525,6 +530,9 @@ func usage(writer io.Writer) {
 	fmt.Fprintln(writer, "  temper software <install|check|remove> [options]")
 	fmt.Fprintln(writer, "  temper catalog compile --catalog FILE --selection FILE --target darwin/arm64 --out FILE [--dry-run]")
 	fmt.Fprintln(writer, "  temper execution export --lock FILE --out DIRECTORY [--dry-run]")
+	fmt.Fprintln(writer, "  temper execution inspect --lock FILE")
+	fmt.Fprintln(writer, "  temper execution prepare|render|remove --lock FILE --root PATH --installation ID [--dry-run]")
+	fmt.Fprintln(writer, "  temper execution serve --lock FILE --root PATH --installation ID --generation SHA256 --status-file FILE [--listen 127.0.0.1:PORT] [--dry-run]")
 	fmt.Fprintln(writer, "  temper version")
 	fmt.Fprintln(writer, "  temper help")
 }

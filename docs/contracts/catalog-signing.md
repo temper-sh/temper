@@ -2,6 +2,10 @@
 
 Status: approved for retained software-catalog release tooling, 2026-08-24.
 
+This tooling signs the earlier software-publication format. The maintained V3
+catalog uses [local execution-lock preparation](execution-lock.md); connecting
+it to signed distribution is separate work.
+
 `temper-catalog` is a release-only command, deliberately separate from the
 end-user `temper` binary. It validates and signs exact software catalog or
 channel bytes with the production trust identity, and verifies detached

@@ -1,0 +1,27 @@
+schema: temper-software-state/v1
+root: /tmp/temper-state-test
+generation: 1
+operations:
+  probe:
+    kind: install
+    software_lock_digest: eb3f9618831fe243425f5b0bf527d85a7803fa04cfbbcae323803a4a3549ef47
+    target:
+      os: darwin
+      arch: arm64
+      distribution: macos
+      distribution_version: "15.6"
+    plan_digest: fd943646cba5c8aacdf91c8a3aeb0c70c5ddb27e30c628b6b6ed97b8bee97846
+    started_at: "2026-08-23T09:00:00Z"
+    claimed_by: run-1
+    lease_expires_at: "2026-08-23T09:01:00Z"
+    fence: 1
+    groups:
+      uv:probe:
+        adapter: uv
+        scope: probe
+        effect_model: isolated
+        units:
+          uv:probe:tool:
+            before: absent
+            ownership_after: temper-added
+shared_units: {}

@@ -2,6 +2,11 @@
 
 Status: approved software-catalog update implementation, 2026-08-24.
 
+This retained command updates the earlier signed software-publication format.
+It does not update or supply the maintained V3 catalog/compiler. Use the
+[execution-lock preparation path](execution-lock.md) for current profile and
+software selection; signed V3 distribution remains separate work.
+
 ## Invocation
 
 ```text

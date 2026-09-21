@@ -100,7 +100,7 @@ The current release target and safety boundary are deliberately narrow:
 | Privacy | No telemetry or background updater. Model serving listens only on the Mac itself; retained evidence stays local unless a person chooses to export it. |
 | System changes | No `sudo`. Temper writes beneath an explicit root and does not silently take over an existing service. |
 | Configuration | The user's manifest is never mechanically rewritten after creation. Updates produce explicit lock changes and follow-up commands. |
-| Cleanup | Temper removes only state attributed by its own installation receipts and shared-package claims. |
+| Cleanup | Temper can remove its receipted private installations. It never removes system-managed packages, including packages it requested. |
 
 The path exercised with a real model currently uses `llama-server`.
 Alternative serving engines—the programs that load a model and answer
@@ -130,8 +130,13 @@ part of every run's identity.
 
 Temper `0.1.0-alpha.7` supplies the execution-lock commands required by the
 [Field Kit collaborator alpha](https://github.com/temper-sh/field-kit).
-Its experiments require an explicit qualification plan and machine-owner
+Its experiments require an explicit experiment plan and machine-owner
 consent. No question has completed external-machine qualification yet.
+
+The new [direct execution commands](docs/contracts/execution-runtime.md) consume
+locks without client-managed compatibility files and return supervised process
+identities and shutdown results. They support Field Kit's revision 2 development
+study and have not yet been published in a release.
 
 ## Learn more
 

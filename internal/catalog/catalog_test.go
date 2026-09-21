@@ -13,14 +13,14 @@ import (
 	"github.com/temper-sh/temper/internal/render"
 	"github.com/temper-sh/temper/internal/render/engine"
 	"github.com/temper-sh/temper/internal/software"
+	"github.com/temper-sh/temper/internal/software/adapter/upstreamrelease"
 	softwarelock "github.com/temper-sh/temper/internal/software/lockfile"
 )
 
 func supply(pkg string) catalog.Supply {
-	id := "upstream-release:" + pkg
 	return catalog.Supply{Package: pkg, Target: software.Target{OS: "darwin", Arch: "arm64"},
-		Selection: softwarelock.Selection{Provenance: "experiment", Method: "release-artifact", Adapter: "upstream-release", RecipeRevision: "release-archive/v1", RootUnit: id},
-		Units:     map[string]softwarelock.Unit{id: {Adapter: "upstream-release", Scope: pkg, NativeName: pkg, Version: "b10936", Revision: strings.Repeat("b", 40), Dependencies: []string{}, Artifacts: []software.Artifact{{Locator: "https://example.test/" + pkg + ".tar.gz", SHA256: strings.Repeat("c", 64), Size: 101, UnpackedSize: 200, InstalledEntries: 2, Format: "tar.gz", ArchiveRoot: "bundle"}}}}}
+		Source:  &upstreamrelease.GitHubSource{Repository: "example/" + pkg, Asset: "tool-{version}.tar.gz", ArchiveRoot: "bundle"},
+		Release: &upstreamrelease.Release{Version: "b10936", Revision: strings.Repeat("b", 40), Artifact: software.Artifact{Locator: "https://example.test/" + pkg + ".tar.gz", SHA256: strings.Repeat("c", 64), Size: 101, UnpackedSize: 200, InstalledEntries: 2, Format: "tar.gz", ArchiveRoot: "bundle"}}}
 }
 
 func document() catalog.Document {
@@ -33,12 +33,12 @@ func document() catalog.Document {
 			Speculation:     catalog.Speculation{Method: "mtp", Source: "embedded", MaxDraftTokens: 3},
 			EngineConfig: catalog.LlamaConfig{Kind: "llama-server/v2", Parallel: 1, KVCache: "q8", FlashAttention: "on", BatchTokens: 512, MicrobatchTokens: 512, ContextCheckpoints: 16, PromptCacheRAMMiB: 0, GPULayers: 99,
 				Controls: engine.LlamaServerControls{CacheReuse: 16, ReasoningEffort: "medium", PreserveReasoning: true, ContextShift: false, CachePrompt: true, Fit: "off", Threads: 4, ThreadsBatch: 4, LoadMode: "mmap"}}}},
-		Profiles: map[string]catalog.Profile{"local-qwen": {GPUMemoryUtilization: .85, Bindings: []catalog.Binding{{ID: "primary", Layout: "qwen-32k", Route: "default", Residency: "resident", IdleTTLSeconds: 1800}}}}}
+		Profiles: map[string]catalog.Profile{"local-qwen": {GPUMemoryUtilization: .85, Bindings: []catalog.Binding{{Layout: "qwen-32k", Route: "default", Residency: "resident", IdleTTLSeconds: 1800}}}}}
 }
 
 func compile(t *testing.T, d catalog.Document) catalog.Lock {
 	t.Helper()
-	l, err := catalog.Compile(d, catalog.Selection{Schema: catalog.SelectionSchema, Profile: "local-qwen", Tools: []string{}, Integrations: []string{}}, software.Target{OS: "darwin", Arch: "arm64"})
+	l, err := catalog.Compile(d, catalog.Selection{Schema: catalog.SelectionSchema, Profile: "local-qwen"}, software.Target{OS: "darwin", Arch: "arm64"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,7 +226,7 @@ func TestNegativeCheckpointSpacingIsRejectedBeforeEffects(t *testing.T) {
 	layout := d.Layouts["qwen-32k"]
 	layout.EngineConfig.Controls.CheckpointMinStep = &negative
 	d.Layouts["qwen-32k"] = layout
-	_, err := catalog.Compile(d, catalog.Selection{Schema: catalog.SelectionSchema, Profile: "local-qwen", Tools: []string{}, Integrations: []string{}}, software.Target{OS: "darwin", Arch: "arm64"})
+	_, err := catalog.Compile(d, catalog.Selection{Schema: catalog.SelectionSchema, Profile: "local-qwen"}, software.Target{OS: "darwin", Arch: "arm64"})
 	if err == nil || !strings.Contains(err.Error(), "checkpoint spacing") {
 		t.Fatalf("catalog accepted negative checkpoint spacing: %v", err)
 	}
@@ -289,14 +289,8 @@ func TestDigestChangesFollowOwnedFacts(t *testing.T) {
 			d := document()
 			tt.change(&d)
 			got := compile(t, d)
-			if reflect.DeepEqual(got.Digests.Records, base.Digests.Records) {
+			if got.SourceSnapshotSHA256 == base.SourceSnapshotSHA256 {
 				t.Error("record identity did not change")
-			}
-			if changed := !reflect.DeepEqual(got.Digests.Materials, base.Digests.Materials); changed != tt.material {
-				t.Errorf("material changed=%v", changed)
-			}
-			if changed := got.Digests.Layouts["qwen-32k"] != base.Digests.Layouts["qwen-32k"]; changed != tt.layout {
-				t.Errorf("layout changed=%v", changed)
 			}
 			if changed := got.Digests.Profile != base.Digests.Profile; changed != tt.profile {
 				t.Errorf("profile changed=%v", changed)
@@ -323,7 +317,7 @@ func TestRejectsUnexecutableGraphs(t *testing.T) {
 		{"incomplete Rapid closure", func(d *catalog.Document) {
 			e := d.Engines["llama-b10936"]
 			e.Family = "rapid-mlx"
-			e.Supply.Units = nil
+			e.Supply.Release = nil
 			d.Engines["llama-b10936"] = e
 		}},
 		{"unknown adapter", func(d *catalog.Document) {
@@ -338,9 +332,7 @@ func TestRejectsUnexecutableGraphs(t *testing.T) {
 		}},
 		{"missing library archive", func(d *catalog.Document) {
 			e := d.Engines["llama-b10936"]
-			u := e.Supply.Units[e.Supply.Selection.RootUnit]
-			u.Artifacts = nil
-			e.Supply.Units[e.Supply.Selection.RootUnit] = u
+			e.Supply.Release.Artifact.SHA256 = ""
 			d.Engines["llama-b10936"] = e
 		}},
 		{"unsafe file", func(d *catalog.Document) {

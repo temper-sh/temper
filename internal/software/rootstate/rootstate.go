@@ -65,8 +65,22 @@ type OperationUnit struct {
 	OwnershipBefore installplan.Ownership `yaml:"ownership_before,omitempty"`
 	Location        string                `yaml:"location,omitempty"`
 	RemoveProvider  bool                  `yaml:"remove_provider,omitempty"`
-	RetireShared    bool                  `yaml:"retire_shared,omitempty"`
 	SharedClaim     string                `yaml:"shared_claim,omitempty"`
+}
+
+// V1 operation digests included the now-retired boolean even for isolated
+// operations. Preserve those hashes so an interrupted shipped installation
+// can recover. The flag is no longer accepted or written in persisted YAML.
+func (u OperationUnit) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Before          installplan.Before
+		OwnershipAfter  installplan.Ownership
+		OwnershipBefore installplan.Ownership
+		Location        string
+		RemoveProvider  bool
+		RetireShared    bool
+		SharedClaim     string
+	}{u.Before, u.OwnershipAfter, u.OwnershipBefore, u.Location, u.RemoveProvider, false, u.SharedClaim})
 }
 
 type SharedUnit struct {
@@ -79,7 +93,6 @@ type SharedUnit struct {
 	Artifacts    []software.Artifact                `yaml:"artifacts,omitempty"`
 	Location     string                             `yaml:"location"`
 	Acquisition  installplan.Ownership              `yaml:"acquisition"`
-	Lifecycle    installplan.SharedLifecycle        `yaml:"lifecycle"`
 	Claims       map[string]installplan.SharedClaim `yaml:"claims"`
 }
 
@@ -210,7 +223,7 @@ func (d Document) Validate() error {
 					if unit.OwnershipAfter != installplan.OwnershipTemperAdded && unit.OwnershipAfter != installplan.OwnershipPreExisting {
 						problem("operation %q unit %q has invalid ownership_after %q", installationID, unitID, unit.OwnershipAfter)
 					}
-					if unit.OwnershipBefore != "" || unit.Location != "" || unit.RemoveProvider || unit.RetireShared {
+					if unit.OwnershipBefore != "" || unit.Location != "" || unit.RemoveProvider {
 						problem("install operation %q unit %q carries removal-only fields", installationID, unitID)
 					}
 				} else {
@@ -237,17 +250,8 @@ func (d Document) Validate() error {
 					if unit.Before == installplan.BeforeNonExact {
 						problem("operation %q shared unit %q cannot have non-exact pre-state", installationID, unitID)
 					}
-					if operation.Kind == "remove" && unit.RetireShared && unit.OwnershipBefore != installplan.OwnershipTemperAdded {
-						problem("remove operation %q shared unit %q cannot retire pre-existing software", installationID, unitID)
-					}
-					if operation.Kind == "remove" && unit.RemoveProvider != unit.RetireShared {
-						problem("remove operation %q shared unit %q must remove exactly the retiring generation", installationID, unitID)
-					}
-					if operation.Kind == "remove" && unit.RetireShared {
-						shared, ok := d.SharedUnits[unit.SharedClaim]
-						if !ok || shared.Lifecycle != installplan.SharedRetiring || len(shared.Claims) != 0 {
-							problem("remove operation %q shared unit %q has no exact retiring authority", installationID, unitID)
-						}
+					if operation.Kind == "remove" && unit.RemoveProvider {
+						problem("remove operation %q shared unit %q cannot remove system-managed software", installationID, unitID)
 					}
 					if operation.Kind == "remove" {
 						if shared, ok := d.SharedUnits[unit.SharedClaim]; ok {
@@ -258,8 +262,6 @@ func (d Document) Validate() error {
 					}
 				} else if unit.SharedClaim != "" {
 					problem("operation %q isolated unit %q carries a shared_claim", installationID, unitID)
-				} else if unit.RetireShared {
-					problem("operation %q isolated unit %q cannot retire shared authority", installationID, unitID)
 				}
 			}
 			if operation.Kind == "remove" && group.EffectModel == installplan.EffectIsolated {
@@ -303,22 +305,8 @@ func (d Document) Validate() error {
 		if unit.Acquisition != installplan.OwnershipTemperAdded && unit.Acquisition != installplan.OwnershipPreExisting {
 			problem("shared unit %q has invalid acquisition %q", sharedKey, unit.Acquisition)
 		}
-		if unit.Lifecycle != installplan.SharedActive && unit.Lifecycle != installplan.SharedRetiring {
-			problem("shared unit %q has invalid lifecycle %q", sharedKey, unit.Lifecycle)
-		}
-		if unit.Lifecycle == installplan.SharedActive && len(unit.Claims) == 0 {
+		if len(unit.Claims) == 0 {
 			problem("active shared unit %q must have at least one claim", sharedKey)
-		}
-		if unit.Lifecycle == installplan.SharedRetiring {
-			if unit.Acquisition != installplan.OwnershipTemperAdded {
-				problem("retiring shared unit %q must be Temper-added", sharedKey)
-			}
-			if len(unit.Claims) != 0 {
-				problem("retiring shared unit %q must have no claims", sharedKey)
-			}
-			if !operationRetiresShared(d.Operations, sharedKey) {
-				problem("retiring shared unit %q has no matching remove operation", sharedKey)
-			}
 		}
 		for _, installationID := range sortedKeys(unit.Claims) {
 			claim := unit.Claims[installationID]
@@ -354,7 +342,7 @@ func (d Document) Projection(installation installplan.Installation) (installplan
 			Adapter: unit.Adapter, Scope: unit.Scope, NativeName: unit.NativeName,
 			Version: unit.Version, Revision: unit.Revision,
 			Dependencies: append([]string(nil), unit.Dependencies...), Artifacts: append([]software.Artifact(nil), unit.Artifacts...),
-			Location: unit.Location, Acquisition: unit.Acquisition, Lifecycle: unit.Lifecycle, Claims: claims,
+			Location: unit.Location, Acquisition: unit.Acquisition, Claims: claims,
 		}
 	}
 	if operation, ok := d.Operations[installation.ID]; ok {
@@ -462,9 +450,9 @@ func Prepare(current *Document, desired softwarelock.Document, plan installplan.
 					Adapter: locked.Adapter, Scope: locked.Scope, NativeName: locked.NativeName,
 					Version: locked.Version, Revision: locked.Revision,
 					Dependencies: dependencies, Artifacts: artifacts, Location: planned.Location,
-					Acquisition: planned.Ownership, Lifecycle: installplan.SharedActive, Claims: map[string]installplan.SharedClaim{},
+					Acquisition: planned.Ownership, Claims: map[string]installplan.SharedClaim{},
 				}
-			} else if shared.Lifecycle != installplan.SharedActive || !sameSharedIdentity(shared, locked) || shared.Location != planned.Location || shared.Acquisition != planned.Ownership {
+			} else if !sameSharedIdentity(shared, locked) || shared.Location != planned.Location || shared.Acquisition != planned.Ownership {
 				return Document{}, false, 0, fmt.Errorf("shared unit %q conflicts with root-state identity", planned.ID)
 			}
 			if _, claimed := shared.Claims[plan.Installation.ID]; claimed {
@@ -598,23 +586,6 @@ func operationIntentDigest(installationID string, operation Operation) string {
 	}
 	sum := sha256.Sum256(encoded)
 	return hex.EncodeToString(sum[:])
-}
-
-func operationRetiresShared(operations map[string]Operation, sharedKey string) bool {
-	count := 0
-	for _, operation := range operations {
-		if operation.Kind != "remove" {
-			continue
-		}
-		for _, group := range operation.Groups {
-			for _, unit := range group.Units {
-				if unit.SharedClaim == sharedKey && unit.RetireShared {
-					count++
-				}
-			}
-		}
-	}
-	return count == 1
 }
 
 func validateLease(lease Lease) error {

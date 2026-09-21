@@ -84,7 +84,6 @@ check, removal, or catalog policy.
 | `temper probe serve` | `internal/probecmd` | exact software receipt/lock and rendered-generation admission | foreground loopback process group; dry-run is read-only | `docs/contracts/probe-serve.md` |
 | `temper probe tokenize` | `internal/probecmd` | exact software receipt/lock and manifest-locked GGUF admission | one offline tokenizer subprocess; reads prompt bytes from stdin | `docs/contracts/probe-tokenize.md` |
 | `temper field-kit bind` | `internal/fieldkitcmd` + `internal/fieldkitbinding` | manifest/software locks, receipts, canonical machine facts | explicitly named Temper state; pure binding after reads | `docs/contracts/field-kit.md` |
-| Qualification documents | `internal/qualification` | exact references/index, common profile/evidence envelope, canonical witness-scope keys, independent immutable qualification/lifecycle transitions, machine buckets, model artifacts, engines, model runtimes/performance, tools, modes, activities, and exact bundle loading | read-only reuse of software-supply target/catalog constants; callers supply index/document bytes and canonical facts, and all parsing, hashing, validation, loading, transition/composition checks, and matching are pure | `docs/design/qualification-catalog-schema.md` |
 
 An internal package not listed as a public operation is usually a decision or
 boundary collaborator. It does not become a user-facing surface merely because
@@ -140,14 +139,12 @@ workflow-only decisions stay with the use case.
 |---|---|
 | `internal/software` | Provider-neutral shared values such as targets, candidates, and artifacts |
 | `software/archive` | Shared bounded tar.gz inspection, safe extraction, and canonical installed-tree inventory for isolated adapters |
-| `software/catalog` | Strict software-supply catalog parsing and validation |
+| `internal/catalog` | Maintained source records, latest/tested resolution, exact execution-lock compilation and derived installer inputs |
+| `software/catalog` | Earlier signed software-publication format; not the V3 authoring path |
 | `software/version` | Closed SemVer/PEP 440/opaque/git version semantics |
 | `software/policy` | Pure catalog recipe and constraint policy |
-| `software/selection` | Deterministic provider-candidate selection |
-| `software/testedstatus` | Derived tested/untested/known-bad/outside-policy status |
-| `software/resolve` | Catalog + provider reads + selection + one software-lock commit |
 | `software/lockfile` | Exact desired software closure and provenance |
-| `software/lockstore` | Concurrency-safe software-lock snapshots and atomic replacement |
+| `software/lockstore` | Concurrency-safe software-lock snapshots used by exact installers |
 
 Catalog policy never proves what is installed. The lock is desired state, a
 receipt is observed history, and root state is operation/share authority.
@@ -158,13 +155,12 @@ receipt is observed history, and root state is operation/share authority.
 descriptor validation, and keyed family dispatch. Concrete provider knowledge
 stays in member packages:
 
-- `adapter/homebrew` translates Homebrew metadata and controlled process
-  behavior.
 - `adapter/uv` translates version-matched uv/PEP 751 data into an exact managed
   Python closure and installs that locked closure into an inspected immutable
   environment using its exact managed runtime and local hashed wheelhouse.
-- `adapter/upstreamrelease` resolves, installs, inspects, and removes isolated
-  verified release archives.
+- `adapter/upstreamrelease` discovers latest or exact numbered GitHub releases,
+  verifies archive identities/inventory, and installs, inspects and removes
+  private release archives.
 
 Both isolated effect members delegate tar.gz path, bound, mode, link, hash,
 extraction, and tree-inventory semantics to `software/archive`. They do not
@@ -199,15 +195,17 @@ The order in the last three rows is part of the reliability contract. Do not
 move provider effects ahead of prepared authority or turn check findings into
 writes.
 
-### Catalog publication
+### Earlier software-catalog publication
+
+These signing/update tools remain independent of the maintained V3 catalog.
+The unused generic resolver/status pipeline, embedded bootstrap catalog and
+Homebrew dependency graph reader were retired during the first cleanup wave.
 
 | Package | Owns |
 |---|---|
 | `software/catalogpublication` | Pure detached-signature envelope parsing and verification |
 | `software/catalogtrust` | Public verification keys compiled into the binary |
 | `software/catalogsource` | Bounded read-only catalog transport |
-| `software/catalogreader` | Verified active-or-bootstrap catalog selection |
-| `software/catalogbootstrap` | Embedded signed fallback publication |
 | `software/catalogstore` | Immutable snapshots and conditional active digest pointer |
 | `software/catalogupdate` | Verify → capability/rollback checks → one active-pointer commit |
 | `software/catalogsigning` | Release-side signing, verification, and conditional output commit |
@@ -228,7 +226,7 @@ caller-owned.
 | Model artifact set | `artifacts/layouts/<layout>/<digest>/` | `fetch`; immutable content-addressed publication |
 | Render generation | `rendered/generations/<digest>/` | `apply`; immutable generation |
 | Current render | `rendered/current` | `apply`; atomic relative symlink switch after validation |
-| Software lock | caller-owned `software.lock.yaml` | `software/resolve` through `software/lockstore`; installation only consumes it |
+| Software lock | caller-owned `software.lock.yaml` | `catalogcmd` exports resolved inputs; installation only consumes them |
 | Catalog snapshots | `software/catalog/snapshots/<digest>/` | `catalogstore`; immutable verified publication |
 | Active catalog | `software/catalog/active` | `catalogupdate`; exact digest plus newline in a regular file |
 | Installation receipt | `software/installations/<id>/installation-receipt.yaml` | `receiptstore`; canonical conditional commit/removal |
@@ -271,22 +269,12 @@ release cutover gate.
    restart through the ordinary entry point, and prove convergence.
 5. Re-prove `--dry-run` purity and a clean second run.
 
-### Extend qualification profiles
+### Change installable catalog records
 
-1. Refine `docs/design/qualification-catalog-schema.md`; do not introduce a
-   generic untyped `spec` escape hatch.
-2. Add the typed document to `internal/qualification` with canonical fake
-   bytes and strict refusals.
-3. Keep selection, consent, install authorization, Labs state, and Field Kit
-   session data out of the package.
-4. Extend the index loader only after each referenced typed document surface
-   exists. It verifies machine buckets and all six profile kinds, including
-   exact runtime/mode composition and activity narrowing. Public evidence is
-   accepted only with a recomputed typed scope; qualified profiles require the
-   complete schema-specific review gates, runtime task-quality evidence, and
-   an available exact dependency closure. Recommendations still fail closed.
-5. Do not build the product-promotion compiler until Labs adopts its writer contract under
-   explicit cross-repository authorization.
+Use the execution-lock contract and the current software source policy. Keep
+source facts separate from resolved installation details. Results owns public
+assessment; reference applicable Labs or Field Kit evidence through ordinary
+review. No qualification package or product-promotion compiler is involved.
 
 ## Keeping this map useful
 

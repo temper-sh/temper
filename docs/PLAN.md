@@ -1,5 +1,49 @@
 # Temper — execution plan
 
+## Field Kit simplification — 2026-09-22
+
+The owner authorized wave 2 in the V3 session plan. Product engineering here
+supplies direct execution-lock inspection, preparation, rendering, serving and
+removal, reusing the existing installers and receipt checks. Compatibility
+exports and issued v1 locks remain supported. Field Kit owns consent and the
+decision to run or stop; Temper owns process identities, listener validation,
+bounded termination and an explicit shutdown result. No model runs, downloads,
+release, publication or live-service changes are authorized by this work.
+
+Completed locally. The [direct execution runtime](contracts/execution-runtime.md)
+supplies the new commands, exact generation checks, process identities and
+shutdown proof. Existing dirty work and issued Field Kit exports were preserved.
+Go tests, race checks, vet and build pass, including harmless native child-process
+tests for listener ownership and TERM/KILL shutdown. All 15 Field Kit configurations
+compile and inspect through the new API. Publication remains a separate action;
+the new Field Kit client requires a matching development Temper build.
+
+## Authorized simplification — 2026-09-21
+
+The owner authorized the first wave in the
+[V3 session plan](../../v3/PLAN.md#temper-simplification-session--2026-09-21):
+retire the unused qualification/product-promotion subsystem and obsolete Labs
+authoring lane; simplify software sources and resolved installation records;
+support latest and tested software selection with separate required/tested
+versions; retain all system-managed software; remove redundant identities and
+placeholder fields. Preserve existing dirty work, exact historical evidence
+and the working Field Kit host surface. This bounded cleanup is independent of
+live cutover and replaces conflicting older qualification and shared-package
+retirement requirements below.
+
+Field Kit's implementation and direct-lock transition are recorded as a
+separate second wave. No release, publication, live-service change, model run,
+commit or push is part of this first wave.
+
+Completed 2026-09-22. The maintained v2 catalog/compiler now separates sources
+from resolved releases, exposes recorded/latest/tested choice, scopes required
+and tested versions separately, and omits unused identity fields. The unused
+qualification and generic software-resolution/status/bootstrap paths are
+removed. System-package removal and retirement are removed; private installation
+cleanup and recovery remain. Issued Field Kit v1 locks retain their identity
+and exact export bytes. Go tests, race tests, vet, build, Labs checks and local
+references pass. See the V3 session plan for the bounded outcome and second wave.
+
 V3 consolidation note (2026-09-03): the current implementation and live-safety
 constraints in this file remain authoritative until cutover. New V3 product
 engineering follows Local AI V3's
@@ -69,7 +113,7 @@ mix; CLI verbs are orchestrators composing them.
 
 | Kind | Temper instances |
 |---|---|
-| Pure computation | manifest + lock + qualification catalog → rendered config text; software candidates + supply policy → exact software-lock selection; the wall model (fraction × device memory + co-tenants + OS floor ≤ wired limit); render diffs (what loads/unloads, warmup cost); lock-drift computation; packet → catalog-row compilation |
+| Pure computation | manifest + lock → rendered config text; software candidates + supply policy → exact software-lock selection; the wall model (fraction × device memory + co-tenants + OS floor ≤ wired limit); render diffs (what loads/unloads, warmup cost); lock-drift computation; catalog source → exact execution lock |
 | Read | hardware and allowance detection; provider-native upstream resolution; service status at its three levels (job loaded / process alive / answering with residency); lease state; catalog, installed-software, and provenance reads |
 | Side effect | writing lock rows; installing exact software from a software lock; installing rendered configs; the launchctl kick; lazy-pull downloads; writing state (active mode, leases); uninstall |
 
@@ -96,9 +140,10 @@ generalizes:
   ships.
 - `update`: writes pins only. Printing the acceptance gate is the design;
   running it is the human's move.
-- software resolution/update: read provider candidates → select with the
-  catalog's provider-native policy → stage and validate the complete
-  `software.lock.yaml` → atomically replace it once. It never installs.
+- software preparation: read the selected catalog sources → choose recorded,
+  latest or tested versions satisfying required support → compile an exact
+  execution lock → export installer inputs. It never installs or rewrites an
+  existing lock to a new identity.
 - software install: read a complete software lock plus its required base
   receipts → compute the whole named-installation/provider/claim plan →
   atomically prepare root-wide intent and claims → perform declared adapter
@@ -172,8 +217,8 @@ follows the one-writer rule.
 | C4 | software supply records for Temper-managed packages: logical package, portable installation method, target-adapter definition, adapter-native package recipe/version scheme, selection policy, constraints, and tested-version evidence | release review | software resolver, installer, `check` | M2 phase A |
 | C5 | `software.lock.yaml`: exact target/method/adapter/provider closure, immutable catalog and/or experiment provenance, and required base-lock identities | explicit catalog resolution/update or explicit experiment-lock generation | installer, `check`, Field Kit Temper-material binding | M2 phase A |
 | C6 | named installation receipt plus root-wide software state: observed closure/base receipts and current prepared operations/shared claims | installer around inspected effects and receipt commit | `check`, uninstall, Field Kit Temper-material binding | M2 phase B |
-| C7 | qualification profiles (model artifact, model patch, engine, model runtime, tool, mode, activity) + independent evidence qualification (`WATCH/LAB/QUALIFIED/REJECTED`) and product lifecycle (`EXPERIMENTAL/SUPPORTED/DEPRECATED/RETIRED`) | release review | wizard, `check`, render validation | M2 phase C; two-axis surface approved 2026-08-25 and portfolio/foreground/patch composition amended 2026-08-29 in `docs/design/qualification-catalog-schema.md` |
-| C8 | Labs product-promotion packet | Labs review | the qualification-catalog compiler | M2 phase C; approved Labs writer adoption and first pure Temper compiler slice implemented 2026-08-25; semantic-name byte-contract refresh re-adopted 2026-08-27; see `docs/design/product-promotion-contract.md` |
+| C7 | qualification catalog | — | — | Retired 2026-09-21; ordinary catalog review and Results assessment replace this unused subsystem. |
+| C8 | Labs product-promotion packet | — | — | Retired 2026-09-21 with the synthetic writer/compiler fixture. |
 | C9 | state dir: active mode, leases | `mode`/`start`/`stop` | `mode`, `status`, cooperating harnesses | M4 |
 | C10 | Stable Temper host for Field Kit: canonical machine facts, exact software/artifact install/check/remove, rendering, ordered material binding, and one receipt/generation-bound loopback process primitive | Temper's machine/software/model/config/bind/probe verbs | independently released Field Kit runtime | M2 phase B |
 | C11 | CLI verb surface: verbs, exit codes, RESULT lines, machine-parseable outcomes | this plan → per-verb design docs | humans and agents | grows M1 → M4 |
@@ -444,7 +489,7 @@ base.
 
 > **Sequence changed by owner 2026-08-20.** Build the minimum software supply
 > catalog first, immediately use it to install the Field Kit base, then expand
-> the broader qualification catalog. Field Kit does not wait for the wizard,
+> the broader reviewed configuration catalog. Field Kit does not wait for the wizard,
 > production modes, harness leases, or live-machine cutover.
 
 > **Field Kit boundary revised by owner 2026-08-24.** The new Field Kit is a
@@ -466,14 +511,11 @@ base.
 > Temper release, and Field Kit package, session, and protocol bytes do not
 > live in this repository.
 
-> The software-supply catalog is **an independently published, signed database
-> of tested software versions**; the qualification catalog separately records tested composed
-> configurations. "Minimum tested" is evidence, while "latest version
-> satisfying this floor" is update policy; neither is the exact installed
-> version. Every actual installation is frozen in `software.lock.yaml` and
-> witnessed by an installation receipt. Rolling policy is evaluated only by an
-> explicit resolve/update—there is no background updater and no floating
-> installation.
+> **Version policy revised by owner 2026-09-21.** The maintained catalog owns
+> software sources, required support and optional tested evidence. Required is
+> a compatibility floor; tested is a separate observed boundary. Explicit
+> latest/tested preparation records exact inputs before installation. Results
+> owns public assessment; there is no qualification registry or automatic update.
 
 #### Phase A — software supply first
 
@@ -734,160 +776,13 @@ base.
     manifest-locked GGUF and returns canonical token IDs; Field Kit retains
     exact-context construction and protocol policy.
 
-#### Phase C — broader qualification catalog resumes
+#### Qualification and product promotion — retired 2026-09-21
 
-12. *(decide, D1/D22/D23; design — provisionally approved by owner 2026-08-25
-    and amended 2026-08-29; refinement remains open before v1 freeze)* Define
-    C7 as separate typed profile documents over a common envelope for model
-    artifact, model patch, engine, model runtime, tool, mode, and activity.
-    The envelope carries exact pins, status, witness scope key (artifact
-    revision × optional selected patch revision × engine-profile revision ×
-    runtime-profile revision × machine bucket × mode × co-residents),
-    dependencies, known failures, data boundary, invalidation triggers,
-    applicability, tool-consumed service roles, and a "what this means for
-    you" line. Applicability says where a profile is useful; witness scope says
-    where evidence exists. Runtime profiles remain plural per artifact because
-    selected patches, fit, stability, cache, and performance evidence may vary.
-
-    `Coder` is removed as a catalog role. Coding is an evidence-backed use;
-    `main` is the local mode's explicit foreground binding; activities compose
-    only explicitly selected tools and harness extensions around that
-    foreground. Recommendation is a plural, consent-neutral portfolio
-    projection over qualified and applicable rows, not a status and not a
-    ranking: zero, one or many model choices may be recommended for the same
-    machine/mode/work question. Exact runtime variants over one base artifact
-    are grouped beneath that model choice, so Froggeric and Sharp can be
-    offered as template-patch options without duplicating or relabeling the
-    shared Qwen weights. Each runtime row carries a structured performance
-    profile covering task success/regressions, time-to-solution/tool use, raw
-    throughput, qualified context, memory and cache behavior with conditions
-    and unmeasured axes explicit. The schema must distinguish catalog
-    recommendation from the manifest's user-owned selection and foreground
-    binding.
-    The provisionally approved contract is
-    [`docs/design/qualification-catalog-schema.md`](design/qualification-catalog-schema.md):
-    seven content-addressed typed profile documents, immutable supersession and
-    status history, separately versioned machine-bucket vocabulary, and
-    unordered catalog-level portfolio recommendation sets. The amended D7 rule
-    preserves exact history while allowing a routine compatible software
-    revision to become current directly after one focused shared regression
-    packet; material behavior changes return through `LAB/EXPERIMENTAL`, and
-    deliberately parallel supported combinations use separate profile IDs.
-    The qualification catalog receives an independently signed current channel
-    so software currency does not wait for a Temper binary release.
-
-    Temper refinement currently implements the pre-amendment exact-reference and index
-    surface plus strict machine-bucket, model-artifact, engine, model-runtime,
-    tool, mode, and activity documents. The pure loader verifies canonical
-    bytes,
-    derived paths, hashes, identities, exact bucket applicability, dependency
-    presence, runtime role/template/speculation compatibility, mode
-    roles/placement/harness transports, and the active data-boundary union from
-    a supplied in-memory bundle. Activities resolve one exact mode, keep its
-    runtime bindings, require a strict subset of its active tools, and may only
-    narrow applicability and the recomputed permission boundary. The common
-    profile envelope, artifact byte/quantization/component/license identity,
-    exact C4-tested engine plus
-    serving/process contract, output-affecting runtime layout, and explicit
-    structured performance axes are typed. Public evidence inventories and
-    canonical witness-scope keys are validated, and a pure immutable-lineage
-    validator enforces exact supersession and legal qualification/lifecycle
-    transitions. Tool
-    core/transport/permission/backend/failure identity is closed and
-    consent-neutral. Exact composed mode worlds remain distinct from user
-    selection. All six pre-amendment typed document kinds are executable against fake
-    hermetic fixtures. Schema-specific `QUALIFIED` packet gates, public
-    applicability/evidence completeness, runtime task-quality requirements,
-    and exact dependency qualification/lifecycle closure now pass a complete
-    fake six-profile chain and refuse weakened variants. That implementation
-    is retained evidence, not the surface to freeze: model-patch identity,
-    technical interfaces, explicit foreground binding, service-only roles,
-    use claims, activity support, the signed current channel, and grouped
-    portfolio options must land before recommendation projection resumes.
-    Recommendation content remains an explicit refusal pending those amended
-    cross-document rules.
-    The fixtures remain fake and do not seed a qualification row.
-13. *(design/build, with Labs — writer adoption explicitly authorized by owner
-    and first compiler slice complete 2026-08-25)* Define
-    the product-promotion packet
-    (C8): how a reviewed Labs packet compiles into a qualification row without
-    becoming consent. The provisionally approved Temper-side contract is
-    [`docs/design/product-promotion-contract.md`](design/product-promotion-contract.md):
-    one canonical packet targets one C7 revision, private/raw provenance stays
-    in Labs, and a pure compiler emits only public-safe claim-level evidence
-    plus exact packet identity.
-    Labs owns the writer schema, lifecycle, prompt, registry, and fake
-    model-artifact packet adopted on 2026-08-25. The owner explicitly
-    re-authorized its semantic-name byte refresh on 2026-08-27; the Labs and
-    Temper packet/projection copies again form an exact cross-repository golden.
-    Temper strictly parses the refreshed packet,
-    injects its byte digest, recomputes evidence-scope keys, drops C8-only and
-    private source material, and reproduces the declared fake C7 projection
-    byte for byte from explicit in-memory inputs. The compiler refuses missing,
-    wrong, duplicate, or unused dependency/bucket documents and performs no
-    adjacent-repository or filesystem discovery. Exact prior packet and target-
-    profile bytes are required for independent supersession-chain validation.
-    Hermetic generated packets currently cover all six pre-amendment target
-    kinds; model-patch packets and the amended envelope are the next coordinated
-    Labs/Temper byte-contract revision. The refreshed fake
-    model-artifact pair is the independent Labs/Temper byte-for-byte golden.
-    The compiler now enforces the closed target-specific `QUALIFIED` gate set,
-    complete runtime task quality, bounded confounds, and exact dependency
-    qualification/lifecycle closure against explicitly supplied bytes.
-    `field-kit-runtime-profile/v1` is the exploratory-witness special case;
-    `external-lab` packets stay inspectable but outside the generic install
-    path.
-14. *(build; pre-amendment qualification/closure slice complete 2026-08-25;
-    amendment implementation next)* Extend
-    validation with status-machine legality, witness-scope completeness,
-    applicability, and consent-neutrality (no row selects itself). Immutable
-    status edges, qualified applicability witnesses, exact evidence-scope
-    references, task-quality gates, and dependency closure are implemented.
-    Before recommendation/performance projection, replace the fake coder-role
-    chain with the seven-kind amended chain, update the Labs packet/compiler
-    golden once, and add focused fixtures for routine-software currentness,
-    lower-tier local foreground, activity-support consent, and shared-weight
-    template-patch choices. Then implement portfolio recommendation projection
-    and its no-selection acceptance fixture.
-15. *(build)* After accepted C8 packets exist, seed the reviewed current
-    posture as narrowly scoped `QUALIFIED` rows and compile a native-MTP
-    candidate as a consent-neutral `LAB` row. It remains opt-in, non-default,
-    and non-recommended, with any rejected autonomous M5/32 GiB scope retained
-    exactly. As checked on 2026-08-24, the current Labs handoff registry
-    contains no accepted native-MTP C8 packet; legacy evidence or a Field Kit
-    runtime-profile packet is
-    inspectable input to future Labs review, not an accepted fixture and not
-    permission to read moving Labs state or alter the live legacy service.
-
-**Acceptance:** Phase A fixtures cover all three policies, provider-native and
-non-SemVer comparison, exact method/adapter/closure locking, known-bad
-exclusions, refusal of silent method fallback, deterministic target→adapter
-selection, and an unknown-adapter refusal. The same adapter-contract suite runs
-against every member; adding a fake second-OS system-package adapter requires
-no workflow change. The reviewed initial inventory contains no Pi/Node recipe,
-and an explicitly selected harness remains render/check-only. C5 fixtures also
-cover direct experiment provenance, combined catalog/experiment provenance,
-and canonical required-base digests. Phase B uses hermetic fake adapters to
-prove dry-run purity, clean second runs, concurrent-run refusal, interruption
-reconciliation, named-root isolation, two experiments claiming one exact
-shared package without reinstall/removal races, base-receipt drift refusal,
-preservation of pre-existing packages, exact uninstall, and ordered packet identity. A
-real scratch round-trip through one promoted fixed experiment and one promoted
-bounded-adaptive experiment is on-demand, announced, and run only with explicit
-authorization. Those experiment promotions are incremental evidence gates,
-not prerequisites for the already completed single-runtime ownership change.
-Phase C round-trips every amended profile kind into a wizard-readable portfolio
-choice, proves service-role and foreground separation, preserves exact patch
-composition, exercises routine-current/holdback/material-change software
-paths, and rejects every illegal fixture.
-
-**Dependencies:** M1 for phases A and B. Phase C is required by M3. Labs-side
-parity (`add-tool` intake) is tracked in Labs and does not block the installed
-base. **Decisions:** D1, D7, D22, and D23 are provisionally accepted for Temper-only
-fake-fixture implementation and remain refinable before v1 freezes. D14 fixes
-the Phase A method/adapter boundary. D4 does not block a checksummed pre-release
-Temper binary; Field Kit compatibility is exercised by the independently
-released Field Kit test suite against its declared minimum Temper version.
+The unused typed qualification subsystem, its synthetic fixtures and dedicated
+product-promotion compiler/contracts were removed in the authorized cleanup.
+No real promotion packet depended on them. Current catalog work uses the V3
+source/resolution path; Results owns public assessment. The preserved acceptance
+records remain evidence for the installer and Field Kit host primitives.
 
 ### M3 — wizard
 
@@ -942,7 +837,7 @@ option fits; a coding activity offers but does not silently select Pi
 extensions; a Qwen fixture presents Froggeric and Sharp as template-patch
 options over one exact weight artifact; plural model choices display their
 tradeoffs and choose neither by default; re-run is advisory only.
-**Dependencies:** M2 Phase C (the qualification catalog is what it browses),
+**Dependencies:** the maintained installable catalog and reviewed Results assessment,
 M1.
 **Decisions:** D3 (where the wizard writes), D8 (remote providers
 render-only), D4 (latest useful point).
@@ -996,7 +891,8 @@ Work items:
    generation. Re-witnessing after a software or model update remains a Field
    Kit run against the M2 base.
 5. *(measure + release review)* Run the prerequisite experiments and protocol
-   soaks, then add only the witnessed machine/mode/harness bindings to C7.
+   soaks, then record only the witnessed findings in the owning evidence and
+   Results assessment.
 
 **Acceptance:** a mode switch is witnessed under in-flight load; two live
 cooperating harnesses obey a lease without preemption; `local`, `utility`, and
@@ -1028,10 +924,9 @@ story complete.
 3. *(build)* Zero-context docs pass: README, compact applicability
    references, "FINDINGS #N" citations replaced by stable Results records
    or compact release anchors, "last reviewed" watermarks.
-4. *(build, with Labs + Results)* Review wiring: promotion publishes a
-   Results record and compiles a catalog row — two explicit outputs, one
-   writer each, no live cross-repo dependency. The catalog ships only
-   reviewed qualified rows.
+4. *(build, with Labs + Results)* Review findings for public assessment and
+   installable catalog changes. Results and Temper each own their output; no
+   promotion packet or qualification registry sits between them.
 5. *(process)* Legacy repo archived per Labs' archive-migration job (Labs
    work; original revisions and hashes preserved before layout improves).
 6. *(build)* CI per the org roster bar: offline, hermetic, per-repo.
@@ -1100,15 +995,15 @@ or CI dependency.
 
 | # | Decision | Blocks | Current lean |
 |---|---|---|---|
-| D1 | Qualification-catalog representation: typed documents vs normalized graph | M2 Phase C | **provisionally approved 2026-08-25; amended 2026-08-29:** seven content-addressed typed documents, including independently versioned model patches, plus catalog-level bucket/portfolio-recommendation vocabulary; refine before v1 freeze (`docs/design/qualification-catalog-schema.md`) |
+| D1 | Catalog representation | current cleanup | The unused qualification taxonomy is retired; use the simplified V3 catalog and exact execution locks. |
 | D2 | Language | — | **resolved 2026-08-14: the whole CLI is Go; completed 2026-08-19 for the first `apply` slice by starting native rendering in M1** (§4) |
 | D3 | Adopt `~/.temper` as the machine-identity home | M3 (wizard write location); M1 schemas stay location-neutral; M2 Field Kit work uses an explicit isolated root | spec proposes yes |
 | D4 | Final public distribution: brew vs curl-installer vs release asset (including prebuilt darwin/arm64 vs build-at-setup) | M5 | **resolved 2026-08-27 (owner): begin with a prebuilt Developer ID-signed and Apple-notarized macOS ARM64 GitHub release asset plus SHA-256; generate linked-module notices into the asset so the source tree stays 0BSD-only; Homebrew/curl remain post-alpha options** |
 | D5 | Mode-posture soaks as Labs-promoted Field Kit experiment packages (Temper only guarantees the base can render and serve the requested posture in isolation) | M4 qualification | open — a Field Kit/Labs question (spec Q8) |
 | D6 | Advisory lease file with expiry sufficient; `--force` human-only | M4 | leaning yes on both (spec Q7) |
-| D7 | Witnessed-row versioning on engine update: invalidate vs fork | M2 Phase C schema design | **amended 2026-08-29:** immutable old witness always remains; a routine compatible software revision may become the new exact `QUALIFIED/SUPPORTED` head after one focused shared regression packet, a material change returns through `LAB/EXPERIMENTAL`, a regression holds the prior current revision, and deliberate parallel support gets a new profile ID (`docs/design/qualification-catalog-schema.md`) |
+| D7 | Historical evidence and software updates | current cleanup | Preserve exact observations; required versions constrain selection, tested versions provide scoped evidence and an optional fallback, and latest remains selectable. |
 | D8 | Remote-provider integration strictly render-only | M3 | leaning yes (spec Q4) |
-| D9 | Qualification-catalog contribution flow for Field Kit witnesses | post-M5 | Labs review and explicit product promotion; submission transport remains open |
+| D9 | Returned Field Kit evidence | Workshop/Labs | Ordinary review informs Results and, when justified, a Temper catalog change. No product-promotion packet is required. |
 | D10 | Pi `packages` / Codex / Claude Code plugin packaging as distribution channels | M4 adapters | open (spec Q9) |
 | D11 | Which modes ship as qualified v1 | M4/M5 | **narrowed 2026-08-19 and clarified 2026-08-29**: `local` + `utility` (+ `off`) describe foreground ownership, never task or model class; local needs an explicit qualified foreground, not a coder; tool narrowing is an activity, not a world. Still evidence-driven (spec Q2) |
 | D12 | Development locus stance (§0: legacy remains the live reference, native product work is here, live cutover at M5) | — | **resolved 2026-08-19:** extracted Bash stays legacy-side; no compatibility/runtime landing; M1 starts native here |
@@ -1175,8 +1070,8 @@ or CI dependency.
    receipts, required-base drift, unclaimed/shared-claim drift, and prepared
    operations without mutation. Provenance-guided uninstall is now executable
    behind keyed fake adapters: it conditionally releases receipts and claims,
-   serializes the final Temper-added generation through `retiring`, preserves
-   pre-existing and still-claimed units, refuses drift, and recovers explicit
+   retains every system-managed package when releasing its last usage record,
+   preserves pre-existing private units, refuses drift, and recovers explicit
    reruns without repeating a completed provider effect. Canonical
    `temper-machine-facts/v1` detection and the pure
    `temper-field-kit-binding/v1` schema/builder now bind exact binary,
@@ -1205,45 +1100,9 @@ or CI dependency.
    passes. Repository signing/notarization secrets and an explicit tag push
    remain external release actions; no live question-package run has been
    performed.
-4. **M2 Phase C — qualification catalog:** the C7 typed-document and
-   Temper-side C8 product-promotion surfaces are provisionally approved; the
-   owner amended their portfolio, foreground, patch, and software-currentness
-   semantics on 2026-08-29 before wizard freeze.
-   The first C7 executable slice now strictly parses, canonically encodes,
-   hashes, validates, and matches immutable machine-bucket documents against
-   canonical Temper machine facts using a fake hermetic fixture. Its exact
-   catalog index now canonically validates references and release paths, then
-   verifies bucket, model-artifact, engine, and model-runtime bytes, hashes,
-   identities, dependencies, compatibility, and exact bucket applicability
-   through a pure bundle loader. The reusable profile envelope, both
-   dependency-root profiles, output-affecting runtime layout, and explicit
-   performance axes are typed. Public evidence inventories and complete,
-   recomputed runtime witness scopes are accepted, and `QUALIFIED` profiles
-   now require schema-specific C8 gates, complete runtime task quality,
-   applicability witnesses, and an available exact dependency closure.
-   Recommendations still fail closed. Exact immutable
-   qualification/lifecycle edges are also validated without a moving-history
-   lookup. The tool
-   dependency root is typed and loaded with exact permission/data-boundary
-   agreement, and mode worlds now verify the old role, placement, harness, and
-   active boundary composition. Activity profiles resolve an exact mode and
-   prove strict tool, applicability, role, and data-boundary narrowing. The
-   complete six-kind pre-amendment C7 document chain therefore runs over fake
-   hermetic fixtures.
-   The explicitly authorized Labs C8 writer adoption and first Temper compiler
-   slice completed on 2026-08-25. The owner re-authorized the semantic-name
-   packet/public-profile byte refresh on 2026-08-27, and the exact Labs and
-   Temper copies match. Private locators remain packet-side.
-   All six pre-amendment compiler fixtures and qualification/dependency closure
-   validation are complete. Next implement the seven-kind amended chain and
-   coordinated packet golden: model patches, technical runtime interfaces,
-   explicit foreground, service-only roles, evidenced uses, activity support,
-   signed current catalog selection, and routine software adoption. Its first
-   portfolio fixtures are the lower-tier everyday foreground, plural
-   speed/context/quality choices without a winner, and Froggeric/Sharp options
-   over shared Qwen weights. Only then add recommendation/performance
-   projection and reviewed seed rows. No real native-MTP row exists until Labs
-   supplies an accepted C8 packet.
+4. **Qualification/product promotion — retired 2026-09-21:** no replacement
+   registry or promotion compiler. Continue through the authorized
+   simplification section above.
 5. **M1 — complete and accepted locally:** keep the dated current-posture
    manifest/lock fixture and its field-to-config acceptance test current while
    this path remains isolated from the running service; the wall-model contract

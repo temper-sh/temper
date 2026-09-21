@@ -19,10 +19,10 @@ import (
 )
 
 type Digests struct {
-	Records   map[string]string `yaml:"records" json:"records"`
-	Materials map[string]string `yaml:"materials" json:"materials"`
-	Engines   map[string]string `yaml:"engines" json:"engines"`
-	Layouts   map[string]string `yaml:"layouts" json:"layouts"`
+	Records   map[string]string `yaml:"records,omitempty" json:"records,omitempty"`
+	Materials map[string]string `yaml:"materials,omitempty" json:"materials,omitempty"`
+	Engines   map[string]string `yaml:"engines,omitempty" json:"engines,omitempty"`
+	Layouts   map[string]string `yaml:"layouts,omitempty" json:"layouts,omitempty"`
 	Profile   string            `yaml:"profile" json:"profile"`
 }
 
@@ -44,6 +44,9 @@ func Compile(d Document, s Selection, target software.Target) (Lock, error) {
 	if err := s.Validate(); err != nil {
 		return Lock{}, err
 	}
+	if (d.Schema == Schema) != (s.Schema == SelectionSchema) {
+		return Lock{}, errors.New("catalog and selection schema versions must match")
+	}
 	if err := target.Validate(); err != nil {
 		return Lock{}, err
 	}
@@ -56,14 +59,20 @@ func Compile(d Document, s Selection, target software.Target) (Lock, error) {
 	}
 	d = canonicalDocument(d)
 	snapshot := digest(d)
-	s.Tools = []string{}
-	s.Integrations = []string{}
-	selected := Document{Schema: Schema, Date: d.Date, Runtime: d.Runtime, Artifacts: map[string]Artifact{}, Patches: map[string]Patch{}, Engines: map[string]Engine{}, Layouts: map[string]Layout{}, Profiles: map[string]Profile{s.Profile: profile}}
+	if d.Schema == legacySchema {
+		s.Tools, s.Integrations = []string{}, []string{}
+	}
+	selected := Document{Schema: d.Schema, Date: d.Date, Runtime: d.Runtime, Artifacts: map[string]Artifact{}, Patches: map[string]Patch{}, Engines: map[string]Engine{}, Layouts: map[string]Layout{}, Profiles: map[string]Profile{s.Profile: profile}}
 	for _, b := range profile.Bindings {
 		l := d.Layouts[b.Layout]
 		selected.Layouts[b.Layout] = l
 		selected.Artifacts[l.Artifact] = d.Artifacts[l.Artifact]
 		selected.Engines[l.Engine] = d.Engines[l.Engine]
+		if release := d.Engines[l.Engine].Supply.Release; release != nil {
+			if err := l.EngineVersions.require(release.Version); err != nil {
+				return Lock{}, fmt.Errorf("layout %q: %w", b.Layout, err)
+			}
+		}
 		if !d.Engines[l.Engine].Supply.Target.Matches(target) {
 			return Lock{}, fmt.Errorf("layout %q engine is incompatible with target", b.Layout)
 		}
@@ -76,6 +85,9 @@ func Compile(d Document, s Selection, target software.Target) (Lock, error) {
 	}
 	selected = canonicalDocument(selected)
 	locked := Lock{Schema: LockSchema, SourceSnapshotSHA256: snapshot, Selection: s, Target: target, Records: selected}
+	if d.Schema == legacySchema {
+		locked.Schema = legacyLockSchema
+	}
 	locked.Digests = deriveDigests(selected, s, target)
 	// Prove the exact selected graph reaches the current typed renderer before
 	// returning an executable lock. No caller-supplied shell or local path enters it.
@@ -101,7 +113,7 @@ func ParseLock(data []byte) (Lock, error) {
 }
 
 func (l Lock) Validate() error {
-	if l.Schema != LockSchema || !hashPattern.MatchString(l.SourceSnapshotSHA256) {
+	if (l.Schema != LockSchema && l.Schema != legacyLockSchema) || !hashPattern.MatchString(l.SourceSnapshotSHA256) {
 		return errors.New("execution lock requires its schema and exact source snapshot digest")
 	}
 	expected, err := Compile(l.Records, l.Selection, l.Target)
@@ -169,12 +181,17 @@ func deriveDigests(d Document, s Selection, target software.Target) Digests {
 	}
 	for id, e := range d.Engines {
 		digests.Records["engine/"+id] = digest(e)
+		if d.Schema == Schema {
+			e.Supply.Source = nil
+			e.Supply.Versions = nil
+		}
 		digests.Engines[id] = digest(e)
 	}
 	for id, l := range d.Layouts {
 		digests.Records["layout/"+id] = digest(l)
 		x := l
 		x.DisplayName = ""
+		x.EngineVersions = nil
 		x.Artifact = digests.Materials["artifact/"+l.Artifact]
 		x.Engine = digests.Engines[l.Engine]
 		x.Patches = append([]string{}, l.Patches...)
@@ -192,12 +209,20 @@ func deriveDigests(d Document, s Selection, target software.Target) Digests {
 	for i, b := range p.Bindings {
 		p.Bindings[i].Layout = digests.Layouts[b.Layout]
 	}
+	router := d.Runtime.Router
+	if d.Schema == Schema {
+		router.Source = nil
+		router.Versions = nil
+	}
 	digests.Profile = digest(struct {
 		Kind    string
 		Target  software.Target
 		Router  Supply
 		Profile Profile
-	}{"profile-execution/v1", target, d.Runtime.Router, p})
+	}{"profile-execution/v1", target, router, p})
+	if d.Schema == Schema {
+		return Digests{Profile: digests.Profile}
+	}
 	return digests
 }
 
@@ -232,14 +257,24 @@ func (l Lock) projections() (Projections, error) {
 	p := Projections{Manifest: manifest.Document{Schema: manifest.SchemaV2, Defaults: manifest.Defaults{TTL: 1800, GPUMemoryUtilization: profile.GPUMemoryUtilization}, Patches: map[string]manifest.Patch{}, Layouts: map[string]manifest.Layout{}, Modes: map[string]manifest.Mode{}, Tools: map[string]manifest.Tool{}},
 		Artifacts: lockfile.Document{Schema: lockfile.SchemaV1, Entries: map[string]lockfile.Entry{}},
 		Software: softwarelock.Document{Schema: softwarelock.SchemaV1, Target: l.Target, TargetMode: "compatible", Resolved: d.Date, Requires: []softwarelock.InstallationRequirement{},
-			Provenance: softwarelock.Provenance{Experiment: &softwarelock.ExperimentIdentity{Schema: LockSchema, ID: l.Selection.Profile, DefinitionSHA256: l.Digests.Profile}}, Selections: map[string]softwarelock.Selection{}, Units: map[string]softwarelock.Unit{}},
+			Provenance: softwarelock.Provenance{Experiment: &softwarelock.ExperimentIdentity{Schema: legacyLockSchema, ID: l.Selection.Profile, DefinitionSHA256: l.Digests.Profile}}, Selections: map[string]softwarelock.Selection{}, Units: map[string]softwarelock.Unit{}},
 		RequestDefaults: map[string]RequestDefaults{}}
+	if l.Schema == LockSchema {
+		p.Software.Provenance = softwarelock.Provenance{Execution: &softwarelock.ExecutionIdentity{Schema: LockSchema, Profile: l.Selection.Profile, SHA256: l.Digests.Profile}}
+		// The catalog's date is not an observation of when moving software was
+		// resolved. Execution provenance suffices; receipts date installations.
+		p.Software.Resolved = ""
+	}
 	addSupply := func(s Supply) error {
-		if prior, ok := p.Software.Selections[s.Package]; ok && !reflect.DeepEqual(prior, s.Selection) {
+		selection, units, err := s.installerInputs()
+		if err != nil {
+			return err
+		}
+		if prior, ok := p.Software.Selections[s.Package]; ok && !reflect.DeepEqual(prior, selection) {
 			return fmt.Errorf("conflicting software selection %q", s.Package)
 		}
-		p.Software.Selections[s.Package] = s.Selection
-		for id, u := range s.Units {
+		p.Software.Selections[s.Package] = selection
+		for id, u := range units {
 			if prior, ok := p.Software.Units[id]; ok && !reflect.DeepEqual(prior, u) {
 				return fmt.Errorf("conflicting software unit %q", id)
 			}

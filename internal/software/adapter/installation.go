@@ -178,6 +178,9 @@ func (f InstallationFamily) Remove(ctx context.Context, target software.Target, 
 	if descriptor.EffectModel != string(group.EffectModel) {
 		return fmt.Errorf("removal group %q effect model %q differs from compiled adapter %q", group.ID, group.EffectModel, descriptor.EffectModel)
 	}
+	if group.EffectModel == installplan.EffectShared {
+		return fmt.Errorf("system-managed software is retained; adapter %q cannot remove it", group.Adapter)
+	}
 	if group.ID != group.Adapter+":"+group.Scope {
 		return fmt.Errorf("removal group %q differs from its adapter or scope", group.ID)
 	}

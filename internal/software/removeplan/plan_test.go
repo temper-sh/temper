@@ -80,7 +80,7 @@ func TestBuildSharedReleasePreservesForAnotherClaimThenRetiresTheLastTemperAdded
 		t.Fatalf("Build() with another claim error = %v", err)
 	}
 	planned := plan.Groups[0].Units[0]
-	if planned.Action != removeplan.ActionPreserve || !planned.RequirePresent || planned.RetireShared {
+	if planned.Action != removeplan.ActionPreserve || !planned.RequirePresent {
 		t.Fatalf("non-final release = %#v", planned)
 	}
 
@@ -91,7 +91,7 @@ func TestBuildSharedReleasePreservesForAnotherClaimThenRetiresTheLastTemperAdded
 		t.Fatalf("Build() final release error = %v", err)
 	}
 	planned = plan.Groups[0].Units[0]
-	if planned.Action != removeplan.ActionRemove || !planned.Execute || !planned.RetireShared {
+	if planned.Action != removeplan.ActionPreserve || planned.Execute {
 		t.Fatalf("final release = %#v", planned)
 	}
 }
@@ -231,7 +231,7 @@ func sharedRemovalState(desired softwarelock.Document, previous receipt.Document
 			Adapter: locked.Adapter, Scope: locked.Scope, NativeName: locked.NativeName,
 			Version: locked.Version, Revision: locked.Revision,
 			Dependencies: append([]string(nil), locked.Dependencies...), Artifacts: append([]software.Artifact(nil), locked.Artifacts...),
-			Location: previous.Units[unitID].Location, Acquisition: previous.Units[unitID].Ownership, Lifecycle: installplan.SharedActive,
+			Location: previous.Units[unitID].Location, Acquisition: previous.Units[unitID].Ownership,
 			Claims: map[string]installplan.SharedClaim{installationID: {
 				SoftwareLockDigest: digest, UnitID: unitID, Status: installplan.ClaimActive,
 			}},

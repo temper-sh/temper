@@ -126,15 +126,8 @@ type SharedClaim struct {
 	Status             ClaimStatus
 }
 
-type SharedLifecycle string
-
-const (
-	SharedActive   SharedLifecycle = "active"
-	SharedRetiring SharedLifecycle = "retiring"
-)
-
-// SharedUnit is the root-wide current ownership fact for one provider-native
-// shared unit. Receipts snapshot claims; this registry arbitrates removal.
+// SharedUnit records exact shared software used by active installations.
+// It prevents conflicting installs; it never authorizes provider removal.
 type SharedUnit struct {
 	Adapter      string
 	Scope        string
@@ -145,7 +138,6 @@ type SharedUnit struct {
 	Artifacts    []software.Artifact
 	Location     string
 	Acquisition  Ownership
-	Lifecycle    SharedLifecycle
 	Claims       map[string]SharedClaim
 }
 
@@ -749,15 +741,6 @@ func validateSharedState(desired softwarelock.Document, installation Installatio
 		if registered.Acquisition != OwnershipTemperAdded && registered.Acquisition != OwnershipPreExisting {
 			return fmt.Errorf("shared-claim record %q has invalid acquisition %q", key, registered.Acquisition)
 		}
-		if registered.Lifecycle != SharedActive && registered.Lifecycle != SharedRetiring {
-			return fmt.Errorf("shared-claim record %q has invalid lifecycle %q", key, registered.Lifecycle)
-		}
-		if registered.Lifecycle == SharedRetiring {
-			if len(registered.Claims) != 0 {
-				return fmt.Errorf("retiring shared-claim record %q still has installation claims", key)
-			}
-			continue
-		}
 		if len(registered.Claims) == 0 {
 			return fmt.Errorf("active shared-claim record %q has no installation claims", key)
 		}
@@ -797,9 +780,6 @@ func validateSharedState(desired softwarelock.Document, installation Installatio
 				return fmt.Errorf("shared installation unit %q has provenance but no root-wide claim record", unitID)
 			}
 			continue
-		}
-		if registered.Lifecycle != SharedActive {
-			return fmt.Errorf("shared installation unit %q is retiring and cannot accept a claim", unitID)
 		}
 		registeredObserved := ObservedUnit{
 			Present: true, Adapter: registered.Adapter, Scope: registered.Scope, NativeName: registered.NativeName,

@@ -606,7 +606,7 @@ func stateFor(t *testing.T, desired softwarelock.Document, previous *installplan
 			Adapter: locked.Adapter, Scope: locked.Scope, NativeName: locked.NativeName,
 			Version: locked.Version, Revision: locked.Revision,
 			Dependencies: append([]string(nil), locked.Dependencies...), Artifacts: append([]software.Artifact(nil), locked.Artifacts...),
-			Location: actual.Location, Acquisition: ownership, Lifecycle: installplan.SharedActive,
+			Location: actual.Location, Acquisition: ownership,
 			Claims: map[string]installplan.SharedClaim{
 				"field-kit-base": {SoftwareLockDigest: digest, UnitID: unitID, Status: status},
 			},
@@ -632,7 +632,7 @@ func claimedSharedState(t *testing.T, desired softwarelock.Document, installatio
 			Adapter: locked.Adapter, Scope: locked.Scope, NativeName: locked.NativeName,
 			Version: locked.Version, Revision: locked.Revision,
 			Dependencies: append([]string(nil), locked.Dependencies...), Artifacts: append([]software.Artifact(nil), locked.Artifacts...),
-			Location: actual.Location, Acquisition: acquisition, Lifecycle: installplan.SharedActive,
+			Location: actual.Location, Acquisition: acquisition,
 			Claims: map[string]installplan.SharedClaim{
 				installationID: {SoftwareLockDigest: digest, UnitID: unitID, Status: status},
 			},

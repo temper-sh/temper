@@ -7,10 +7,10 @@ Consolidation note (2026-09-03): Local AI V3's
 [`REQUIREMENTS.md`](../../../v3/REQUIREMENTS.md) adopts this study's
 Layout/Profile flip, identity boundaries, adapter design, concrete specimens,
 and Field Kit deduplication. It starts the executable catalog with five record
-kinds and requires Qualification to earn a separate record through real
-independent identity, revision, or reuse; Results owns public portfolio
-entries. This document remains the detailed research and proof plan, not a
-second V3 authority.
+kinds; Results owns public portfolio entries. The 2026-09-21 cleanup retires
+the qualification/promotion subsystem and its proposed registry. This document
+remains design history, not a second V3 authority. Current source/version and
+execution identities are defined in the [execution-lock contract](../contracts/execution-lock.md).
 
 Implementation update (2026-09-13): the owner-authorized Qwen refresh produced
 the first additive five-record local compiler/export slice, described in

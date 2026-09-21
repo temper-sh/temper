@@ -173,8 +173,8 @@ func (d Document) Validate() error {
 		if !idPattern.MatchString(packageID) {
 			problem("selection id %q is not a lowercase stable id", packageID)
 		}
-		if selection.Provenance != softwarelock.ProvenanceCatalog && selection.Provenance != softwarelock.ProvenanceExperiment {
-			problem("selection %q provenance %q must be catalog or experiment", packageID, selection.Provenance)
+		if selection.Provenance != softwarelock.ProvenanceCatalog && selection.Provenance != softwarelock.ProvenanceExperiment && selection.Provenance != softwarelock.ProvenanceExecution {
+			problem("selection %q provenance %q must be catalog, experiment or execution", packageID, selection.Provenance)
 		}
 		if !idPattern.MatchString(selection.Method) || !idPattern.MatchString(selection.Adapter) {
 			problem("selection %q method and adapter must be lowercase stable ids", packageID)

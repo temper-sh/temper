@@ -30,6 +30,13 @@ It feeds the existing primitives and does not replace their manifest workflow,
 publish a catalog, or activate a service. Signed catalog selection and broader
 engine closures remain separate work.
 
+The 2026-09-22 Field Kit simplification adds direct execution-lock consumption
+and supervised foreground probes. The [execution runtime contract](contracts/execution-runtime.md)
+owns preparation, rendering, process identities, listener validation and shutdown
+results. Field Kit retains protocols, measurements and stop decisions. Issued
+client exports remain compatible; the new host surface is development-only until
+a separate release is authorized.
+
 The existing manifest file is **`manifest.yaml`** with **`manifest.lock.yaml`**
 beside it (decided 2026-08-14: it carries the whole wizard selection —
 tools, harness integrations and mode bindings, not just models — so
@@ -66,12 +73,10 @@ model, tool, or harness integration.
 
 ## Principles (inherited, non-negotiable)
 
-- **Measured beats plausible.** A qualification-catalog row ships only after
-  Labs produces a reviewable qualification packet and a witnessed run
-  (machine, SHAs, date, conditions, corpus and numbers). A mechanical probe
-  can rule a combination *out*, never establish model or tool quality by
-  itself. Software-supply records may describe resolvable packages, but only
-  cited tested-version evidence may call a version tested.
+- **Measured beats plausible.** Public claims reference exact observed inputs
+  and conditions. Results owns assessment; Temper owns installable choices.
+  Unmeasured behavior remains unmeasured.
+
 - **Every tool is explicit.** Tools start unselected. Recommendations explain
   why a tool fits, but installation requires a one-by-one affirmative choice. A
   mode or profile may only narrow the selected universe; it cannot add a tool,
@@ -276,24 +281,15 @@ is Qwen3.8 plain Q4 at 128k (more context and faster controlled decode) beside
 Dynamic 3.0 XL at 100k (the modest quality-first profile). Both passed the
 practical task gate; neither dominates every axis, so both are recommended.
 
-Three catalog concepts stay separate:
-
-- **`QUALIFIED` is evidence validity:** the exact artifact/runtime/machine
-  witness cleared its gates.
-- **Lifecycle is product posture:** `EXPERIMENTAL` may be working and
-  qualified while long-term retention remains unsettled; `SUPPORTED` is the
-  maintained path, `DEPRECATED` preserves existing-user continuity, and
-  `RETIRED` ends availability without rewriting historical evidence.
-- **Recommended is applicability:** among qualified rows, this layout is a
-  sensible choice for this machine, mode and use. Zero, one or many choices may
-  be recommended. Recommendation does not imply a total order or a default.
-- **Selected/foreground is user intent:** only an explicit checkbox puts a
-  layout in `manifest.yaml`, and only the user's “Pi starts on” radio makes one
-  the local foreground. A recommendation never checks either control.
+Evidence, recommendation and selection stay separate. Results records what
+was observed and the applicable conditions. Temper describes installable
+choices and required software versions. Recommendations never select a model,
+layout, tool or foreground on the user's behalf. There is no qualification or
+product-lifecycle state machine in the catalog.
 
 Each recommended layout carries an evidence-backed **performance profile** in
-its model-runtime qualification record—not a new profile kind and not a scalar
-score. The comparison view covers first-attempt task success and known
+the corresponding Results assessment, with each measurement
+scoped to its exact inputs and conditions. The comparison view covers first-attempt task success and known
 regressions first, then task wall time/tool use, raw decode and prefill,
 qualified context threshold, resident/full-slot memory, cache/replay behavior,
 and the exact conditions behind every number. Unknown axes say unmeasured.
@@ -385,97 +381,47 @@ loads another unless a machine-specific witnessed profile explicitly permits
 co-residency. Small specialists remain on demand or CPU-placed according to the
 mode's witnessed resource profile.
 
-**Software installation has a portable strategy and a target adapter.** The
-software-supply catalog calls `system-package`, `python-environment`,
-`release-artifact`, or `source-revision` an installation **method**. A concrete
-**adapter** executes that method on a target: `homebrew` is the current macOS
-system-package adapter, while a future target may explicitly bind the same
-method to `apt`, `dnf`, `pacman`, `winget`, or another reviewed implementation.
-The method/adapter boundary is a keyed adapter family, not OS conditionals in
-the installer. Every adapter package supplies the same narrow,
-provider-neutral contracts for resolver reads, state inspection, installation
-and removal effects, and reconciliation; planning remains pure and vendor
-command/output types stop at the adapter edge.
+**Software ownership and installation backend are separate.** System package
+managers may install bootstrap prerequisites, support software and non-Python
+software. Python applications use the Python/uv path. A compiled adapter owns
+provider-specific reads and effects; the catalog describes source facts and
+resolution produces exact installable inputs. Do not mirror a package manager's
+dependency database or infer an installation method from ambient PATH contents.
 
-Target selection may use only a catalog-declared adapter binding, and the exact
-method, adapter, target, versions, and closure are written to the software lock
-and installation receipt. An adapter definition is the one home for its
-method, supported targets, effect class, and capabilities; an adapter-native
-package recipe references that definition and owns package names and version
-rules. Each catalog snapshot names at most one canonical adapter for a method/target;
-alternatives are explicit variants rather than environment-driven guesses.
-Choosing the declared target adapter inside the same method is deterministic
-target resolution; changing methods is explicit and never a fallback.
+Temper offers the latest upstream release and an explicit tested fallback.
+Minimum required and minimum tested versions are separate. Required is a hard
+model/feature/platform support floor. Tested is optional evidence under cited
+conditions, not a blanket compatibility guarantee. Latest and fallback choices
+must satisfy the selected use's requirements. Unknown boundaries remain unknown;
+ordinary installation is not limited to a maintainer-pinned catalog release.
+Exact resolved and installed identities remain necessary for recovery and
+reproduction. Field Kit keeps its frozen inputs independently.
 
-**Catalog curation starts from the concrete package, not a preferred package
-manager (owner, 2026-08-20).** This is the Temper-wide rule, including but not
-limited to the Field Kit base. For a Temper-managed application, release review
-first considers a verified isolated upstream artifact; Python applications use
-an exact Temper-owned `uv` environment when their dependency closure is part of
-the qualification; `system-package` is reserved for bootstrap tools, genuine
-system-wide dependencies, packages available only there, or a distribution
-shown to be materially more maintainable. `source-revision` is the last resort.
-This order chooses which reviewed recipes the catalog offers; it is never an
-automatic fallback chain at resolution or installation time.
+Temper never removes system-managed software, even when it requested the
+installation or installation later fails. It may tell the user a package is no
+longer required by Temper; the user handles any removal independently. Shared
+version/usage state exists only for installation, checks, recovery and
+concurrency. Private Temper installations retain their explicit cleanup path.
 
-On the current macOS target, Homebrew is an acceptable owner for the shared
-bootstrap tools `uv` and `hf`. It does not own the Python applications that uv
-installs: uv selects and materializes each exact interpreter and package closure
-inside a Temper-owned environment. The Hugging Face CLI is likewise a tool, not
-model identity. Temper may use only revision-pinned `hf` operations; rendered
-llama-server commands still use an exact local `-m` path with `--offline` and
-never the moving llama.cpp `-hf` shortcut. Homebrew, uv, hf, and every package
-they install remain visible catalog/lock/receipt facts rather than ambient
-commands discovered from `PATH`.
+The wired macOS ARM64 installation members are isolated release archives for
+llama.cpp/llama-swap and managed Python/wheel closures through the uv member.
+Homebrew and Linux system installers are policy options, not wired installers
+in this release. `catalog compile --software latest|tested` resolves the current
+release-archive sources; exact installation consumes the exported lock. There
+is no silent downgrade or switch of installation method. Pi remains a
+user-managed harness: selected integration authorizes configuration rendering.
 
-The initial managed inventory is deliberately finite. `uv` and `hf` are the
-shared Homebrew-managed bootstrap tools. `llama-swap` and `llama.cpp` form the
-Field Kit serving base. The 2026-08-24 static and bounded runtime comparison
-selected isolated `release-artifact` installation through the compiled
-`upstream-release` adapter; recipe publication still waits for its real
-scratch install/check/remove/second-run gate. Supported,
-non-default `rapid-mlx` and `mlx-dspark` use explicit
-`python-environment`/`uv` recipes so their Python and MLX closures are isolated
-and locked. Pi is not in this inventory: it is a user-managed harness whose
-selected integration authorizes configuration rendering, not installation. v1
-qualifies only Apple Silicon, but this schema and workflow do not make Homebrew
-or macOS the domain abstraction.
+The current catalog/compiler is the maintained authoring path. Older signed
+software-publication tooling remains separate and does not feed V3 compilation.
+The unused generic resolver/status pipeline, bootstrap catalog reader and
+Homebrew dependency graph reader are retired. No replacement registry is needed.
 
-**Profile** has one precise catalog meaning: a versioned, evidence-backed
-configuration record. The pre-wizard qualification-catalog direction now uses
-seven typed documents: model artifact, model patch, engine, model runtime,
-tool, mode, and activity. Harness executables remain user-managed; exact integration revisions
-and deviations live on the engine, tool, and mode records that consume them
-unless a later witnessed need earns a standalone kind. A profile declares
-compatibility, defaults, dependencies, data boundaries, resource placement,
-known failures, regression suite,
-evidence status and witness scope. A profile is advice and configuration, not
-consent. In particular:
-
-- a **model artifact profile** pins the base weights, complete quantization
-  recipe (format, layer/tensor precision map, calibration provenance and
-  sidecars), tokenizer, shipped template material, and immutable provenance
-  once;
-- a **model-patch profile** pins an independently moving patch source, any
-  local transform, resulting bytes, purpose, license, compatibility evidence,
-  and preference description without duplicating the base weights;
-- an **engine profile** references the exact tested software-supply identity
-  and declares API/capability surface, process isolation, service contract and
-  known engine-wide failures; the install recipe and resolved dependency
-  closure have one home in the software supply catalog and software lock;
-- a **model runtime profile** references an artifact, engine, and optional
-  selected patch profile and pins output-affecting layout identity—context/KV
-  settings, sampling/thinking, batching and speculation—while exact witness
-  scope records the machine, mode and co-residents;
-- a **tool profile** pins the tool core, transport, schema/description,
-  backend service roles, permissions and harness/model affordance deviations;
-- a **mode profile** composes qualified runtime and tool profiles for a world
-  and owns the explicit foreground binding, placement, residency, preload,
-  TTL, service-role bindings, and exact harness integration revisions without
-  overriding output-affecting layout identity;
-- an **activity profile** such as coding, inspect, change, verify, or review
-  narrows explicitly selected tools and harness support inside a mode and
-  never widens them.
+The current catalog vocabulary is Artifact (immutable model material), Patch
+(independent output-affecting material), Engine (resolved serving software),
+Layout (one servable configuration) and Profile (explicit composition and
+routing). Software sources describe how to obtain releases; resolution records
+the exact selected installation. Public assessment and evidence remain outside
+these execution records. Add another record kind only for a concrete consumer.
 
 `Coder` is not a catalog role. Coding is an evidenced capability and portfolio
 use of an exact runtime or composition. `Main` is likewise not an intrinsic
@@ -562,7 +508,7 @@ identity is stamped into runtime measurements only after the selected manifest
 is active; preflight labels it pending. A tune invalidates the identity.
 An `external-lab` packet is inspectable but cannot enter the generic install
 path. This is the Labs-to-probe handoff format, not a premature decision about
-the qualification catalog's normalized schema and never a consent token.
+the installable catalog schema and never a consent token.
 
 Compatibility and deterministic template results may be reused only when the
 base artifact and selected patch identities are identical and the evidence
@@ -572,13 +518,10 @@ engine-profile revision, runtime-profile revision, machine bucket, mode and
 relevant co-residents. A mode is qualified only for the exact composed
 configuration that was tested.
 
-Profiles carry independent evidence qualification and product lifecycle.
-Evidence moves through `WATCH → LAB → QUALIFIED` (or `REJECTED`); lifecycle
-moves from `EXPERIMENTAL` toward `SUPPORTED`, `DEPRECATED`, or `RETIRED`. Web
-research alone cannot produce `QUALIFIED`. Any artifact, model patch, engine, template,
-schema, prompt-policy or meaningful tuning change invalidates the affected
-witness and sends qualification back to `LAB` and lifecycle to `EXPERIMENTAL`
-until its targeted gates pass. Retirement preserves the last evidence status.
+Historical observations retain their exact inputs and conditions. A meaningful
+runtime change requires new evidence for the claims it affects; a metadata-only
+change does not invalidate an unchanged runtime. Catalog changes use ordinary
+review without qualification or product-lifecycle transitions.
 
 ## Modes (settled shape 2026-08-13; bindings still need witnesses)
 
@@ -673,7 +616,7 @@ artifacts; it does not sequence them.
   new pin leaves the active catalog's tested set, and prints (never runs) the
   targeted gate. The native implementation moves existing rows through one
   concurrency-safe lock commit and never downloads weights; tested-set reporting joins it with
-  the qualification catalog. There is no locally stored verified/unverified
+  scoped tested-version evidence. There is no locally stored verified/unverified
   state.
 - `temper check` — read-only lock and local-artifact audit plus a labeled
   resident wall-model prediction from live machine allowances and admitted
@@ -770,12 +713,9 @@ Software and configuration have separate fact chains:
   tested-version evidence → explicit resolution writes the exact desired
   `software.lock.yaml` → the selected adapter installs, inspects, and writes the
   actual installation receipt;
-- Labs packets + witnessed measurements produce reviewed qualification
-  product-promotion packets → release review publishes human evidence to
-  Results and compiles accepted configuration into the qualification catalog
-  → the wizard writes
-  `manifest.yaml` (user selection + mode bindings) → `manifest.lock.yaml` →
-  generator → configs.
+- reviewed Labs or Field Kit findings inform Results assessment and ordinary
+  Temper catalog changes → explicit user selection → exact execution lock →
+  installation and rendered configuration.
 
 The software lock does not claim installation, the receipt does not select an
 update policy, and the manifest lock does not duplicate either. Probe results
@@ -783,9 +723,9 @@ remain separate local artifacts (`report.md`, `provenance.txt`). Results
 contains sanitized conclusions, machine tables and detailed records—not Labs'
 raw journal—and is never a runtime dependency. A promoted Field Kit question
 package is an immutable snapshot of a Labs-authored investigation, not a second mutable
-source. Its local session packet is a signed-by-hash transport back into Labs
+source. Its local session packet is a attributable transport back into Labs
 review; it does not skip review, become a Results recommendation, or become a
-qualification-catalog row itself.
+catalog change by itself.
 
 Software-supply catalog snapshots are signed and published independently of
 the Temper binary. The binary owns supported schemas, adapter protocols,
@@ -795,9 +735,10 @@ explicit catalog update may atomically move the active snapshot only. It never
 rewrites a lock, resolves or installs software, or changes an installation
 receipt, and there is no background updater.
 
-## Labs qualification workflow
+## Evidence review
 
-Labs has two independent promotion gates. **Question-package promotion** publishes
+Labs reviews portable experiment methods separately from their findings.
+**Question-package publication** publishes
 an immutable package into Field Kit only after review of its useful question, exact
 inputs, machine predicates and versioned buckets, estimated resources, consent
 and data boundaries, bounded adaptive prompt, stop/re-consent rules, evidence
@@ -810,57 +751,12 @@ schema, review workflow, and validated runtime consumer live in Labs and Field
 Kit; Temper implements the stable host primitives described in
 [`design/field-kit-question-boundary.md`](design/field-kit-question-boundary.md).
 
-**Product promotion** happens only after Labs reviews evidence. Labs keeps
-decisions reproducible without turning exploratory code into product code.
-The provisionally approved Temper-side product-promotion contract is one
-canonical Labs packet per exact qualification-profile revision; Temper's pure compiler retains only
-public-safe claim-level evidence and exact packet identity. It does not read a
-Field Kit session or legacy runtime-profile packet directly, and it cannot
-create recommendation, consent, or selection. See
-[`design/product-promotion-contract.md`](design/product-promotion-contract.md)
-and the provisionally approved typed qualification surface in
-[`design/qualification-catalog-schema.md`](design/qualification-catalog-schema.md).
-Model, tool, harness and mode candidates follow the same two-axis transition
-rules and evidence discipline:
-
-1. **Intake / `WATCH`.** Record the question, intended uses/modes, discovery
-   sources, official artifact locations, release state and re-check triggers.
-2. **Pin / `LAB`.** Resolve exact revisions and hashes; decompose every layer
-   that can affect the result. For models this includes weights, the actual
-   quantization allocation rather than its advertised bit label,
-   tokenizer/template, system-prompt policy and sampling. For tools it includes
-   core, transport, schema/description, permissions, backend and harness glue.
-3. **Deterministic regressions.** Reproduce cited failures with a known-bad
-   fixture, invariant, minimal passing change and false-positive counterexample.
-   Security, path/data boundaries, parser/serialization, error propagation and
-   silent-loss cases belong here.
-4. **Integration witnesses.** Exercise the real engine and streamed harness
-   request shape. Run each materially different runtime profile—including
-   placement/tuning/co-resident variants—under its actual machine conditions.
-5. **Use/composition A/B.** Hold unrelated layers fixed; score first-attempt task success,
-   correct selection/arguments, recovery and unnecessary calls before tokens or
-   speed. Community templates, prompts, fine-tunes and tool descriptions are
-   separate arms wherever possible; unavoidable confounds are declared.
-6. **Decision packet.** Emit evidence qualification (`QUALIFIED`, `REJECTED`,
-   continued `LAB`, or `WATCH`) plus lifecycle (`EXPERIMENTAL`, `SUPPORTED`,
-   `DEPRECATED`, or `RETIRED`), exact scope, raw-evidence index, known failures,
-   rollback, invalidation triggers and the smallest candidate profile(s).
-7. **Publication and release review.** Publish a laconic Results record with
-   current/rejected status, machine scope, detailed sanitized evidence and
-   provenance; compile an accepted profile into the catalog. Neither Results
-   nor release consumes a moving Labs branch or infers conclusions from raw
-   output.
-
-The model-intake implementation begins in `prompts/add-model.md`.
-`prompts/update-data.md` now implements the review-to-Results side: it audits
-profile identity, provenance, corrections/retractions, conflicting runs,
-sanitization and every affected publication surface. A symmetrical
-`prompts/add-tool.md` is planned next. The prompts produce dossiers, test plans
-and publication candidates, never permission to install or promote. Profile
-variants prevent false global conclusions: one base model artifact can qualify
-different performance tunings or selectable template patches independently;
-a specialist can qualify CPU and GPU placements; and one tool can qualify
-different affordance surfaces for Pi, Codex and Claude Code.
+Reviewed findings may inform the installable catalog. Labs or Field Kit retains
+raw evidence; Results owns the public assessment; Temper owns source and
+installation facts. Review the exact change and reuse applicable evidence. A
+routine software revision gets focused checks, while a newly possible capability
+returns to Labs. No product-promotion packet, qualification registry or second
+review of identical evidence is required.
 
 ## Home (**proposed** 2026-08-08): `~/.temper`
 
@@ -961,7 +857,7 @@ portfolio-use first-attempt results; machine conditions and raw artifacts;
 declared thresholds/stop conditions; license and data-boundary review; known
 confounds; and a minimal proposed profile. The model prompt in
 `prompts/add-model.md` is the first concrete intake template. Tool intake must
-reach the same standard before tool profiles enter the qualification catalog.
+reach the same standard before an installable tool is offered with those claims.
 
 ## Non-goals
 
@@ -985,20 +881,16 @@ reach the same standard before tool profiles enter the qualification catalog.
   2026-08-20; rendering, pin management, exact artifact materialization,
   receipt/full-hash admission, and the resident wall-model prediction execute
   in Go with no Bash runtime dependency.
-- **Software supply catalog + Field Kit execution base, then the broader
-  qualification catalog**. First model rolling/guarded/constrained package
-  policy and exact software locking; next install/check/remove the receipted
-  reversible base Labs-promoted Field Kit experiments consume and freeze the
-  cross-repository experiment-promotion boundary; then add the seven typed
-  model-artifact, model-patch, engine, model-runtime, tool, mode, and activity qualification
-  profiles plus the separate Labs product-promotion packet.
+- **Software supply and Field Kit host:** preserve exact installation and
+  experiment execution, simplify authored source records, and offer latest
+  software plus applicable tested fallbacks under explicit version requirements.
 - **Wizard TUI** over a curated model universe, individually opt-in tools,
   harness integrations and mode bindings.
 - **Production mode state machine + harness qualification** over the
   already installed Field Kit base: active mode, service reconciliation,
   leases, harness protocol, and witnessed bindings.
 - **Release split**: Labs/release extraction, Results publication wired into
-  review, and the catalog seeded only with reviewed qualified rows.
+  review, and an installable catalog with scoped evidence references.
 
 ## Open questions (owner)
 
@@ -1013,14 +905,11 @@ reach the same standard before tool profiles enter the qualification catalog.
    four, and the tool-narrowing that used to distinguish planning from coding
    needs a permissions test rather than a resource witness.)
 3. Field Kit evidence submission transport: how a user deliberately exports a
-   local session packet to Labs for review. Labs review and explicit product
-   promotion are mandatory regardless of transport; no report becomes a row
-   directly.
+   local session packet to Labs for review. Review is required regardless of transport; no report automatically changes
+   a public assessment or installable catalog.
 4. Is remote-provider integration strictly render-only (current direction),
    with credential and foreground-model ownership left to each harness?
-5. Qualification current-channel signing and publication reuse the
-   software-supply trust/rollback mechanics in the amended design; the exact
-   transport and bootstrap fixture still need implementation before freeze.
+5. Signed distribution for the maintained V3 catalog remains separate work.
 6. llama-swap mechanics the modes design leans on: service-role aliases
    (checkable), and config-reload behavior under in-flight requests
    (witnessable — a mode-switch-under-load probe measurement).
@@ -1034,8 +923,5 @@ reach the same standard before tool profiles enter the qualification catalog.
    requested posture in isolation.)
 9. Pi `packages` as an adapter distribution channel, plugin packaging for
    Codex/Claude Code, and the standalone CI contract for a shared tool core.
-10. Catalog representation: the provisionally approved qualification-catalog
-    answer is seven separate content-addressed typed profile documents plus
-    versioned machine-bucket and unordered portfolio-recommendation vocabulary,
-    with no standalone harness kind in v1. Refine this before the v1 surface
-    freezes.
+10. Catalog representation follows the current V3 contract and simplification
+    plan. Additional kinds require actual consumers.

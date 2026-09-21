@@ -1,7 +1,9 @@
 package rootstate_test
 
 import (
+	"bytes"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +15,33 @@ import (
 )
 
 const stateRoot = "/tmp/temper-state-test"
+
+func TestPreCleanupIsolatedOperationStillRecovers(t *testing.T) {
+	data, err := os.ReadFile("testdata/prepared-v1.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	prepared, err := rootstate.Parse(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := rootstate.Marshal(prepared)
+	if err != nil || !bytes.Equal(encoded, data) {
+		t.Fatalf("existing prepared state changed: %v", err)
+	}
+	desired := stateLock(t, "uv", "python-environment", "probe")
+	installation := installplan.Installation{ID: "probe", Root: stateRoot}
+	observed := absentObservation(desired, installplan.InstallationRoot(installation)+"/environment/tool")
+	projection, err := prepared.Projection(installation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan := buildStatePlan(t, desired, installation, observed, projection)
+	_, changed, fence, err := rootstate.Prepare(&prepared, desired, plan, observed, rootstate.Lease{InvocationID: "recovery", Now: time.Date(2026, 8, 23, 9, 2, 0, 0, time.UTC), Duration: time.Minute})
+	if err != nil || !changed || fence != 2 {
+		t.Fatalf("existing operation recovery: changed=%v fence=%d err=%v", changed, fence, err)
+	}
+}
 
 func TestPrepareRoundTripsAndFinalizeRemovesIntent(t *testing.T) {
 	desired := stateLock(t, "uv", "python-environment", "probe")

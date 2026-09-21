@@ -7,9 +7,25 @@ independently versioned user runtime. New discovery, consent, session,
 protocol, evidence, reporting, export, and cleanup behavior lands in
 `temper-sh/field-kit`, not in this binary.
 
-## Stable host primitives
+## Direct execution-lock host
 
-A Field Kit release may compose only these public Temper commands:
+The wave 2 development client uses the
+[direct execution runtime](execution-runtime.md): `execution inspect`,
+`prepare`, `render`, `serve` and `remove`. Temper derives installer inputs
+internally. Field Kit retains its consent plan, experiment protocol, measurements
+and evidence; it no longer coordinates compatibility exports or discovers and
+terminates engine processes itself.
+
+`execution serve` requires an exact lock-bound generation and a new status file.
+Temper supplies process identities, verifies loopback listener ownership and
+confirms bounded shutdown. The caller chooses when to send SIGTERM to its
+foreground Temper child. A missing or unsafe final status forbids cleanup.
+This surface is not included in the pinned `0.1.0-alpha.7` bootstrap release.
+
+## Issued-client host primitives
+
+Issued clients, including `qwen-machine-study@1`, can still compose these public
+commands. Their compatibility exports and identities remain unchanged:
 
 ```text
 temper machine facts

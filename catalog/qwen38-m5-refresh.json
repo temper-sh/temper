@@ -1,5 +1,5 @@
 {
-  "schema": "temper-catalog/v1",
+  "schema": "temper-catalog/v2",
   "date": "2026-09-15",
   "runtime": {
     "router": {
@@ -8,32 +8,22 @@
         "os": "darwin",
         "arch": "arm64"
       },
-      "selection": {
-        "provenance": "experiment",
-        "method": "release-artifact",
-        "adapter": "upstream-release",
-        "recipe_revision": "release-archive/v1",
-        "root_unit": "upstream-release:llama-swap"
+      "source": {
+        "repository": "mostlygeek/llama-swap",
+        "asset": "llama-swap_{number}_darwin_arm64.tar.gz",
+        "archive_root": "."
       },
-      "units": {
-        "upstream-release:llama-swap": {
-          "adapter": "upstream-release",
-          "scope": "llama-swap",
-          "native_name": "llama-swap",
-          "version": "v255",
-          "revision": "7761aa13360ea379cb89366d07c2d08aa9f1ed10",
-          "dependencies": [],
-          "artifacts": [
-            {
-              "locator": "https://github.com/mostlygeek/llama-swap/releases/download/v255/llama-swap_255_darwin_arm64.tar.gz",
-              "sha256": "d11b4c733da1c64ffd1b955f64b6af92a8c66a443aeeafeef2e84d3bf1fbf531",
-              "size": 21730221,
-              "unpacked_size": 40133282,
-              "installed_entries": 3,
-              "format": "tar.gz",
-              "archive_root": "."
-            }
-          ]
+      "release": {
+        "version": "v255",
+        "revision": "7761aa13360ea379cb89366d07c2d08aa9f1ed10",
+        "artifact": {
+          "locator": "https://github.com/mostlygeek/llama-swap/releases/download/v255/llama-swap_255_darwin_arm64.tar.gz",
+          "sha256": "d11b4c733da1c64ffd1b955f64b6af92a8c66a443aeeafeef2e84d3bf1fbf531",
+          "size": 21730221,
+          "unpacked_size": 40133282,
+          "installed_entries": 3,
+          "format": "tar.gz",
+          "archive_root": "."
         }
       }
     }
@@ -71,7 +61,7 @@
     }
   },
   "engines": {
-    "llama-b10964-darwin-arm64": {
+    "llama-cpp-darwin-arm64": {
       "family": "llama-server",
       "adapter": "llama-server/v2",
       "interfaces": [
@@ -86,32 +76,22 @@
           "os": "darwin",
           "arch": "arm64"
         },
-        "selection": {
-          "provenance": "experiment",
-          "method": "release-artifact",
-          "adapter": "upstream-release",
-          "recipe_revision": "release-archive/v1",
-          "root_unit": "upstream-release:llama-cpp"
+        "source": {
+          "repository": "ggml-org/llama.cpp",
+          "asset": "llama-{version}-bin-macos-arm64.tar.gz",
+          "archive_root": "llama-{version}"
         },
-        "units": {
-          "upstream-release:llama-cpp": {
-            "adapter": "upstream-release",
-            "scope": "llama-cpp",
-            "native_name": "llama-cpp",
-            "version": "b10964",
-            "revision": "b29c606e28a01b1bc8c1351026a0fa6e616bf6c4",
-            "dependencies": [],
-            "artifacts": [
-              {
-                "locator": "https://github.com/ggml-org/llama.cpp/releases/download/b10964/llama-b10964-bin-macos-arm64.tar.gz",
-                "sha256": "033c845c1df9bf945ff37bb193238b40910b2244be3e1e637b2ceb5878f1a6f5",
-                "size": 11149739,
-                "unpacked_size": 27886118,
-                "installed_entries": 60,
-                "format": "tar.gz",
-                "archive_root": "llama-b10964"
-              }
-            ]
+        "release": {
+          "version": "b10964",
+          "revision": "b29c606e28a01b1bc8c1351026a0fa6e616bf6c4",
+          "artifact": {
+            "locator": "https://github.com/ggml-org/llama.cpp/releases/download/b10964/llama-b10964-bin-macos-arm64.tar.gz",
+            "sha256": "033c845c1df9bf945ff37bb193238b40910b2244be3e1e637b2ceb5878f1a6f5",
+            "size": 11149739,
+            "unpacked_size": 27886118,
+            "installed_entries": 60,
+            "format": "tar.gz",
+            "archive_root": "llama-b10964"
           }
         }
       }
@@ -124,7 +104,7 @@
       "patches": [
         "froggeric-qwen38-v22.5"
       ],
-      "engine": "llama-b10964-darwin-arm64",
+      "engine": "llama-cpp-darwin-arm64",
       "interface": "chat-completions",
       "modalities": [
         "text"
@@ -178,7 +158,6 @@
       "gpu_memory_utilization": 0.85,
       "bindings": [
         {
-          "id": "primary",
           "layout": "qwen3.8-27b-q4xl-32k-mtp",
           "route": "default",
           "residency": "resident",

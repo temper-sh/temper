@@ -16,6 +16,9 @@ import (
 type ProcessRunner struct{}
 
 func (ProcessRunner) Run(ctx context.Context, invocation Invocation, stdout, stderr io.Writer) error {
+	if invocation.Supervision != nil {
+		return runSupervised(ctx, invocation, stdout, stderr)
+	}
 	command := exec.CommandContext(ctx, invocation.Path, invocation.Arguments...)
 	command.Stdout = stdout
 	command.Stderr = stderr

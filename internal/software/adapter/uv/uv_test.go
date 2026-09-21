@@ -13,7 +13,6 @@ import (
 	"github.com/temper-sh/temper/internal/software/adapter"
 	"github.com/temper-sh/temper/internal/software/adapter/uv"
 	"github.com/temper-sh/temper/internal/software/catalog"
-	"github.com/temper-sh/temper/internal/software/selection"
 )
 
 type commandResponse struct {
@@ -129,19 +128,7 @@ func TestCandidatesTranslateVersionMatchedRuntimeAndFlattenedWheelClosure(t *tes
 	if _, descriptor, err := family.For(request.Supply, "python-environment", request.Target); err != nil || descriptor.ID != "uv" {
 		t.Fatalf("resolver family = %#v, %v", descriptor, err)
 	}
-	locked, err := selection.Resolve(
-		catalog.Snapshot{Document: request.Supply, SHA256: strings.Repeat("f", 64)},
-		request.Target,
-		time.Date(2026, 8, 24, 0, 0, 0, 0, time.UTC),
-		nil,
-		[]selection.Request{{Package: request.Package, Method: "python-environment", Candidates: candidates}},
-	)
-	if err != nil {
-		t.Fatalf("translated candidate does not satisfy selection and lock invariants: %v", err)
-	}
-	if locked.Units["uv:rapid-mlx:cpython"].Artifacts[0].Locator == "" {
-		t.Fatal("selected lock omitted managed Python artifact")
-	}
+
 }
 
 func TestCandidatesAllowPrereleaseOnlyForCatalogPackagesThatRequestIt(t *testing.T) {

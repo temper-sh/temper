@@ -41,7 +41,7 @@ func TestDurableSurfacesUseSemanticNames(t *testing.T) {
 			return err
 		}
 		if entry.IsDir() {
-			if entry.Name() == ".git" {
+			if entry.Name() == ".git" || (relative == ".scratch" || relative == "build" || relative == "dist") {
 				return filepath.SkipDir
 			}
 			return nil

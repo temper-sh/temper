@@ -223,7 +223,7 @@ func TestValidateRefusesMissingOrMalformedProvenance(t *testing.T) {
 				document.Provenance = softwarelock.Provenance{}
 				return document
 			},
-			want: "provenance must contain",
+			want: "provenance must identify",
 		},
 		{
 			name: "bad experiment digest",
@@ -241,7 +241,7 @@ func TestValidateRefusesMissingOrMalformedProvenance(t *testing.T) {
 				document.Selections["llama-swap"] = selection
 				return document
 			},
-			want: "must be catalog or experiment",
+			want: "must be catalog, experiment or execution",
 		},
 		{
 			name: "selection provenance has no matching identity",

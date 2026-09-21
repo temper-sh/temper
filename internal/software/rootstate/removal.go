@@ -32,7 +32,7 @@ func (d Document) RemovalProjection(installation installplan.Installation) (remo
 			Adapter: unit.Adapter, Scope: unit.Scope, NativeName: unit.NativeName,
 			Version: unit.Version, Revision: unit.Revision,
 			Dependencies: append([]string(nil), unit.Dependencies...), Artifacts: append([]software.Artifact(nil), unit.Artifacts...),
-			Location: unit.Location, Acquisition: unit.Acquisition, Lifecycle: unit.Lifecycle, Claims: claims,
+			Location: unit.Location, Acquisition: unit.Acquisition, Claims: claims,
 		}
 	}
 	operation, ok := d.Operations[installation.ID]
@@ -48,7 +48,7 @@ func (d Document) RemovalProjection(installation installplan.Installation) (remo
 		for unitID, unit := range group.Units {
 			units[unitID] = removeplan.PreparedUnit{
 				Before: unit.Before, Ownership: unit.OwnershipBefore, Location: unit.Location,
-				RemoveProvider: unit.RemoveProvider, RetireShared: unit.RetireShared, SharedClaim: unit.SharedClaim,
+				RemoveProvider: unit.RemoveProvider, SharedClaim: unit.SharedClaim,
 			}
 		}
 		groups[groupID] = removeplan.PreparedGroup{
@@ -63,8 +63,8 @@ func (d Document) RemovalProjection(installation installplan.Installation) (remo
 }
 
 // PrepareRemoval records immutable removal intent and releases this
-// installation's shared claims in the same serialized root-state commit. A
-// final Temper-added generation becomes retiring before any provider deletion.
+// installation's shared usage records in the same serialized root-state commit.
+// System-managed software is always retained, including the last user's package.
 func PrepareRemoval(current *Document, desired softwarelock.Document, plan removeplan.Plan, observed installplan.Observation, lease Lease) (Document, bool, uint64, error) {
 	if err := desired.Validate(); err != nil {
 		return Document{}, false, 0, err
@@ -131,7 +131,7 @@ func PrepareRemoval(current *Document, desired softwarelock.Document, plan remov
 		}
 		for _, planned := range group.Units {
 			shared, ok := next.SharedUnits[planned.SharedClaim]
-			if !ok || shared.Lifecycle != installplan.SharedActive {
+			if !ok {
 				return Document{}, false, 0, fmt.Errorf("shared removal unit %q lost active root-state authority", planned.ID)
 			}
 			locked := desired.Units[planned.ID]
@@ -144,20 +144,9 @@ func PrepareRemoval(current *Document, desired softwarelock.Document, plan remov
 				return Document{}, false, 0, fmt.Errorf("shared removal unit %q lost its active claim", planned.ID)
 			}
 			delete(shared.Claims, plan.Installation.ID)
-			switch {
-			case planned.RetireShared:
-				if len(shared.Claims) != 0 || shared.Acquisition != installplan.OwnershipTemperAdded {
-					return Document{}, false, 0, fmt.Errorf("shared removal unit %q is no longer the final Temper-added claim", planned.ID)
-				}
-				shared.Lifecycle = installplan.SharedRetiring
-				shared.Claims = map[string]installplan.SharedClaim{}
-				next.SharedUnits[planned.SharedClaim] = shared
-			case len(shared.Claims) == 0:
-				if shared.Acquisition != installplan.OwnershipPreExisting {
-					return Document{}, false, 0, fmt.Errorf("shared removal unit %q would orphan Temper-added authority", planned.ID)
-				}
+			if len(shared.Claims) == 0 {
 				delete(next.SharedUnits, planned.SharedClaim)
-			default:
+			} else {
 				next.SharedUnits[planned.SharedClaim] = shared
 			}
 		}
@@ -170,8 +159,7 @@ func PrepareRemoval(current *Document, desired softwarelock.Document, plan remov
 	return next, true, operation.Fence, nil
 }
 
-// FinalizeRemoval forgets only retiring generations owned by this exact
-// operation, then removes the completed intent under the lease fence.
+// FinalizeRemoval removes the completed intent under the lease fence.
 func FinalizeRemoval(current Document, installationID, invocationID string, fence uint64, now time.Time) (Document, error) {
 	if err := current.AssertFence(installationID, invocationID, fence, now); err != nil {
 		return Document{}, err
@@ -180,18 +168,6 @@ func FinalizeRemoval(current Document, installationID, invocationID string, fenc
 	operation := next.Operations[installationID]
 	if operation.Kind != "remove" {
 		return Document{}, errors.New("prepared software operation is not a removal")
-	}
-	for _, group := range operation.Groups {
-		for _, unit := range group.Units {
-			if !unit.RetireShared {
-				continue
-			}
-			shared, ok := next.SharedUnits[unit.SharedClaim]
-			if !ok || shared.Lifecycle != installplan.SharedRetiring || len(shared.Claims) != 0 {
-				return Document{}, errors.New("retiring shared authority disappeared or changed before finalization")
-			}
-			delete(next.SharedUnits, unit.SharedClaim)
-		}
 	}
 	delete(next.Operations, installationID)
 	next.Generation++
@@ -236,14 +212,17 @@ func operationFromRemovalPlan(desired softwarelock.Document, plan removeplan.Pla
 			if group.EffectModel == installplan.EffectShared && planned.SharedClaim != installplan.SharedUnitKey(locked.Adapter, locked.Scope, locked.NativeName) {
 				return Operation{}, fmt.Errorf("shared removal unit %q has the wrong provider claim", planned.ID)
 			}
+			if group.EffectModel == installplan.EffectShared && planned.Action != removeplan.ActionPreserve {
+				return Operation{}, fmt.Errorf("shared removal unit %q must retain system-managed software", planned.ID)
+			}
 			before := installplan.BeforeAbsent
 			if observed.Units[planned.ID].Present {
 				before = installplan.BeforeExact
 			}
 			units[planned.ID] = OperationUnit{
 				Before: before, OwnershipBefore: planned.Ownership, Location: planned.Location,
-				RemoveProvider: planned.Action == removeplan.ActionRemove, RetireShared: planned.RetireShared,
-				SharedClaim: planned.SharedClaim,
+				RemoveProvider: planned.Action == removeplan.ActionRemove,
+				SharedClaim:    planned.SharedClaim,
 			}
 		}
 		groups[group.ID] = OperationGroup{Adapter: group.Adapter, Scope: group.Scope, EffectModel: group.EffectModel, Units: units}
@@ -272,7 +251,7 @@ func removalPlanMatchesOperation(plan removeplan.Plan, operation Operation) bool
 		for _, unit := range group.Units {
 			intent, ok := stored.Units[unit.ID]
 			if !ok || intent.OwnershipBefore != unit.Ownership || intent.Location != unit.Location ||
-				intent.RemoveProvider != (unit.Action == removeplan.ActionRemove) || intent.RetireShared != unit.RetireShared || intent.SharedClaim != unit.SharedClaim {
+				intent.RemoveProvider != (unit.Action == removeplan.ActionRemove) || intent.SharedClaim != unit.SharedClaim {
 				return false
 			}
 		}

@@ -1,5 +1,6 @@
 // Package catalogcmd owns the additive local catalog and execution-lock CLI.
-// Export writes only derived inputs; existing primitives retain runtime effects.
+// Runtime composes the existing effect primitives from a direct execution lock;
+// export remains a compatibility surface for issued clients.
 package catalogcmd
 
 import (
@@ -13,13 +14,16 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/software"
+	"github.com/temper-sh/temper/internal/software/adapter/upstreamrelease"
 )
 
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
@@ -29,7 +33,11 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	}
 	switch args[0] + " " + args[1] {
 	case "catalog compile":
-		return compile(ctx, args[2:], stdout, stderr)
+		reader, err := upstreamrelease.NewHTTPReader(&http.Client{Timeout: 5 * time.Minute})
+		if err != nil {
+			return failed(stderr, err)
+		}
+		return compile(ctx, args[2:], stdout, stderr, reader)
 	case "execution export":
 		return export(ctx, args[2:], stdout, stderr)
 	default:
@@ -38,7 +46,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	}
 }
 
-func compile(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+func compile(ctx context.Context, args []string, stdout, stderr io.Writer, reader upstreamrelease.ArtifactReader) int {
 	f := flag.NewFlagSet("temper catalog compile", flag.ContinueOnError)
 	f.SetOutput(stderr)
 	catalogPath := f.String("catalog", "", "explicit local catalog snapshot")
@@ -47,6 +55,7 @@ func compile(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	out := f.String("out", "", "new execution lock path")
 	dry := f.Bool("dry-run", false, "validate and report without writes")
 	jsonOutput := f.Bool("json", false, "print the execution-input contract as JSON")
+	softwareChoice := f.String("software", "recorded", "software version choice: recorded, latest or tested")
 	if err := f.Parse(args); err != nil {
 		return 2
 	}
@@ -67,6 +76,10 @@ func compile(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return failed(stderr, err)
 	}
 	s, err := catalog.ParseSelection(raw)
+	if err != nil {
+		return failed(stderr, err)
+	}
+	d, err = catalog.ResolveSoftware(ctx, d, s, *softwareChoice, reader)
 	if err != nil {
 		return failed(stderr, err)
 	}
@@ -311,7 +324,7 @@ func failed(w io.Writer, err error) int {
 }
 func usage(w io.Writer) {
 	fmt.Fprintln(w, strings.TrimSpace(`Usage:
-  temper catalog compile --catalog FILE --selection FILE --target darwin/arm64 --out FILE [--dry-run] [--json]
+  temper catalog compile --catalog FILE --selection FILE --target darwin/arm64 --out FILE [--software recorded|latest|tested] [--dry-run] [--json]
   temper execution export --lock FILE --out DIRECTORY [--dry-run] [--json]
 Explicit local snapshots only. These commands do not install or start anything.`))
 }

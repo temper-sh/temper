@@ -1,11 +1,11 @@
 # `temper software install` — exact layered software installations
 
-Status: approved installed-base surface, revised 2026-09-02. Software-lock
+Status: approved installed-base surface, revised 2026-09-22. Software-lock
 provenance, the pure installation/claim planner, strict canonical installation
 receipt/root-state
 documents and stores, and internal keyed-adapter effect orchestration are
 executable. The read-only check analyzer/reader and provenance-guided removal
-planner, retiring-authority state machine, receipt release, adapter effect
+planner, receipt release, adapter effect
 orchestration, and recovery path are executable as well. The public verbs now
 detect the exact macOS host target and compose two concrete isolated members:
 `upstream-release` for reviewed release archives and `uv` for exact managed-
@@ -29,8 +29,8 @@ declared network/provider boundary permits that read. Generation and
 installation remain separate verbs: once written, the exact lock is immutable
 input to `software install`.
 
-Each lock selection says whether the catalog or the experiment definition
-authorized it. A mixed lock can therefore reuse catalog-pinned base tools and
+Each lock selection identifies catalog, experiment or execution-lock provenance.
+V2 catalog exports use their actual execution identity, not a fabricated experiment. A mixed lock can therefore reuse catalog-pinned base tools and
 carry a fresh experimental runtime without exempting the catalog selections
 from catalog validation. If an experiment changes a catalog package's closure,
 that complete selection is marked experimental.
@@ -248,7 +248,6 @@ shared_units:
         sha256: <sha256>
     location: <absolute observed or prepared provider location>
     acquisition: temper-added|pre-existing
-    lifecycle: active|retiring
     claims:
       <installation id>:
         software_lock_digest: <semantic sha256>
@@ -264,7 +263,7 @@ refuses before mutation.
 
 An install operation unit carries `before`, `ownership_after`, and an optional
 `shared_claim`. A remove operation unit instead carries `before`,
-`ownership_before`, `location`, `remove_provider`, `retire_shared`, and an
+`ownership_before`, `location`, `remove_provider`, and an
 optional `shared_claim`. The operation's plan, pre-state, ownership, and
 provider action are immutable recorded intent. Only lease fields may renew.
 `non-exact` pre-state is admitted only for a receipted, wholly Temper-owned
@@ -279,17 +278,13 @@ invoking the provider, and every state completion is conditional on the same
 token. A live holder makes a concurrent invocation refuse. An expired holder
 may be reclaimed only after inspection and with a higher fence.
 
-Prepared claims count as claims: another installation cannot remove or replace
-their shared unit during a crash window. Shared units are normally `active`.
-The serialized final release removes the last claim and changes an exact
-Temper-added unit to `retiring` in the same state commit. A retiring generation
-accepts no new claims and may have no claims only while its matching remove
-operation exists. Observed absence permits finalization and removal of the
-retiring record. A pre-existing final release preserves the provider and drops
-Temper's authority record. If the final install receipt already matches, the
-state transition activates claims and removes leftover intent. A failure before
-prepare changes nothing; a failure after it leaves enough durable state to
-reconcile and is never silently discarded.
+Prepared and active usage records prevent conflicting shared installations and
+retain recovery identity. They never authorize system-package removal. Releasing
+the last Temper user removes only the shared usage record; the provider package
+remains, regardless of who installed it. No retiring lifecycle or final-claim
+provider deletion exists. Install completion activates usage records and removes
+leftover operation intent. A failure before prepare changes nothing; a failure
+after it retains the state needed for explicit recovery.
 
 ## `temper-software-installation/v1`
 
@@ -446,16 +441,14 @@ Removal follows one recoverable state machine:
 1. Read the exact lock, optional receipt, root state, and provider state.
 2. Purely derive the complete release and provider plan.
 3. Atomically record immutable `kind: remove` intent and release this
-   installation's shared claims. A non-final release leaves the active provider
-   generation. The final Temper-added release changes it to `retiring`; the
-   final pre-existing release drops Temper's authority while preserving the
-   provider.
-4. Invoke only prepared idempotent provider removals, checking the lease fence
-   before every group.
-5. Re-inspect. Every removed unit must be absent; a unit preserved for another
-   claim must remain exact.
-6. Conditionally remove the unchanged receipt, then finalize root state by
-   deleting the operation and any successfully retired shared records.
+   installation's shared usage records. When no Temper users remain, drop only
+   the usage record. System packages remain installed.
+4. Invoke prepared removals only for private isolated installation groups,
+   checking the lease fence before every group.
+5. Re-inspect. Every removed private unit must be absent; a shared unit still
+   required by another installation must remain exact.
+6. Conditionally remove the unchanged receipt, then delete completed operation
+   intent under its fence.
 
 A crash after prepare is recovered only by an explicit rerun. The operation
 contains locations and provider actions, so recovery still works if the receipt
@@ -463,11 +456,12 @@ commit already succeeded. A live lease refuses a concurrent run; an expired
 lease may be reclaimed after inspection with a higher fence. The second
 successful run is byte-for-byte clean.
 
-A shared provider unit is removed only for a final release when root state
-proves the exact generation was Temper-added. Prepared and active claims both
-block final release. No new claim may attach to `retiring`. Every pre-existing,
-unproven, or identity-drifted shared unit is preserved or refused, never
-deleted. For an isolated adapter/scope, provider removal occurs only when every
+Temper never removes system-managed software, including packages it requested
+or packages left after an unsuccessful install. It does not run uninstall,
+autoremove or orphan cleanup. An optional “no longer required by Temper” notice
+is not a claim that other software does not use a package. Removal is the user's
+independent decision. The planner, prepared-intent validation and adapter effect
+boundary all enforce this policy. For an isolated adapter/scope, provider removal occurs only when every
 receipted unit in that atomic group is Temper-added and every location is
 strictly below the named installation directory. If any unit in that group was
 pre-existing, the whole provider group is preserved while the installation
