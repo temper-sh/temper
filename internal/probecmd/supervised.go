@@ -75,7 +75,14 @@ type probeStatus struct {
 type processRow struct {
 	pid, ppid, pgid     int
 	started, executable string
+	state               string
 }
+
+func (p processRow) exited() bool {
+	return strings.HasPrefix(p.state, "Z") || strings.Contains(p.state, "E")
+}
+
+var errCommandUnavailable = errors.New("owned process command temporarily unavailable")
 
 func parseRows(raw string) ([]processRow, error) {
 	var rows []processRow
@@ -84,7 +91,7 @@ func parseRows(raw string) ([]processRow, error) {
 			continue
 		}
 		fields := strings.Fields(line)
-		if len(fields) < 9 {
+		if len(fields) < 10 {
 			return nil, errors.New("incomplete process observation")
 		}
 		pid, e1 := strconv.Atoi(fields[0])
@@ -95,14 +102,14 @@ func parseRows(raw string) ([]processRow, error) {
 		}
 		// Skip the fixed columns without normalizing spaces inside an executable path.
 		executable := strings.TrimLeft(line, " \t")
-		for range 8 {
+		for range 9 {
 			separator := strings.IndexAny(executable, " \t")
 			if separator < 0 {
 				return nil, errors.New("incomplete process observation")
 			}
 			executable = strings.TrimLeft(executable[separator:], " \t")
 		}
-		rows = append(rows, processRow{pid, ppid, pgid, strings.Join(fields[3:8], " "), executable})
+		rows = append(rows, processRow{pid, ppid, pgid, strings.Join(fields[3:8], " "), executable, fields[8]})
 	}
 	return rows, nil
 }
@@ -116,11 +123,28 @@ func systemRead(path string, args ...string) ([]byte, error) {
 }
 
 func readRows() ([]processRow, error) {
-	raw, err := systemRead("/bin/ps", "-axww", "-o", "pid=,ppid=,pgid=,lstart=,comm=")
+	raw, err := systemRead("/bin/ps", "-axww", "-o", "pid=,ppid=,pgid=,lstart=,stat=,comm=")
 	if err != nil {
 		return nil, fmt.Errorf("read process identities: %w", err)
 	}
 	return parseRows(string(raw))
+}
+
+func readMembers(group int, invocation Invocation, known map[int]processRow) ([]processRow, []ProcessIdentity, error) {
+	for attempt := 0; ; attempt++ {
+		rows, err := readRows()
+		if err != nil {
+			return nil, nil, err
+		}
+		owned, roles, err := members(rows, group, invocation, known)
+		if !errors.Is(err, errCommandUnavailable) || attempt == 2 {
+			return owned, roles, err
+		}
+		// ps reads the process table and argv separately. A child can exit
+		// between those reads. Refresh the observation before any signal;
+		// an unavailable command never establishes ownership by itself.
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 // members verifies every member before signaling the group. Previously observed
@@ -146,12 +170,27 @@ func members(rows []processRow, group int, invocation Invocation, known map[int]
 			}
 			continue
 		}
-		if prior, ok := known[row.pid]; ok {
+		prior, tracked := known[row.pid]
+		if row.exited() {
+			// macOS replaces an exited process's command with <defunct> until
+			// its parent reaps it. Retain the observed identity, but do not
+			// publish a live role or treat the group as gone yet.
+			if !tracked || prior.started != row.started {
+				return nil, nil, errors.New("unverified exited process in owned group")
+			}
+			row.executable = prior.executable
+			found = append(found, row)
+			continue
+		}
+		if tracked {
 			// A launch shell may exec the expected engine without changing PID or
 			// start time. Once it is an engine, its identity cannot rebind.
 			expectedExec := isLaunchShell(prior.executable) && row.executable == invocation.EnginePath
-			if prior.started != row.started || (prior.executable != row.executable && !expectedExec) {
-				return nil, nil, errors.New("owned process identity changed")
+			if !prior.exited() && prior.started == row.started && row.executable == "("+filepath.Base(prior.executable)+")" {
+				return nil, nil, fmt.Errorf("%w: PID %d", errCommandUnavailable, row.pid)
+			}
+			if prior.exited() || prior.started != row.started || (prior.executable != row.executable && !expectedExec) {
+				return nil, nil, fmt.Errorf("owned process %d identity changed: start %q -> %q, executable %q -> %q, state %q -> %q", row.pid, prior.started, row.started, prior.executable, row.executable, prior.state, row.state)
 			}
 		}
 		role := ""
@@ -318,11 +357,7 @@ func runSupervised(ctx context.Context, invocation Invocation, stdout, stderr io
 	var failure error
 	reaped := false
 	observe := func() error {
-		rows, err := readRows()
-		if err != nil {
-			return err
-		}
-		owned, roles, err := members(rows, group, invocation, known)
+		owned, roles, err := readMembers(group, invocation, known)
 		if err != nil {
 			return err
 		}
@@ -393,38 +428,47 @@ running:
 }
 
 func shutdownGroup(group int, invocation Invocation, known map[int]processRow, grace time.Duration) error {
-	verified := func() (bool, error) {
-		rows, err := readRows()
+	verified := func() (present, live bool, err error) {
+		owned, _, err := readMembers(group, invocation, known)
 		if err != nil {
-			return false, err
-		}
-		owned, _, err := members(rows, group, invocation, known)
-		if err != nil {
-			return false, err
+			return false, false, err
 		}
 		if len(owned) == 0 {
 			if err := syscall.Kill(-group, 0); errors.Is(err, syscall.ESRCH) {
-				return false, nil
+				return false, false, nil
 			}
-			return false, errors.New("group exists without observable members")
+			return false, false, errors.New("group exists without observable members")
 		}
-		return true, nil
+		for _, row := range owned {
+			live = live || !row.exited()
+		}
+		return true, live, nil
 	}
 	for _, stage := range []struct {
 		signal syscall.Signal
 		wait   time.Duration
 	}{{syscall.SIGTERM, grace}, {syscall.SIGKILL, 5 * time.Second}} {
-		live, err := verified()
-		if err != nil || !live {
+		present, live, err := verified()
+		if err != nil || !present {
 			return err
 		}
-		if err := syscall.Kill(-group, stage.signal); err != nil && !errors.Is(err, syscall.ESRCH) {
-			return err
+		if live {
+			if signalErr := syscall.Kill(-group, stage.signal); signalErr != nil && !errors.Is(signalErr, syscall.ESRCH) {
+				// The last live member may have exited since observation. macOS
+				// refuses signals to an all-zombie group; still wait for reaping.
+				present, live, err = verified()
+				if err != nil || live {
+					return errors.Join(signalErr, err)
+				}
+				if !present {
+					return nil
+				}
+			}
 		}
 		deadline := time.Now().Add(stage.wait)
 		for time.Now().Before(deadline) {
-			live, err := verified()
-			if err != nil || !live {
+			present, _, err := verified()
+			if err != nil || !present {
 				return err
 			}
 			time.Sleep(100 * time.Millisecond)

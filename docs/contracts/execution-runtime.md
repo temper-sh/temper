@@ -41,7 +41,9 @@ invocation and reject stale or incomplete observations.
 Temper discovers and validates router/engine membership and listener ownership.
 SIGTERM to the foreground Temper child requests bounded group shutdown; Temper
 rechecks identities before TERM and KILL. Only a final stopped snapshot proving
-the group absent and listener closed permits cleanup. Unknown identity, failed
-observation, forced termination of Temper, or missing final status cannot imply
+the group absent and listener closed permits cleanup. Exiting children retain
+their observed identity until reaped. A temporarily unavailable command from
+`ps` is re-read and never grants signaling authority by itself. Unknown identity,
+failed observation, forced termination of Temper, or missing final status cannot imply
 successful shutdown. Field Kit measures the supplied identities and chooses its
 own limits; these primitives contain no experiment protocol or threshold policy.
