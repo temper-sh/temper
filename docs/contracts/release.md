@@ -61,7 +61,9 @@ The tag workflow runs on a native GitHub-hosted macOS ARM64 runner. It:
 5. packages the signed binary and generated notices;
 6. submits the ZIP with `notarytool` and waits for acceptance;
 7. verifies the checksum, signature, notarization, version and archive shape
-   from a clean extraction, then compiles and exports a local execution lock; and
+   from a clean extraction, then compiles, inspects and exports a local execution
+   lock, checks export replay, and verifies that execution preparation, rendering
+   and removal dry runs leave the installation absent; and
 8. uses GitHub's REST API and the scoped workflow token to create a draft,
    upload both verified assets, and publish only after every prior gate passes.
 

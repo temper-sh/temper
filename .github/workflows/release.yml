@@ -201,6 +201,19 @@ jobs:
             --catalog catalog/qwen38-m5-refresh.json \
             --selection catalog/qwen38-m5-refresh.selection.json \
             --target darwin/arm64 --out "$inputs_root/execution.lock.json"
+          "$binary" execution inspect --lock "$inputs_root/execution.lock.json" \
+            > "$inputs_root/inspection.json"
+          jq -e '.schema == "temper-execution/v1" and (.execution_digest | length == 64)' \
+            "$inputs_root/inspection.json"
+          for operation in prepare render remove; do
+            "$binary" execution "$operation" --lock "$inputs_root/execution.lock.json" \
+              --root "$inputs_root/installation" --installation release-smoke --dry-run \
+              > "$inputs_root/$operation.json"
+            jq -e --arg operation "$operation" \
+              '.schema == "temper-execution-plan/v1" and .operation == $operation and .dry_run == true' \
+              "$inputs_root/$operation.json"
+            test ! -e "$inputs_root/installation"
+          done
           "$binary" execution export --lock "$inputs_root/execution.lock.json" \
             --out "$inputs_root/inputs" --dry-run --json
           test ! -e "$inputs_root/inputs"
