@@ -81,7 +81,7 @@ check, removal, or catalog policy.
 | `temper software install` | `software/install` through `softwarecmd` | `software/lockfile`, `installplan`, `receipt`, `rootstate` | receipt/state stores; compiled installation adapter effects | `docs/contracts/software-install.md` |
 | `temper software check` | `software/check` through `softwarecmd` | `software/lockfile`, `checkplan`, `receipt`, `rootstate` | stores and provider inspection; no writes | `docs/contracts/software-install.md` |
 | `temper software remove` | `software/remove` through `softwarecmd` | `software/lockfile`, `removeplan`, `receipt`, `rootstate` | prepared authority, compiled adapter removal, receipt/state commits | `docs/contracts/software-install.md` |
-| `temper probe serve` | `internal/probecmd` | exact software receipt/lock and rendered-generation admission | foreground loopback process group; dry-run is read-only | `docs/contracts/probe-serve.md` |
+| `temper probe serve` | `internal/probecmd` | exact software receipt/lock and rendered-generation admission | foreground loopback router and owned engine groups; dry-run is read-only | `docs/contracts/probe-serve.md` |
 | `temper probe tokenize` | `internal/probecmd` | exact software receipt/lock and manifest-locked GGUF admission | one offline tokenizer subprocess; reads prompt bytes from stdin | `docs/contracts/probe-tokenize.md` |
 | `temper field-kit bind` | `internal/fieldkitcmd` + `internal/fieldkitbinding` | manifest/software locks, receipts, canonical machine facts | explicitly named Temper state; pure binding after reads | `docs/contracts/field-kit.md` |
 
@@ -116,7 +116,7 @@ it is executable in a test.
 |---|---|---|
 | `internal/fieldkitcmd` | stable command edge | reads explicitly named Temper material and emits the canonical binding |
 | `internal/fieldkitbinding` | pure identity | exact executing material across machine, binary, locks, receipts, and rendered generation |
-| `internal/probecmd` | controlled effect boundary | admission and process lifecycle for one exact receipt/generation-bound loopback router or one exact receipt/model-bound offline tokenizer |
+| `internal/probecmd` | controlled effect boundary | receipt/generation admission, kernel executable identity and supervised router/engine groups; also one exact receipt/model-bound offline tokenizer |
 | `internal/releaseartifact` | pure release document | strict release SemVer, deterministic ZIP names/order/modes/timestamps/checksum, and stable third-party notice rendering |
 
 Current Field Kit source and runtime live in the adjacent repository and call

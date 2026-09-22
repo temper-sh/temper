@@ -1,6 +1,6 @@
 # Temper — execution plan
 
-Status: **DIRECT RUNTIME VERIFIED / ALPHA.9 RELEASE PREPARED**
+Status: **ALPHA.9 AND FIELD KIT BOOTSTRAP DELIVERED**
 
 Updated: **2026-09-22**
 
@@ -22,8 +22,8 @@ promotion, resolver and bootstrap proposals are no longer an active backlog.
 | Software selection | Source records are separate from resolved releases. `catalog compile --software recorded\|latest\|tested` supports the current llama.cpp/llama-swap macOS ARM64 sources. Recorded inputs are the offline default; fallback is explicit. |
 | Installation | Exact isolated release/Python installation, receipts, version checks and recovery remain. System-managed software is always retained. Removing the unused Homebrew reader did not add a new Homebrew or Linux installer. |
 | Field Kit host | `execution inspect/prepare/render/serve/remove` and supervised probes are implemented. The [runtime contract](contracts/execution-runtime.md) owns process identities, listener checks and final shutdown proof. |
-| Source and build | Cleanup `5cd2ad8`, shutdown fix `3746209` and alpha.8 release `858f0f2` are pushed. The alpha.9 candidate handles separate engine process groups and passed the native integration check. |
-| Public binary | Signed/notarized `0.1.0-alpha.8` is published. Its first native check exposed a single-group assumption; use the corrected alpha.9 delivery for revision 2. Alpha.7 remains the dispatched revision 1 host. |
+| Source and build | Cleanup and runtime fixes are pushed. Alpha.9 source is `db8f258`; Go tests, vet, race checks and release CI pass. `build/temper` is the current macOS ARM64 development build. |
+| Public binary | Signed/notarized [0.1.0-alpha.9](https://github.com/temper-sh/temper/releases/tag/v0.1.0-alpha.9) is published and pinned by Field Kit `01dd867`. Fresh bootstrap, unchanged replay, preview, declined consent and interactive setup pass. Alpha.7 remains the dispatched revision 1 host. |
 | Catalog distribution | Signing/update/storage utilities for the earlier catalog format remain. They do not yet publish or select the maintained V3 catalog. |
 
 The 22 September native check used the frozen `qwen-machine-study@2` lock and
@@ -40,25 +40,7 @@ binds each observed group, and has a native regression matching that topology.
 
 ## Next delivery
 
-**Make the new Field Kit study work through its normal bootstrap.**
-
-1. Publish corrected macOS ARM64 alpha.9 using the existing
-   [release contract](contracts/release.md). Its full Go tests, vet, race checks,
-   repeated native supervisor regressions and real runtime check pass locally.
-2. Update V3 Field Kit's pinned host version/checksum and verify its required
-   primitives against that binary. The [Field Kit plan](../../v3/FIELD-KIT-PLAN.md#next-delivery)
-   owns contributor-side changes.
-3. Verify fresh bootstrap, replay, read-only preview and declined consent with
-   the final signed artifact. These checks passed with alpha.8; verify the new
-   pin before publishing the contributor update.
-
-Pending revision 1 results are not a prerequisite for release preparation.
-Preserve their original package, producer, Python, Temper and session identities.
-The new client must not resume or silently replay those runs.
-
-## Following product work
-
-### Signed V3 catalog distribution
+**Signed V3 catalog distribution.**
 
 Connect one maintained V3 catalog snapshot to authenticated publication,
 explicit retrieval/update and rollback. Reuse existing trust, signature and
@@ -69,6 +51,14 @@ The concrete outcome is a consumer obtaining a verified catalog, explicitly
 selecting a Profile and compiling an exact lock. A catalog update cannot rewrite
 the user's Selection or existing Execution Lock. Results remains the assessment
 owner; no qualification registry or promotion packet is needed.
+
+The normal Field Kit bootstrap is delivered. Pending revision 1 results are
+independent of this catalog work. Preserve their original package, producer,
+Python, Temper and session identities; the new client must not resume or
+silently replay them. The [Field Kit plan](../../v3/FIELD-KIT-PLAN.md#next-delivery)
+owns the remaining study work.
+
+## Following product work
 
 ### Additional engine closures
 
@@ -177,9 +167,10 @@ failure-boundary tests, the full Go tests, `go vet` and race tests. Verify
 dry-run purity, interruption/refusal and clean reruns at the affected effect
 boundary. Use native harmless child processes for supervisor tests.
 
-The cleanup and shutdown fix passed those checks, all 15 Field Kit configuration
-compile/inspect checks, unchanged issued exports and read-only preview. The
-shutdown regression also passed ten repeated native runs. Reuse those results
+The cleanup passed all 15 Field Kit configuration compile/inspect checks and
+unchanged issued exports. The alpha.9 runtime fix passed full tests, vet and race
+checks, three repeated supervisor race runs, and the bounded native check above.
+Both repositories' CI and the signed release workflow pass. Reuse those results
 for unchanged code; documentation maintenance needs link and consistency checks.
 
 Heavy model runs, new downloads, external spending, tagged publication and live
