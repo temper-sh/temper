@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -48,16 +49,26 @@ func TestLaunchShellMayExecOnlyTheExpectedEngine(t *testing.T) {
 	}
 }
 
-func TestMovedOrEscapedChildPreventsGroupOnlyShutdownProof(t *testing.T) {
+func TestEngineMayStartItsOwnGroupButCannotMoveAfterObservation(t *testing.T) {
 	inv := Invocation{Path: "/owned/router", EnginePath: "/owned/engine"}
 	router := processRow{100, 1, 100, "Tue Sep 22 12:00:00 2026", inv.Path, "S"}
 	engine := processRow{101, 100, 101, router.started, inv.EnginePath, "S"}
-	if _, _, err := members([]processRow{router, engine}, 100, inv, map[int]processRow{}); err == nil {
-		t.Fatal("accepted descendant in another group")
+	known := map[int]processRow{}
+	if _, roles, err := members([]processRow{router, engine}, 100, inv, known); err != nil || len(roles) != 2 || roles[0].PGID != engine.pid {
+		t.Fatal("refused the router's engine group", roles, err)
 	}
 	engine.ppid = 1
-	if _, _, err := members([]processRow{engine}, 100, inv, map[int]processRow{101: engine}); err == nil {
-		t.Fatal("forgot a previously observed orphan outside its group")
+	if owned, _, err := members([]processRow{engine}, 100, inv, known); err != nil || len(owned) != 1 {
+		t.Fatal("forgot the verified engine after its router exited", owned, err)
+	}
+	engine.pgid = 102
+	if _, _, err := members([]processRow{engine}, 100, inv, known); err == nil {
+		t.Fatal("accepted a changed process group")
+	}
+	engine.pgid = 101
+	stranger := processRow{102, 1, 101, router.started, inv.EnginePath, "S"}
+	if _, _, err := members([]processRow{engine, stranger}, 100, inv, known); err == nil {
+		t.Fatal("adopted an unrelated member of the engine group")
 	}
 }
 
@@ -244,6 +255,14 @@ func TestProcessAndListenerParsersPreserveExactBoundaries(t *testing.T) {
 }
 
 func TestSupervisedForegroundStopsOwnedRouterAndEngine(t *testing.T) {
+	for _, separateGroup := range []bool{false, true} {
+		t.Run(fmt.Sprintf("separate-engine-group=%t", separateGroup), func(t *testing.T) {
+			testSupervisedForeground(t, separateGroup)
+		})
+	}
+}
+
+func testSupervisedForeground(t *testing.T, separateGroup bool) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("macOS listener observation")
 	}
@@ -277,7 +296,8 @@ func TestSupervisedForegroundStopsOwnedRouterAndEngine(t *testing.T) {
 	done := make(chan error, 1)
 	var processOutput bytes.Buffer
 	inv := Invocation{Path: router, EnginePath: engine, Arguments: []string{"-test.run=^TestProbeProcessHelper$"},
-		Environment: append(os.Environ(), "TEMPER_TEST_PROBE=router", "TEMPER_TEST_LISTEN="+listen, "TEMPER_TEST_ENGINE="+engine),
+		Environment: append(os.Environ(), "TEMPER_TEST_PROBE=router", "TEMPER_TEST_LISTEN="+listen, "TEMPER_TEST_ENGINE="+engine,
+			fmt.Sprintf("TEMPER_TEST_ENGINE_GROUP=%t", separateGroup)),
 		Supervision: &Supervision{StatusPath: statusPath, Root: parent, Installation: "fixture", Generation: strings.Repeat("b", 64), Listen: listen}}
 	go func() { done <- runSupervised(ctx, inv, &processOutput, &processOutput) }()
 	var observed probeStatus
@@ -302,6 +322,9 @@ func TestSupervisedForegroundStopsOwnedRouterAndEngine(t *testing.T) {
 	if observed.State != "running" || !observed.ListenersVerified || len(observed.Roles) != 2 {
 		t.Fatalf("no owned live boundary: %+v; helper output: %s", observed, processOutput.String())
 	}
+	if separateGroup && observed.Roles[0].PGID != observed.Roles[0].PID {
+		t.Fatal("engine did not start in its own group", observed.Roles)
+	}
 	raw, err = os.ReadFile(statusPath)
 	if err != nil {
 		t.Fatal(err)
@@ -315,6 +338,11 @@ func TestSupervisedForegroundStopsOwnedRouterAndEngine(t *testing.T) {
 	}
 	if err := syscall.Kill(-stopped.ProcessGroup, 0); err != syscall.ESRCH {
 		t.Fatalf("group remains: %v", err)
+	}
+	for _, role := range observed.Roles {
+		if err := syscall.Kill(-role.PGID, 0); err != syscall.ESRCH {
+			t.Fatalf("%s group remains: %v", role.ID, err)
+		}
 	}
 	// A stale status path cannot be reused by another invocation.
 	if err := runSupervised(context.Background(), inv, io.Discard, io.Discard); err == nil {
@@ -348,6 +376,10 @@ func TestProbeProcessHelper(t *testing.T) {
 	}
 	defer listener.Close()
 	child := exec.Command(os.Getenv("TEMPER_TEST_ENGINE"), "-test.run=^TestProbeProcessHelper$")
+	// Real llama-swap launches by basename and gives the engine its own group.
+	// argv[0] is deliberately insufficient to establish executable identity.
+	child.Args[0] = filepath.Base(child.Path)
+	child.SysProcAttr = &syscall.SysProcAttr{Setpgid: os.Getenv("TEMPER_TEST_ENGINE_GROUP") == "true"}
 	child.Env = append(os.Environ(), "TEMPER_TEST_PROBE=engine")
 	if err := child.Start(); err != nil {
 		os.Exit(3)

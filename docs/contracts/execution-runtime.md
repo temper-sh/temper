@@ -38,10 +38,17 @@ role identities (PID, group and start time), verified loopback listeners, update
 time, errors, and `safe_to_cleanup`. The caller must match its child PID and
 invocation and reject stale or incomplete observations.
 
-Temper discovers and validates router/engine membership and listener ownership.
-SIGTERM to the foreground Temper child requests bounded group shutdown; Temper
-rechecks identities before TERM and KILL. Only a final stopped snapshot proving
-the group absent and listener closed permits cleanup. Exiting children retain
+Temper discovers and validates router/engine ancestry and listener ownership.
+The router may start the engine in its own process group. Each observed PID,
+start time, kernel executable path and group stays bound; an unrelated member,
+changed group or replacement process is refused. A basename in `ps` is not an
+executable identity. The status's `process_group_id` names the router group;
+each role carries its own actual group.
+
+SIGTERM to the foreground Temper child requests bounded shutdown; Temper
+rechecks every owned group before TERM and KILL, stopping child groups first.
+Only a final stopped snapshot proving all owned groups absent and the listener
+closed permits cleanup. Exiting children retain
 their observed identity until reaped. A temporarily unavailable command from
 `ps` is re-read and never grants signaling authority by itself. Unknown identity,
 failed observation, forced termination of Temper, or missing final status cannot imply

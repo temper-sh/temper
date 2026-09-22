@@ -131,12 +131,38 @@ func readRows() ([]processRow, error) {
 }
 
 func readMembers(group int, invocation Invocation, known map[int]processRow) ([]processRow, []ProcessIdentity, error) {
+	var err error
+	invocation.Path, err = filepath.EvalSymlinks(invocation.Path)
+	if err != nil {
+		return nil, nil, err
+	}
+	if invocation.EnginePath != "" {
+		invocation.EnginePath, err = filepath.EvalSymlinks(invocation.EnginePath)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
 	for attempt := 0; ; attempt++ {
 		rows, err := readRows()
 		if err != nil {
 			return nil, nil, err
 		}
-		owned, roles, err := members(rows, group, invocation, known)
+		descendants, groups := processBoundary(rows, group, known)
+		for i, row := range rows {
+			if row.exited() || (!descendants[row.pid] && !groups[row.pgid]) {
+				continue
+			}
+			rows[i].executable, err = processExecutable(row.pid)
+			if err != nil {
+				err = fmt.Errorf("%w: PID %d: %v", errCommandUnavailable, row.pid, err)
+				break
+			}
+		}
+		var owned []processRow
+		var roles []ProcessIdentity
+		if err == nil {
+			owned, roles, err = members(rows, group, invocation, known)
+		}
 		if !errors.Is(err, errCommandUnavailable) || attempt == 2 {
 			return owned, roles, err
 		}
@@ -147,13 +173,14 @@ func readMembers(group int, invocation Invocation, known map[int]processRow) ([]
 	}
 }
 
-// members verifies every member before signaling the group. Previously observed
-// role identities never silently rebind when a process disappears or restarts.
-func members(rows []processRow, group int, invocation Invocation, known map[int]processRow) ([]processRow, []ProcessIdentity, error) {
-	var found []processRow
-	roles := []ProcessIdentity{}
-	roleIDs := map[string]bool{}
-	descendants := map[int]bool{group: true}
+// processBoundary includes the router's descendants and every previously bound
+// group. A router may create a child group; group membership alone never adopts
+// an unrelated process. Known children remain observable after reparenting.
+func processBoundary(rows []processRow, group int, known map[int]processRow) (map[int]bool, map[int]bool) {
+	descendants, groups := map[int]bool{group: true}, map[int]bool{group: true}
+	for pid, prior := range known {
+		descendants[pid], groups[prior.pgid] = true, true
+	}
 	for changed := true; changed; {
 		changed = false
 		for _, row := range rows {
@@ -164,13 +191,28 @@ func members(rows []processRow, group int, invocation Invocation, known map[int]
 		}
 	}
 	for _, row := range rows {
-		if row.pgid != group {
-			if _, tracked := known[row.pid]; tracked || descendants[row.pid] {
-				return nil, nil, errors.New("owned process left its group or its PID was reused")
-			}
+		if descendants[row.pid] && row.pgid == row.pid {
+			groups[row.pgid] = true
+		}
+	}
+	return descendants, groups
+}
+
+// members verifies all owned groups before signaling. Previously observed
+// role identities and group memberships never silently rebind.
+func members(rows []processRow, group int, invocation Invocation, known map[int]processRow) ([]processRow, []ProcessIdentity, error) {
+	var found []processRow
+	roles := []ProcessIdentity{}
+	roleIDs := map[string]bool{}
+	descendants, groups := processBoundary(rows, group, known)
+	for _, row := range rows {
+		if !descendants[row.pid] && !groups[row.pgid] {
 			continue
 		}
 		prior, tracked := known[row.pid]
+		if !descendants[row.pid] || !groups[row.pgid] || (row.pid == group && row.pgid != group) || (tracked && prior.pgid != row.pgid) {
+			return nil, nil, errors.New("unrelated group member or changed owned process group")
+		}
 		if row.exited() {
 			// macOS replaces an exited process's command with <defunct> until
 			// its parent reaps it. Retain the observed identity, but do not
@@ -428,40 +470,65 @@ running:
 }
 
 func shutdownGroup(group int, invocation Invocation, known map[int]processRow, grace time.Duration) error {
-	verified := func() (present, live bool, err error) {
+	verified := func() (present bool, liveGroups []int, err error) {
 		owned, _, err := readMembers(group, invocation, known)
 		if err != nil {
-			return false, false, err
+			return false, nil, err
 		}
-		if len(owned) == 0 {
-			if err := syscall.Kill(-group, 0); errors.Is(err, syscall.ESRCH) {
-				return false, false, nil
+		_, groups := processBoundary(nil, group, known)
+		for id := range groups {
+			seen, live := false, false
+			for _, row := range owned {
+				if row.pgid == id {
+					seen, live = true, live || !row.exited()
+				}
 			}
-			return false, false, errors.New("group exists without observable members")
+			if !seen && !errors.Is(syscall.Kill(-id, 0), syscall.ESRCH) {
+				return false, nil, errors.New("group exists without observable members")
+			}
+			if live {
+				liveGroups = append(liveGroups, id)
+			}
 		}
-		for _, row := range owned {
-			live = live || !row.exited()
-		}
-		return true, live, nil
+		// Stop children first so the router can reap them before it exits.
+		sort.Slice(liveGroups, func(i, j int) bool {
+			if liveGroups[i] == group || liveGroups[j] == group {
+				return liveGroups[j] == group
+			}
+			return liveGroups[i] < liveGroups[j]
+		})
+		return len(owned) != 0, liveGroups, nil
 	}
 	for _, stage := range []struct {
 		signal syscall.Signal
 		wait   time.Duration
 	}{{syscall.SIGTERM, grace}, {syscall.SIGKILL, 5 * time.Second}} {
-		present, live, err := verified()
+		present, liveGroups, err := verified()
 		if err != nil || !present {
 			return err
 		}
-		if live {
-			if signalErr := syscall.Kill(-group, stage.signal); signalErr != nil && !errors.Is(signalErr, syscall.ESRCH) {
+		for _, id := range liveGroups {
+			_, current, err := verified()
+			if err != nil {
+				return err
+			}
+			live := false
+			for _, candidate := range current {
+				live = live || candidate == id
+			}
+			if !live {
+				continue
+			}
+			if signalErr := syscall.Kill(-id, stage.signal); signalErr != nil && !errors.Is(signalErr, syscall.ESRCH) {
 				// The last live member may have exited since observation. macOS
 				// refuses signals to an all-zombie group; still wait for reaping.
-				present, live, err = verified()
-				if err != nil || live {
-					return errors.Join(signalErr, err)
+				_, remaining, err := verified()
+				stillLive := false
+				for _, candidate := range remaining {
+					stillLive = stillLive || candidate == id
 				}
-				if !present {
-					return nil
+				if err != nil || stillLive {
+					return errors.Join(signalErr, err)
 				}
 			}
 		}

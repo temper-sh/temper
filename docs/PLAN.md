@@ -1,6 +1,6 @@
 # Temper — execution plan
 
-Status: **CLEANUP SHIPPED TO MASTER / NEXT ALPHA NOT RELEASED**
+Status: **DIRECT RUNTIME VERIFIED / ALPHA.9 RELEASE PREPARED**
 
 Updated: **2026-09-22**
 
@@ -22,29 +22,35 @@ promotion, resolver and bootstrap proposals are no longer an active backlog.
 | Software selection | Source records are separate from resolved releases. `catalog compile --software recorded\|latest\|tested` supports the current llama.cpp/llama-swap macOS ARM64 sources. Recorded inputs are the offline default; fallback is explicit. |
 | Installation | Exact isolated release/Python installation, receipts, version checks and recovery remain. System-managed software is always retained. Removing the unused Homebrew reader did not add a new Homebrew or Linux installer. |
 | Field Kit host | `execution inspect/prepare/render/serve/remove` and supervised probes are implemented. The [runtime contract](contracts/execution-runtime.md) owns process identities, listener checks and final shutdown proof. |
-| Source and build | Cleanup `5cd2ad8` and shutdown fix `3746209` are pushed to `master`; CI is green. `build/temper` is a clean macOS ARM64 development build. |
-| Public binary | Signed/notarized `0.1.0-alpha.7` supports the dispatched older client. It does not contain the new direct execution runtime. |
+| Source and build | Cleanup `5cd2ad8`, shutdown fix `3746209` and alpha.8 release `858f0f2` are pushed. The alpha.9 candidate handles separate engine process groups and passed the native integration check. |
+| Public binary | Signed/notarized `0.1.0-alpha.8` is published. Its first native check exposed a single-group assumption; use the corrected alpha.9 delivery for revision 2. Alpha.7 remains the dispatched revision 1 host. |
 | Catalog distribution | Signing/update/storage utilities for the earlier catalog format remain. They do not yet publish or select the maintained V3 catalog. |
 
-The real-model witnesses predate the direct runtime cleanup. New hermetic process
-tests establish shutdown behavior, not another model-performance result.
+The 22 September native check used the frozen `qwen-machine-study@2` lock and
+cached model on Apple M5 / 32 GiB. Preparation replay and rendering agreed; one
+64-token-bounded request completed, both owned groups stopped, and private
+cleanup completed. The check observed no swap growth or watcher errors. It
+establishes runtime integration, not study performance or portable defaults.
+
+The first alpha.8 attempt failed before inference: llama-swap starts its engine
+in a separate process group and `ps` reports its command by basename. Shutdown
+was not proved, so cleanup was refused. The exact owned processes were stopped
+after independent identity verification. The fix uses kernel executable paths,
+binds each observed group, and has a native regression matching that topology.
 
 ## Next delivery
 
 **Make the new Field Kit study work through its normal bootstrap.**
 
-1. Prepare the next macOS ARM64 alpha from the cleaned product tree using the
-   existing [release contract](contracts/release.md). Check the built binary's
-   direct execution commands and preserve issued-v1 lock/export behavior.
-2. Publish the signed/notarized host through the existing tag workflow when
-   authorized. Do not invent a new installer or distribution framework.
-3. Update V3 Field Kit's pinned host version/checksum and verify its required
+1. Publish corrected macOS ARM64 alpha.9 using the existing
+   [release contract](contracts/release.md). Its full Go tests, vet, race checks,
+   repeated native supervisor regressions and real runtime check pass locally.
+2. Update V3 Field Kit's pinned host version/checksum and verify its required
    primitives against that binary. The [Field Kit plan](../../v3/FIELD-KIT-PLAN.md#next-delivery)
    owns contributor-side changes.
-4. Verify fresh bootstrap, replay, read-only preview and declined consent.
-   With separate exact-plan consent, verify the changed prepare/serve/stop/
-   private-cleanup path against the frozen study inputs before describing that
-   contributor path as validated.
+3. Verify fresh bootstrap, replay, read-only preview and declined consent with
+   the final signed artifact. These checks passed with alpha.8; verify the new
+   pin before publishing the contributor update.
 
 Pending revision 1 results are not a prerequisite for release preparation.
 Preserve their original package, producer, Python, Temper and session identities.

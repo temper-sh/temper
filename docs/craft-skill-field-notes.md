@@ -224,3 +224,14 @@ and exact partial-export repair; testing covered those outcomes before the
 isolated runtime witness. Field Kit consumes a public export contract rather
 than copying the graph compiler. No craft-skill change is warranted from this
 single slice; the compatibility reader incident is the concrete seam to watch.
+
+## Direct runtime release closeout (2026-09-22)
+
+The first native alpha.8 check exposed a false lifecycle assumption in the
+hermetic helper: real llama-swap starts an engine group of its own and uses a
+basename for argv[0]. The helper now reproduces both behaviors. Temper reads the
+kernel executable path, binds each group's identities, and proves every group
+absent before cleanup. Field Kit measures those identities without owning their
+shutdown. The corrected alpha.9 candidate passed the bounded native check; the
+failed attempt and refusal were retained during diagnosis. Existing reliable
+effects and testing guidance covered the correction; no craft change is needed.
