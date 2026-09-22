@@ -1,6 +1,6 @@
 # Temper — execution plan
 
-Status: **ALPHA.9 AND FIELD KIT BOOTSTRAP DELIVERED**
+Status: **ALPHA.10 SIGNED CATALOG DELIVERED**
 
 Updated: **2026-09-22**
 
@@ -22,9 +22,9 @@ promotion, resolver and bootstrap proposals are no longer an active backlog.
 | Software selection | Source records are separate from resolved releases. `catalog compile --software recorded\|latest\|tested` supports the current llama.cpp/llama-swap macOS ARM64 sources. Recorded inputs are the offline default; fallback is explicit. |
 | Installation | Exact isolated release/Python installation, receipts, version checks and recovery remain. System-managed software is always retained. Removing the unused Homebrew reader did not add a new Homebrew or Linux installer. |
 | Field Kit host | `execution inspect/prepare/render/serve/remove` and supervised probes are implemented. The [runtime contract](contracts/execution-runtime.md) owns process identities, listener checks and final shutdown proof. |
-| Source and build | Cleanup and runtime fixes are pushed. Alpha.9 source is `db8f258`; Go tests, vet, race checks and release CI pass. `build/temper` is the current macOS ARM64 development build. |
-| Public binary | Signed/notarized [0.1.0-alpha.9](https://github.com/temper-sh/temper/releases/tag/v0.1.0-alpha.9) is published and pinned by Field Kit `01dd867`. Fresh bootstrap, unchanged replay, preview, declined consent and interactive setup pass. Alpha.7 remains the dispatched revision 1 host. |
-| Catalog distribution | Signing/update/storage utilities for the earlier catalog format remain. They do not yet publish or select the maintained V3 catalog. |
+| Source and build | Catalog delivery `a9b4a7f` is pushed and tagged alpha.10. Full Go tests, vet, race checks and GitHub CI pass. `build/temper` is the current macOS ARM64 development build. |
+| Public binary | Signed/notarized [0.1.0-alpha.10](https://github.com/temper-sh/temper/releases/tag/v0.1.0-alpha.10) adds catalog commands. Its downloaded checksum, signing identity, notarization and live-catalog compilation pass. Field Kit `01dd867` keeps its verified alpha.9 host; alpha.7 remains the dispatched revision 1 host. |
+| Catalog distribution | The [stable channel](https://temper-sh.github.io/temper/catalog/channels/stable/channel.yaml) publishes signed sequence 2 with one Qwen profile. Explicit update, inspection, selection, compilation and offline rollback are delivered. [The catalog guide](CATALOG.md) owns use. |
 
 The 22 September native check used the frozen `qwen-machine-study@2` lock and
 cached model on Apple M5 / 32 GiB. Preparation replay and rendering agreed; one
@@ -38,19 +38,22 @@ was not proved, so cleanup was refused. The exact owned processes were stopped
 after independent identity verification. The fix uses kernel executable paths,
 binds each observed group, and has a native regression matching that topology.
 
+The catalog delivery verified the Pages-served bytes with the existing signing
+trust root. A fresh update, unchanged replay, no-write dry run, offline selection
+and compilation passed. The downloaded signed alpha.10 compiled byte-identical
+inputs to the verified candidate. Hermetic tests cover interrupted staging,
+signature failures, stale/equivocating publications, explicit rollback with a
+retained highest sequence, writer contention and preserved user files. The
+recorded Qwen inputs and unknown required/tested boundaries were not changed.
+
 ## Next delivery
 
-**Signed V3 catalog distribution.**
+**Guided setup over the working catalog.**
 
-Connect one maintained V3 catalog snapshot to authenticated publication,
-explicit retrieval/update and rollback. Reuse existing trust, signature and
-storage boundaries where they fit; remove obsolete paths only after identifying
-their remaining readers.
-
-The concrete outcome is a consumer obtaining a verified catalog, explicitly
-selecting a Profile and compiling an exact lock. A catalog update cannot rewrite
-the user's Selection or existing Execution Lock. Results remains the assessment
-owner; no qualification registry or promotion packet is needed.
+Design the short user path from machine inspection through explicit profile
+choice, an exact lock and a reviewed installation plan. Reuse the delivered
+catalog and execution commands. Resolve the remaining setup choices below
+before implementing defaults; no live service cutover is implied.
 
 The normal Field Kit bootstrap is delivered. Pending revision 1 results are
 independent of this catalog work. Preserve their original package, producer,
@@ -71,12 +74,10 @@ Reuse unchanged runtime evidence. Changed closures require an authorized native
 smoke before support claims. Generic CUDA/Linux vLLM needs an appropriate device;
 keep the interface portable without claiming untested targets work.
 
-### Guided setup and managed activation
+### Managed activation
 
-A user-facing setup path follows the usable catalog and explicit selection
-flow. Select models, patches, tools and integrations deliberately; offer
-evidenced alternatives without choosing for the user. Create the user's
-configuration once and propose later changes as diffs.
+Guided setup must select models, patches, tools and integrations deliberately,
+create the user's configuration once, and propose later changes as diffs.
 
 Production start/stop, service installation, transitions, leases and harness
 integration remain subsequent work. They need concrete interruption/reload
