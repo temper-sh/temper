@@ -10,8 +10,10 @@ import (
 	"errors"
 	"fmt"
 
+	current "github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/software/catalog"
 	publication "github.com/temper-sh/temper/internal/software/catalogpublication"
+	"gopkg.in/yaml.v3"
 )
 
 const MaxSeedInputBytes = 128
@@ -127,6 +129,16 @@ func (t Tool) validateArtifact(kind Kind, channel string, artifact, envelope []b
 	case KindCatalog:
 		if channel != "" {
 			return errors.New("--channel is valid only for channel publications")
+		}
+		var header struct {
+			Schema string `yaml:"schema"`
+		}
+		if err := yaml.Unmarshal(artifact, &header); err != nil {
+			return fmt.Errorf("read catalog schema: %w", err)
+		}
+		if header.Schema == current.Schema {
+			_, err := current.Parse(artifact)
+			return err
 		}
 		snapshot, err := catalog.ParseSnapshot(artifact)
 		if err != nil {

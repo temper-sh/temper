@@ -34,7 +34,8 @@ func (r releaseReader) Open(ctx context.Context, locator string) (io.ReadCloser,
 	return io.NopCloser(bytes.NewReader(data)), nil
 }
 
-func TestLatestCompileUsesResolvedSoftwareAndDryRunWritesNothing(t *testing.T) {
+func latestReleaseReader(t *testing.T) releaseReader {
+	t.Helper()
 	reader := releaseReader{}
 	for _, item := range []struct{ repo, tag, asset, root string }{
 		{"ggml-org/llama.cpp", "b12000", "llama-b12000-bin-macos-arm64.tar.gz", "llama-b12000"},
@@ -62,6 +63,11 @@ func TestLatestCompileUsesResolvedSoftwareAndDryRunWritesNothing(t *testing.T) {
 		})
 		reader["https://api.github.com/repos/"+item.repo+"/git/ref/tags/"+item.tag] = []byte(`{"object":{"type":"commit","sha":"` + strings.Repeat("a", 40) + `"}}`)
 	}
+	return reader
+}
+
+func TestLatestCompileUsesResolvedSoftwareAndDryRunWritesNothing(t *testing.T) {
+	reader := latestReleaseReader(t)
 	root := t.TempDir()
 	out := filepath.Join(root, "execution.lock.json")
 	args := []string{"--catalog", "../../catalog/qwen38-m5-refresh.json", "--selection", "../../catalog/qwen38-m5-refresh.selection.json", "--target", "darwin/arm64", "--software", "latest", "--out", out}
@@ -127,5 +133,29 @@ func TestLatestCompileUsesResolvedSoftwareAndDryRunWritesNothing(t *testing.T) {
 	}
 	if _, err := os.Stat(failedPath); !os.IsNotExist(err) {
 		t.Fatalf("failed resolution published a lock: %v", err)
+	}
+}
+
+func TestPublishedLatestCompilationRetainsAuthenticatedSource(t *testing.T) {
+	root, published := publishedRoot(t)
+	out := filepath.Join(filepath.Dir(root), "latest.lock.json")
+	var stdout, stderr bytes.Buffer
+	args := []string{"--root", root, "--selection", "../../catalog/qwen38-m5-refresh.selection.json", "--target", "darwin/arm64", "--software", "latest", "--out", out}
+	if code := compile(context.Background(), args, &stdout, &stderr, latestReleaseReader(t)); code != 0 {
+		t.Fatal(stderr.String())
+	}
+	data, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	locked, err := catalog.ParseLock(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if locked.SourceSnapshotSHA256 != published.SHA256 {
+		t.Fatal("latest software changed the authenticated catalog source identity")
+	}
+	if locked.Records.Runtime.Router.Release.Version != "v300" {
+		t.Fatal("latest software was not resolved")
 	}
 }

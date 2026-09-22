@@ -87,6 +87,26 @@ func TestRunRefusesBadChannelBeforeCatalogRead(t *testing.T) {
 	}
 }
 
+func TestLegacyCommandDirectsCurrentCatalogUsersWithoutChangingItsStore(t *testing.T) {
+	key, trust := updateTrust(t)
+	root := filepath.Join(t.TempDir(), "root")
+	options := catalogupdate.Options{Root: root, Channel: "stable"}
+	if _, err := catalogupdate.Run(context.Background(), options, trust, updateSource(key, 1, "legacy"), updateRegistry(t)); err != nil {
+		t.Fatal(err)
+	}
+	before := updateTree(t, root)
+	source := updateSource(key, 2, "unused")
+	sha := strings.Repeat("a", 64)
+	data := []byte(fmt.Sprintf("schema: temper-catalog-channel/v1\nchannel: stable\ncatalog:\n  schema: temper-catalog/v2\n  sequence: 2\n  sha256: %s\n  locator: https://example.test/snapshots/%s/\n", sha, sha))
+	source.channel = catalogupdate.SignedArtifact{Data: data, Signature: updateSign(key, data)}
+	if _, err := catalogupdate.Run(context.Background(), options, trust, source, updateRegistry(t)); err == nil || !strings.Contains(err.Error(), "use temper catalog update") {
+		t.Fatalf("current channel refusal: %v", err)
+	}
+	if source.catalogReads != 0 || updateTree(t, root) != before {
+		t.Fatal("legacy command read a current snapshot or changed its store")
+	}
+}
+
 func TestRunRefusesRollbackAndSameSequenceEquivocation(t *testing.T) {
 	privateKey, trust := updateTrust(t)
 	root := filepath.Join(t.TempDir(), "temper-data")

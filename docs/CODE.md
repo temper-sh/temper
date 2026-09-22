@@ -140,6 +140,7 @@ workflow-only decisions stay with the use case.
 | `internal/software` | Provider-neutral shared values such as targets, candidates, and artifacts |
 | `software/archive` | Shared bounded tar.gz inspection, safe extraction, and canonical installed-tree inventory for isolated adapters |
 | `internal/catalog` | Maintained source records, latest/tested resolution, exact execution-lock compilation and derived installer inputs |
+| `internal/catalog/distribution` | Current signed publication verification, bounded updates, verified local reads and deliberate rollback; one atomic active/highest-accepted state commit |
 | `software/catalog` | Earlier signed software-publication format; not the V3 authoring path |
 | `software/version` | Closed SemVer/PEP 440/opaque/git version semantics |
 | `software/policy` | Pure catalog recipe and constraint policy |
@@ -148,6 +149,12 @@ workflow-only decisions stay with the use case.
 
 Catalog policy never proves what is installed. The lock is desired state, a
 receipt is observed history, and root state is operation/share authority.
+
+`internal/catalogcmd` exposes catalog update, inspection, explicit selection,
+compilation from a verified store and rollback. Distribution reuses the existing
+catalog trust root, signature envelope and HTTPS transport. The older software
+catalog parser/store remain for issued compatibility; current state lives under
+`ROOT/catalog` and never changes the legacy `ROOT/software/catalog` store.
 
 ### Software adapter family
 

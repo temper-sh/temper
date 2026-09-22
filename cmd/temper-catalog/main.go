@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/temper-sh/temper/internal/catalog/distribution"
 	"github.com/temper-sh/temper/internal/software/adapter"
 	"github.com/temper-sh/temper/internal/software/adapter/upstreamrelease"
 	"github.com/temper-sh/temper/internal/software/catalogsigning"
@@ -26,12 +27,40 @@ func main() {
 }
 
 func run(ctx context.Context, arguments []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	if len(arguments) > 0 && arguments[0] == "verify-publication" {
+		return runVerifyPublication(arguments[1:], stdout, stderr)
+	}
 	tool, err := newProductionTool()
 	if err != nil {
 		fmt.Fprintf(stderr, "temper-catalog: construct release tool: %v\n", err)
 		return 1
 	}
 	return runWithTool(ctx, arguments, stdin, stdout, stderr, tool)
+}
+
+func runVerifyPublication(arguments []string, stdout, stderr io.Writer) int {
+	flags := flag.NewFlagSet("temper-catalog verify-publication", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	root := flags.String("root", "", "catalog publication tree served by Pages")
+	if err := flags.Parse(arguments); err != nil {
+		return 2
+	}
+	if flags.NArg() != 0 || *root == "" {
+		fmt.Fprintln(stderr, "usage: temper-catalog verify-publication --root DIRECTORY")
+		return 2
+	}
+	trust, err := catalogtrust.Production()
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	snapshot, err := distribution.VerifyTree(*root, trust)
+	if err != nil {
+		fmt.Fprintf(stderr, "temper-catalog verify-publication: %v\n", err)
+		return 1
+	}
+	fmt.Fprintf(stdout, "RESULT catalog-publication verified channel=%s sequence=%d sha256=%s profiles=%d\n", distribution.Channel, snapshot.Sequence, snapshot.SHA256, len(snapshot.Document.Profiles))
+	return 0
 }
 
 func newProductionTool() (catalogsigning.Tool, error) {
@@ -275,11 +304,13 @@ func artifactLimit(kind catalogsigning.Kind) int64 {
 func usage(output io.Writer) {
 	fmt.Fprintln(output, `usage: temper-catalog <verb> [options]
 
-Release-only software catalog publication tool.
+Release-only catalog publication tool.
 
 verbs:
   sign     validate and sign exact artifact bytes with a base64 seed from stdin
-  verify   validate an artifact and its detached production signature`)
+  verify   validate an artifact and its detached production signature
+  verify-publication --root DIRECTORY
+           verify the complete current channel-to-snapshot publication`)
 }
 
 func signUsage(output io.Writer) {

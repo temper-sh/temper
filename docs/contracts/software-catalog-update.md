@@ -2,8 +2,11 @@
 
 Status: approved software-catalog update implementation, 2026-08-24.
 
-This retained command updates the earlier signed software-publication format.
-It does not update or supply the maintained V3 catalog/compiler. Use the
+This retained command understands the earlier signed software-publication format.
+The stable endpoint now publishes the maintained catalog; the earlier command
+refuses that format without changing its legacy store. Use `temper catalog update`
+and the [distribution contract](catalog-distribution.md) for current publications.
+For explicit local authoring inputs, use the
 [execution-lock preparation path](execution-lock.md) for current profile and
 software selection; signed V3 distribution remains separate work.
 

@@ -1,6 +1,6 @@
-# Local catalog and execution-lock preparation
+# Catalog and execution-lock preparation
 
-Temper compiles an explicit local catalog and user selection into a
+Temper compiles a verified active catalog or explicit local catalog and selection into a
 self-contained execution lock. The [direct execution runtime](execution-runtime.md)
 consumes that lock for installation, rendering and serving. Compatibility exports
 remain available for issued clients. Version selection is a preparation
@@ -14,6 +14,13 @@ temper execution inspect --lock execution.lock.json
 temper execution prepare --lock execution.lock.json \
   --root /explicit/temper-root --installation candidate [--dry-run]
 ```
+
+Use `--root ROOT` instead of `--catalog FILE` to compile from the verified active
+publication. Exactly one source is required. The [catalog guide](../CATALOG.md)
+describes download, inspection and explicit selection. Published compilation
+binds the lock's source identity to the exact signed snapshot bytes, including
+when latest/tested resolution changes the software inputs. The existing local
+authoring path retains its canonical document identity and issued-lock behavior.
 
 Choose one software value. `recorded` is the default and uses retained exact
 inputs without network access. `latest` discovers the upstream stable release

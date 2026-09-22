@@ -26,16 +26,16 @@ catalog and selection and compiles a self-contained execution lock. Its five
 records are Artifact, Patch, Engine, Layout and Profile; Results retains public
 portfolio assessment. [The execution-lock contract](contracts/execution-lock.md)
 owns this narrow compiler/export surface and the refreshed llama-server controls.
-It feeds the existing primitives and does not replace their manifest workflow,
-publish a catalog, or activate a service. Signed catalog selection and broader
-engine closures remain separate work.
+It feeds the existing primitives and retains their manifest workflow. The
+[distribution contract](contracts/catalog-distribution.md) adds signed catalog
+publication, explicit selection and offline rollback. Broader engine closures
+and managed activation remain separate work.
 
 The 2026-09-22 Field Kit simplification adds direct execution-lock consumption
 and supervised foreground probes. The [execution runtime contract](contracts/execution-runtime.md)
 owns preparation, rendering, process identities, listener validation and shutdown
 results. Field Kit retains protocols, measurements and stop decisions. Issued
-client exports remain compatible; the new host surface is development-only until
-a separate release is authorized.
+client exports remain compatible; alpha.9 supplies the current contributor host.
 
 The existing manifest file is **`manifest.yaml`** with **`manifest.lock.yaml`**
 beside it (decided 2026-08-14: it carries the whole wizard selection —
@@ -909,7 +909,8 @@ reach the same standard before an installable tool is offered with those claims.
    a public assessment or installable catalog.
 4. Is remote-provider integration strictly render-only (current direction),
    with credential and foreground-model ownership left to each harness?
-5. Signed distribution for the maintained V3 catalog remains separate work.
+5. Signed distribution for the maintained V3 catalog follows the
+   [catalog distribution contract](contracts/catalog-distribution.md).
 6. llama-swap mechanics the modes design leans on: service-role aliases
    (checkable), and config-reload behavior under in-flight requests
    (witnessable — a mode-switch-under-load probe measurement).

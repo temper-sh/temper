@@ -10,20 +10,28 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"regexp"
 	"sort"
 	"strings"
 	"unicode"
 
+	current "github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/software/catalog"
 	"gopkg.in/yaml.v3"
 )
 
 const (
-	SignatureSchemaV1 = "temper-signature/v1"
-	ChannelSchemaV1   = "temper-software-channel/v1"
-	AlgorithmEd25519  = "ed25519"
+	SignatureSchemaV1    = "temper-signature/v1"
+	ChannelSchemaV1      = "temper-software-channel/v1"
+	CurrentChannelSchema = "temper-catalog-channel/v1"
+	AlgorithmEd25519     = "ed25519"
 )
+
+type SignedArtifact struct {
+	Data      []byte
+	Signature []byte
+}
 
 var (
 	idPattern     = regexp.MustCompile(`^[a-z0-9]+(?:[.-][a-z0-9]+)*$`)
@@ -117,8 +125,8 @@ func ValidateChannelName(name string) error {
 }
 
 func (r CatalogReference) Validate() error {
-	if r.Schema != catalog.SchemaV1 {
-		return fmt.Errorf("catalog reference schema is %q, want %q", r.Schema, catalog.SchemaV1)
+	if r.Schema != catalog.SchemaV1 && r.Schema != current.Schema {
+		return fmt.Errorf("unsupported catalog reference schema %q", r.Schema)
 	}
 	if r.Sequence == 0 {
 		return errors.New("catalog reference sequence must be greater than zero")
@@ -134,12 +142,21 @@ func (r CatalogReference) Validate() error {
 			return errors.New("catalog reference locator must not contain control characters")
 		}
 	}
+	if r.Schema == current.Schema {
+		u, err := url.Parse(r.Locator)
+		if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.RawPath != "" || !strings.HasSuffix(u.Path, "/"+r.SHA256+"/") {
+			return errors.New("catalog locator must be an HTTPS directory named by its exact digest, without credentials, query, fragment or encoding")
+		}
+	}
 	return nil
 }
 
 func (c Channel) Validate() error {
-	if c.Schema != ChannelSchemaV1 {
-		return fmt.Errorf("catalog channel schema is %q, want %q", c.Schema, ChannelSchemaV1)
+	if c.Schema != ChannelSchemaV1 && c.Schema != CurrentChannelSchema {
+		return fmt.Errorf("unsupported catalog channel schema %q", c.Schema)
+	}
+	if (c.Schema == CurrentChannelSchema) != (c.Catalog.Schema == current.Schema) {
+		return errors.New("catalog channel and referenced catalog schemas do not match")
 	}
 	if err := ValidateChannelName(c.Channel); err != nil {
 		return err

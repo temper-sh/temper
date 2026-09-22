@@ -82,6 +82,16 @@ func (s *HTTPS) Catalog(ctx context.Context, locator string) (catalogupdate.Sign
 	return s.readPublication(ctx, root, "software catalog", "catalog.yaml", "catalog.signature.yaml", MaxCatalogBytes)
 }
 
+// CatalogJSON reads the maintained catalog through the same bounded transport.
+// The caller verifies its exact bytes against the signed current-format channel.
+func (s *HTTPS) CatalogJSON(ctx context.Context, locator string) (publication.SignedArtifact, error) {
+	root, err := parseDirectoryURL(locator, "catalog locator")
+	if err != nil {
+		return publication.SignedArtifact{}, err
+	}
+	return s.readPublication(ctx, root, "catalog", "catalog.json", "catalog.signature.yaml", MaxCatalogBytes)
+}
+
 func (s *HTTPS) readPublication(ctx context.Context, root *url.URL, label, dataName, signatureName string, dataLimit int64) (catalogupdate.SignedArtifact, error) {
 	dataURL := *root
 	dataURL.Path += dataName

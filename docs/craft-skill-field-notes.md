@@ -235,3 +235,15 @@ absent before cleanup. Field Kit measures those identities without owning their
 shutdown. The corrected alpha.9 candidate passed the bounded native check; the
 failed attempt and refusal were retained during diagnosis. Existing reliable
 effects and testing guidance covered the correction; no craft change is needed.
+
+## Catalog distribution (2026-09-22)
+
+The current catalog reuses the existing signing trust and bounded HTTP reader.
+Its signed channel owns publication sequence; authored model records do not
+gain release bookkeeping. Explicit rollback retains the highest accepted
+publication, so local recovery does not weaken network downgrade refusal.
+One atomic state commit and a kernel writer lock cover update/rollback races;
+the tests exercise interrupted staging, offline use and preserved user files.
+Latest compilation retains the exact authenticated source digest while resolving
+new software inputs. These are applications of the existing organization,
+data-modeling, reliable-effects and testing guidance; no skill change is needed.

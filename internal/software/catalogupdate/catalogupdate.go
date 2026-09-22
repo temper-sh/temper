@@ -13,10 +13,7 @@ import (
 	"github.com/temper-sh/temper/internal/software/catalogstore"
 )
 
-type SignedArtifact struct {
-	Data      []byte
-	Signature []byte
-}
+type SignedArtifact = publication.SignedArtifact
 
 // Source is the read-only catalog transport boundary. A signed locator is
 // opaque input to Catalog; it is never executed or interpreted here.
@@ -72,6 +69,9 @@ func Run(ctx context.Context, options Options, trust publication.TrustRoot, sour
 	verifiedChannel, err := publication.VerifyChannel(options.Channel, channelArtifact.Data, channelArtifact.Signature, trust)
 	if err != nil {
 		return Result{}, err
+	}
+	if verifiedChannel.Document.Catalog.Schema != catalog.SchemaV1 {
+		return Result{}, errors.New("this channel publishes the current catalog; use temper catalog update")
 	}
 	if err := ctx.Err(); err != nil {
 		return Result{}, err

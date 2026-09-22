@@ -5,9 +5,9 @@ so an experiment runs the model files, serving software, and settings it claims
 to run.
 
 **Alpha (September 2026):** Temper is usable today by collaborators with a
-reviewed configuration file or Field Kit experiment. It is not yet a general
-setup tool: the guided model-selection wizard is still in development and
-Field Kit questions are in qualification.
+reviewed configuration file, catalog profile or Field Kit experiment. The
+guided setup wizard is still in development and independent Field Kit
+observations are pending.
 
 ## Why this is useful
 
@@ -76,6 +76,13 @@ If you already have a reviewed Temper manifest and lock, continue with
 resolution, downloads, rendering, checks, and activation as separate visible
 steps.
 
+### Choose a catalog configuration
+
+Temper alpha.10 adds a signed catalog with one Qwen3.8 27B profile for macOS
+ARM64. You can inspect its files and settings, select it explicitly, and compile
+an exact execution lock before installing anything.
+[Browse and use the catalog](docs/CATALOG.md).
+
 ## What to expect
 
 Temper treats a local-AI setup as a reproducible system rather than a loose
@@ -128,15 +135,15 @@ Keeping the two releases separate lets an experiment improve without changing
 the installer, while the exact Temper binary and installed material remain
 part of every run's identity.
 
-Temper `0.1.0-alpha.7` supplies the execution-lock commands required by the
+Temper supplies the execution-lock commands required by the
 [Field Kit collaborator alpha](https://github.com/temper-sh/field-kit).
 Its experiments require an explicit experiment plan and machine-owner
 consent. No question has completed external-machine qualification yet.
 
-The new [direct execution commands](docs/contracts/execution-runtime.md) consume
+The [direct execution commands](docs/contracts/execution-runtime.md) consume
 locks without client-managed compatibility files and return supervised process
-identities and shutdown results. They support Field Kit's revision 2 development
-study and have not yet been published in a release.
+identities and shutdown results. Field Kit's revision 2 study pins the published
+alpha.9 host; catalog updates do not change its frozen experiment inputs.
 
 ## Learn more
 

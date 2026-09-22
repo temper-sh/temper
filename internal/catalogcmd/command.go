@@ -22,8 +22,11 @@ import (
 	"time"
 
 	"github.com/temper-sh/temper/internal/catalog"
+	"github.com/temper-sh/temper/internal/catalog/distribution"
 	"github.com/temper-sh/temper/internal/software"
 	"github.com/temper-sh/temper/internal/software/adapter/upstreamrelease"
+	"github.com/temper-sh/temper/internal/software/catalogsource"
+	"github.com/temper-sh/temper/internal/software/catalogtrust"
 )
 
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
@@ -32,6 +35,16 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	switch args[0] + " " + args[1] {
+	case "catalog update", "catalog inspect", "catalog select", "catalog rollback":
+		trust, err := catalogtrust.Production()
+		if err != nil {
+			return failed(stderr, err)
+		}
+		source, err := catalogsource.NewProductionHTTPS(&http.Client{Timeout: 30 * time.Second})
+		if err != nil {
+			return failed(stderr, err)
+		}
+		return runDistribution(ctx, args[1:], stdout, stderr, trust, source)
 	case "catalog compile":
 		reader, err := upstreamrelease.NewHTTPReader(&http.Client{Timeout: 5 * time.Minute})
 		if err != nil {
@@ -50,6 +63,7 @@ func compile(ctx context.Context, args []string, stdout, stderr io.Writer, reade
 	f := flag.NewFlagSet("temper catalog compile", flag.ContinueOnError)
 	f.SetOutput(stderr)
 	catalogPath := f.String("catalog", "", "explicit local catalog snapshot")
+	root := f.String("root", "", "Temper root containing a verified active catalog")
 	selectionPath := f.String("selection", "", "user-owned selection")
 	target := f.String("target", "", "portable target, currently darwin/arm64")
 	out := f.String("out", "", "new execution lock path")
@@ -59,19 +73,15 @@ func compile(ctx context.Context, args []string, stdout, stderr io.Writer, reade
 	if err := f.Parse(args); err != nil {
 		return 2
 	}
-	if f.NArg() != 0 || *catalogPath == "" || *selectionPath == "" || *out == "" || *target != "darwin/arm64" {
+	if f.NArg() != 0 || (*catalogPath == "") == (*root == "") || *selectionPath == "" || *out == "" || *target != "darwin/arm64" {
 		usage(stderr)
 		return 2
 	}
-	raw, err := os.ReadFile(*catalogPath)
+	d, publishedDigest, err := readCompileCatalog(*catalogPath, *root)
 	if err != nil {
 		return failed(stderr, err)
 	}
-	d, err := catalog.Parse(raw)
-	if err != nil {
-		return failed(stderr, err)
-	}
-	raw, err = os.ReadFile(*selectionPath)
+	raw, err := os.ReadFile(*selectionPath)
 	if err != nil {
 		return failed(stderr, err)
 	}
@@ -87,6 +97,11 @@ func compile(ctx context.Context, args []string, stdout, stderr io.Writer, reade
 	if err != nil {
 		return failed(stderr, err)
 	}
+	if publishedDigest != "" {
+		// Preserve the authenticated source identity even when latest/tested
+		// resolution changes the software material inside the new lock.
+		l.SourceSnapshotSHA256 = publishedDigest
+	}
 	raw, err = catalog.MarshalLock(l)
 	if err != nil {
 		return failed(stderr, err)
@@ -100,6 +115,26 @@ func compile(ctx context.Context, args []string, stdout, stderr io.Writer, reade
 	}
 	fmt.Fprintf(stdout, "RESULT catalog-compile %s profile=%s execution_digest=%s path=%q\n", status(changed, *dry), s.Profile, l.Digests.Profile, *out)
 	return 0
+}
+
+func readCompileCatalog(path, root string) (catalog.Document, string, error) {
+	if root != "" {
+		trust, err := catalogtrust.Production()
+		if err != nil {
+			return catalog.Document{}, "", err
+		}
+		snapshot, err := distribution.Read(root, trust)
+		if err != nil {
+			return catalog.Document{}, "", err
+		}
+		return snapshot.Document, snapshot.SHA256, nil
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return catalog.Document{}, "", err
+	}
+	d, err := catalog.Parse(raw)
+	return d, "", err
 }
 
 func export(ctx context.Context, args []string, stdout, stderr io.Writer) int {
@@ -324,7 +359,13 @@ func failed(w io.Writer, err error) int {
 }
 func usage(w io.Writer) {
 	fmt.Fprintln(w, strings.TrimSpace(`Usage:
-  temper catalog compile --catalog FILE --selection FILE --target darwin/arm64 --out FILE [--software recorded|latest|tested] [--dry-run] [--json]
+  temper catalog update --root ROOT [--dry-run] [--json]
+  temper catalog inspect --root ROOT [--profile ID] [--json]
+  temper catalog select --root ROOT --profile ID --out SELECTION [--dry-run] [--json]
+  temper catalog rollback --root ROOT --snapshot SHA256 [--dry-run] [--json]
+  temper catalog compile (--catalog FILE | --root ROOT) --selection FILE --target darwin/arm64 --out FILE [--software recorded|latest|tested] [--dry-run] [--json]
   temper execution export --lock FILE --out DIRECTORY [--dry-run] [--json]
-Explicit local snapshots only. These commands do not install or start anything.`))
+Only catalog update retrieves a publication. Compilation with latest/tested
+software resolves upstream releases explicitly. These commands do not install
+or start anything.`))
 }

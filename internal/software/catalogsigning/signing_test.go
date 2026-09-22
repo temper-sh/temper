@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -63,6 +64,25 @@ func TestSignAndVerifyCatalogAndChannel(t *testing.T) {
 	}
 	if keyID, err := tool.Verify(catalogsigning.KindChannel, "stable", channelData, channelEnvelope); err != nil || keyID != "fixture-key" {
 		t.Fatalf("Verify(channel) = key %q, error %v", keyID, err)
+	}
+}
+
+func TestCurrentCatalogSigningUsesItsCompiledCapabilities(t *testing.T) {
+	tool, seed := fixtureTool(t, capabilities{})
+	data, err := os.ReadFile("../../../catalog/qwen38-m5-refresh.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	signature, err := tool.Sign(catalogsigning.KindCatalog, "", data, seed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tool.Verify(catalogsigning.KindCatalog, "", data, signature); err != nil {
+		t.Fatal(err)
+	}
+	unsupported := bytes.Replace(data, []byte("llama-server/v2"), []byte("unsupported-engine/v9"), 1)
+	if _, err := tool.Sign(catalogsigning.KindCatalog, "", unsupported, seed); err == nil {
+		t.Fatal("signed an unsupported current engine adapter")
 	}
 }
 
