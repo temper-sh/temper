@@ -185,7 +185,7 @@ func Run(ctx context.Context, options Options) (Result, error) {
 		result.Layouts[index] = layoutResult
 	}
 
-	result.Budget, err = predictBudget(document, mode, options.Machine, modelBytes)
+	result.Budget, err = PredictBudget(document, mode, options.Machine, modelBytes)
 	if err != nil {
 		return Result{}, fmt.Errorf("predict resident budget: %w", err)
 	}
@@ -226,7 +226,9 @@ func formatConservativeFraction(value float64) string {
 	return strconv.FormatFloat(math.Nextafter(value, 0), 'g', -1, 64)
 }
 
-func predictBudget(document manifest.Document, mode manifest.Mode, machine budget.Machine, modelBytes map[string]int64) (budget.Prediction, error) {
+// PredictBudget applies the shared wall model to explicit model sizes. Setup
+// supplies catalog-declared sizes; installed checks supply admitted file sizes.
+func PredictBudget(document manifest.Document, mode manifest.Mode, machine budget.Machine, modelBytes map[string]int64) (budget.Prediction, error) {
 	residents := make([]budget.Resident, 0, len(mode.Members.Resident))
 	for _, member := range mode.Members.Resident {
 		gpu := member.NGL == nil || *member.NGL > 0

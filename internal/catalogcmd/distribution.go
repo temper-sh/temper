@@ -6,6 +6,8 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/temper-sh/temper/internal/catalog"
@@ -21,6 +23,8 @@ func runDistribution(ctx context.Context, args []string, stdout, stderr io.Write
 	jsonOutput := f.Bool("json", false, "print the result as JSON")
 	var dry bool
 	var profile, out, sha string
+	templates := templateChoices{}
+	contexts := contextChoices{}
 	if verb != "inspect" {
 		f.BoolVar(&dry, "dry-run", false, "validate and report without writes")
 	}
@@ -29,6 +33,8 @@ func runDistribution(ctx context.Context, args []string, stdout, stderr io.Write
 	}
 	if verb == "select" {
 		f.StringVar(&out, "out", "", "new user-owned selection path")
+		f.Var(&templates, "template", "template choice layout=patch or layout=builtin (repeatable)")
+		f.Var(&contexts, "context", "context window layout=tokens; default is the authored configuration (repeatable)")
 	}
 	if verb == "rollback" {
 		f.StringVar(&sha, "snapshot", "", "exact retained catalog SHA-256")
@@ -92,6 +98,13 @@ func runDistribution(ctx context.Context, args []string, stdout, stderr io.Write
 			for _, b := range p.Bindings {
 				l := d.Layouts[b.Layout]
 				fmt.Fprintf(stdout, "  LAYOUT %s name=%q engine=%s context=%d route=%s residency=%s\n", b.Layout, l.DisplayName, l.Engine, l.ContextWindowTokens, b.Route, b.Residency)
+				a := d.Artifacts[l.Artifact]
+				if a.Description != "" {
+					fmt.Fprintf(stdout, "    %s\n", a.Description)
+				}
+				if a.AssessmentURL != "" {
+					fmt.Fprintf(stdout, "    Assessment: %s\n", a.AssessmentURL)
+				}
 				if profile != "" {
 					data, err := json.MarshalIndent(l, "  ", "  ")
 					if err != nil {
@@ -113,8 +126,8 @@ func runDistribution(ctx context.Context, args []string, stdout, stderr io.Write
 		if _, ok := snapshot.Document.Profiles[profile]; !ok {
 			return failed(stderr, fmt.Errorf("unknown profile %q", profile))
 		}
-		selection := catalog.Selection{Schema: catalog.SelectionSchema, Profile: profile}
-		if err := selection.Validate(); err != nil {
+		selection, err := catalog.ResolveSelection(snapshot.Document, catalog.Selection{Schema: catalog.SelectionSchema, Profile: profile, Templates: templates, ContextWindows: contexts})
+		if err != nil {
 			return failed(stderr, err)
 		}
 		data, err := json.MarshalIndent(selection, "", "  ")
@@ -134,4 +147,40 @@ func runDistribution(ctx context.Context, args []string, stdout, stderr io.Write
 		usage(stderr)
 		return 2
 	}
+}
+
+type templateChoices map[string]string
+
+func (t templateChoices) String() string { return "" }
+
+func (t templateChoices) Set(raw string) error {
+	layout, patch, ok := strings.Cut(raw, "=")
+	if !ok || layout == "" || patch == "" {
+		return fmt.Errorf("template choice must be layout=patch or layout=builtin")
+	}
+	if _, exists := t[layout]; exists {
+		return fmt.Errorf("template choice repeats layout %q", layout)
+	}
+	if patch == "builtin" {
+		patch = ""
+	}
+	t[layout] = patch
+	return nil
+}
+
+type contextChoices map[string]int
+
+func (c contextChoices) String() string { return "" }
+
+func (c contextChoices) Set(raw string) error {
+	layout, value, ok := strings.Cut(raw, "=")
+	tokens, err := strconv.Atoi(value)
+	if !ok || layout == "" || err != nil || tokens <= 0 {
+		return fmt.Errorf("context choice must be layout=tokens with a positive integer")
+	}
+	if _, exists := c[layout]; exists {
+		return fmt.Errorf("context choice repeats layout %q", layout)
+	}
+	c[layout] = tokens
+	return nil
 }

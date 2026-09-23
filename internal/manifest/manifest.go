@@ -128,11 +128,12 @@ type Tool struct {
 }
 
 type Mode struct {
-	Foreground string            `yaml:"foreground"`
-	Services   map[string]string `yaml:"services,omitempty"`
-	Tools      []string          `yaml:"tools"`
-	Harnesses  []string          `yaml:"harnesses"`
-	Members    Members           `yaml:"members"`
+	Foreground         string            `yaml:"foreground"`
+	ExternalForeground bool              `yaml:"external_foreground,omitempty"`
+	Services           map[string]string `yaml:"services,omitempty"`
+	Tools              []string          `yaml:"tools"`
+	Harnesses          []string          `yaml:"harnesses"`
+	Members            Members           `yaml:"members"`
 }
 
 type Members struct {
@@ -357,6 +358,9 @@ func (d Document) validateV1() error {
 		}
 		if mode.Foreground != "local" && mode.Foreground != "none" {
 			problem("mode %q foreground %q must be local or none in manifest v1", id, mode.Foreground)
+		}
+		if mode.ExternalForeground {
+			problem("mode %q external_foreground is only supported in manifest v2", id)
 		}
 		if len(mode.Services) != 0 {
 			problem("mode %q manifest v1 cannot declare services", id)
@@ -843,6 +847,15 @@ func validateV2Mode(d Document, id string, mode Mode, problem func(string, ...an
 		}
 	}
 
+	if mode.ExternalForeground {
+		if mode.Foreground != "" {
+			problem("mode %q external foreground cannot name a local foreground layout", id)
+		}
+		if len(seenLayouts) == 0 {
+			problem("mode %q with external foreground needs a helper member", id)
+		}
+		return
+	}
 	if mode.Foreground == "none" {
 		if len(seenLayouts) != 0 || len(mode.Tools) != 0 || len(mode.Harnesses) != 0 || len(mode.Services) != 0 {
 			problem("mode %q with foreground none must be empty", id)
@@ -933,7 +946,7 @@ func (l Layout) SpeculationContract() (string, int) {
 // ForegroundLayout returns the exact foreground member selected by a mode.
 func (d Document) ForegroundLayout(mode Mode) string {
 	if d.Schema == SchemaV2 {
-		if mode.Foreground == "none" {
+		if mode.Foreground == "none" || mode.ExternalForeground {
 			return ""
 		}
 		return mode.Foreground

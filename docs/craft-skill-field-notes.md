@@ -247,3 +247,77 @@ the tests exercise interrupted staging, offline use and preserved user files.
 Latest compilation retains the exact authenticated source digest while resolving
 new software inputs. These are applications of the existing organization,
 data-modeling, reliable-effects and testing guidance; no skill change is needed.
+
+## Guided setup (2026-09-23)
+
+The wizard reuses Selection and Execution Lock instead of adding a second
+configuration schema. Pure planning, read-only catalog/model inspection, the
+terminal state machine and filesystem publication have separate owners. An
+accepted review binds exact bytes so a moving latest release cannot change
+between review and preparation. Exclusive directory publication keeps multiple
+mode selections and locks complete; resume preserves edits and credits existing
+model sets when checking remaining disk space.
+
+The native terminal check caught a review viewport that snapped back after
+scrolling; a wrapped, small-terminal regression now covers it. Runtime review
+also exposed the distinction between preparation, temporary supervised serving
+and persistent helper availability. The wizard states the existing single-layout
+and idle/restart limits; managed activation remains separate. Hermetic machine
+fixtures establish selection behavior, not low-memory model fit. These findings
+fit the existing craft guidance; no skill change is proposed.
+
+Review follow-up found that equal model records did not prove installed-byte
+reuse: template variants still fetched duplicate weights. Fetch regressions now
+assert one model transfer, shared file identity, byte verification and rollback
+after template failure. Model reuse stays within existing artifact receipts,
+without a cache registry. The same review separated harness ownership from a
+valid layout ID and extended viewport tests to wrapped selection rows. These
+are corrections at the owning effect and rendering boundaries, not reasons to
+add another configuration or lifecycle abstraction.
+
+Trying Latest exposed a source-contract gap: the fake GitHub response represented
+only numbered stable tags, while llama.cpp publishes its binary builds as
+prereleases alongside semantic stable-release headings. The adapter now owns
+that concrete release convention. Hermetic tests replay those release shapes
+through the actual wizard resolver, including failed integrity and no-write
+outcomes; a read-only upstream preview checked the fixtures against current
+publication behavior. Existing testing guidance already calls for faithful
+external contracts, so no skill change is warranted.
+
+The presentation follow-up separated the persistent tabs and controls from
+scrollable content, while keeping the same explicit-selection state machine.
+One set of disclosure sections now feeds both plain CLI lines and styled review
+blocks. Rendering checks cover actual terminal bounds and readable focus rather
+than freezing an ANSI snapshot. Visual inspection removed a duplicated summary;
+resize tests ensure hidden confirmation controls cannot be activated. Existing
+unit-design and testing guidance covered the work; no skill change is warranted.
+
+MacBook use exposed gaps that frame bounds alone did not establish: advancing
+needed a visible control, scrolling needed ordinary keys, and duplicate
+download totals hid whether weights were already present. The follow-up keeps
+cache facts in the planner, projects one per-file status into CLI and TUI, and
+retains the transfer summary when rows collapse. Regressions exercise visible
+mouse positions and explicit-selection guards, skipped fixed templates, arrow
+and wheel scrolling, and cache/no-cache disclosure. These are concrete usability
+and integration checks under the existing guidance. Native inspection also
+caught nested table wrapping; width regressions now preserve complete filenames,
+statuses and table borders. No new craft rule is needed.
+
+Shared-cache work initially grew a second implementation of HF's publication,
+locking and partial-download lifecycle. The owner review corrected that boundary:
+the official hf client now owns downloads and cache writes, while Temper owns
+read-only preview, exact-byte verification and durable installation. Tests cover
+that integration contract and the effects Temper still owns, including child
+cancellation, corrupt bytes and cache/install removal independence. Downloader
+support uses the existing hf or uv tool path without another dependency registry.
+This applies the existing narrow-boundary and reliable-effects guidance; no new
+skill mechanism is warranted.
+
+Context review exposed a historical test condition being reused as a product
+default. Maintained catalog layouts now own the native maximum; Selection owns
+the accepted number and the existing lock/renderer carries it exactly. No new
+capability registry or model-memory estimator was introduced. Frozen evidence
+and old locks retain their original windows. Regressions check actual rendered
+context arguments, independent mode choices, invalid input, exact resume and
+unchanged weight identity. This applies the existing fact-ownership and
+assertion-strength guidance; no skill change is needed.

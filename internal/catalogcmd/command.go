@@ -35,6 +35,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	switch args[0] + " " + args[1] {
+	case "catalog describe":
+		return describe(ctx, args[2:], stdout, stderr)
 	case "catalog update", "catalog inspect", "catalog select", "catalog rollback":
 		trust, err := catalogtrust.Production()
 		if err != nil {
@@ -106,12 +108,26 @@ func compile(ctx context.Context, args []string, stdout, stderr io.Writer, reade
 	if err != nil {
 		return failed(stderr, err)
 	}
+	layouts := map[string]string{}
+	if *jsonOutput {
+		for id, layout := range l.Records.Layouts {
+			template := ""
+			if len(layout.Patches) > 0 {
+				template = layout.Patches[0]
+			}
+			value, err := catalog.ContextExecutionSHA256(l.Records, id, template, layout.ContextWindowTokens)
+			if err != nil {
+				return failed(stderr, err)
+			}
+			layouts[id] = value
+		}
+	}
 	changed, err := publishFile(ctx, *out, raw, *dry)
 	if err != nil {
 		return failed(stderr, err)
 	}
 	if *jsonOutput {
-		return encode(stdout, stderr, map[string]any{"schema": "temper-catalog-compilation/v1", "profile": s.Profile, "execution_digest": l.Digests.Profile, "path": *out, "changed": changed, "dry_run": *dry})
+		return encode(stdout, stderr, map[string]any{"schema": "temper-catalog-compilation/v1", "profile": s.Profile, "execution_digest": l.Digests.Profile, "context_execution_digests": layouts, "path": *out, "changed": changed, "dry_run": *dry})
 	}
 	fmt.Fprintf(stdout, "RESULT catalog-compile %s profile=%s execution_digest=%s path=%q\n", status(changed, *dry), s.Profile, l.Digests.Profile, *out)
 	return 0
@@ -361,9 +377,10 @@ func usage(w io.Writer) {
 	fmt.Fprintln(w, strings.TrimSpace(`Usage:
   temper catalog update --root ROOT [--dry-run] [--json]
   temper catalog inspect --root ROOT [--profile ID] [--json]
-  temper catalog select --root ROOT --profile ID --out SELECTION [--dry-run] [--json]
+  temper catalog select --root ROOT --profile ID --out SELECTION [--template LAYOUT=PATCH|builtin] [--context LAYOUT=TOKENS] [--dry-run] [--json]
   temper catalog rollback --root ROOT --snapshot SHA256 [--dry-run] [--json]
   temper catalog compile (--catalog FILE | --root ROOT) --selection FILE --target darwin/arm64 --out FILE [--software recorded|latest|tested] [--dry-run] [--json]
+  temper catalog describe --catalog FILE --artifact ID (--description TEXT | --description-file FILE) [--assessment-url URL] [--if-empty] [--dry-run]
   temper execution export --lock FILE --out DIRECTORY [--dry-run] [--json]
 Only catalog update retrieves a publication. Compilation with latest/tested
 software resolves upstream releases explicitly. These commands do not install

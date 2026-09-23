@@ -3,6 +3,7 @@ package render_test
 import (
 	"encoding/json"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -185,6 +186,44 @@ func TestBuildV2RendersEverySelectedEngineThroughItsAdapter(t *testing.T) {
 	settings := string(artifact(t, bundle, "pi/settings.json"))
 	if !strings.Contains(settings, `"defaultModel": "rapid"`) || !strings.Contains(settings, `"reserveTokens": 16384`) {
 		t.Fatalf("Pi did not derive settings from explicit v2 foreground:\n%s", settings)
+	}
+}
+
+func TestExternalForegroundPreservesPiOwnedSettings(t *testing.T) {
+	document, err := manifest.Parse([]byte(renderV2Manifest))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mode := document.Modes["large"]
+	mode.Foreground = ""
+	mode.ExternalForeground = true
+	document.Modes["large"] = mode
+	locked := lockfile.Document{Schema: lockfile.SchemaV1, Entries: map[string]lockfile.Entry{}}
+	files := []lockfile.File{{Name: "config.json", SHA256: strings.Repeat("a", 64)}, {Name: "model.safetensors", SHA256: strings.Repeat("b", 64)}, {Name: "tokenizer.json", SHA256: strings.Repeat("c", 64)}}
+	for _, id := range []string{"rapid", "mlx", "vllm"} {
+		locked.Entries[id] = lockfile.Entry{Repo: document.Layouts[id].Model.Repo, Revision: strings.Repeat("d", 40), Files: append([]lockfile.File(nil), files...), Resolved: "2026-09-02"}
+	}
+	base := []byte(`{"defaultModel":"provider/model","compaction":{"enabled":true,"reserveTokens":99,"keepRecentTokens":13},"theme":"dark"}`)
+	bundle, err := render.Build(render.Inputs{Manifest: document, Lock: locked, Mode: "large", Root: "/temper", PiSettingsBase: base})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var want, got map[string]any
+	if err := json.Unmarshal(base, &want); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(artifact(t, bundle, "pi/settings.json"), &got); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("external foreground changed Pi-owned settings: got %#v, want %#v", got, want)
+	}
+	config := string(artifact(t, bundle, "llama-swap/config.yaml"))
+	if !strings.Contains(config, `"rapid"`) {
+		t.Fatal("external foreground lost local helper")
+	}
+	if strings.Contains(config, "routing:") {
+		t.Fatal("external foreground exposed an implicit local router group")
 	}
 }
 

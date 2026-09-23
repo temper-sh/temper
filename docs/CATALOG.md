@@ -45,6 +45,22 @@ Selection and compilation support `--dry-run`. Identical reruns leave files
 unchanged. To adopt a different choice or configuration, use a new output path;
 Temper refuses to overwrite a different existing Selection or Execution Lock.
 
+Current unreleased source also supports `catalog select --template
+LAYOUT=PATCH|builtin`. New selections record the accepted defaults explicitly;
+`builtin` chooses the model's embedded template. Compatible patches are offered
+per model, and changing the catalog default does not change saved selections.
+Source also supports `--context LAYOUT=TOKENS` to choose an explicit
+window. The [guided authoring candidate](../catalog/README.md) records the
+262,144-token native ceiling for both Qwen models, with an editable Context tab.
+Guided setup uses the largest matching reviewed context finding automatically;
+without one, it requests an explicit window and reports fit as unknown. The
+candidate has no reviewed machine-context findings yet. Model descriptions are
+catalog text, editable through Workshop or `temper catalog describe`; see the
+[authoring guide](../catalog/README.md).
+That candidate is unpublished; the stable catalog above still supplies 32k.
+The [guided setup contract](contracts/init.md) describes the terminal and
+scripted paths using the same choices.
+
 ## Choose newer software explicitly
 
 ```sh
@@ -53,9 +69,10 @@ temper catalog compile --root "$HOME/.local/share/temper" \
   --out execution.latest.lock.json
 ```
 
-`latest` resolves upstream stable engine and router releases, including archive
-reads to verify their contents. The resulting lock retains exact versions and
-checksums. This does not install or activate the new software.
+`latest` resolves the newest downloadable llama.cpp nightly build and the stable
+llama-swap release, including archive reads to verify their contents. The
+resulting lock retains exact versions and checksums. This does not install or
+activate the new software.
 
 `--software tested` is an explicit fallback to recorded minimum tested versions
 when the catalog supplies that evidence. It refuses an unknown tested boundary;

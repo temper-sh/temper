@@ -24,10 +24,12 @@ import (
 	checkverb "github.com/temper-sh/temper/internal/check"
 	fetchverb "github.com/temper-sh/temper/internal/fetch"
 	"github.com/temper-sh/temper/internal/fieldkitcmd"
+	"github.com/temper-sh/temper/internal/hfcache"
 	"github.com/temper-sh/temper/internal/huggingface"
 	"github.com/temper-sh/temper/internal/machine"
 	"github.com/temper-sh/temper/internal/probecmd"
 	resolveverb "github.com/temper-sh/temper/internal/resolve"
+	"github.com/temper-sh/temper/internal/setupcmd"
 	"github.com/temper-sh/temper/internal/software/adapter"
 	"github.com/temper-sh/temper/internal/software/adapter/upstreamrelease"
 	"github.com/temper-sh/temper/internal/software/adapter/uv"
@@ -50,7 +52,11 @@ func main() {
 
 func run(ctx context.Context, arguments []string, stdout, stderr io.Writer) int {
 	return runWithDependencies(ctx, arguments, stdout, stderr, dependencies{
-		newUpstream:   newUpstreamReader,
+		newUpstream: newUpstreamReader,
+		cacheRoot:   hfcache.DefaultRoot,
+		downloadModel: func(ctx context.Context, e hfcache.Entry, cache string) error {
+			return hfcache.Download(ctx, e, cache, stderr)
+		},
 		detectMachine: machine.Detect,
 		detectFacts:   machine.DetectFacts,
 		newSoftware:   newSoftwareCommand,
@@ -72,6 +78,8 @@ type probeCommandFactory func() (probecmd.Command, error)
 
 type dependencies struct {
 	newUpstream   upstreamFactory
+	cacheRoot     func() (string, error)
+	downloadModel hfcache.DownloadFunc
 	detectMachine machineDetector
 	detectFacts   machineFactsDetector
 	newSoftware   softwareCommandFactory
@@ -106,6 +114,12 @@ func runWithDependencies(ctx context.Context, arguments []string, stdout, stderr
 	case "help", "--help", "-h":
 		usage(stdout)
 		return 0
+	case "init":
+		command := setupcmd.New(deps.detectFacts, func(ctx context.Context, args []string, out, diagnostics io.Writer) int {
+			return runWithDependencies(ctx, args, out, diagnostics, deps)
+		})
+		command.CacheRoot = deps.cacheRoot
+		return command.Run(ctx, arguments[1:], os.Stdin, stdout, stderr)
 	case "catalog", "execution":
 		if arguments[0] == "execution" && len(arguments) > 1 && arguments[1] != "export" {
 			return catalogcmd.Runtime(ctx, arguments[1:], stdout, stderr, func(ctx context.Context, args []string, out, err io.Writer) int {
@@ -118,7 +132,7 @@ func runWithDependencies(ctx context.Context, arguments []string, stdout, stderr
 	case "resolve":
 		return runResolve(ctx, arguments[1:], stdout, stderr, deps.newUpstream)
 	case "fetch":
-		return runFetch(ctx, arguments[1:], stdout, stderr, deps.newUpstream)
+		return runFetch(ctx, arguments[1:], stdout, stderr, deps.newUpstream, deps.cacheRoot, deps.downloadModel)
 	case "check":
 		return runCheck(ctx, arguments[1:], stdout, stderr, deps.detectMachine)
 	case "update":
@@ -363,7 +377,7 @@ func runResolve(ctx context.Context, arguments []string, stdout, stderr io.Write
 	return 0
 }
 
-func runFetch(ctx context.Context, arguments []string, stdout, stderr io.Writer, newSource upstreamFactory) int {
+func runFetch(ctx context.Context, arguments []string, stdout, stderr io.Writer, newSource upstreamFactory, cacheRoot func() (string, error), download hfcache.DownloadFunc) int {
 	if len(arguments) == 0 || strings.HasPrefix(arguments[0], "-") {
 		fmt.Fprintln(stderr, "temper fetch: layout id is required")
 		fetchUsage(stderr)
@@ -394,12 +408,22 @@ func runFetch(ctx context.Context, arguments []string, stdout, stderr io.Writer,
 		fmt.Fprintf(stderr, "temper fetch: %v\n", err)
 		return 1
 	}
+	cache := ""
+	if cacheRoot != nil {
+		cache, err = cacheRoot()
+		if err != nil {
+			fmt.Fprintf(stderr, "temper fetch: HF cache: %v\n", err)
+			return 1
+		}
+	}
 	result, err := fetchverb.Run(ctx, fetchverb.Options{
-		ManifestPath: *manifestPath,
-		LockPath:     *lockPath,
-		Root:         *root,
-		Layout:       layout,
-		DryRun:       *dryRun,
+		ManifestPath:  *manifestPath,
+		LockPath:      *lockPath,
+		Root:          *root,
+		Layout:        layout,
+		DryRun:        *dryRun,
+		HFCache:       cache,
+		DownloadModel: download,
 	}, source)
 	if err != nil {
 		fmt.Fprintf(stderr, "temper fetch: %v\n", err)
@@ -518,6 +542,8 @@ func runApply(ctx context.Context, arguments []string, stdout, stderr io.Writer)
 func usage(writer io.Writer) {
 	fmt.Fprintf(writer, "temper %s — deterministic local-AI configuration\n\n", version)
 	fmt.Fprintln(writer, "usage:")
+	fmt.Fprintln(writer, "  temper init [--root PATH] [--catalog FILE] [--profile ID] [--dry-run]")
+	fmt.Fprintln(writer, "  temper init [--root PATH] --resume [--prepare] [--dry-run]")
 	fmt.Fprintln(writer, "  temper apply [options]")
 	fmt.Fprintln(writer, "  temper resolve [options]")
 	fmt.Fprintln(writer, "  temper fetch <layout-id> --root PATH [options]")
@@ -529,6 +555,7 @@ func usage(writer io.Writer) {
 	fmt.Fprintln(writer, "  temper probe tokenize [options]")
 	fmt.Fprintln(writer, "  temper software <install|check|remove> [options]")
 	fmt.Fprintln(writer, "  temper catalog update|inspect|select|rollback --root ROOT [options]")
+	fmt.Fprintln(writer, "  temper catalog describe --catalog FILE --artifact ID --description TEXT [--dry-run]")
 	fmt.Fprintln(writer, "  temper catalog compile (--catalog FILE | --root ROOT) --selection FILE --target darwin/arm64 --out FILE [--software recorded|latest|tested] [--dry-run]")
 	fmt.Fprintln(writer, "  temper execution export --lock FILE --out DIRECTORY [--dry-run]")
 	fmt.Fprintln(writer, "  temper execution inspect --lock FILE")

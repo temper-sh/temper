@@ -31,14 +31,22 @@ It feeds the existing primitives and retains their manifest workflow. The
 publication, explicit selection and offline rollback. Broader engine closures
 and managed activation remain separate work.
 
+The 2026-09-23 guided setup implementation adds `temper init`, using `~/.temper`
+by default. Its [command contract](contracts/init.md) defines the current
+modes-first screens, per-model template choices, combined preview, atomic
+Selection/Execution Lock save and optional preparation. This is unreleased
+source work; alpha.10 does not include the wizard. The broader screen designs
+below include tools, integrations and activation that this first slice does not
+offer.
+
 The 2026-09-22 Field Kit simplification adds direct execution-lock consumption
 and supervised foreground probes. The [execution runtime contract](contracts/execution-runtime.md)
 owns preparation, rendering, process identities, listener validation and shutdown
 results. Field Kit retains protocols, measurements and stop decisions. Issued
 client exports remain compatible; alpha.9 supplies the current contributor host.
 
-The existing manifest file is **`manifest.yaml`** with **`manifest.lock.yaml`**
-beside it (decided 2026-08-14: it carries the whole wizard selection —
+The explicit workflow's manifest file is **`manifest.yaml`** with **`manifest.lock.yaml`**
+beside it (decided 2026-08-14: it carries the whole manifest selection —
 tools, harness integrations and mode bindings, not just models — so
 `models.yaml` misnamed it; the legacy repo's `models.yaml` keeps its name).
 
@@ -117,13 +125,56 @@ profile revisions used to make it.
 The wizard is a choice among curated and tested artifacts, not an open-ended
 model browser.
 
+**TUI implementation, 2026-09-23.** Use
+[Bubble Tea](https://github.com/charmbracelet/bubbletea) for `temper init`,
+with [Bubbles](https://github.com/charmbracelet/bubbles) components and
+[Lip Gloss](https://github.com/charmbracelet/lipgloss) styling where useful.
+The wizard uses the Tokyo Night palette, persistent tabs for each mode's
+screens, bordered choice blocks and grouped review sections. Navigation, review
+actions and keyboard help remain visible while content scrolls.
+Fixed templates do not add a screen. Visible Next buttons advance explicit
+choices; Review supports ordinary arrow keys and trackpad scrolling. Its
+collapsible downloads table distinguishes cached weights from required
+transfers, with the weight-transfer summary visible even when collapsed.
+The framework handles interaction and presentation; catalog validation,
+installation planning and execution remain in Temper's existing product code.
+The dependency versions are maintained in `go.mod`.
+
+**Catalog context defaults, 2026-09-23 (owner).** The catalog owns both the
+model's supported context ceiling and reviewed machine-specific context
+defaults. Workshop reviews existing context tests and Field Kit observations;
+Temper consumes the maintained conclusions, with references to their evidence.
+Raw observations and context-search protocols stay with their existing owners.
+
+Setup should select the largest verified stable window applicable to the user's
+hardware, memory allowances and selected configuration. Each catalog finding
+must retain the tested configuration, window and output allowance, applicable
+machine conditions, resource limits and evidence reference. Applicability must
+account for model bytes, template, engine, KV precision, MTP, parallelism and
+cache settings; equal RAM alone does not establish equivalent fit. Changing
+software or settings cannot silently carry a tested claim into an untested
+configuration. Response-time guidance stays separate from the capacity default.
+
+Missing applicable evidence is shown as unknown. The native ceiling or a
+benchmark's 32k/16k window must not stand in for a measured machine maximum;
+the largest successful test remains a lower bound when larger sizes were not
+tested. A manual override remains available, and the exact chosen number is
+recorded in Selection and the execution lock. Existing selections stay fixed.
+Extended RoPE-scaled windows require a separate runtime configuration.
+Manual choices, catalog findings and automatic selection from them are
+implemented in source. The authoring candidate still needs reviewed findings;
+without an applicable point, setup requests an explicit window and labels its
+fit unknown. Setup does not run a context benchmark during preview.
+
 **Reordered to modes-first, 2026-08-19 (owner).** It now proceeds:
 
 1. detect hardware and allowances, then **choose the modes** to set up;
 2. **one screen per chosen mode** — its models, its tools, its harnesses,
    and for each model whether it stays loaded;
 3. preview downloads, residency, mode transitions and external data paths;
-4. write the manifest once, then render and probe it.
+4. save the user's choices once, then explicitly prepare them. The current V3
+   path saves Selection/Execution Lock pairs; foreground serving is a separate
+   explicit command.
 
 The previous order collected models, then tools, then harnesses, then asked
 the user to sort those choices into "workflow-mode templates built only from
@@ -179,6 +230,17 @@ The screens differ in shape, which is the point: the utility screen never asks
 Temper to choose the harness-owned foreground, and the local screen never
 offers a placement that conflicts with the selected foreground's witnessed
 resource profile.
+
+Each model choice includes a brief catalog-authored description beneath its
+name: what it is useful for and, when material to the choice, its main limitation
+or tradeoff. Keep it to one or two short sentences. Workshop lets the owner
+write or replace it using their own assessment; an existing Results assessment
+may supply suggested wording and a link for further detail. A Results record
+is not required for personal editorial judgment. The final description lives
+in the Temper catalog, and later refreshes preserve the owner's wording unless
+they explicitly accept a replacement. File size, context and machine-fit
+information remain separate from that description. A capability matrix or
+generated marketing copy is not needed.
 
 ```
   local — a local model does the foreground work
@@ -260,6 +322,28 @@ Rules the screens must follow:
   Froggeric and Sharp apply to the same exact Qwen weights, the wizard groups
   them beneath one model choice. It still records the selected patch exactly
   because compatibility, rendered behavior, and cache reuse may differ.
+
+The current catalog already represents a chat template as an independently
+versioned `Patch` with explicit `compatible_artifacts`. A `Layout` selects its
+artifact and optional template patch; compilation rejects an incompatible
+pairing and the execution lock pins the template's exact source and bytes.
+
+**Template defaults, 2026-09-23 (owner).** The catalog proposes defaults per
+model and offers compatible alternatives. Template preference may be subjective;
+the wizard lets the user accept the proposed default or choose another
+compatible template. The user's selected variant is distinct from the catalog
+default. Once resolved, the execution lock records that choice's exact revision
+and bytes for installation, reproduction and rollback. The user can explicitly
+change or update the template; a changed catalog default leaves existing choices
+and locks intact.
+
+The alpha.10 Qwen profile contains Frog v22.5 as its recorded composition.
+That entry does not make Frog mandatory for Qwen users. The current source
+accepts `Selection.templates`, mapping each selected layout to a compatible
+patch or the embedded template. New guided and catalog selections make defaults
+explicit; older selections that omit overrides retain their original semantics
+and lock bytes. The wizard presents alternatives under their model and saves
+the exact composition the user accepts.
 
 ### The model section groups exact layouts into portfolio choices
 
@@ -650,10 +734,12 @@ Lifecycle:
   acquisition, and reconciliation contract. Experiment locks may require exact
   verified base-lock receipts and keep isolated software below their own named
   installation directories;
-- `temper init` — the wizard described above: deterministic machine checks,
-  portfolio choices, exact model/patch options, one-by-one activity-support
-  choices, harness integrations, mode bindings and allowances. Writes
-  manifest.yaml once.
+- `temper init` — implemented guided setup: machine facts, local/utility mode
+  choices, one catalog profile per mode, compatible template options, software
+  policy, combined review and optional preparation. Saves the selected modes
+  atomically below `ROOT/configuration` and resumes from those exact locks.
+  Activity-support choices, harness integration and managed activation remain
+  later parts of the broader design. Existing manifests are preserved.
 - the Field Kit execution base (**probe ownership decided 2026-08-14; moved
   immediately after the supply catalog on 2026-08-20; runtime ownership
   revised 2026-08-28**): Field Kit owns immutable promoted question packages and its
@@ -758,20 +844,35 @@ routine software revision gets focused checks, while a newly possible capability
 returns to Labs. No product-promotion packet, qualification registry or second
 review of identical evidence is required.
 
-## Home (**proposed** 2026-08-08): `~/.temper`
+## Default home: `~/.temper`
 
-Temper's config is machine-witnessed, not portable — a 32GB-witnessed
-manifest synced onto a 64GB machine is exactly the lie the witness
-system exists to prevent, and people sync `~/.config`. So: one
-machine-identity root, `~/.temper` — `manifest.yaml` (intent), the lock,
-`state/` (active mode, leases), provenance, backups. One root also
-keeps keep-or-restore and provenance-guided uninstall trivially
-auditable (`~/.pi` is precedent next door). Rendered configs stay in
-their consumers' homes (`~/.config/llama-swap`, `~/.pi`): temper
-renders into other tools' territory, it never relocates it. The real
-migration hiding here: the manifest moves out of the repo clone —
-today "the install lives in the clone"; under temper the clone is
-disposable and `~/.temper` is the machine's identity.
+**Adopted 2026-09-23.** `~/.temper` is the default home for the user's Temper
+configuration and local state. Explicit `--root` overrides remain supported,
+including private experiment installations. This keeps configuration and
+installation state independent of a repository checkout.
+
+User choices, exact locks, the verified catalog cache and installation state
+belong beneath the selected root. Exact execution locks remain portable;
+machine checks still inspect the machine on which they will run.
+
+Model downloads use the standard shared Hugging Face cache, honoring HF cache
+environment overrides. The official `hf` client owns cache writes and download
+recovery; Temper uses an installed hf or provisions it through `uv tool run`.
+Temper inspects cache presence for preview, verifies model bytes, and retains
+durable hard links or cross-filesystem copies under its own root. Templates and
+receipts stay under that root. It never prunes shared HF/uv caches. The
+[fetch contract](contracts/fetch.md#shared-hugging-face-cache) defines this
+support-tool boundary and the separate filesystem allowances.
+
+Pi keeps its own configuration in its existing Pi home. Temper may stage Pi
+integration output beneath its root, while the live files stay in Pi's expected
+location. An explicitly selected integration manages its reviewed configuration
+entries and preserves unrelated Pi providers and settings. This same ownership
+boundary applies to other harnesses.
+
+The released alpha.10 commands still require explicit roots. The current source
+applies this default in guided setup; lower-level primitives remain root-explicit.
+Adoption does not migrate existing roots or installations.
 
 ## What ships where (the org, reshaped 2026-08-08 — owner)
 

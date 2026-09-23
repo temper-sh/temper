@@ -23,19 +23,27 @@ when latest/tested resolution changes the software inputs. The existing local
 authoring path retains its canonical document identity and issued-lock behavior.
 
 Choose one software value. `recorded` is the default and uses retained exact
-inputs without network access. `latest` discovers the upstream stable release
-for each selected software source. `tested` explicitly selects the recorded
-minimum tested version; it refuses unknown or conflicting tested boundaries.
+inputs without network access. `latest` discovers the newest downloadable
+llama.cpp numbered build (published upstream as a nightly), and the upstream
+stable release for llama-swap. `tested` explicitly selects the recorded minimum
+tested version; it refuses unknown or conflicting tested boundaries.
 All choices must satisfy required versions. A failed lookup never triggers an
 automatic fallback. A newer resolved lock needs a new output path.
 
 Latest/tested discovery supports the current GitHub release archives for
 llama.cpp and llama-swap on macOS ARM64. It resolves the release tag to a commit,
 selects the target archive, verifies its upstream SHA-256 and size, and computes
-the bounded archive inventory without writing files. Numbered `b...` and `v...`
-tags are compared numerically within their own family. Unknown tag formats or
-missing integrity metadata refuse. See the upstream
-[release API](https://docs.github.com/en/rest/releases/releases#get-the-latest-release).
+the bounded archive inventory without writing files. llama.cpp discovery scans
+at most 100 recent releases, skipping drafts and builds missing the target
+archive. Once selected, an archive's integrity failure refuses rather than
+trying an older build. Only official llama.cpp `b<number>` builds may carry
+GitHub's prerelease flag; other sources require stable releases.
+
+Numbered `b...` and `v...` tags are compared numerically within their own family.
+Semantic `vMAJOR.MINOR.PATCH` tags use semantic version ordering. Ordering between
+families is never inferred. Unknown tag formats or missing integrity metadata
+refuse. See upstream's [versioning explanation](https://github.com/ggml-org/ggml/discussions/1579)
+and [release API](https://docs.github.com/en/rest/releases/releases).
 
 The output parent must already exist. Compilation preserves the selection and
 refuses to replace a different lock. Export verifies existing derived files,
@@ -64,15 +72,85 @@ a later version does not make it the required floor. Unknown boundaries remain
 absent, and a tested release below a newly required floor cannot be selected as
 a fallback. Version metadata does not change execution identity.
 
-`temper-selection/v2` contains only `schema` and `profile`. Each profile binding
-uses its layout as identity. The compiler rejects empty tools/integrations
-placeholders and separate binding IDs in v2 rather than maintaining unused
-extension slots.
+`temper-selection/v2` contains `schema`, `profile`, and optional `templates`
+and `context_windows` maps.
+The `templates` map keys selected layout IDs to a compatible patch ID; an empty
+value explicitly selects the model's embedded template. An omitted map or key
+inherits that layout's catalog default (`patches[0]`, or embedded when there is
+no patch). `temper catalog select` freezes every selected layout's current
+choice into the new user-owned selection; repeat `--template layout=patch` or
+`--template layout=builtin` to override individual choices. The compiler accepts
+older selections with omitted choices without rewriting them. Unknown or
+unselected layout keys and missing or incompatible patches are refused before
+publication or runtime effects. Each profile binding uses its layout as
+identity. The compiler rejects empty tools/integrations placeholders and
+separate binding IDs in v2 rather than maintaining unused extension slots.
+
+`context_windows` maps selected layout IDs to total input-plus-output token
+windows. Low-level selection with an omitted value uses the layout's authored
+`context_window_tokens`. Optional `context_limit_tokens` separately records the
+model/configuration ceiling; without it, the authored window remains the limit
+for compatibility. An explicit choice must exceed
+`request_defaults.max_output_tokens` and cannot exceed that limit.
+`catalog select --context LAYOUT=TOKENS` and guided setup freeze each chosen number.
+Compilation records it in the selected
+layout and renders that exact window. Context changes alter execution identity
+while reusing the same model bytes. Old selections and frozen execution locks
+retain their original windows. A context limit states capacity, not measured
+memory fit or task quality; extended RoPE scaling requires its own configuration.
+
+Layouts may carry reviewed `context_findings`. Each gives `window_tokens`,
+`max_output_tokens`, a tested `execution_sha256`, a `machine` selector
+(`target`, `chip`, exact `physical_memory_bytes`, optional `hardware_model`,
+and `minimum_wired_limit_mib`), `engine_memory_limit_bytes`,
+`swap_growth_limit_bytes`, an `evidence` URL and optional `latency_note`.
+The execution digest binds the actual window, output allowance, model bytes,
+template, engine, router and all launch/request controls. `catalog compile
+--json` reports `context_execution_digests` per layout for these exact inputs;
+this identifies a candidate and does not certify that a test ran. Changed inputs leave a finding
+inapplicable rather than silently updating its evidence identity. Findings and
+the ceiling are catalog metadata, excluded from execution identity.
+
+Guided setup resolves software before selecting the largest matching tested
+window. Its automatic choice requires applicable evidence; otherwise it reports
+unknown and requests an explicit window. Explicit values remain possible up to
+the model ceiling and disclose whether that exact point has matching evidence.
+There is no interpolation from a larger machine or between tested points.
+Latency notes do not reduce the capacity default. This first automatic path
+covers single-layout profiles; multi-layout composition needs its own fit
+evidence and explicit windows. Preview performs no model run or weight download.
+
+Artifacts may carry `description` and an optional `assessment_url`. Workshop
+edits these through `temper catalog describe`; one artifact's description is
+shared by its local-main and utility choices. Descriptions may contain the
+owner's personal assessment and need no Results record. They are display
+metadata, excluded from execution identity, and software/evidence refreshes
+preserve them. `catalog describe --if-empty` supplies a suggestion only when no
+description exists; replacement is an explicit edit.
+
+A profile with omitted `foreground` has one local default route. A profile with
+`foreground: external` has no default route and at least one available helper
+binding. The derived v2 manifest uses `external_foreground: true` with no
+`foreground` layout to tell a selected harness that its provider-owned model
+does the foreground work. A v2 `foreground: external` remains an ordinary local
+layout reference when a layout has that ID. Temper still
+renders the explicitly selected local helpers by layout ID, without a generic
+local router group. Pi's existing default model and compaction settings remain
+provider-owned in this mode. The empty `none` mode
+remains a separate manifest state. A compact chat model can be a local default
+when that profile selects it; artifact size is not a role classifier.
+With no resident local model, the resident wall-model check reports
+`not-applicable`; it does not establish that loading an on-demand helper will
+fit alongside a harness-owned foreground. Current catalog locks also do not
+select or install a Pi integration; Pi settings preservation applies when an
+explicit integration supplies Pi's base configuration to the renderer.
 
 The lock retains only selected layouts and their material/engine records. It
 keeps the source snapshot hash and one profile execution digest; intermediate
 record/material/engine/layout hash maps are not serialized. Consumed model,
-template, engine or settings changes alter execution identity. License, display
+selected template, engine or settings changes alter execution identity. Template
+overrides retain the original catalog snapshot identity and do not duplicate
+model weights. License, display
 name, source-discovery instructions and evidence metadata do not. Export also
 identifies the exact lock bytes by SHA-256. Local machine paths never enter the
 portable lock.

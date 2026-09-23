@@ -148,6 +148,46 @@ func TestUpdateRollbackAndOfflineReadPreserveIndependentUserFiles(t *testing.T) 
 	}
 }
 
+func TestPreviewVerifiesWithoutCreatingStateAndHonorsHighestSequence(t *testing.T) {
+	first, trust := fixture(t, 1)
+	second, _ := fixture(t, 2)
+	root := filepath.Join(t.TempDir(), "new-root")
+	if _, err := Read(root, trust); !errors.Is(err, ErrNoCatalog) {
+		t.Fatalf("empty cache read: %v", err)
+	}
+	if _, err := Inspect(root, trust); !errors.Is(err, ErrNoCatalog) {
+		t.Fatalf("empty cache inspect: %v", err)
+	}
+	source := &fixtureSource{publication: first}
+	preview, err := Preview(context.Background(), root, trust, source)
+	if err != nil || preview.Sequence != 1 {
+		t.Fatalf("fresh preview: %+v %v", preview.Identity, err)
+	}
+	if _, err := os.Lstat(root); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("preview created root: %v", err)
+	}
+	if _, err := Update(context.Background(), root, false, trust, &fixtureSource{publication: second}); err != nil {
+		t.Fatal(err)
+	}
+	before := tree(t, root)
+	source = &fixtureSource{publication: first}
+	if _, err := Preview(context.Background(), root, trust, source); err == nil || !strings.Contains(err.Error(), "highest accepted") {
+		t.Fatalf("preview accepted rollback: %v", err)
+	}
+	if source.catalogReads != 0 || !reflect.DeepEqual(before, tree(t, root)) {
+		t.Fatal("refused preview fetched catalog or changed store")
+	}
+	if err := os.WriteFile(filepath.Join(root, "catalog", "state.json"), []byte("tampered"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Read(root, trust); err == nil || errors.Is(err, ErrNoCatalog) {
+		t.Fatalf("tampered cache was classified as empty: %v", err)
+	}
+	if _, err := Preview(context.Background(), root, trust, &fixtureSource{publication: second}); err == nil || errors.Is(err, ErrNoCatalog) {
+		t.Fatalf("preview ignored or misclassified tampered local state: %v", err)
+	}
+}
+
 func TestFailuresDoNotCreateOrReplaceActiveState(t *testing.T) {
 	good, trust := fixture(t, 1)
 	next, _ := fixture(t, 2)

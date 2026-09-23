@@ -58,9 +58,17 @@ func latestReleaseReader(t *testing.T) releaseReader {
 		}
 		assetURL := "https://github.com/" + item.repo + "/releases/download/" + item.tag + "/" + item.asset
 		reader[assetURL] = data.Bytes()
-		reader["https://api.github.com/repos/"+item.repo+"/releases/latest"], _ = json.Marshal(map[string]any{
+		metadata := map[string]any{
 			"tag_name": item.tag, "assets": []any{map[string]any{"name": item.asset, "browser_download_url": assetURL, "size": data.Len(), "digest": fmt.Sprintf("sha256:%x", sha256.Sum256(data.Bytes()))}},
-		})
+		}
+		if item.repo == "ggml-org/llama.cpp" {
+			metadata["prerelease"] = true
+			reader["https://api.github.com/repos/"+item.repo+"/releases?per_page=20&page=1"], _ = json.Marshal([]any{
+				map[string]any{"tag_name": "v0.4.1", "assets": []any{}}, metadata,
+			})
+		} else {
+			reader["https://api.github.com/repos/"+item.repo+"/releases/latest"], _ = json.Marshal(metadata)
+		}
 		reader["https://api.github.com/repos/"+item.repo+"/git/ref/tags/"+item.tag] = []byte(`{"object":{"type":"commit","sha":"` + strings.Repeat("a", 40) + `"}}`)
 	}
 	return reader

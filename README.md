@@ -83,12 +83,45 @@ ARM64. You can inspect its files and settings, select it explicitly, and compile
 an exact execution lock before installing anything.
 [Browse and use the catalog](docs/CATALOG.md).
 
+### Preview guided setup from source
+
+The current source adds a modes-first terminal wizard, available before its next
+release:
+
+```sh
+go build -o build/temper ./cmd/temper
+./build/temper init --dry-run
+```
+
+It defaults to `~/.temper`, shows machine limits, and asks for a local main model
+and/or local helpers alongside a harness-owned main model. Model size does not
+determine its role. You choose templates, context windows and software versions, review the
+complete plan, then save or prepare explicitly. The
+[setup contract](docs/contracts/init.md) also documents scripted selection and
+exact resume. The [compact authoring candidate](catalog/README.md) is available
+through an explicit `--catalog catalog/guided-setup.json`; it is not in the
+published catalog and its new runtime composition remains unmeasured.
+The Context tab defaults to automatic: the largest reviewed context matching
+the machine and selected configuration. The candidate records a 262,144-token
+model ceiling but has no reviewed machine-context findings yet, so preview
+requires an explicit window in the Context tab or with `--context LAYOUT=TOKENS`.
+It labels that choice's fit as unknown. Brief model descriptions appear beneath
+the names, separately from download and memory details. The released catalog
+and existing saved configurations retain their original windows.
+The preview checks the standard Hugging Face cache before listing model
+downloads. Preparation reuses those weights and delegates missing downloads to
+`hf`, using `uv tool run` when hf is absent. Configuration, templates and durable
+installation files stay under the Temper root; shared HF cache files are never
+removed by Temper. [Cache and support-tool behavior](docs/contracts/fetch.md#shared-hugging-face-cache).
+Preparation starts no service; the available foreground command runs a temporary
+supervised session. Persistent activation remains separate work.
+
 ## What to expect
 
 Temper treats a local-AI setup as a reproducible system rather than a loose
 collection of model names and command-line flags:
 
-1. A manifest records the configuration the user selected.
+1. A user-owned manifest or catalog Selection records the chosen configuration.
 2. Lock files identify the exact model, template, engine, Python runtime, and
    dependency artifacts needed for that configuration.
 3. Temper verifies those artifacts, predicts whether the models kept in memory
@@ -105,8 +138,8 @@ The current release target and safety boundary are deliberately narrow:
 | Machine | macOS on Apple Silicon; the published binary is `darwin/arm64`. |
 | Downloads | Model fetches and runtime installation are explicit and may use many gigabytes. Dry runs do not mutate. |
 | Privacy | No telemetry or background updater. Model serving listens only on the Mac itself; retained evidence stays local unless a person chooses to export it. |
-| System changes | No `sudo`. Temper writes beneath an explicit root and does not silently take over an existing service. |
-| Configuration | The user's manifest is never mechanically rewritten after creation. Updates produce explicit lock changes and follow-up commands. |
+| System changes | No `sudo`. Temper owns files beneath an explicit root; source preparation also uses the shared HF/uv caches for model downloads and their support tool. It does not silently take over an existing service. |
+| Configuration | User choices are never mechanically overwritten. Guided setup saves Selection/Execution Lock pairs; the explicit manifest workflow remains available. |
 | Cleanup | Temper can remove its receipted private installations. It never removes system-managed packages, including packages it requested. |
 
 The path exercised with a real model currently uses `llama-server`.

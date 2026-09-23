@@ -247,6 +247,11 @@ V2 applies the pre-wizard successor decisions as follows:
   the technical API and `modalities: [text]` or `[text, image]` describes
   admitted input. A mode names its exact resident foreground layout. V2 does
   not derive foreground from `preferred`.
+- Utility modes set `external_foreground: true`, leave `foreground` empty,
+  and retain at least one local helper member. The renderer preserves the
+  harness's default model and compaction settings and omits a generic local
+  router group. The flag is v2-only and cannot accompany a local foreground
+  binding; a layout literally named `external` remains a valid local binding.
 - A mode's `services` map binds tool-consumed roles such as `rerank` to an
   exact member implementing the required technical interface. Coding remains
   an evidenced use rather than a role.

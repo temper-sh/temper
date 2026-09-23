@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/temper-sh/temper/internal/lockfile"
 	"github.com/temper-sh/temper/internal/manifest"
@@ -171,58 +172,16 @@ func (s Set) Verify() error {
 // Inspect performs routine receipt and shape verification and returns the
 // recorded model size established when fetch hashed and published the set.
 func (s Set) Inspect() (Inspection, error) {
-	target := s.Path()
-	info, err := os.Lstat(target)
-	if errors.Is(err, fs.ErrNotExist) {
-		return Inspection{}, fmt.Errorf("%w: %s", ErrNotMaterialized, target)
-	}
+	recorded, err := inspectReceipt(s.Path(), s.layoutID, s.digest)
 	if err != nil {
-		return Inspection{}, fmt.Errorf("inspect artifact set: %w", err)
+		return Inspection{}, err
 	}
-	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-		return Inspection{}, errors.New("artifact set is not a regular directory")
-	}
-
-	receiptPath := filepath.Join(target, "receipt.json")
-	receiptInfo, err := os.Lstat(receiptPath)
-	if errors.Is(err, fs.ErrNotExist) {
-		return Inspection{}, errors.New("artifact set has no regular receipt.json")
-	}
-	if err != nil {
-		return Inspection{}, fmt.Errorf("inspect artifact receipt: %w", err)
-	}
-	if !receiptInfo.Mode().IsRegular() || receiptInfo.Mode()&os.ModeSymlink != 0 {
-		return Inspection{}, errors.New("artifact set has no regular receipt.json")
-	}
-	data, err := os.ReadFile(receiptPath)
-	if err != nil {
-		return Inspection{}, fmt.Errorf("read artifact receipt: %w", err)
-	}
-	var recorded receipt
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&recorded); err != nil {
-		return Inspection{}, fmt.Errorf("decode artifact receipt: %w", err)
-	}
-	if err := requireJSONEOF(decoder); err != nil {
-		return Inspection{}, fmt.Errorf("decode artifact receipt: %w", err)
-	}
-	if recorded.Schema != receiptSchema || recorded.Layout != s.layoutID || recorded.EntryDigest != s.digest {
-		return Inspection{}, errors.New("artifact receipt does not identify the requested immutable set")
-	}
-	canonical, err := s.Receipt(recorded.Files)
-	if err != nil {
+	if _, err := s.validateRecords(recorded.Files); err != nil {
 		return Inspection{}, fmt.Errorf("artifact receipt: %w", err)
-	}
-	if !bytes.Equal(data, canonical) {
-		return Inspection{}, errors.New("artifact receipt is not in canonical form")
 	}
 	sizes := make(map[string]int64, len(recorded.Files))
 	for _, file := range recorded.Files {
 		sizes[file.Path] = file.Size
-	}
-	if err := verifyShape(target, sizes); err != nil {
-		return Inspection{}, fmt.Errorf("artifact set is malformed: %w", err)
 	}
 	var modelBytes int64
 	for _, model := range s.models {
@@ -233,6 +192,100 @@ func (s Set) Inspect() (Inspection, error) {
 		modelBytes += size
 	}
 	return Inspection{ModelBytes: modelBytes}, nil
+}
+
+// inspectReceipt admits a complete published set without a caller's manifest.
+// Consumers still compare its records with their own selected hashes. Both
+// selected-set verification and reuse across compositions use this admission.
+func inspectReceipt(target, layoutID, digest string) (receipt, error) {
+	recorded, err := readReceipt(target, layoutID, digest)
+	if err != nil {
+		return receipt{}, err
+	}
+	if err := verifyReceiptShape(target, recorded); err != nil {
+		return receipt{}, err
+	}
+	return recorded, nil
+}
+
+func readReceipt(target, layoutID, digest string) (receipt, error) {
+	info, err := os.Lstat(target)
+	if errors.Is(err, fs.ErrNotExist) {
+		return receipt{}, fmt.Errorf("%w: %s", ErrNotMaterialized, target)
+	}
+	if err != nil {
+		return receipt{}, fmt.Errorf("inspect artifact set: %w", err)
+	}
+	if !info.IsDir() {
+		return receipt{}, errors.New("artifact set is not a regular directory")
+	}
+	receiptPath := filepath.Join(target, "receipt.json")
+	receiptInfo, err := os.Lstat(receiptPath)
+	if errors.Is(err, fs.ErrNotExist) {
+		return receipt{}, errors.New("artifact set has no regular receipt.json")
+	}
+	if err != nil {
+		return receipt{}, fmt.Errorf("inspect artifact receipt: %w", err)
+	}
+	if !receiptInfo.Mode().IsRegular() {
+		return receipt{}, errors.New("artifact set has no regular receipt.json")
+	}
+	const maxReceiptBytes = 16 << 20
+	if receiptInfo.Size() > maxReceiptBytes {
+		return receipt{}, errors.New("artifact receipt exceeds size limit")
+	}
+	file, err := os.Open(receiptPath)
+	if err != nil {
+		return receipt{}, fmt.Errorf("read artifact receipt: %w", err)
+	}
+	data, readErr := io.ReadAll(io.LimitReader(file, maxReceiptBytes+1))
+	closeErr := file.Close()
+	if err := errors.Join(readErr, closeErr); err != nil {
+		return receipt{}, fmt.Errorf("read artifact receipt: %w", err)
+	}
+	if len(data) > maxReceiptBytes {
+		return receipt{}, errors.New("artifact receipt exceeds size limit")
+	}
+	var recorded receipt
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&recorded); err != nil {
+		return receipt{}, fmt.Errorf("decode artifact receipt: %w", err)
+	}
+	if err := requireJSONEOF(decoder); err != nil {
+		return receipt{}, fmt.Errorf("decode artifact receipt: %w", err)
+	}
+	if recorded.Schema != receiptSchema || recorded.Layout != layoutID || recorded.EntryDigest != digest {
+		return receipt{}, errors.New("artifact receipt does not identify the requested immutable set")
+	}
+	previous := ""
+	for _, entry := range recorded.Files {
+		if !fs.ValidPath(entry.Path) || strings.Contains(entry.Path, "\\") ||
+			(!strings.HasPrefix(entry.Path, "model/") && !strings.HasPrefix(entry.Path, "patches/")) ||
+			!validDigest(entry.SHA256) || entry.Size < 0 || entry.Path <= previous {
+			return receipt{}, fmt.Errorf("artifact receipt has invalid or noncanonical metadata for %q", entry.Path)
+		}
+		previous = entry.Path
+	}
+	canonical, err := json.MarshalIndent(recorded, "", "  ")
+	if err != nil {
+		return receipt{}, fmt.Errorf("artifact receipt: %w", err)
+	}
+	if !bytes.Equal(data, append(canonical, '\n')) {
+		return receipt{}, errors.New("artifact receipt is not in canonical form")
+	}
+	return recorded, nil
+}
+
+func verifyReceiptShape(target string, recorded receipt) error {
+	sizes := make(map[string]int64, len(recorded.Files))
+	for _, file := range recorded.Files {
+		sizes[file.Path] = file.Size
+	}
+	if err := verifyShape(target, sizes); err != nil {
+		return fmt.Errorf("artifact set is malformed: %w", err)
+	}
+	return nil
 }
 
 // VerifyContent performs routine receipt and shape verification, then streams

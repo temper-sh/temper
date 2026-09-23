@@ -22,6 +22,43 @@ import (
 	"github.com/temper-sh/temper/internal/upstream"
 )
 
+func TestRunInitHelpDoesNotInspectMachine(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	exit := runWithDependencies(context.Background(), []string{"init", "--help"}, &stdout, &stderr, dependencies{
+		detectFacts: func(context.Context) (machine.Facts, error) {
+			t.Fatal("help must not inspect the machine")
+			return machine.Facts{}, nil
+		},
+	})
+	if exit != 0 || !strings.Contains(stderr.String(), "default ~/.temper") {
+		t.Fatalf("exit=%d stdout=%q stderr=%q", exit, stdout.String(), stderr.String())
+	}
+}
+
+func TestRunInitScriptedPreviewLeavesRootAbsent(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "setup")
+	var stdout, stderr bytes.Buffer
+	exit := runWithDependencies(context.Background(), []string{"init", "--root", root,
+		"--catalog", "../../catalog/guided-setup.json", "--profile", "qwen3.5-4b-local", "--context", "qwen3.5-4b-q4km-off=16384", "--dry-run", "--json"}, &stdout, &stderr, dependencies{
+		detectFacts: func(context.Context) (machine.Facts, error) {
+			return machine.Facts{
+				Schema:        machine.FactsSchemaV1,
+				Target:        software.Target{OS: "darwin", Arch: "arm64", Distribution: "macos", DistributionVersion: "26.6"},
+				HardwareModel: "MacTest,1", Chip: "Apple test chip", OSBuild: "25G1",
+				PhysicalMemoryBytes: 16 << 30, MetalDeviceMemoryMiB: 13271,
+				MetalDeviceMemorySource: machine.MetalDeviceSourcePredicted,
+				WiredLimitMiB:           10649, WiredLimitSource: budget.WiredSourcePredicted,
+			}, nil
+		},
+	})
+	if exit != 0 || !strings.Contains(stdout.String(), `"schema": "temper-setup-plan/v1"`) || !strings.Contains(stdout.String(), `"dry_run": true`) {
+		t.Fatalf("exit=%d stdout=%q stderr=%q", exit, stdout.String(), stderr.String())
+	}
+	if _, err := os.Stat(root); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("dry run changed setup root: %v", err)
+	}
+}
+
 func TestRunDispatchesFieldKitHelpWithoutReadingMachineOrBinary(t *testing.T) {
 	called := false
 	command, err := fieldkitcmd.New(
@@ -300,6 +337,45 @@ func TestRunFetchDryRunReportsOneExplicitLayoutWithoutWriting(t *testing.T) {
 	}
 	if _, err := os.Lstat(root); !os.IsNotExist(err) {
 		t.Fatalf("dry run touched root: %v", err)
+	}
+}
+
+func TestRunFetchUsesOfficialDownloaderAndSharedCache(t *testing.T) {
+	directory := t.TempDir()
+	manifest, lock := filepath.Join(directory, "manifest.yaml"), filepath.Join(directory, "manifest.lock.yaml")
+	for path, data := range map[string]string{manifest: cliManifest, lock: cliLock} {
+		if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cache := filepath.Join(directory, "hub")
+	snapshot := filepath.Join(cache, "models--org--Coder", "snapshots", strings.Repeat("a", 40))
+	hf := filepath.Join(directory, "hf")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$TEMPER_TEST_ARGS\"\n/bin/mkdir -p \"$TEMPER_TEST_SNAPSHOT\"\nprintf weights > \"$TEMPER_TEST_SNAPSHOT/coder.gguf\"\n"
+	if err := os.WriteFile(hf, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	argsFile := filepath.Join(directory, "hf-args")
+	t.Setenv("PATH", directory)
+	t.Setenv("HF_HUB_CACHE", cache)
+	t.Setenv("TEMPER_TEST_ARGS", argsFile)
+	t.Setenv("TEMPER_TEST_SNAPSHOT", snapshot)
+	for _, installation := range []string{"first", "second"} {
+		var out, diagnostics bytes.Buffer
+		root := filepath.Join(directory, installation)
+		code := run(context.Background(), []string{"fetch", "coder", "--manifest", manifest, "--lock", lock, "--root", root}, &out, &diagnostics)
+		if code != 0 || !strings.Contains(out.String(), "RESULT fetch changed") {
+			t.Fatalf("%s fetch: %d %s %s", installation, code, out.String(), diagnostics.String())
+		}
+		if installation == "first" {
+			data, err := os.ReadFile(argsFile)
+			if err != nil || string(data) != "download\n--revision\n"+strings.Repeat("a", 40)+"\n--cache-dir\n"+cache+"\n--quiet\n--\norg/Coder\ncoder.gguf\n" {
+				t.Fatalf("wrong official downloader invocation: %q %v", data, err)
+			}
+			if err := os.Remove(hf); err != nil {
+				t.Fatal(err)
+			}
+		}
 	}
 }
 

@@ -53,7 +53,7 @@ syntax as the owner of a product rule.
 
 | Executable | Role | Wiring boundary |
 |---|---|---|
-| `cmd/temper` | User-facing CLI for manifest/lock, artifacts, rendering, checks, software lifecycle, machine facts, Field Kit host primitives, probes, and catalog update | Constructs upstream readers, machine detectors, the compiled software adapter family, Field Kit binding/probe commands, catalog trust, and catalog transport |
+| `cmd/temper` | User-facing CLI for guided setup, manifest/lock, artifacts, rendering, checks, software lifecycle, machine facts, Field Kit host primitives, probes, and catalog update | Constructs setup UI/reads/dispatch, upstream readers, machine detectors, the compiled software adapter family, Field Kit binding/probe commands, catalog trust, and catalog transport |
 | `cmd/temper-catalog` | Release-only catalog signing and verification tool | Constructs signing/verification capabilities; private seed bytes enter only through stdin |
 | `cmd/temper-release` | Maintainer-only deterministic binary/archive builder | Cross-builds the version-injected macOS ARM64 binary, discovers the linked module graph, collects root license/notice bytes, and conditionally commits the release ZIP and checksum; it never signs, notarizes, or publishes |
 
@@ -70,11 +70,13 @@ check, removal, or catalog policy.
 
 | Operation | Orchestrator | Decisions and schemas | Reads/effects | Contract |
 |---|---|---|---|---|
+| `temper init` | `internal/setupcmd` | `setup`: combined eligibility/download/disk plan; existing catalog Selection and Execution Lock | machine/disk/catalog reads, `setupui` review, exclusive atomic configuration-directory publication, then explicit `execution prepare` dispatch | `docs/contracts/init.md` |
 | `temper catalog compile` | `internal/catalogcmd` | `catalog`: five records, selection, closure, scoped digests and execution lock | explicit local file reads; atomic lock publication without replacement | `docs/contracts/execution-lock.md` |
+| `temper catalog describe` | `internal/catalogcmd` | `catalog.Describe`: editable artifact description and optional assessment link | explicit authoring-file read, directory writer lock, validated atomic replacement; dry run writes nothing | `docs/contracts/execution-lock.md` |
 | `temper execution export` | `internal/catalogcmd` | `catalog`: self-contained lock validation and compatibility projections | exact derived input publication; idempotent partial-export recovery | `docs/contracts/execution-lock.md` |
 | `temper resolve` | `internal/resolve` | `manifest`, `lockfile`, `pinning` | `upstream`/`huggingface`; `lockstore` atomic commit | `docs/contracts/resolve.md` |
 | `temper update` | `internal/update` | `manifest`, `lockfile`, `pinning`, update gates | `upstream`/`huggingface`; `lockstore` atomic commit | `docs/contracts/update.md` |
-| `temper fetch` | `internal/fetch` | `manifest`, `lockfile`, `artifactset`, `patch` | upstream byte reads; immutable artifact-set publication | `docs/contracts/fetch.md` |
+| `temper fetch` | `internal/fetch` | `manifest`, `lockfile`, `artifactset`, `patch` | HF cache lookup/official client; template byte reads; immutable artifact-set publication | `docs/contracts/fetch.md` |
 | `temper apply` | `internal/apply` | `manifest`, `lockfile`, `artifactset`, `render` | artifact verification; staged generation and atomic `rendered/current` switch | `docs/contracts/apply.md` |
 | `temper check` | `internal/check` | `manifest`, `lockfile`, `artifactset`, `budget` | machine and artifact reads only | `docs/contracts/check.md` |
 | `temper software catalog update` | `software/catalogupdate` through `softwarecmd` | `software/catalog`, `catalogpublication`, adapter capability registry | signed HTTPS source; immutable catalog store and active-pointer commit | `docs/contracts/software-catalog-update.md` |
@@ -91,18 +93,47 @@ it is executable in a test.
 
 ## Package neighborhoods
 
+### Guided setup
+
+`internal/setupui` is a Bubble Tea state machine supplied with options and an
+asynchronous preview callback. It performs no catalog or installation effects.
+Its Lip Gloss rendering lives in `view.go`, with Tokyo Night colors, per-screen
+tabs and a viewport that excludes the header and controls. Templates without
+alternatives are skipped in both navigation directions. Plain CLI lines and
+terminal review blocks share the disclosure sections and per-file cache facts
+in `setup.Plan`; the UI renders those rows as a collapsible table.
+`context.go` uses Bubbles text inputs for per-mode/per-layout windows. The
+catalog owns their ceilings and reviewed context findings; `ResolveMachineContexts`
+matches the resolved configuration and observed machine. `ResolveSelection` freezes
+choices and compilation passes exact windows through the existing renderer.
+`internal/setupcmd` reads the catalog and machine, resolves explicit choices,
+binds the accepted review to exact lock bytes, and dispatches optional
+preparation after save. `internal/setup` owns pure memory/disk planning plus
+separate model-receipt inspection and filesystem read/save operations. Exact
+existing model hashes reduce the remaining disk allowance across template and
+layout variants without a weight rehash during review. Fetch hashes staged hard
+links before publishing each new composition. Saving stages the complete set of
+Selection/Execution Lock pairs and commits the configuration directory with an
+exclusive rename under a kernel writer lock. Existing differing files are a
+refusal; resume consumes exact saved locks without upstream resolution.
+
+Primary tests live beside each package. They cover navigation and explicit
+choices, changing upstream resolution between previews, stale machine facts,
+pure dry runs, preserved user edits, concurrent saves and exact resume.
+
 ### Manifest, model artifacts, and rendering
 
 | Package | Owns |
 |---|---|
-| `internal/manifest` | Strict user-owned `temper-manifest/v1` parsing and invariants |
+| `internal/manifest` | Strict user-owned manifest parsing and invariants, including v2 external foreground for utility profiles |
 | `internal/lockfile` | Strict resolved model lock and its canonical identities |
 | `internal/lockstore` | Concurrency-safe model-lock snapshots and atomic replacement |
 | `internal/pinning` | Resolution and validation of exact upstream layout pins |
 | `internal/upstream` | Narrow model-metadata/byte-read contracts consumed by resolution and fetch |
 | `internal/huggingface` | Hugging Face transport adaptation; external response types stop here |
+| `internal/hfcache` | Shared model-cache inspection and official hf invocation; HF owns cache writes, locking and recovery |
 | `internal/patch` | Pinned patch-source parsing and deterministic patch application |
-| `internal/artifactset` | Immutable content-addressed layout-set identity and verification |
+| `internal/artifactset` | Immutable layout-set identity, verification and receipt-based discovery of reusable model hashes |
 | `internal/render` | Pure construction of the complete llama-swap/Pi configuration bundle |
 | `internal/render/engine` | Closed pure engine-launch family, typed adapters, specialized command builders, and safe llama-swap shell serialization |
 | `internal/runtimeconfig` | Canonical generation-owned, receipt-resolved executable requirements shared by render and probe |
@@ -178,6 +209,11 @@ The production `temper` installation-effect family wires the isolated
 authorize a CLI fallback to Homebrew, an unknown adapter, ambient Python, or
 an ambient package index.
 
+Model-download support is a separate, explicit boundary: `hfcache` uses the
+official hf executable, or `uv tool run --from huggingface-hub` when absent.
+This does not install serving runtimes or change their locked closures. Fetch
+independently verifies the resulting model bytes before publication.
+
 To add a member, implement the existing narrow adapter role in its own
 package, add its descriptor to compiled capability validation, and wire the
 concrete member in `cmd/`. Change `adapter` itself only when the common
@@ -228,12 +264,15 @@ caller-owned.
 
 | State | Path/identity | Writer and rule |
 |---|---|---|
-| User choices | caller-owned `manifest.yaml` | Wizard writes only when absent; mechanical code never rewrites it |
+| Guided choices and locks | `configuration/<mode>.selection.json` and `<mode>.execution.lock.json` | `init` publishes all selected modes once; unchanged replay is clean, differing user files are preserved |
+| Explicit-workflow choices | caller-owned `manifest.yaml` | User-owned; mechanical code never rewrites it |
 | Resolved model pins | caller-owned `manifest.lock.yaml` | `resolve`/`update` through `internal/lockstore`; one atomic replacement |
 | Model artifact set | `artifacts/layouts/<layout>/<digest>/` | `fetch`; immutable content-addressed publication |
+| Shared HF model cache | Outside the Temper root; HF environment overrides or `~/.cache/huggingface/hub` | Official HF client; Temper only inspects and links/copies verified material, never prunes it |
 | Render generation | `rendered/generations/<digest>/` | `apply`; immutable generation |
 | Current render | `rendered/current` | `apply`; atomic relative symlink switch after validation |
 | Software lock | caller-owned `software.lock.yaml` | `catalogcmd` exports resolved inputs; installation only consumes them |
+| Current maintained catalog | `catalog/snapshots/<digest>/` and `catalog/state.json` | `catalog/distribution`; immutable snapshots and one atomic active/highest-sequence state commit |
 | Catalog snapshots | `software/catalog/snapshots/<digest>/` | `catalogstore`; immutable verified publication |
 | Active catalog | `software/catalog/active` | `catalogupdate`; exact digest plus newline in a regular file |
 | Installation receipt | `software/installations/<id>/installation-receipt.yaml` | `receiptstore`; canonical conditional commit/removal |

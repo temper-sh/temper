@@ -15,6 +15,7 @@ import (
 
 	"github.com/temper-sh/temper/internal/software"
 	softwarearchive "github.com/temper-sh/temper/internal/software/archive"
+	softwareversion "github.com/temper-sh/temper/internal/software/version"
 )
 
 // GitHubSource selects a release asset for one catalog target. {version} is
@@ -31,8 +32,21 @@ type Release struct {
 	Artifact software.Artifact `yaml:"artifact" json:"artifact"`
 }
 
+type githubRelease struct {
+	Tag        string `json:"tag_name"`
+	Draft      bool   `json:"draft"`
+	Prerelease bool   `json:"prerelease"`
+	Assets     []struct {
+		Name   string `json:"name"`
+		URL    string `json:"browser_download_url"`
+		Size   int64  `json:"size"`
+		Digest string `json:"digest"`
+	} `json:"assets"`
+}
+
 var githubRepo = regexp.MustCompile(`^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$`)
 var buildTag = regexp.MustCompile(`^([bv])([0-9]+)$`)
+var semanticTag = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
 var commitSHA = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
 func (s GitHubSource) Validate() error {
@@ -46,12 +60,15 @@ func (s GitHubSource) Validate() error {
 	return nil
 }
 
-// CompareVersions orders the numbered release tags used by llama.cpp and
-// llama-swap. Different tag families and unknown formats are not guessed.
+// CompareVersions orders numbered builds and semantic releases within their
+// own families. A semantic release is not inferred to follow a numbered build.
 func CompareVersions(left, right string) (int, error) {
+	if semanticTag.MatchString(left) && semanticTag.MatchString(right) {
+		return softwareversion.Compare("semver", strings.TrimPrefix(left, "v"), strings.TrimPrefix(right, "v"))
+	}
 	l, r := buildTag.FindStringSubmatch(left), buildTag.FindStringSubmatch(right)
 	if l == nil || r == nil || l[1] != r[1] {
-		return 0, fmt.Errorf("cannot compare release versions %q and %q: expected matching b<number> or v<number> tags", left, right)
+		return 0, fmt.Errorf("cannot compare release versions %q and %q: expected matching b<number>, v<number>, or vMAJOR.MINOR.PATCH tags", left, right)
 	}
 	a, _ := new(big.Int).SetString(l[2], 10)
 	b, _ := new(big.Int).SetString(r[2], 10)
@@ -60,7 +77,9 @@ func CompareVersions(left, right string) (int, error) {
 
 // Discover reads upstream metadata and verifies the selected archive in memory
 // as a stream. It neither installs software nor writes a cache or catalog.
-// See https://docs.github.com/en/rest/releases/releases#get-the-latest-release.
+// llama.cpp publishes its binaries as numbered nightly builds; its semantic
+// stable-release entry is a separate source-only release. Other sources use
+// GitHub's stable latest-release endpoint.
 func Discover(ctx context.Context, reader ArtifactReader, source GitHubSource, requested string) (Release, error) {
 	if err := source.Validate(); err != nil {
 		return Release{}, err
@@ -76,22 +95,18 @@ func Discover(ctx context.Context, reader ArtifactReader, source GitHubSource, r
 		}
 		path = "/releases/tags/" + url.PathEscape(requested)
 	}
-	var release struct {
-		Tag        string `json:"tag_name"`
-		Draft      bool   `json:"draft"`
-		Prerelease bool   `json:"prerelease"`
-		Assets     []struct {
-			Name   string `json:"name"`
-			URL    string `json:"browser_download_url"`
-			Size   int64  `json:"size"`
-			Digest string `json:"digest"`
-		} `json:"assets"`
+	var release githubRelease
+	var err error
+	if requested == "latest" && source.Repository == "ggml-org/llama.cpp" {
+		release, err = latestLlamaCPPBuild(ctx, reader, source)
+	} else {
+		err = readGitHub(ctx, reader, endpoint+path, &release)
 	}
-	if err := readGitHub(ctx, reader, endpoint+path, &release); err != nil {
+	if err != nil {
 		return Release{}, err
 	}
-	if release.Draft || release.Prerelease || (requested != "latest" && release.Tag != requested) {
-		return Release{}, errors.New("upstream did not return the requested stable release")
+	if release.Draft || (release.Prerelease && !llamaCPPBuild(source, release.Tag)) || (requested != "latest" && release.Tag != requested) {
+		return Release{}, errors.New("upstream did not return an eligible requested release")
 	}
 	if _, err := CompareVersions(release.Tag, release.Tag); err != nil {
 		return Release{}, err
@@ -163,6 +178,39 @@ func Discover(ctx context.Context, reader ArtifactReader, source GitHubSource, r
 		return Release{}, errors.New("release archive contains no file content")
 	}
 	return Release{Version: release.Tag, Revision: ref.Object.SHA, Artifact: artifact}, nil
+}
+
+func llamaCPPBuild(source GitHubSource, tag string) bool {
+	return source.Repository == "ggml-org/llama.cpp" && strings.HasPrefix(tag, "b") && buildTag.MatchString(tag)
+}
+
+// GitHub lists releases newest first. A just-published build may still be
+// uploading assets; choose the first published build that has this target.
+// Once selected, integrity failures are fatal rather than a reason to try an
+// older build. Bound discovery even if this target stops receiving binaries.
+func latestLlamaCPPBuild(ctx context.Context, reader ArtifactReader, source GitHubSource) (githubRelease, error) {
+	const perPage, maxPages = 20, 5
+	for page := 1; page <= maxPages; page++ {
+		var releases []githubRelease
+		endpoint := fmt.Sprintf("https://api.github.com/repos/%s/releases?per_page=%d&page=%d", source.Repository, perPage, page)
+		if err := readGitHub(ctx, reader, endpoint, &releases); err != nil {
+			return githubRelease{}, err
+		}
+		for _, release := range releases {
+			if release.Draft || !llamaCPPBuild(source, release.Tag) {
+				continue
+			}
+			for _, asset := range release.Assets {
+				if asset.Name == expandRelease(source.Asset, release.Tag) {
+					return release, nil
+				}
+			}
+		}
+		if len(releases) < perPage {
+			break
+		}
+	}
+	return githubRelease{}, fmt.Errorf("no recent published llama.cpp build provides target archive %q", source.Asset)
 }
 
 func expandRelease(pattern, tag string) string {

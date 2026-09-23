@@ -8,7 +8,46 @@ import (
 	"testing"
 
 	"github.com/temper-sh/temper/internal/catalog"
+	"github.com/temper-sh/temper/internal/software"
 )
+
+// Captured from the pre-template-choice v2 compiler. An omitted templates map
+// must keep both portable execution identity and serialized lock bytes.
+func TestExistingV2SelectionKeepsExactQwenLockBytes(t *testing.T) {
+	catalogBytes, err := os.ReadFile("../../catalog/qwen38-m5-refresh.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	selectionBytes, err := os.ReadFile("../../catalog/qwen38-m5-refresh.selection.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, err := catalog.Parse(catalogBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := catalog.ParseSelection(selectionBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Templates != nil {
+		t.Fatal("compatibility fixture unexpectedly contains template choices")
+	}
+	l, err := catalog.Compile(d, s, software.Target{OS: "darwin", Arch: "arm64"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l.Digests.Profile != "40277487aef35c16a3d078ec58976d778be6389963ba42ffd11ebed5ec155b1e" {
+		t.Fatal("existing v2 execution identity changed")
+	}
+	raw, err := catalog.MarshalLock(l)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := fmt.Sprintf("%x", sha256.Sum256(raw)); got != "5a11b208f9b1b52e1a1abb498a3b1411f53f0d9a2db8127f4d50fd8b1d128f4a" {
+		t.Fatalf("existing v2 lock bytes changed: %s", got)
+	}
+}
 
 // This is the issued Qwen study lock, not a newly generated golden snapshot.
 // Its four hashes were measured using the pre-cleanup compiler. Field Kit

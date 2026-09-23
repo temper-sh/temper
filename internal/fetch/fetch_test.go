@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/temper-sh/temper/internal/fetch"
+	"github.com/temper-sh/temper/internal/hfcache"
 	"github.com/temper-sh/temper/internal/lockfile"
 	"github.com/temper-sh/temper/internal/upstream"
 )
@@ -61,6 +62,41 @@ func (f *fakeSource) Open(_ context.Context, repo, revision, file string) (io.Re
 	return io.NopCloser(strings.NewReader(value)), nil
 }
 
+// Replace only the official HF process in these offline fetch tests. The real
+// cache lookup, staged byte verification and installation publication still run.
+func runFetch(ctx context.Context, options fetch.Options, source upstream.Reader) (fetch.Result, error) {
+	if options.HFCache == "" {
+		options.HFCache = options.Root + "-hf"
+	}
+	if options.DownloadModel == nil && source != nil {
+		options.DownloadModel = func(ctx context.Context, e hfcache.Entry, cache string) error {
+			reader, err := source.Open(ctx, e.Repo, e.Revision, e.Name)
+			if err != nil {
+				return err
+			}
+			data, err := io.ReadAll(reader)
+			if err := errors.Join(err, reader.Close(), ctx.Err()); err != nil {
+				return err
+			}
+			snapshot := filepath.Join(cache, "models--"+strings.ReplaceAll(e.Repo, "/", "--"), "snapshots", e.Revision, e.Name)
+			if err := os.MkdirAll(filepath.Dir(snapshot), 0o755); err != nil {
+				return err
+			}
+			file, err := os.CreateTemp(filepath.Dir(snapshot), "fixture-")
+			if err != nil {
+				return err
+			}
+			defer os.Remove(file.Name())
+			_, err = file.Write(data)
+			if err := errors.Join(err, file.Close()); err != nil {
+				return err
+			}
+			return os.Rename(file.Name(), snapshot)
+		}
+	}
+	return fetch.Run(ctx, options, source)
+}
+
 func TestRunPublishesExactLayoutSetAndSecondRunIsClean(t *testing.T) {
 	directory := t.TempDir()
 	manifestPath, lockPath, entry := writeInputs(t, directory, true, "weights")
@@ -69,7 +105,7 @@ func TestRunPublishesExactLayoutSetAndSecondRunIsClean(t *testing.T) {
 		"owner/model@" + modelRevision + "/nested/model.gguf": "weights",
 		"patches/templates@" + patchRevision + "/chat.jinja":  "before\n" + oldGuard + "\nafter\n",
 	}}
-	result, err := fetch.Run(context.Background(), fetch.Options{
+	result, err := runFetch(context.Background(), fetch.Options{
 		ManifestPath: manifestPath,
 		LockPath:     lockPath,
 		Root:         root,
@@ -88,7 +124,7 @@ func TestRunPublishesExactLayoutSetAndSecondRunIsClean(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	second, err := fetch.Run(context.Background(), fetch.Options{
+	second, err := runFetch(context.Background(), fetch.Options{
 		ManifestPath: manifestPath,
 		LockPath:     lockPath,
 		Root:         root,
@@ -103,6 +139,208 @@ func TestRunPublishesExactLayoutSetAndSecondRunIsClean(t *testing.T) {
 	if source.openCalls != 2 {
 		t.Fatalf("downloads = %d, want 2 from first run only", source.openCalls)
 	}
+}
+
+func TestTemplateChangeReusesInstalledWeightsAndKeepsSetsIndependent(t *testing.T) {
+	directory := t.TempDir()
+	root := filepath.Join(directory, "root")
+	source := &fakeSource{files: map[string]string{
+		"owner/model@" + modelRevision + "/nested/model.gguf": "weights",
+		"patches/templates@" + patchRevision + "/chat.jinja":  "before\n" + oldGuard + "\nafter\n",
+	}}
+	var sets []string
+	for _, withPatch := range []bool{false, true} {
+		manifestPath, lockPath, entry := writeInputs(t, directory, withPatch, "weights")
+		options := fetch.Options{ManifestPath: manifestPath, LockPath: lockPath, Root: root, Layout: "coder"}
+		result, err := runFetch(context.Background(), options, source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !result.Changed {
+			t.Fatal("a new template composition must publish its own set")
+		}
+		sets = append(sets, filepath.Join(root, "artifacts", "layouts", "coder", entry.Digest()))
+		if replay, err := runFetch(context.Background(), options, nil); err != nil || replay.Changed {
+			t.Fatalf("unchanged replay: %+v, %v", replay, err)
+		}
+	}
+	if source.openCalls != 2 {
+		t.Fatalf("downloads = %d, want one model and one template", source.openCalls)
+	}
+	first, err := os.Stat(filepath.Join(sets[0], "model", "nested", "model.gguf"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := os.Stat(filepath.Join(sets[1], "model", "nested", "model.gguf"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !os.SameFile(first, second) {
+		t.Fatal("template variants consume separate copies of the same weights")
+	}
+	if err := os.RemoveAll(sets[0]); err != nil {
+		t.Fatal(err)
+	}
+	assertFile(t, filepath.Join(sets[1], "model", "nested", "model.gguf"), "weights")
+	assertFile(t, filepath.Join(sets[1], "patches", "stable-template", "chat.jinja"), "before\n"+newGuard+"\nafter\n")
+}
+
+func TestTemplateChangeFailurePreservesInstalledSet(t *testing.T) {
+	for _, failure := range []string{"corrupt weights", "failed patch", "canceled patch", "symlinked weights"} {
+		t.Run(failure, func(t *testing.T) {
+			directory := t.TempDir()
+			root := filepath.Join(directory, "root")
+			manifestPath, lockPath, original := writeInputs(t, directory, false, "weights")
+			options := fetch.Options{ManifestPath: manifestPath, LockPath: lockPath, Root: root, Layout: "coder"}
+			if _, err := runFetch(context.Background(), options, &fakeSource{files: map[string]string{
+				"owner/model@" + modelRevision + "/nested/model.gguf": "weights",
+			}}); err != nil {
+				t.Fatal(err)
+			}
+			originalPath := filepath.Join(root, "artifacts", "layouts", "coder", original.Digest())
+			modelPath := filepath.Join(originalPath, "model", "nested", "model.gguf")
+			if failure == "corrupt weights" {
+				if err := os.WriteFile(modelPath, []byte("changed"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if failure == "symlinked weights" {
+				outside := filepath.Join(directory, "outside.gguf")
+				if err := os.Rename(modelPath, outside); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(outside, modelPath); err != nil {
+					t.Fatal(err)
+				}
+			}
+			_, _, changed := writeInputs(t, directory, true, "weights")
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			source := &patchFailureSource{cancel: cancel, canceled: failure == "canceled patch"}
+			_, err := runFetch(ctx, options, source)
+			if err == nil {
+				t.Fatal("invalid composition was published")
+			}
+			if failure == "corrupt weights" && !strings.Contains(err.Error(), "SHA-256") {
+				t.Fatalf("reused bytes were not verified: %v", err)
+			}
+			if source.modelCalls != 0 {
+				t.Fatal("template change tried to download the already installed model")
+			}
+			if failure == "canceled patch" && !errors.Is(err, context.Canceled) {
+				t.Fatalf("lost cancellation: %v", err)
+			}
+			changedPath := filepath.Join(root, "artifacts", "layouts", "coder", changed.Digest())
+			if _, err := os.Lstat(changedPath); !os.IsNotExist(err) {
+				t.Fatalf("failed composition exists: %v", err)
+			}
+			entries, err := os.ReadDir(filepath.Dir(originalPath))
+			if err != nil || len(entries) != 1 || entries[0].Name() != original.Digest() {
+				t.Fatalf("failed composition left staging material or removed original: %v, %v", entries, err)
+			}
+			want := "weights"
+			if failure == "corrupt weights" {
+				want = "changed" // No in-place repair of existing material.
+			}
+			assertFile(t, modelPath, want)
+		})
+	}
+}
+
+func TestModelReuseFollowsContentAcrossLayoutNames(t *testing.T) {
+	directory := t.TempDir()
+	root := filepath.Join(directory, "root")
+	manifestPath, lockPath, original := writeInputs(t, directory, true, "weights")
+	options := fetch.Options{ManifestPath: manifestPath, LockPath: lockPath, Root: root, Layout: "coder"}
+	if _, err := runFetch(context.Background(), options, &fakeSource{files: map[string]string{
+		"owner/model@" + modelRevision + "/nested/model.gguf": "weights",
+		"patches/templates@" + patchRevision + "/chat.jinja":  "before\n" + oldGuard + "\nafter\n",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	// A different layout, filename and upstream revision can still select the
+	// same model bytes. Removing its template needs no upstream reader at all.
+	_, _, changed := writeInputs(t, directory, false, "weights")
+	data, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data = []byte(strings.NewReplacer("  coder:\n", "  helper:\n", "layout: coder", "layout: helper", "nested/model.gguf", "other.gguf").Replace(string(data)))
+	if err := os.WriteFile(manifestPath, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	changed.Revision = strings.Repeat("2", 40)
+	changed.Files[0].Name = "other.gguf"
+	lockData, err := lockfile.Marshal(lockfile.Document{Schema: lockfile.SchemaV1, Entries: map[string]lockfile.Entry{"helper": changed}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(lockPath, lockData, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	options.Layout = "helper"
+	options.DryRun = true
+	if result, err := runFetch(context.Background(), options, nil); err != nil || !result.Changed || !result.DryRun {
+		t.Fatalf("reuse preview = %+v, %v", result, err)
+	}
+	helperDir := filepath.Join(root, "artifacts", "layouts", "helper")
+	if _, err := os.Lstat(helperDir); !os.IsNotExist(err) {
+		t.Fatalf("reuse preview created layout: %v", err)
+	}
+	options.DryRun = false
+	if _, err := runFetch(context.Background(), options, nil); err != nil {
+		t.Fatal(err)
+	}
+	first, err := os.Stat(filepath.Join(root, "artifacts", "layouts", "coder", original.Digest(), "model", "nested", "model.gguf"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := os.Stat(filepath.Join(helperDir, changed.Digest(), "model", "other.gguf"))
+	if err != nil || !os.SameFile(first, second) {
+		t.Fatalf("same hash was not shared across layouts: %v", err)
+	}
+	// A later revision with different bytes must still fetch those exact bytes.
+	manifestPath, lockPath, replacement := writeInputs(t, directory, false, "updated")
+	replacement.Revision = strings.Repeat("4", 40)
+	updatedLock, err := lockfile.Marshal(lockfile.Document{Schema: lockfile.SchemaV1, Entries: map[string]lockfile.Entry{"coder": replacement}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(lockPath, updatedLock, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	source := &fakeSource{files: map[string]string{
+		"owner/model@" + replacement.Revision + "/nested/model.gguf": "updated",
+	}}
+	if _, err := runFetch(context.Background(), fetch.Options{ManifestPath: manifestPath, LockPath: lockPath, Root: root, Layout: "coder"}, source); err != nil {
+		t.Fatal(err)
+	}
+	if source.openCalls != 1 {
+		t.Fatalf("changed model needs one download, got %d", source.openCalls)
+	}
+	assertFile(t, filepath.Join(root, "artifacts", "layouts", "coder", replacement.Digest(), "model", "nested", "model.gguf"), "updated")
+}
+
+type patchFailureSource struct {
+	cancel     context.CancelFunc
+	canceled   bool
+	modelCalls int
+}
+
+func (f *patchFailureSource) Resolve(context.Context, string, string) (upstream.FilePin, error) {
+	return upstream.FilePin{}, errors.New("fetch must not resolve")
+}
+
+func (f *patchFailureSource) Open(_ context.Context, _, _, file string) (io.ReadCloser, error) {
+	if file != "chat.jinja" {
+		f.modelCalls++
+		return nil, errors.New("model download was not authorized")
+	}
+	if f.canceled {
+		f.cancel()
+		return nil, context.Canceled
+	}
+	return nil, errors.New("template unavailable")
 }
 
 func TestRunPublishesEveryFileInAV2Snapshot(t *testing.T) {
@@ -163,7 +401,7 @@ modes:
 		sourceFiles["owner/model@"+modelRevision+"/"+name] = value
 	}
 	root := filepath.Join(directory, "root")
-	result, err := fetch.Run(context.Background(), fetch.Options{
+	result, err := runFetch(context.Background(), fetch.Options{
 		ManifestPath: manifestPath, LockPath: lockPath, Root: root, Layout: "large",
 	}, &fakeSource{files: sourceFiles})
 	if err != nil {
@@ -183,7 +421,7 @@ func TestDryRunDoesNotDownloadOrCreateRoot(t *testing.T) {
 	manifestPath, lockPath, _ := writeInputs(t, directory, false, "weights")
 	root := filepath.Join(directory, "root")
 	source := &fakeSource{}
-	result, err := fetch.Run(context.Background(), fetch.Options{
+	result, err := runFetch(context.Background(), fetch.Options{
 		ManifestPath: manifestPath,
 		LockPath:     lockPath,
 		Root:         root,
@@ -208,7 +446,7 @@ func TestHashMismatchPublishesNothingAndRollsBackPreparation(t *testing.T) {
 	source := &fakeSource{files: map[string]string{
 		"owner/model@" + modelRevision + "/nested/model.gguf": "downloaded bytes",
 	}}
-	_, err := fetch.Run(context.Background(), fetch.Options{
+	_, err := runFetch(context.Background(), fetch.Options{
 		ManifestPath: manifestPath,
 		LockPath:     lockPath,
 		Root:         root,
@@ -234,7 +472,7 @@ func TestMalformedExistingImmutableSetRefusesWithoutDownload(t *testing.T) {
 		t.Fatal(err)
 	}
 	source := &fakeSource{}
-	_, err := fetch.Run(context.Background(), fetch.Options{ManifestPath: manifestPath, LockPath: lockPath, Root: root, Layout: "coder"}, source)
+	_, err := runFetch(context.Background(), fetch.Options{ManifestPath: manifestPath, LockPath: lockPath, Root: root, Layout: "coder"}, source)
 	if err == nil || !strings.Contains(err.Error(), "does not identify") {
 		t.Fatalf("error = %v", err)
 	}
@@ -253,7 +491,7 @@ func TestConcurrentIdenticalFetchesConverge(t *testing.T) {
 	errors := make(chan error, 2)
 	for range 2 {
 		go func() {
-			_, err := fetch.Run(context.Background(), options, source)
+			_, err := runFetch(context.Background(), options, source)
 			errors <- err
 		}()
 	}
@@ -265,7 +503,7 @@ func TestConcurrentIdenticalFetchesConverge(t *testing.T) {
 	if source.calls.Load() != 2 {
 		t.Fatalf("downloads = %d, want both staged contenders", source.calls.Load())
 	}
-	result, err := fetch.Run(context.Background(), options, nil)
+	result, err := runFetch(context.Background(), options, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

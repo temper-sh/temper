@@ -84,6 +84,42 @@ func TestPublishedSelectionCompilesOfflineAndBindsExactPublication(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
+	selected, err := catalog.ParseSelection(before)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, binding := range published.Document.Profiles[profile].Bindings {
+		if got := selected.Templates[binding.Layout]; got != published.Document.Layouts[binding.Layout].Patches[0] {
+			t.Fatalf("catalog select did not freeze template default for %s: %q", binding.Layout, got)
+		}
+		if selected.ContextWindows[binding.Layout] != published.Document.Layouts[binding.Layout].ContextWindowTokens {
+			t.Fatal("catalog select did not freeze current context default")
+		}
+	}
+	builtinPath := filepath.Join(parent, "builtin-selection.json")
+	binding := published.Document.Profiles[profile].Bindings[0]
+	run("catalog", "select", "--root", root, "--profile", profile, "--out", builtinPath, "--template", binding.Layout+"=builtin", "--context", binding.Layout+"=16384")
+	builtinBytes, err := os.ReadFile(builtinPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	builtin, err := catalog.ParseSelection(builtinBytes)
+	if err != nil || builtin.Templates[binding.Layout] != "" {
+		t.Fatalf("builtin choice lost: %+v %v", builtin, err)
+	}
+	if builtin.ContextWindows[binding.Layout] != 16384 {
+		t.Fatal("explicit context choice lost")
+	}
+	customLock := filepath.Join(parent, "custom.execution.lock.json")
+	run("catalog", "compile", "--root", root, "--selection", builtinPath, "--target", "darwin/arm64", "--out", customLock)
+	customBytes, err := os.ReadFile(customLock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	custom, err := catalog.ParseLock(customBytes)
+	if err != nil || custom.Records.Layouts[binding.Layout].ContextWindowTokens != 16384 {
+		t.Fatalf("compiled context override lost: %v", err)
+	}
 	if out := run(selectArgs...); !strings.Contains(out, "unchanged") {
 		t.Fatalf("selection replay: %s", out)
 	}

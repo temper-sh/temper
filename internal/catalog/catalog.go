@@ -59,11 +59,13 @@ type File struct {
 }
 
 type Artifact struct {
-	Repo     string `yaml:"repo" json:"repo"`
-	Revision string `yaml:"revision" json:"revision"`
-	Format   string `yaml:"format" json:"format"`
-	Files    []File `yaml:"files" json:"files"`
-	License  string `yaml:"license" json:"license"`
+	Repo          string `yaml:"repo" json:"repo"`
+	Revision      string `yaml:"revision" json:"revision"`
+	Format        string `yaml:"format" json:"format"`
+	Files         []File `yaml:"files" json:"files"`
+	License       string `yaml:"license" json:"license"`
+	Description   string `yaml:"description,omitempty" json:"description,omitempty"`
+	AssessmentURL string `yaml:"assessment_url,omitempty" json:"assessment_url,omitempty"`
 }
 
 type Patch struct {
@@ -121,17 +123,19 @@ type LlamaConfig struct {
 }
 
 type Layout struct {
-	DisplayName         string          `yaml:"display_name" json:"display_name"`
-	Artifact            string          `yaml:"artifact" json:"artifact"`
-	Patches             []string        `yaml:"patches" json:"patches"`
-	Engine              string          `yaml:"engine" json:"engine"`
-	Interface           string          `yaml:"interface" json:"interface"`
-	Modalities          []string        `yaml:"modalities" json:"modalities"`
-	ContextWindowTokens int             `yaml:"context_window_tokens" json:"context_window_tokens"`
-	RequestDefaults     RequestDefaults `yaml:"request_defaults" json:"request_defaults"`
-	Speculation         Speculation     `yaml:"speculation" json:"speculation"`
-	EngineConfig        LlamaConfig     `yaml:"engine_config" json:"engine_config"`
-	EngineVersions      *Versions       `yaml:"engine_versions,omitempty" json:"engine_versions,omitempty"`
+	DisplayName         string           `yaml:"display_name" json:"display_name"`
+	Artifact            string           `yaml:"artifact" json:"artifact"`
+	Patches             []string         `yaml:"patches" json:"patches"`
+	Engine              string           `yaml:"engine" json:"engine"`
+	Interface           string           `yaml:"interface" json:"interface"`
+	Modalities          []string         `yaml:"modalities" json:"modalities"`
+	ContextWindowTokens int              `yaml:"context_window_tokens" json:"context_window_tokens"`
+	ContextLimitTokens  int              `yaml:"context_limit_tokens,omitempty" json:"context_limit_tokens,omitempty"`
+	ContextFindings     []ContextFinding `yaml:"context_findings,omitempty" json:"context_findings,omitempty"`
+	RequestDefaults     RequestDefaults  `yaml:"request_defaults" json:"request_defaults"`
+	Speculation         Speculation      `yaml:"speculation" json:"speculation"`
+	EngineConfig        LlamaConfig      `yaml:"engine_config" json:"engine_config"`
+	EngineVersions      *Versions        `yaml:"engine_versions,omitempty" json:"engine_versions,omitempty"`
 }
 
 type Binding struct {
@@ -146,13 +150,16 @@ type Binding struct {
 type Profile struct {
 	Bindings             []Binding `yaml:"bindings" json:"bindings"`
 	GPUMemoryUtilization float64   `yaml:"gpu_memory_utilization" json:"gpu_memory_utilization"`
+	Foreground           string    `yaml:"foreground,omitempty" json:"foreground,omitempty"`
 }
 
 type Selection struct {
-	Schema       string   `yaml:"schema" json:"schema"`
-	Profile      string   `yaml:"profile" json:"profile"`
-	Tools        []string `yaml:"tools,omitempty" json:"tools,omitempty"`               // V1 only.
-	Integrations []string `yaml:"integrations,omitempty" json:"integrations,omitempty"` // V1 only.
+	Schema         string            `yaml:"schema" json:"schema"`
+	Profile        string            `yaml:"profile" json:"profile"`
+	Templates      map[string]string `yaml:"templates,omitempty" json:"templates,omitempty"`
+	ContextWindows map[string]int    `yaml:"context_windows,omitempty" json:"context_windows,omitempty"`
+	Tools          []string          `yaml:"tools,omitempty" json:"tools,omitempty"`               // V1 only.
+	Integrations   []string          `yaml:"integrations,omitempty" json:"integrations,omitempty"` // V1 only.
 }
 
 func decode(data []byte, into any) error {
@@ -198,7 +205,18 @@ func (s Selection) Validate() error {
 		return errors.New("this catalog slice has no supported optional tools or integrations")
 	}
 	if s.Schema == SelectionSchema && (s.Tools != nil || s.Integrations != nil) {
-		return errors.New("v2 selection contains only schema and profile")
+		return errors.New("v2 selection contains only schema, profile, templates and context_windows")
+	}
+	if s.Schema == legacySelectionSchema && s.Templates != nil {
+		return errors.New("v1 selection cannot contain template choices")
+	}
+	if s.Schema == legacySelectionSchema && s.ContextWindows != nil {
+		return errors.New("v1 selection cannot contain context choices")
+	}
+	for id, tokens := range s.ContextWindows {
+		if !idPattern.MatchString(id) || tokens <= 0 {
+			return fmt.Errorf("context choice %q requires a stable layout id and positive token count", id)
+		}
 	}
 	return nil
 }
@@ -220,6 +238,12 @@ func (d Document) Validate() error {
 		return fmt.Errorf("router: %w", err)
 	}
 	for id, a := range d.Artifacts {
+		if err := a.validateDescription(); err != nil {
+			return fmt.Errorf("artifact %q: %w", id, err)
+		}
+		if d.Schema == legacySchema && (a.Description != "" || a.AssessmentURL != "") {
+			return fmt.Errorf("artifact %q: v1 cannot carry descriptions", id)
+		}
 		if err := validateMaterial(id, a.Repo, a.Revision, a.Files, a.License); err != nil {
 			return fmt.Errorf("artifact: %w", err)
 		}
@@ -259,6 +283,12 @@ func (d Document) Validate() error {
 		}
 	}
 	for id, l := range d.Layouts {
+		if err := l.validateContext(); err != nil {
+			return fmt.Errorf("layout %q: %w", id, err)
+		}
+		if d.Schema == legacySchema && (l.ContextLimitTokens != 0 || len(l.ContextFindings) != 0) {
+			return fmt.Errorf("layout %q: v1 cannot carry context findings or a separate limit", id)
+		}
 		if !idPattern.MatchString(id) || strings.TrimSpace(l.DisplayName) == "" {
 			return fmt.Errorf("layout %q needs a stable id and display name", id)
 		}
@@ -309,6 +339,9 @@ func (d Document) Validate() error {
 		if !(p.GPUMemoryUtilization > 0 && p.GPUMemoryUtilization <= 1) {
 			return fmt.Errorf("profile %q memory utilization must be in (0, 1]", id)
 		}
+		if p.Foreground != "" && (d.Schema == legacySchema || p.Foreground != "external") {
+			return fmt.Errorf("profile %q foreground must be omitted or external in v2", id)
+		}
 		seenBindings, seenLayouts := map[string]bool{}, map[string]bool{}
 		defaults := 0
 		var engineID string
@@ -338,7 +371,11 @@ func (d Document) Validate() error {
 			}
 			engineID = l.Engine
 		}
-		if defaults != 1 {
+		if p.Foreground == "external" {
+			if defaults != 0 {
+				return fmt.Errorf("profile %q with external foreground requires no default route", id)
+			}
+		} else if defaults != 1 {
 			return fmt.Errorf("profile %q requires exactly one default route", id)
 		}
 	}

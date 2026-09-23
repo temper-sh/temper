@@ -99,8 +99,71 @@ func (s Supply) installerInputs() (softwarelock.Selection, map[string]softwarelo
 	return selection, units, nil
 }
 
+// ValidateTestedSoftware checks whether the selected v2 profile records one
+// tested fallback for each required software source, and whether those versions
+// satisfy its current required floors. It does not read upstream metadata or
+// prove that a release archive remains available.
+func ValidateTestedSoftware(d Document, s Selection) error {
+	if err := d.Validate(); err != nil {
+		return err
+	}
+	if err := s.Validate(); err != nil {
+		return err
+	}
+	profile, ok := d.Profiles[s.Profile]
+	if !ok {
+		return fmt.Errorf("unknown selected profile %q", s.Profile)
+	}
+	if d.Schema != Schema || s.Schema != SelectionSchema {
+		return errors.New("moving software resolution requires a v2 catalog and selection")
+	}
+	if _, err := testedVersion(d.Runtime.Router, []*Versions{d.Runtime.Router.Versions}); err != nil {
+		return err
+	}
+	engineRules := selectedEngineRules(d, profile)
+	ids := make([]string, 0, len(engineRules))
+	for id := range engineRules {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		if _, err := testedVersion(d.Engines[id].Supply, engineRules[id]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func testedVersion(supply Supply, rules []*Versions) (string, error) {
+	requested := ""
+	for _, rule := range rules {
+		if rule == nil || rule.MinimumTested == "" {
+			return "", fmt.Errorf("software %q has no tested version for this selection", supply.Package)
+		}
+		if requested != "" && requested != rule.MinimumTested {
+			return "", errors.New("selected layouts record different tested versions; choose a profile with a common tested release")
+		}
+		requested = rule.MinimumTested
+	}
+	for _, rule := range rules {
+		if err := rule.require(requested); err != nil {
+			return "", err
+		}
+	}
+	return requested, nil
+}
+
+func selectedEngineRules(d Document, profile Profile) map[string][]*Versions {
+	rules := map[string][]*Versions{}
+	for _, binding := range profile.Bindings {
+		layout := d.Layouts[binding.Layout]
+		rules[layout.Engine] = append(rules[layout.Engine], layout.EngineVersions)
+	}
+	return rules
+}
+
 // ResolveSoftware reads only the selected profile's sources. The caller chooses
-// recorded inputs, latest stable releases, or an explicit tested fallback; a
+// recorded inputs, latest available releases, or an explicit tested fallback; a
 // failed latest lookup never silently changes that choice.
 func ResolveSoftware(ctx context.Context, d Document, s Selection, choice string, reader upstreamrelease.ArtifactReader) (Document, error) {
 	if err := d.Validate(); err != nil {
@@ -126,22 +189,10 @@ func ResolveSoftware(ctx context.Context, d Document, s Selection, choice string
 	resolve := func(supply Supply, rules []*Versions) (Supply, error) {
 		requested := "latest"
 		if choice == "tested" {
-			requested = ""
-			for _, rule := range rules {
-				if rule == nil || rule.MinimumTested == "" {
-					return Supply{}, fmt.Errorf("software %q has no tested version for this selection", supply.Package)
-				}
-				if requested != "" && requested != rule.MinimumTested {
-					return Supply{}, errors.New("selected layouts record different tested versions; choose a profile with a common tested release")
-				}
-				requested = rule.MinimumTested
-			}
-		}
-		for _, rule := range rules {
-			if requested != "latest" {
-				if err := rule.require(requested); err != nil {
-					return Supply{}, err
-				}
+			var err error
+			requested, err = testedVersion(supply, rules)
+			if err != nil {
+				return Supply{}, err
 			}
 		}
 		if supply.Release == nil || supply.Release.Version != requested {
@@ -163,11 +214,7 @@ func ResolveSoftware(ctx context.Context, d Document, s Selection, choice string
 	if err != nil {
 		return Document{}, err
 	}
-	engineRules := map[string][]*Versions{}
-	for _, binding := range profile.Bindings {
-		layout := d.Layouts[binding.Layout]
-		engineRules[layout.Engine] = append(engineRules[layout.Engine], layout.EngineVersions)
-	}
+	engineRules := selectedEngineRules(d, profile)
 	ids := make([]string, 0, len(engineRules))
 	for id := range engineRules {
 		ids = append(ids, id)

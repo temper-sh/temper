@@ -251,6 +251,61 @@ func TestParseManifestV2AdmitsOnlyMatchedTypedEngineVariants(t *testing.T) {
 	}
 }
 
+func TestManifestV2ExternalForegroundRequiresAnUnambiguousHelperMode(t *testing.T) {
+	document, err := manifest.Parse([]byte(validV2Manifest))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mode := document.Modes["large"]
+	mode.Foreground = ""
+	mode.ExternalForeground = true
+	document.Modes["large"] = mode
+	if err := document.Validate(); err != nil {
+		t.Fatalf("external helper mode refused: %v", err)
+	}
+	if got := document.ForegroundLayout(mode); got != "" {
+		t.Fatalf("external mode foreground layout = %q", got)
+	}
+	mode.Foreground = "rapid"
+	document.Modes["large"] = mode
+	if err := document.Validate(); err == nil || !strings.Contains(err.Error(), "cannot name a local foreground") {
+		t.Fatalf("external mode with local route error = %v", err)
+	}
+	mode.Foreground = ""
+	mode.Members = manifest.Members{}
+	document.Modes["large"] = mode
+	if err := document.Validate(); err == nil || !strings.Contains(err.Error(), "needs a helper member") {
+		t.Fatalf("external mode without helper error = %v", err)
+	}
+}
+
+func TestManifestV1RejectsExternalForegroundFlag(t *testing.T) {
+	data := `schema: temper-manifest/v1
+defaults: {ttl: 1800, gpu_memory_utilization: 0.85}
+layouts:
+  coder:
+    display_name: Coder
+    model: {repo: org/Coder, file: coder.gguf}
+    engine: llama-server
+    role: coder
+    window: 8192
+    max_tokens: 2048
+    kv: q8
+    thinking: off
+    llama: {parallel: 1, flash_attention: on, batch: 512, ubatch: 512}
+modes:
+  local:
+    foreground: local
+    external_foreground: true
+    members:
+      resident: [{layout: coder, preferred: true}]
+`
+	_, err := manifest.Parse([]byte(data))
+	if err == nil || !strings.Contains(err.Error(), "only supported in manifest v2") {
+		t.Fatalf("manifest v1 external flag error = %v", err)
+	}
+}
+
 func TestManifestV2RefusesAmbiguousOrLegacyEngineState(t *testing.T) {
 	tests := []struct {
 		name   string

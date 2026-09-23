@@ -15,9 +15,11 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 
 	"github.com/temper-sh/temper/internal/artifactset"
 	"github.com/temper-sh/temper/internal/datadir"
+	"github.com/temper-sh/temper/internal/hfcache"
 	"github.com/temper-sh/temper/internal/lockfile"
 	"github.com/temper-sh/temper/internal/manifest"
 	"github.com/temper-sh/temper/internal/patch"
@@ -29,11 +31,13 @@ const (
 )
 
 type Options struct {
-	ManifestPath string
-	LockPath     string
-	Root         string
-	Layout       string
-	DryRun       bool
+	ManifestPath  string
+	LockPath      string
+	Root          string
+	Layout        string
+	DryRun        bool
+	HFCache       string
+	DownloadModel hfcache.DownloadFunc
 }
 
 type Result struct {
@@ -74,10 +78,7 @@ func Run(ctx context.Context, options Options, source upstream.Reader) (Result, 
 	if options.DryRun {
 		return result, nil
 	}
-	if source == nil {
-		return Result{}, errors.New("upstream reader is required to fetch an absent artifact set")
-	}
-	if err := publish(ctx, materialization, source); err != nil {
+	if err := publish(ctx, materialization, source, options.HFCache, options.DownloadModel); err != nil {
 		return Result{}, err
 	}
 	return result, nil
@@ -138,8 +139,16 @@ func buildPlan(options Options) (plan, error) {
 	return materialization, nil
 }
 
-func publish(ctx context.Context, materialization plan, source upstream.Reader) (returnErr error) {
+func publish(ctx context.Context, materialization plan, source upstream.Reader, cacheRoot string, download hfcache.DownloadFunc) (returnErr error) {
 	if err := ctx.Err(); err != nil {
+		return err
+	}
+	hashes := make([]string, 0, len(materialization.entry.Files))
+	for _, model := range materialization.entry.Files {
+		hashes = append(hashes, model.SHA256)
+	}
+	models, err := artifactset.FindModels(materialization.root, hashes)
+	if err != nil {
 		return err
 	}
 	layoutRoot := filepath.Join(materialization.root, "artifacts", "layouts", materialization.layoutID)
@@ -175,24 +184,31 @@ func publish(ctx context.Context, materialization plan, source upstream.Reader) 
 			return err
 		}
 		modelPath := filepath.ToSlash(filepath.Join("model", model.Name))
-		modelReader, err := source.Open(ctx, materialization.entry.Repo, materialization.entry.Revision, model.Name)
+		if existing, ok := models[model.SHA256]; ok {
+			if err := linkModel(ctx, existing, stage, modelPath, model.SHA256, false); err != nil {
+				return fmt.Errorf("reuse model %q: %w", model.Name, err)
+			}
+			receiptFiles = append(receiptFiles, artifactset.Record{Path: modelPath, SHA256: model.SHA256, Size: existing.Size})
+			continue
+		}
+		entry := hfcache.Entry{Repo: materialization.entry.Repo, Revision: materialization.entry.Revision, Name: model.Name, SHA256: model.SHA256}
+		cached, err := (hfcache.Cache{Root: cacheRoot}).Ensure(ctx, entry, download)
 		if err != nil {
-			return fmt.Errorf("fetch model %q: %w", model.Name, err)
+			return fmt.Errorf("cache model %q: %w", model.Name, err)
 		}
-		modelSize, err := writeStream(ctx, stage, modelPath, model.SHA256, modelReader)
-		closeErr := modelReader.Close()
-		if err != nil {
-			return fmt.Errorf("fetch model %q: %w", model.Name, err)
+		if err := linkModel(ctx, artifactset.ModelFile{Path: cached.Path, Size: cached.Size}, stage, modelPath, model.SHA256, true); err != nil {
+			return fmt.Errorf("install cached model %q: %w", model.Name, err)
 		}
-		if closeErr != nil {
-			return fmt.Errorf("close model download %q: %w", model.Name, closeErr)
-		}
-		receiptFiles = append(receiptFiles, artifactset.Record{Path: modelPath, SHA256: model.SHA256, Size: modelSize})
+		receiptFiles = append(receiptFiles, artifactset.Record{Path: modelPath, SHA256: model.SHA256, Size: cached.Size})
+		models[model.SHA256] = artifactset.ModelFile{Path: filepath.Join(stage, filepath.FromSlash(modelPath)), Size: cached.Size}
 	}
 
 	if materialization.patchID != "" {
 		if err := ctx.Err(); err != nil {
 			return err
+		}
+		if source == nil {
+			return errors.New("upstream reader is required to fetch an absent template")
 		}
 		reader, err := source.Open(ctx, materialization.patchSource.Repo, materialization.patchSource.Revision, materialization.patchSource.File)
 		if err != nil {
@@ -244,6 +260,68 @@ func publish(ctx context.Context, materialization plan, source upstream.Reader) 
 	committed = true
 	if err := syncDirectory(layoutRoot); err != nil {
 		return fmt.Errorf("sync layout artifact directory: %w", err)
+	}
+	return nil
+}
+
+// linkModel keeps the composition's existing regular-file path while sharing
+// model storage. Hash the staged link, not a pathname that could be replaced
+// between verification and linking. Failure only removes this private stage.
+func linkModel(ctx context.Context, model artifactset.ModelFile, stage, relative, expectedHash string, crossFilesystemCopy bool) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	path := filepath.Join(stage, filepath.FromSlash(relative))
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	if err := os.Link(model.Path, path); err != nil {
+		if crossFilesystemCopy && errors.Is(err, syscall.EXDEV) {
+			return copyModel(ctx, model, stage, relative, expectedHash)
+		}
+		return fmt.Errorf("link existing model: %w", err)
+	}
+	info, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() || info.Size() != model.Size {
+		return errors.New("existing model is no longer a regular file of its recorded size")
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	hash := sha256.New()
+	_, readErr := copyWithContext(ctx, hash, file)
+	closeErr := file.Close()
+	if err := errors.Join(readErr, closeErr); err != nil {
+		return err
+	}
+	if actual := hex.EncodeToString(hash.Sum(nil)); actual != expectedHash {
+		return fmt.Errorf("%w: SHA-256 mismatch: got %s, want %s", artifactset.ErrContentMismatch, actual, expectedHash)
+	}
+	return nil
+}
+
+func copyModel(ctx context.Context, model artifactset.ModelFile, stage, relative, expectedHash string) error {
+	info, err := os.Lstat(model.Path)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() || info.Size() != model.Size {
+		return errors.New("cached model is no longer a regular file of its inspected size")
+	}
+	source, err := os.Open(model.Path)
+	if err != nil {
+		return err
+	}
+	written, copyErr := writeStream(ctx, stage, relative, expectedHash, source)
+	if err := errors.Join(copyErr, source.Close()); err != nil {
+		return err
+	}
+	if written != model.Size {
+		return errors.New("cached model size changed during copy")
 	}
 	return nil
 }

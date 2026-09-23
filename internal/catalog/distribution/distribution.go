@@ -17,6 +17,10 @@ import (
 
 const Channel = "stable"
 
+// ErrNoCatalog means the local store is valid but has no accepted snapshot.
+// A malformed or tampered store returns its specific error instead.
+var ErrNoCatalog = errors.New("no verified local catalog; run temper catalog update first")
+
 type Publication struct {
 	Channel publication.SignedArtifact
 	Catalog publication.SignedArtifact
@@ -98,9 +102,6 @@ func verifyChannel(artifact publication.SignedArtifact, trust publication.TrustR
 }
 
 func Update(ctx context.Context, root string, dry bool, trust publication.TrustRoot, source Source) (Result, error) {
-	if source == nil {
-		return Result{}, errors.New("catalog source is required")
-	}
 	if err := ctx.Err(); err != nil {
 		return Result{}, err
 	}
@@ -108,27 +109,8 @@ func Update(ctx context.Context, root string, dry bool, trust publication.TrustR
 	if err != nil {
 		return Result{}, err
 	}
-	channel, err := source.Channel(ctx, Channel)
+	candidate, err := fetchCandidate(ctx, observed.latest.Identity, trust, source)
 	if err != nil {
-		return Result{}, fmt.Errorf("read catalog channel: %w", err)
-	}
-	verified, err := verifyChannel(channel, trust)
-	if err != nil {
-		return Result{}, err
-	}
-	ref := verified.Document.Catalog
-	if err := checkForward(observed.latest.Identity, Identity{SHA256: ref.SHA256, Sequence: ref.Sequence}); err != nil {
-		return Result{}, err
-	}
-	data, err := source.CatalogJSON(ctx, ref.Locator)
-	if err != nil {
-		return Result{}, fmt.Errorf("read catalog snapshot: %w", err)
-	}
-	candidate, err := Verify(Publication{Channel: channel, Catalog: data}, trust)
-	if err != nil {
-		return Result{}, err
-	}
-	if err := ctx.Err(); err != nil {
 		return Result{}, err
 	}
 	result := Result{Changed: observed.active.SHA256 != candidate.SHA256,
@@ -140,6 +122,50 @@ func Update(ctx context.Context, root string, dry bool, trust publication.TrustR
 		return Result{}, err
 	}
 	return result, nil
+}
+
+// Preview verifies the current signed publication and the local highest
+// accepted sequence without creating or changing the catalog store. A caller
+// can prepare an initial selection before deciding to persist anything.
+func Preview(ctx context.Context, root string, trust publication.TrustRoot, source Source) (Snapshot, error) {
+	if err := ctx.Err(); err != nil {
+		return Snapshot{}, err
+	}
+	observed, err := readStore(root, trust)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	return fetchCandidate(ctx, observed.latest.Identity, trust, source)
+}
+
+func fetchCandidate(ctx context.Context, latest Identity, trust publication.TrustRoot, source Source) (Snapshot, error) {
+	if source == nil {
+		return Snapshot{}, errors.New("catalog source is required")
+	}
+	channel, err := source.Channel(ctx, Channel)
+	if err != nil {
+		return Snapshot{}, fmt.Errorf("read catalog channel: %w", err)
+	}
+	verified, err := verifyChannel(channel, trust)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	ref := verified.Document.Catalog
+	if err := checkForward(latest, Identity{SHA256: ref.SHA256, Sequence: ref.Sequence}); err != nil {
+		return Snapshot{}, err
+	}
+	data, err := source.CatalogJSON(ctx, ref.Locator)
+	if err != nil {
+		return Snapshot{}, fmt.Errorf("read catalog snapshot: %w", err)
+	}
+	candidate, err := Verify(Publication{Channel: channel, Catalog: data}, trust)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return Snapshot{}, err
+	}
+	return candidate, nil
 }
 
 func checkForward(latest, candidate Identity) error {
@@ -193,7 +219,7 @@ func Read(root string, trust publication.TrustRoot) (Snapshot, error) {
 		return Snapshot{}, err
 	}
 	if s.active.SHA256 == "" {
-		return Snapshot{}, errors.New("no verified local catalog; run temper catalog update first")
+		return Snapshot{}, ErrNoCatalog
 	}
 	return s.active, nil
 }
@@ -210,7 +236,7 @@ func Inspect(root string, trust publication.TrustRoot) (Inspection, error) {
 		return Inspection{}, err
 	}
 	if s.active.SHA256 == "" {
-		return Inspection{}, errors.New("no verified local catalog; run temper catalog update first")
+		return Inspection{}, ErrNoCatalog
 	}
 	identities, err := s.snapshots(trust)
 	if err != nil {

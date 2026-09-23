@@ -8,7 +8,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/temper-sh/temper/internal/budget"
 	"github.com/temper-sh/temper/internal/catalog"
+	"github.com/temper-sh/temper/internal/check"
 	"github.com/temper-sh/temper/internal/manifest"
 	"github.com/temper-sh/temper/internal/render"
 	"github.com/temper-sh/temper/internal/render/engine"
@@ -43,6 +45,165 @@ func compile(t *testing.T, d catalog.Document) catalog.Lock {
 		t.Fatal(err)
 	}
 	return l
+}
+
+func TestTemplateChoiceChangesOnlySelectedExecutionClosure(t *testing.T) {
+	d := document()
+	alt := d.Patches["template"]
+	alt.Files = []catalog.File{{Path: "alternative.jinja", Bytes: 14, SHA256: strings.Repeat("f", 64)}}
+	d.Patches["alternative"] = alt
+	target := software.Target{OS: "darwin", Arch: "arm64"}
+	baseline := compile(t, d)
+	for _, choice := range []struct {
+		name  string
+		patch string
+	}{
+		{"alternative", "alternative"},
+		{"embedded", ""},
+	} {
+		t.Run(choice.name, func(t *testing.T) {
+			selection := catalog.Selection{Schema: catalog.SelectionSchema, Profile: "local-qwen", Templates: map[string]string{"qwen-32k": choice.patch}}
+			selected, err := catalog.Compile(d, selection, target)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if selected.SourceSnapshotSHA256 != baseline.SourceSnapshotSHA256 || selected.Digests.Profile == baseline.Digests.Profile {
+				t.Fatalf("source or execution identity wrong: source=%s execution=%s", selected.SourceSnapshotSHA256, selected.Digests.Profile)
+			}
+			if !reflect.DeepEqual(selected.Records.Artifacts, baseline.Records.Artifacts) {
+				t.Fatal("template choice copied or changed model weights")
+			}
+			if len(selected.Records.Patches) != len(selected.Records.Layouts["qwen-32k"].Patches) {
+				t.Fatal("lock retained an unselected patch")
+			}
+			projection, err := selected.Projections()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := projection.Manifest.Layouts["qwen-32k"].ChatTemplate; got != choice.patch {
+				t.Fatalf("manifest template = %q, want %q", got, choice.patch)
+			}
+			if got := len(projection.Artifacts.Entries["qwen-32k"].Patches); got != len(selected.Records.Patches) {
+				t.Fatalf("artifact patch count = %d", got)
+			}
+		})
+	}
+}
+
+func TestResolvedTemplateChoiceSurvivesChangedCatalogDefault(t *testing.T) {
+	d := document()
+	alt := d.Patches["template"]
+	alt.Files = []catalog.File{{Path: "alternative.jinja", Bytes: 14, SHA256: strings.Repeat("f", 64)}}
+	d.Patches["alternative"] = alt
+	original := catalog.Selection{Schema: catalog.SelectionSchema, Profile: "local-qwen"}
+	resolved, err := catalog.ResolveSelection(d, original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if original.Templates != nil || resolved.Templates["qwen-32k"] != "template" {
+		t.Fatalf("resolution mutated or failed to freeze default: %+v %+v", original, resolved)
+	}
+	before, err := catalog.Compile(d, resolved, software.Target{OS: "darwin", Arch: "arm64"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	layout := d.Layouts["qwen-32k"]
+	layout.Patches = []string{"alternative"}
+	d.Layouts["qwen-32k"] = layout
+	after, err := catalog.Compile(d, resolved, software.Target{OS: "darwin", Arch: "arm64"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if before.Digests.Profile != after.Digests.Profile || before.SourceSnapshotSHA256 == after.SourceSnapshotSHA256 {
+		t.Fatal("changed catalog default changed frozen execution or failed to change source identity")
+	}
+	for _, templates := range []map[string]string{{"unknown": "template"}, {"qwen-32k": "unknown"}} {
+		_, err := catalog.ResolveSelection(d, catalog.Selection{Schema: catalog.SelectionSchema, Profile: "local-qwen", Templates: templates})
+		if err == nil {
+			t.Fatalf("accepted invalid template choice: %+v", templates)
+		}
+	}
+	incompatible := d.Patches["alternative"]
+	incompatible.CompatibleArtifacts = []string{"other-artifact"}
+	d.Patches["alternative"] = incompatible
+	if _, err := catalog.ResolveSelection(d, catalog.Selection{Schema: catalog.SelectionSchema, Profile: "local-qwen", Templates: map[string]string{"qwen-32k": "alternative"}}); err == nil {
+		t.Fatal("accepted template incompatible with the selected model artifact")
+	}
+}
+
+func TestExternalForegroundKeepsOnlyHelperRoutes(t *testing.T) {
+	d := document()
+	a := d.Artifacts["qwen-q4"]
+	a.Files[0].Bytes = 42 // size cannot classify a chat model's foreground role
+	d.Artifacts["qwen-q4"] = a
+	_ = compile(t, d) // a compact chat model remains a valid local primary
+	p := d.Profiles["local-qwen"]
+	p.Foreground = "external"
+	p.Bindings[0].Route = "available"
+	d.Profiles["local-qwen"] = p
+	lock := compile(t, d)
+	projection, err := lock.Projections()
+	if err != nil {
+		t.Fatal(err)
+	}
+	mode := projection.Manifest.Modes["local-qwen"]
+	if !mode.ExternalForeground || mode.Foreground != "" {
+		t.Fatalf("external foreground projection = %+v", mode)
+	}
+	p.Bindings[0].Route = "default"
+	d.Profiles["local-qwen"] = p
+	if err := d.Validate(); err == nil {
+		t.Fatal("external profile accepted a local default")
+	}
+}
+
+func TestLayoutNamedExternalKeepsLocalDefaultRoute(t *testing.T) {
+	d := document()
+	layout := d.Layouts["qwen-32k"]
+	delete(d.Layouts, "qwen-32k")
+	d.Layouts["external"] = layout
+	profile := d.Profiles["local-qwen"]
+	profile.Bindings[0].Layout = "external"
+	d.Profiles["local-qwen"] = profile
+	lock := compile(t, d)
+	projection, err := lock.Projections()
+	if err != nil {
+		t.Fatal(err)
+	}
+	mode := projection.Manifest.Modes["local-qwen"]
+	if mode.Foreground != "external" || mode.ExternalForeground || projection.Manifest.ForegroundLayout(mode) != "external" {
+		t.Fatalf("layout named external lost local foreground: %+v", mode)
+	}
+	prediction, err := check.PredictBudget(projection.Manifest, mode,
+		budget.Machine{PhysicalMiB: 32768, DeviceMiB: 24576, WiredLimitMiB: 24576, WiredSource: budget.WiredSourcePredicted},
+		map[string]int64{"external": 17 * 1024 * 1024})
+	if err != nil || prediction.Holder != "external" {
+		t.Fatalf("local layout named external lost resident budget holder: %+v %v", prediction, err)
+	}
+	mode.Harnesses = []string{"pi"}
+	projection.Manifest.Modes["local-qwen"] = mode
+	bundle, err := render.Build(render.Inputs{Manifest: projection.Manifest, Lock: projection.Artifacts, Mode: "local-qwen", Root: "/isolated", PiSettingsBase: []byte(`{"defaultModel":"provider/main","compaction":{"enabled":true}}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var routerFound, piFound bool
+	for _, artifact := range bundle.Artifacts {
+		switch artifact.Path {
+		case "llama-swap/config.yaml":
+			routerFound = true
+			if !strings.Contains(string(artifact.Data), "routing:\n  router:") {
+				t.Fatalf("local layout named external lost default router:\n%s", artifact.Data)
+			}
+		case "pi/settings.json":
+			piFound = true
+			if !strings.Contains(string(artifact.Data), `"defaultModel": "external"`) || !strings.Contains(string(artifact.Data), `"reserveTokens": 4096`) {
+				t.Fatalf("local layout named external lost Pi defaults:\n%s", artifact.Data)
+			}
+		}
+	}
+	if !routerFound || !piFound {
+		t.Fatalf("local layout named external missing render artifacts: %+v", bundle.Artifacts)
+	}
 }
 
 func TestCompiledLockRunsWithoutSourceCatalog(t *testing.T) {

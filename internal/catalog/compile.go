@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"reflect"
 	"slices"
 	"sort"
@@ -57,7 +58,12 @@ func Compile(d Document, s Selection, target software.Target) (Lock, error) {
 	if !ok {
 		return Lock{}, fmt.Errorf("unknown selected profile %q", s.Profile)
 	}
+	if _, err := ResolveSelection(d, s); err != nil {
+		return Lock{}, err
+	}
 	d = canonicalDocument(d)
+	s.Templates = maps.Clone(s.Templates)
+	s.ContextWindows = maps.Clone(s.ContextWindows)
 	snapshot := digest(d)
 	if d.Schema == legacySchema {
 		s.Tools, s.Integrations = []string{}, []string{}
@@ -65,6 +71,15 @@ func Compile(d Document, s Selection, target software.Target) (Lock, error) {
 	selected := Document{Schema: d.Schema, Date: d.Date, Runtime: d.Runtime, Artifacts: map[string]Artifact{}, Patches: map[string]Patch{}, Engines: map[string]Engine{}, Layouts: map[string]Layout{}, Profiles: map[string]Profile{s.Profile: profile}}
 	for _, b := range profile.Bindings {
 		l := d.Layouts[b.Layout]
+		if window, chosen := s.ContextWindows[b.Layout]; chosen {
+			l.ContextWindowTokens = window
+		}
+		if choice, chosen := s.Templates[b.Layout]; chosen {
+			l.Patches = []string{}
+			if choice != "" {
+				l.Patches = []string{choice}
+			}
+		}
 		selected.Layouts[b.Layout] = l
 		selected.Artifacts[l.Artifact] = d.Artifacts[l.Artifact]
 		selected.Engines[l.Engine] = d.Engines[l.Engine]
@@ -166,42 +181,19 @@ func deriveDigests(d Document, s Selection, target software.Target) Digests {
 	digests := Digests{Records: map[string]string{}, Materials: map[string]string{}, Engines: map[string]string{}, Layouts: map[string]string{}}
 	for id, a := range d.Artifacts {
 		digests.Records["artifact/"+id] = digest(a)
-		digests.Materials["artifact/"+id] = digest(struct {
-			Kind   string
-			Format string
-			Files  []File
-		}{"artifact-material/v1", a.Format, a.Files})
+		digests.Materials["artifact/"+id] = artifactMaterialDigest(a)
 	}
 	for id, p := range d.Patches {
 		digests.Records["patch/"+id] = digest(p)
-		digests.Materials["patch/"+id] = digest(struct {
-			Kind  string
-			Files []File
-		}{"patch-material/v1", p.Files})
+		digests.Materials["patch/"+id] = patchMaterialDigest(p)
 	}
 	for id, e := range d.Engines {
 		digests.Records["engine/"+id] = digest(e)
-		if d.Schema == Schema {
-			e.Supply.Source = nil
-			e.Supply.Versions = nil
-		}
-		digests.Engines[id] = digest(e)
+		digests.Engines[id] = engineExecutionDigest(d.Schema, e)
 	}
 	for id, l := range d.Layouts {
 		digests.Records["layout/"+id] = digest(l)
-		x := l
-		x.DisplayName = ""
-		x.EngineVersions = nil
-		x.Artifact = digests.Materials["artifact/"+l.Artifact]
-		x.Engine = digests.Engines[l.Engine]
-		x.Patches = append([]string{}, l.Patches...)
-		for i, p := range l.Patches {
-			x.Patches[i] = digests.Materials["patch/"+p]
-		}
-		digests.Layouts[id] = digest(struct {
-			Kind   string
-			Layout Layout
-		}{"layout-execution/v1", x})
+		digests.Layouts[id] = layoutExecutionDigest(d, l)
 	}
 	p := d.Profiles[s.Profile]
 	digests.Records["profile/"+s.Profile] = digest(p)
@@ -224,6 +216,44 @@ func deriveDigests(d Document, s Selection, target software.Target) Digests {
 		return Digests{Profile: digests.Profile}
 	}
 	return digests
+}
+
+func artifactMaterialDigest(a Artifact) string {
+	return digest(struct {
+		Kind   string
+		Format string
+		Files  []File
+	}{"artifact-material/v1", a.Format, a.Files})
+}
+
+func patchMaterialDigest(p Patch) string {
+	return digest(struct {
+		Kind  string
+		Files []File
+	}{"patch-material/v1", p.Files})
+}
+
+func engineExecutionDigest(schema string, e Engine) string {
+	if schema == Schema {
+		e.Supply.Source, e.Supply.Versions = nil, nil
+	}
+	return digest(e)
+}
+
+func layoutExecutionDigest(d Document, l Layout) string {
+	x := l
+	x.DisplayName, x.EngineVersions = "", nil
+	x.ContextLimitTokens, x.ContextFindings = 0, nil
+	x.Artifact = artifactMaterialDigest(d.Artifacts[l.Artifact])
+	x.Engine = engineExecutionDigest(d.Schema, d.Engines[l.Engine])
+	x.Patches = append([]string{}, l.Patches...)
+	for i, patch := range l.Patches {
+		x.Patches[i] = patchMaterialDigest(d.Patches[patch])
+	}
+	return digest(struct {
+		Kind   string
+		Layout Layout
+	}{"layout-execution/v1", x})
 }
 
 func digest(v any) string {
@@ -310,6 +340,9 @@ func (l Lock) projections() (Projections, error) {
 		p.RequestDefaults[id] = layout.RequestDefaults
 	}
 	mode := manifest.Mode{Tools: []string{}, Harnesses: []string{}}
+	if profile.Foreground == "external" {
+		mode.ExternalForeground = true
+	}
 	for _, b := range profile.Bindings {
 		c := d.Layouts[b.Layout].EngineConfig
 		member := manifest.Member{Layout: b.Layout, TTL: &b.IdleTTLSeconds, NGL: &c.GPULayers, Preload: b.Preload}

@@ -34,21 +34,69 @@ func TestVersionPolicySeparatesRequiredFromTestedAndScopesItToLayout(t *testing.
 func TestTestedFallbackIsExplicitAndMustSatisfyCurrentRequirements(t *testing.T) {
 	d := document()
 	s := catalog.Selection{Schema: catalog.SelectionSchema, Profile: "local-qwen"}
+	if err := catalog.ValidateTestedSoftware(d, s); err == nil || !strings.Contains(err.Error(), "llama-swap") {
+		t.Fatalf("missing router tested boundary = %v", err)
+	}
 	if _, err := catalog.ResolveSoftware(context.Background(), d, s, "tested", nil); err == nil || !strings.Contains(err.Error(), "no tested version") {
 		t.Fatalf("unknown tested boundary = %v", err)
 	}
 	d.Runtime.Router.Versions = &catalog.Versions{MinimumTested: "b10936", TestedEvidence: "router fixture smoke"}
+	if err := catalog.ValidateTestedSoftware(d, s); err == nil || !strings.Contains(err.Error(), "llama-cpp") {
+		t.Fatalf("missing layout tested boundary = %v", err)
+	}
 	l := d.Layouts["qwen-32k"]
 	l.EngineVersions = &catalog.Versions{MinimumRequired: "b10900", RequiredSource: "upstream feature", MinimumTested: "b10936", TestedEvidence: "study fixture"}
 	d.Layouts["qwen-32k"] = l
+	if err := catalog.ValidateTestedSoftware(d, s); err != nil {
+		t.Fatalf("complete retained tested boundary: %v", err)
+	}
 	resolved, err := catalog.ResolveSoftware(context.Background(), d, s, "tested", nil)
 	if err != nil {
 		t.Fatal(err)
 	} // Exact retained inputs need no network.
 	compile(t, resolved)
 	l.EngineVersions.MinimumRequired = "b10937"
+	if err := catalog.ValidateTestedSoftware(d, s); err == nil || !strings.Contains(err.Error(), "minimum required") {
+		t.Fatalf("tested below required = %v", err)
+	}
 	if _, err := catalog.ResolveSoftware(context.Background(), d, s, "tested", nil); err == nil || !strings.Contains(err.Error(), "minimum required") {
 		t.Fatalf("incompatible fallback = %v", err)
+	}
+}
+
+func TestTestedSoftwareRequiresCommonEvidenceForSelectedEngineLayouts(t *testing.T) {
+	d := document()
+	d.Runtime.Router.Versions = &catalog.Versions{MinimumTested: "b10936", TestedEvidence: "router fixture smoke"}
+	first := d.Layouts["qwen-32k"]
+	first.EngineVersions = &catalog.Versions{MinimumRequired: "b10900", RequiredSource: "upstream feature", MinimumTested: "b10936", TestedEvidence: "first layout study"}
+	d.Layouts["qwen-32k"] = first
+	second := first
+	second.DisplayName = "Second selected layout"
+	second.EngineVersions = &catalog.Versions{MinimumRequired: "b10910", RequiredSource: "another upstream feature", MinimumTested: "b10936", TestedEvidence: "second layout study"}
+	d.Layouts["qwen-second"] = second
+	p := d.Profiles["local-qwen"]
+	p.Bindings = append(p.Bindings, catalog.Binding{Layout: "qwen-second", Route: "available", Residency: "on-demand", IdleTTLSeconds: 600})
+	d.Profiles["local-qwen"] = p
+	s := catalog.Selection{Schema: catalog.SelectionSchema, Profile: "local-qwen"}
+	if err := catalog.ValidateTestedSoftware(d, s); err != nil {
+		t.Fatalf("common tested engine release refused: %v", err)
+	}
+	if _, err := catalog.ResolveSoftware(context.Background(), d, s, "tested", nil); err != nil {
+		t.Fatalf("resolver disagreed on retained common tested release: %v", err)
+	}
+	second.EngineVersions.MinimumTested = "b10937"
+	d.Layouts["qwen-second"] = second
+	if err := catalog.ValidateTestedSoftware(d, s); err == nil || !strings.Contains(err.Error(), "different tested versions") {
+		t.Fatalf("conflicting engine evidence = %v", err)
+	}
+	if _, err := catalog.ResolveSoftware(context.Background(), d, s, "tested", nil); err == nil || !strings.Contains(err.Error(), "different tested versions") {
+		t.Fatalf("resolver accepted conflicting engine evidence: %v", err)
+	}
+	second.EngineVersions.MinimumTested = "b10936"
+	second.EngineVersions.MinimumRequired = "b10937"
+	d.Layouts["qwen-second"] = second
+	if err := catalog.ValidateTestedSoftware(d, s); err == nil || !strings.Contains(err.Error(), "minimum required") {
+		t.Fatalf("common tested engine release below one layout floor = %v", err)
 	}
 }
 
