@@ -18,6 +18,7 @@ import (
 	"github.com/temper-sh/temper/internal/lockfile"
 	"github.com/temper-sh/temper/internal/manifest"
 	"github.com/temper-sh/temper/internal/render"
+	"github.com/temper-sh/temper/internal/splash"
 )
 
 type Options struct {
@@ -142,6 +143,16 @@ func verifySelectedArtifactSets(root, modeName string, document manifest.Documen
 			}
 			return fmt.Errorf("verify layout %q artifact set: %w", member.Layout, err)
 		}
+		if layout.Splash != nil {
+			material, err := splash.New(root, member.Layout, layout, entry, document.Patches)
+			if err != nil {
+				return err
+			}
+			if err := material.Verify(); err != nil {
+				return fmt.Errorf("Splash assembly: %w; run temper execution prepare with its lock", err)
+			}
+		}
+
 	}
 	return nil
 }

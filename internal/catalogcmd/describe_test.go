@@ -80,6 +80,7 @@ func TestDescriptionEditIsAtomicSecondRunCleanAndPreservesExecution(t *testing.T
 			if info.Mode().Perm() != 0o600 {
 				t.Fatal("edit changed file permissions")
 			}
+			var originalLock catalog.Lock
 			for _, profile := range []string{"qwen3.5-4b-local", "qwen3.5-4b-utility"} {
 				s := catalog.Selection{Schema: catalog.SelectionSchema, Profile: profile}
 				a, err := catalog.Compile(before, s, software.Target{OS: "darwin", Arch: "arm64"})
@@ -104,12 +105,19 @@ func TestDescriptionEditIsAtomicSecondRunCleanAndPreservesExecution(t *testing.T
 				if !reflect.DeepEqual(p, q) {
 					t.Fatal("editorial change altered runtime projections")
 				}
+				originalLock = a
 			}
 			preserved := after.Artifacts[artifact]
 			preserved.Description = before.Artifacts[artifact].Description
 			preserved.AssessmentURL = before.Artifacts[artifact].AssessmentURL
 			after.Artifacts[artifact] = preserved
-			if !reflect.DeepEqual(after, before) {
+			// Compare catalog facts, allowing canonical ordering of sets such as
+			// compatible artifacts. Reordering a set is not an editorial effect.
+			restored, err := catalog.Compile(after, originalLock.Selection, originalLock.Target)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if restored.SourceSnapshotSHA256 != originalLock.SourceSnapshotSHA256 {
 				t.Fatal("edit changed unrelated catalog facts")
 			}
 			if code, out, diag := describeRun(context.Background(), args...); code != 0 || !strings.Contains(out, "unchanged") {

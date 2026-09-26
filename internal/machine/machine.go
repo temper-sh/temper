@@ -17,7 +17,9 @@ import (
 const (
 	bytesPerMiB int64 = 1024 * 1024
 
-	FactsSchemaV1              = "temper-machine-facts/v1"
+	FactsSchemaV1         = "temper-machine-facts/v1"
+	MetalDeviceSourceLive = "live-metal"
+	// Retained for canonical historical facts, never emitted by detection.
 	MetalDeviceSourcePredicted = "predicted-metal-81-percent"
 )
 
@@ -35,6 +37,9 @@ type Facts struct {
 	MetalDeviceMemorySource string          `yaml:"metal_device_memory_source"`
 	WiredLimitMiB           int64           `yaml:"wired_limit_mib"`
 	WiredLimitSource        string          `yaml:"wired_limit_source"`
+	// The optional sysctl override is configuration, not the effective Metal
+	// budget. Zero means macOS chooses its default; nil means unavailable.
+	WiredLimitOverrideMiB *int64 `yaml:"wired_limit_override_mib,omitempty"`
 }
 
 // Validate enforces the canonical machine-facts schema without reading the
@@ -72,16 +77,29 @@ func (f Facts) Validate() error {
 	if physicalMiB <= 0 {
 		problem("physical_memory_bytes must be at least one MiB")
 	}
-	if f.MetalDeviceMemorySource != MetalDeviceSourcePredicted {
-		problem("metal_device_memory_source is %q, want %q", f.MetalDeviceMemorySource, MetalDeviceSourcePredicted)
+	if f.MetalDeviceMemoryMiB <= 0 || f.MetalDeviceMemoryMiB > physicalMiB {
+		problem("metal device memory must be positive and no greater than physical memory")
 	}
-	if f.MetalDeviceMemoryMiB != physicalMiB*81/100 {
-		problem("metal device memory must equal the labeled 81-percent prediction")
+	switch f.MetalDeviceMemorySource {
+	case MetalDeviceSourceLive:
+		if f.WiredLimitSource != budget.WiredSourceMetal || f.WiredLimitMiB != f.MetalDeviceMemoryMiB {
+			problem("live Metal device and wired budgets must use the same working-set reading")
+		}
+	case MetalDeviceSourcePredicted:
+		if f.MetalDeviceMemoryMiB != physicalMiB*81/100 {
+			problem("metal device memory must equal the labeled 81-percent prediction")
+		}
+	default:
+		problem("metal_device_memory_source %q is not supported", f.MetalDeviceMemorySource)
 	}
 	if f.WiredLimitMiB <= 0 || f.WiredLimitMiB > physicalMiB {
 		problem("wired_limit_mib must be positive and no greater than physical memory")
 	}
 	switch f.WiredLimitSource {
+	case budget.WiredSourceMetal:
+		if f.MetalDeviceMemorySource != MetalDeviceSourceLive {
+			problem("live Metal wired budget requires live Metal device memory")
+		}
 	case budget.WiredSourceLive:
 	case budget.WiredSourcePredicted:
 		if f.WiredLimitMiB != physicalMiB*65/100 {
@@ -89,6 +107,9 @@ func (f Facts) Validate() error {
 		}
 	default:
 		problem("wired_limit_source %q is not supported", f.WiredLimitSource)
+	}
+	if f.WiredLimitOverrideMiB != nil && *f.WiredLimitOverrideMiB < 0 {
+		problem("wired_limit_override_mib cannot be negative")
 	}
 	if len(problems) > 0 {
 		return errors.New("machine facts invalid: " + strings.Join(problems, "; "))
@@ -115,7 +136,7 @@ func DetectFacts(ctx context.Context) (Facts, error) {
 	if runtime.GOOS != "darwin" {
 		return Facts{}, errors.New("field-kit machine detection requires macOS")
 	}
-	return detectFacts(ctx, sysctl, runtime.GOOS, runtime.GOARCH)
+	return detectFacts(ctx, sysctl, metalWorkingSetBytes, runtime.GOOS, runtime.GOARCH)
 }
 
 // DetectTarget reads the exact host target bound to public software commands.
@@ -132,17 +153,18 @@ func Detect(ctx context.Context) (budget.Machine, error) {
 	if runtime.GOOS != "darwin" {
 		return budget.Machine{}, errors.New("wall-model machine detection requires macOS")
 	}
-	return detect(ctx, sysctl)
+	return detect(ctx, sysctl, metalWorkingSetBytes)
 }
 
 type queryFunc func(context.Context, string) (string, error)
+type metalQueryFunc func(context.Context) (uint64, error)
 
-func detect(ctx context.Context, query queryFunc) (budget.Machine, error) {
-	machine, _, err := detectMemory(ctx, query)
+func detect(ctx context.Context, query queryFunc, metal metalQueryFunc) (budget.Machine, error) {
+	machine, _, err := detectMemory(ctx, query, metal)
 	return machine, err
 }
 
-func detectMemory(ctx context.Context, query queryFunc) (budget.Machine, int64, error) {
+func detectMemory(ctx context.Context, query queryFunc, metal metalQueryFunc) (budget.Machine, int64, error) {
 	if err := ctx.Err(); err != nil {
 		return budget.Machine{}, 0, err
 	}
@@ -159,35 +181,35 @@ func detectMemory(ctx context.Context, query queryFunc) (budget.Machine, int64, 
 		return budget.Machine{}, 0, errors.New("read physical memory: value is below one MiB")
 	}
 
-	machine := budget.Machine{
-		PhysicalMiB: physicalMiB,
-		DeviceMiB:   physicalMiB * 81 / 100,
-		WiredSource: budget.WiredSourcePredicted,
-	}
-	wiredText, wiredErr := query(ctx, "iogpu.wired_limit_mb")
 	if err := ctx.Err(); err != nil {
 		return budget.Machine{}, 0, err
 	}
-	if wiredErr == nil {
-		wiredMiB, parseErr := parsePositive(wiredText)
-		if parseErr == nil {
-			machine.WiredLimitMiB = wiredMiB
-			machine.WiredSource = budget.WiredSourceLive
-		}
+	workingSetBytes, err := metal(ctx)
+	if err != nil {
+		return budget.Machine{}, 0, fmt.Errorf("read Metal recommended working-set budget: %w", err)
 	}
-	if machine.WiredLimitMiB == 0 {
-		machine.WiredLimitMiB = physicalMiB * 65 / 100
+	if err := ctx.Err(); err != nil {
+		return budget.Machine{}, 0, err
 	}
-	if machine.DeviceMiB <= 0 || machine.WiredLimitMiB <= 0 || machine.WiredLimitMiB > physicalMiB {
-		return budget.Machine{}, 0, errors.New("machine reported impossible memory capacities")
+	if workingSetBytes < uint64(bytesPerMiB) || workingSetBytes > uint64(physicalBytes) {
+		return budget.Machine{}, 0, errors.New("Metal reported a working-set budget outside physical memory capacities")
 	}
+	workingSetMiB := int64(workingSetBytes / uint64(bytesPerMiB))
+	machine := budget.Machine{PhysicalMiB: physicalMiB, DeviceMiB: workingSetMiB,
+		WiredLimitMiB: workingSetMiB, WiredSource: budget.WiredSourceMetal}
 	return machine, physicalBytes, nil
 }
 
-func detectFacts(ctx context.Context, query queryFunc, operatingSystem, architecture string) (Facts, error) {
-	memory, physicalBytes, err := detectMemory(ctx, query)
+func detectFacts(ctx context.Context, query queryFunc, metal metalQueryFunc, operatingSystem, architecture string) (Facts, error) {
+	memory, physicalBytes, err := detectMemory(ctx, query, metal)
 	if err != nil {
 		return Facts{}, err
+	}
+	var wiredOverride *int64
+	if text, err := query(ctx, "iogpu.wired_limit_mb"); err == nil {
+		if value, err := strconv.ParseInt(strings.TrimSpace(text), 10, 64); err == nil && value >= 0 {
+			wiredOverride = &value
+		}
 	}
 	readRequired := func(name, label string) (string, error) {
 		if err := ctx.Err(); err != nil {
@@ -225,9 +247,10 @@ func detectFacts(ctx context.Context, query queryFunc, operatingSystem, architec
 		HardwareModel: hardwareModel, Chip: chip, OSBuild: osBuild,
 		PhysicalMemoryBytes:     physicalBytes,
 		MetalDeviceMemoryMiB:    memory.DeviceMiB,
-		MetalDeviceMemorySource: MetalDeviceSourcePredicted,
+		MetalDeviceMemorySource: MetalDeviceSourceLive,
 		WiredLimitMiB:           memory.WiredLimitMiB,
 		WiredLimitSource:        memory.WiredSource,
+		WiredLimitOverrideMiB:   wiredOverride,
 	}
 	if err := facts.Validate(); err != nil {
 		return Facts{}, err

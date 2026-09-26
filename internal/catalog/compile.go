@@ -82,6 +82,9 @@ func Compile(d Document, s Selection, target software.Target) (Lock, error) {
 		}
 		selected.Layouts[b.Layout] = l
 		selected.Artifacts[l.Artifact] = d.Artifacts[l.Artifact]
+		if l.Speculation.DraftArtifact != "" {
+			selected.Artifacts[l.Speculation.DraftArtifact] = d.Artifacts[l.Speculation.DraftArtifact]
+		}
 		selected.Engines[l.Engine] = d.Engines[l.Engine]
 		if release := d.Engines[l.Engine].Supply.Release; release != nil {
 			if err := l.EngineVersions.require(release.Version); err != nil {
@@ -234,6 +237,7 @@ func patchMaterialDigest(p Patch) string {
 }
 
 func engineExecutionDigest(schema string, e Engine) string {
+	e.DisplayName = ""
 	if schema == Schema {
 		e.Supply.Source, e.Supply.Versions = nil, nil
 	}
@@ -243,8 +247,12 @@ func engineExecutionDigest(schema string, e Engine) string {
 func layoutExecutionDigest(d Document, l Layout) string {
 	x := l
 	x.DisplayName, x.EngineVersions = "", nil
+	x.MemoryTier = ""
 	x.ContextLimitTokens, x.ContextFindings = 0, nil
 	x.Artifact = artifactMaterialDigest(d.Artifacts[l.Artifact])
+	if l.Speculation.DraftArtifact != "" {
+		x.Speculation.DraftArtifact = artifactMaterialDigest(d.Artifacts[l.Speculation.DraftArtifact])
+	}
 	x.Engine = engineExecutionDigest(d.Schema, d.Engines[l.Engine])
 	x.Patches = append([]string{}, l.Patches...)
 	for i, patch := range l.Patches {
@@ -330,6 +338,17 @@ func (l Lock) projections() (Projections, error) {
 			Speculation: &manifest.Speculation{Method: layout.Speculation.Method, MaxTokens: layout.Speculation.MaxDraftTokens}, Sampling: &layout.RequestDefaults.Sampling,
 			Llama: &manifest.LlamaTuning{KV: c.KVCache, Parallel: c.Parallel, FlashAttention: c.FlashAttention, Batch: c.BatchTokens, UBatch: c.MicrobatchTokens, ContextCheckpoints: &c.ContextCheckpoints, PromptCacheRAMMiB: &c.PromptCacheRAMMiB, Controls: &c.Controls}}
 		entry := lockfile.Entry{Repo: a.Repo, Revision: a.Revision, Resolved: d.Date, Files: []lockfile.File{{Name: a.Files[0].Path, SHA256: a.Files[0].SHA256}}}
+		if c.Splash != nil {
+			m.Llama = nil
+			m.Splash = &manifest.SplashTuning{SplashConfig: c.Splash.SplashConfig, SoftwareSHA256: d.Engines[layout.Engine].Supply.Release.Artifact.SHA256}
+			draft := d.Artifacts[layout.Speculation.DraftArtifact]
+			m.Draft = &manifest.Model{Repo: draft.Repo, Format: draft.Format}
+			entry.Draft = &lockfile.Draft{Repo: draft.Repo, Revision: draft.Revision}
+			for _, file := range draft.Files {
+				m.Draft.Files = append(m.Draft.Files, file.Path)
+				entry.Draft.Files = append(entry.Draft.Files, lockfile.File{Name: file.Path, SHA256: file.SHA256})
+			}
+		}
 		if len(layout.Patches) > 0 {
 			patchID := layout.Patches[0]
 			m.ChatTemplate = patchID
@@ -345,7 +364,10 @@ func (l Lock) projections() (Projections, error) {
 	}
 	for _, b := range profile.Bindings {
 		c := d.Layouts[b.Layout].EngineConfig
-		member := manifest.Member{Layout: b.Layout, TTL: &b.IdleTTLSeconds, NGL: &c.GPULayers, Preload: b.Preload}
+		member := manifest.Member{Layout: b.Layout, TTL: &b.IdleTTLSeconds, Preload: b.Preload}
+		if c.Splash == nil {
+			member.NGL = &c.GPULayers
+		}
 		if b.Route == "default" {
 			mode.Foreground = b.Layout
 		}

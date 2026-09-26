@@ -53,12 +53,16 @@ func TestEveryScreenFitsTerminalWithWrappedContent(t *testing.T) {
 				input.Profiles[0].Description = strings.Repeat("A long description of the chosen model and its limits. ", 8)
 				input.Profiles[0].AssessmentURL = "https://example.test/assessments/model-with-a-long-readable-name"
 				input.Profiles[0].Details = "Model files 3 GiB; memory wall within limit (prediction)."
+				input.Profiles[0].Advice = &Section{Title: "Memory budget is tight", Warning: true, Lines: []string{
+					"Increase the wired-memory limit before running this setup.", "[manual] sudo sysctl iogpu.wired_limit_mb=26624",
+				}}
 				m := NewModel(context.Background(), input, readyPreview)
 				m.selected["local"], m.selected["utility"] = true, true
 				m.profiles["local"], m.profiles["utility"] = "compact", "specialists"
 				m.software = "recorded"
 				m.review, _ = readyPreview(context.Background(), m.choices())
 				m.review.Sections[0].Downloads = []Download{{File: "A-long-model-filename-模型.Q4_K_M.gguf", Size: "3.25 GiB", Status: "Download on Prepare"}}
+				m.review.Sections = append(m.review.Sections, *input.Profiles[0].Advice)
 				m.stage = screen
 				m.Update(tea.WindowSizeMsg{Width: size.width, Height: size.height})
 				view := m.View().Content
@@ -74,6 +78,52 @@ func TestEveryScreenFitsTerminalWithWrappedContent(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestMemoryInstructionsLeadReviewAndRemainVisibleWhenDownloadsCollapse(t *testing.T) {
+	m := NewModel(context.Background(), setupInput(), readyPreview)
+	m.stage = stageReview
+	m.review = Review{Token: "reviewed", CanPrepare: true, Sections: []Section{
+		{Title: "Downloads", Lines: []string{"Weights are cached."}, Downloads: []Download{{File: "model.gguf", Size: "16.35 GiB", Status: "Cached in Hugging Face"}}},
+		{Title: "Memory budget is tight", Warning: true, Lines: []string{"Increase the wired-memory limit to 26 GiB.", "[manual] sudo sysctl iogpu.wired_limit_mb=26624"}},
+	}}
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	for _, expanded := range []bool{false, true} {
+		m.downloadsOpen = expanded
+		view := ansi.Strip(m.View().Content)
+		warning, downloads := strings.Index(view, "Memory budget is tight"), strings.Index(view, "Downloads")
+		if warning < 0 || downloads <= warning || !strings.Contains(view, "sudo sysctl iogpu.wired_limit_mb=26624") {
+			t.Fatalf("memory action buried by download disclosure: %s", view)
+		}
+		if strings.Count(view, "Memory budget is tight") != 1 {
+			t.Fatal("memory warning duplicated in review")
+		}
+		assertFrameFits(t, m.View().Content, 100, 30)
+	}
+	press(m, tea.KeyRight)
+	press(m, tea.KeyEnter)
+	if m.decision.Action != "prepare" {
+		t.Fatal("advisory prevented otherwise eligible preparation")
+	}
+}
+
+func TestModelChoiceShowsMemoryRecommendationBeforeSelection(t *testing.T) {
+	input := setupInput()
+	input.Profiles[0].Advice = &Section{Title: "Memory budget is tight", Warning: true, Lines: []string{
+		"Increase the wired-memory limit to 26 GiB.", "[manual] sudo sysctl iogpu.wired_limit_mb=26624",
+	}}
+	m := NewModel(context.Background(), input, readyPreview)
+	m.selected["local"] = true
+	m.stage = stageProfile
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	view := ansi.Strip(m.View().Content)
+	if !strings.Contains(view, "Increase the wired-memory limit") || !strings.Contains(view, "sudo sysctl iogpu.wired_limit_mb=26624") || m.profiles["local"] != "" {
+		t.Fatalf("model memory recommendation hidden or implicitly selected: %s", view)
+	}
+	press(m, tea.KeyEnter)
+	if m.profiles["local"] != "compact" {
+		t.Fatal("soft memory advice prevented explicit selection")
 	}
 }
 
@@ -135,7 +185,7 @@ func TestSelectionPageScrollKeepsHeaderAndDoesNotSnapBack(t *testing.T) {
 	}
 	press(m, tea.KeyDown) // Next button
 	press(m, tea.KeyDown) // Back to the only profile
-	if view := ansi.Strip(m.View().Content); !strings.Contains(view, "> ( ) Compact general assistant") {
+	if view := ansi.Strip(m.View().Content); !strings.Contains(view, "> [ ] ( ) Compact general assistant") {
 		t.Fatalf("moving focus did not reveal the chosen row: %s", view)
 	}
 }

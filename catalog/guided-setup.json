@@ -1,6 +1,6 @@
 {
   "schema": "temper-catalog/v2",
-  "date": "2026-09-23",
+  "date": "2026-09-26",
   "runtime": {
     "router": {
       "package": "llama-swap",
@@ -14,17 +14,23 @@
         "archive_root": "."
       },
       "release": {
-        "version": "v255",
-        "revision": "7761aa13360ea379cb89366d07c2d08aa9f1ed10",
+        "version": "v257",
+        "revision": "f00d375a927f72d72e74ca86012be210f155c67b",
         "artifact": {
-          "locator": "https://github.com/mostlygeek/llama-swap/releases/download/v255/llama-swap_255_darwin_arm64.tar.gz",
-          "sha256": "d11b4c733da1c64ffd1b955f64b6af92a8c66a443aeeafeef2e84d3bf1fbf531",
-          "size": 21730221,
-          "unpacked_size": 40133282,
-          "installed_entries": 3,
+          "locator": "https://github.com/mostlygeek/llama-swap/releases/download/v257/llama-swap_257_darwin_arm64.tar.gz",
+          "sha256": "97c487b6909fa441ae28903e429e85fcfe4abf0d815274173859762376affd0b",
+          "size": 21836278,
+          "unpacked_size": 40401712,
+          "installed_entries": 4,
           "format": "tar.gz",
           "archive_root": "."
         }
+      },
+      "versions": {
+        "minimum_tested": "v257",
+        "tested_evidence": "../docs/PLAN.md#splash-110-integration (2026-09-26 Apple M5 32 GiB; 32k advertised context, short chat/tool requests, owned shutdown; not a context-capacity or quality qualification)",
+        "minimum_required": "v257",
+        "required_source": "https://github.com/mostlygeek/llama-swap/blob/v257/docs/config.example.yaml (setParams defaults preserve explicit request overrides)"
       }
     }
   },
@@ -41,7 +47,9 @@
         }
       ],
       "license": "Apache-2.0",
-      "description": "Useful for source-based document work and verified tool workflows. Strict output formats and Swedish prose need review."
+      "description": "Useful for source-based document work and verified tool workflows. Strict output formats and Swedish prose need review.",
+      "model_name": "Qwen3.8 27B",
+      "weights_name": "Unsloth UD-Q4_K_XL · GGUF"
     },
     "qwen3.5-4b-q4km": {
       "repo": "unsloth/Qwen3.5-4B-GGUF",
@@ -55,7 +63,62 @@
         }
       ],
       "license": "Apache-2.0",
-      "description": "Compact model for extraction, classification and short tool tasks. Document editing and longer writing need careful review."
+      "description": "Compact model for extraction, classification and short tool tasks. Document editing and longer writing need careful review.",
+      "model_name": "Qwen3.5 4B",
+      "weights_name": "Unsloth Q4_K_M · GGUF"
+    },
+    "gemma-4-e2b-q4km": {
+      "repo": "unsloth/gemma-4-E2B-it-GGUF",
+      "revision": "0314792d7f1f7e229411f620751375812bb9faf2",
+      "format": "gguf",
+      "files": [
+        {
+          "path": "gemma-4-E2B-it-Q4_K_M.gguf",
+          "bytes": 3106738272,
+          "sha256": "740185b21d22ceb83a11c3aa62ad5842ef32c70f6096d756bbee85a1e4ec34b8"
+        }
+      ],
+      "license": "Apache-2.0",
+      "description": "Small local main model for field extraction and short tool tasks. Check writing accuracy and unfinished recovery after conflicts.",
+      "model_name": "Gemma 4 E2B",
+      "weights_name": "Unsloth Q4_K_M · GGUF"
+    },
+    "gemma-4-e4b-q4km": {
+      "repo": "unsloth/gemma-4-E4B-it-GGUF",
+      "revision": "bfc15c382204943c3a8fff0c750b94ae2364d7a3",
+      "format": "gguf",
+      "files": [
+        {
+          "path": "gemma-4-E4B-it-Q4_K_M.gguf",
+          "bytes": 4977171584,
+          "sha256": "85a896a047553e842f25297ee5b031d64ff30147d9c4af17b1e4b394cd1fab87"
+        }
+      ],
+      "license": "Apache-2.0",
+      "description": "Small local main model for short sourced drafts, extraction and tool workflows. Longer edits can retain false claims after feedback.",
+      "model_name": "Gemma 4 E4B",
+      "weights_name": "Unsloth Q4_K_M · GGUF"
+    },
+    "qwen3.8-27b-dflash2": {
+      "repo": "incoai/Qwen3.8-27B-DFlash2",
+      "revision": "015e795645c74b1a0eeef3b570031fb62e769bc5",
+      "format": "safetensors",
+      "files": [
+        {
+          "path": "config.json",
+          "bytes": 1239,
+          "sha256": "873e3556509b0da06e29654ba00d4944888d4b5e8a33afde25f7eb27d321e980"
+        },
+        {
+          "path": "model.safetensors",
+          "bytes": 3848817896,
+          "sha256": "67fc76d68dc5a9415511a4f394ef744d67510cd20e93b37cc2cc7d28e4bab65c"
+        }
+      ],
+      "license": "Apache-2.0",
+      "model_name": "Qwen3.8 27B DFlash2",
+      "weights_name": "BF16 draft",
+      "description": "Architecture-matched DFlash2 sidecar selected by Splash 1.1.0. Included with the Qwen–Splash layout."
     }
   },
   "patches": {
@@ -70,7 +133,24 @@
         }
       ],
       "compatible_artifacts": [
-        "qwen3.8-27b-q4xl"
+        "qwen3.8-27b-q4xl",
+        "qwen3.5-4b-q4km"
+      ],
+      "license": "Apache-2.0"
+    },
+    "sharp-qwen-v22.5.0": {
+      "repo": "peculiar-ragdoll/Qwen-Sharp-Chat-Templates",
+      "revision": "85461fc118aaf25e7319c7ecf2481f944aac3a32",
+      "files": [
+        {
+          "path": "chat_template.jinja",
+          "bytes": 30411,
+          "sha256": "cdff39fb26b60dc90faa292e726655c6b21f62db497846e02e4c4bbab942a84a"
+        }
+      ],
+      "compatible_artifacts": [
+        "qwen3.8-27b-q4xl",
+        "qwen3.5-4b-q4km"
       ],
       "license": "Apache-2.0"
     }
@@ -97,19 +177,56 @@
           "archive_root": "llama-{version}"
         },
         "release": {
-          "version": "b10964",
-          "revision": "b29c606e28a01b1bc8c1351026a0fa6e616bf6c4",
+          "version": "b11157",
+          "revision": "53ed051ce5e8193652e449f43216ca3859454f49",
           "artifact": {
-            "locator": "https://github.com/ggml-org/llama.cpp/releases/download/b10964/llama-b10964-bin-macos-arm64.tar.gz",
-            "sha256": "033c845c1df9bf945ff37bb193238b40910b2244be3e1e637b2ceb5878f1a6f5",
-            "size": 11149739,
-            "unpacked_size": 27886118,
+            "locator": "https://github.com/ggml-org/llama.cpp/releases/download/b11157/llama-b11157-bin-macos-arm64.tar.gz",
+            "sha256": "6e163730d794dbe9694ae251244b9a60f8a149228c7ad62fe4bf58dce6f0275b",
+            "size": 11190878,
+            "unpacked_size": 28000630,
             "installed_entries": 60,
             "format": "tar.gz",
-            "archive_root": "llama-b10964"
+            "archive_root": "llama-b11157"
           }
         }
-      }
+      },
+      "display_name": "llama.cpp"
+    },
+    "splash-darwin-arm64": {
+      "display_name": "Splash 1.1.0 / DFlash2",
+      "family": "splash",
+      "adapter": "splash/v1",
+      "supply": {
+        "package": "splash",
+        "target": {
+          "os": "darwin",
+          "arch": "arm64"
+        },
+        "source": {
+          "repository": "incoai/splash",
+          "asset": "splash-{version}-arm64-macos26.tar.gz",
+          "archive_root": "splash-{version}-arm64-macos26"
+        },
+        "release": {
+          "version": "1.1.0",
+          "revision": "3e1f9ece3e2528f3eb46b82a05911591f34a4317",
+          "artifact": {
+            "locator": "https://github.com/incoai/splash/releases/download/1.1.0/splash-1.1.0-arm64-macos26.tar.gz",
+            "sha256": "255be83f404b1e31e4d98a863ccce05004d348fb6662c68afced4ff992402437",
+            "size": 70643150,
+            "unpacked_size": 230045665,
+            "installed_entries": 8118,
+            "format": "tar.gz",
+            "archive_root": "splash-1.1.0-arm64-macos26"
+          }
+        }
+      },
+      "interfaces": [
+        "chat-completions"
+      ],
+      "modalities": [
+        "text"
+      ]
     }
   },
   "layouts": {
@@ -124,7 +241,7 @@
       "modalities": [
         "text"
       ],
-      "context_window_tokens": 32768,
+      "context_window_tokens": 40960,
       "request_defaults": {
         "max_output_tokens": 4096,
         "reasoning": "on",
@@ -166,7 +283,12 @@
           "checkpoint_min_step": 8192
         }
       },
-      "context_limit_tokens": 262144
+      "context_limit_tokens": 262144,
+      "engine_versions": {
+        "minimum_tested": "b10964",
+        "tested_evidence": "../docs/PLAN.md#current-state (2026-09-22 qwen-machine-study@2 bounded native integration check; 64-token request, startup and owned shutdown)"
+      },
+      "memory_tier": "S"
     },
     "qwen3.5-4b-q4km-off": {
       "display_name": "Qwen3.5 4B Q4_K_M / thinking off text",
@@ -218,7 +340,173 @@
           "load_mode": "mmap"
         }
       },
-      "context_limit_tokens": 262144
+      "context_limit_tokens": 262144,
+      "engine_versions": {
+        "minimum_tested": "b10621",
+        "tested_evidence": "../../v3/labs/workstreams/small-model-capability-portfolio/results/qwen3.5-4b.json#/configurations/cal07-qwen35-4b-q4km-off-b10621-ctx16k:465b8c16fdb6"
+      },
+      "memory_tier": "XS"
+    },
+    "gemma-4-e2b-q4km-off": {
+      "display_name": "Gemma 4 E2B Q4_K_M / thinking off text",
+      "artifact": "gemma-4-e2b-q4km",
+      "patches": [],
+      "engine": "llama-cpp-darwin-arm64",
+      "interface": "chat-completions",
+      "modalities": [
+        "text"
+      ],
+      "context_window_tokens": 16384,
+      "request_defaults": {
+        "max_output_tokens": 4096,
+        "reasoning": "off",
+        "sampling": {
+          "temperature": 0.0,
+          "top_k": 1,
+          "top_p": 1.0,
+          "min_p": 0.0,
+          "repeat_penalty": 1.0,
+          "presence_penalty": 0.0,
+          "seed": 17
+        }
+      },
+      "speculation": {
+        "method": "none",
+        "source": "none",
+        "max_draft_tokens": 0
+      },
+      "engine_config": {
+        "kind": "llama-server/v2",
+        "parallel": 1,
+        "kv_cache": "q8",
+        "flash_attention": "on",
+        "batch_tokens": 256,
+        "microbatch_tokens": 256,
+        "context_checkpoints": 0,
+        "prompt_cache_ram_mib": 0,
+        "gpu_layers": 99,
+        "controls": {
+          "cache_reuse": 0,
+          "reasoning_effort": "medium",
+          "preserve_reasoning": false,
+          "context_shift": false,
+          "cache_prompt": true,
+          "fit": "off",
+          "threads": 4,
+          "threads_batch": 4,
+          "load_mode": "mmap"
+        }
+      },
+      "context_limit_tokens": 131072,
+      "engine_versions": {
+        "minimum_tested": "b10655",
+        "tested_evidence": "../../v3/labs/workstreams/small-model-capability-portfolio/results/gemma-4-e2b.json#/configurations/cal07-gemma4-e2b-off:c9531ba173ac"
+      },
+      "memory_tier": "XS"
+    },
+    "gemma-4-e4b-q4km-off": {
+      "display_name": "Gemma 4 E4B Q4_K_M / thinking off text",
+      "artifact": "gemma-4-e4b-q4km",
+      "patches": [],
+      "engine": "llama-cpp-darwin-arm64",
+      "interface": "chat-completions",
+      "modalities": [
+        "text"
+      ],
+      "context_window_tokens": 16384,
+      "request_defaults": {
+        "max_output_tokens": 4096,
+        "reasoning": "off",
+        "sampling": {
+          "temperature": 1.0,
+          "top_k": 64,
+          "top_p": 0.95,
+          "min_p": 0.0,
+          "repeat_penalty": 1.0,
+          "presence_penalty": 0.0,
+          "seed": 17
+        }
+      },
+      "speculation": {
+        "method": "none",
+        "source": "none",
+        "max_draft_tokens": 0
+      },
+      "engine_config": {
+        "kind": "llama-server/v2",
+        "parallel": 1,
+        "kv_cache": "q8",
+        "flash_attention": "on",
+        "batch_tokens": 256,
+        "microbatch_tokens": 256,
+        "context_checkpoints": 0,
+        "prompt_cache_ram_mib": 0,
+        "gpu_layers": 99,
+        "controls": {
+          "cache_reuse": 0,
+          "reasoning_effort": "medium",
+          "preserve_reasoning": false,
+          "context_shift": false,
+          "cache_prompt": true,
+          "fit": "off",
+          "threads": 4,
+          "threads_batch": 4,
+          "load_mode": "mmap"
+        }
+      },
+      "context_limit_tokens": 131072,
+      "engine_versions": {
+        "minimum_tested": "b10621",
+        "tested_evidence": "../../v3/labs/workstreams/small-model-capability-portfolio/results/gemma-4-e4b.json#/configurations/cal07-gemma4-e4b-q4km-off-b10621-ctx16k:b81efd11cde9"
+      },
+      "memory_tier": "XS"
+    },
+    "qwen3.8-27b-q4xl-splash": {
+      "display_name": "Qwen–Splash / medium thinking / DFlash2",
+      "artifact": "qwen3.8-27b-q4xl",
+      "patches": [
+        "froggeric-qwen38-v22.5"
+      ],
+      "engine": "splash-darwin-arm64",
+      "interface": "chat-completions",
+      "modalities": [
+        "text"
+      ],
+      "context_window_tokens": 118000,
+      "request_defaults": {
+        "max_output_tokens": 4096,
+        "reasoning": "on",
+        "sampling": {
+          "temperature": 1.0,
+          "top_k": 20,
+          "top_p": 0.95,
+          "min_p": 0.0,
+          "repeat_penalty": 1.0,
+          "presence_penalty": 0.0,
+          "seed": 17
+        }
+      },
+      "speculation": {
+        "method": "dflash2",
+        "source": "artifact",
+        "max_draft_tokens": 0,
+        "draft_artifact": "qwen3.8-27b-dflash2"
+      },
+      "engine_config": {
+        "kind": "splash/v1",
+        "kv_cache": "int8",
+        "max_memory_bytes": 25769803776,
+        "reasoning_effort": "medium",
+        "request_timeout_seconds": 1800
+      },
+      "context_limit_tokens": 262144,
+      "engine_versions": {
+        "minimum_required": "1.1.0",
+        "required_source": "https://github.com/incoai/splash/releases/tag/1.1.0 (GGUF metadata derivation and architecture-matched DFlash2)",
+        "minimum_tested": "1.1.0",
+        "tested_evidence": "../docs/PLAN.md#splash-110-integration (2026-09-26 Apple M5 32 GiB; 32k advertised context, short chat/tool requests, owned shutdown; not a context-capacity or quality qualification)"
+      },
+      "memory_tier": "S"
     }
   },
   "profiles": {
@@ -258,6 +546,49 @@
           "preload": false
         }
       ]
+    },
+    "gemma-4-e2b-local": {
+      "gpu_memory_utilization": 0.5,
+      "bindings": [
+        {
+          "layout": "gemma-4-e2b-q4km-off",
+          "route": "default",
+          "residency": "resident",
+          "idle_ttl_seconds": 1800,
+          "preload": false
+        }
+      ]
+    },
+    "gemma-4-e4b-local": {
+      "gpu_memory_utilization": 0.5,
+      "bindings": [
+        {
+          "layout": "gemma-4-e4b-q4km-off",
+          "route": "default",
+          "residency": "resident",
+          "idle_ttl_seconds": 1800,
+          "preload": false
+        }
+      ]
+    },
+    "qwen3.8-27b-splash-local": {
+      "gpu_memory_utilization": 0.85,
+      "bindings": [
+        {
+          "layout": "qwen3.8-27b-q4xl-splash",
+          "route": "default",
+          "residency": "resident",
+          "idle_ttl_seconds": 1800,
+          "preload": false
+        }
+      ]
     }
-  }
+  },
+  "layout_order": [
+    "qwen3.8-27b-q4xl-splash",
+    "qwen3.8-27b-q4xl-mtp",
+    "gemma-4-e2b-q4km-off",
+    "gemma-4-e4b-q4km-off",
+    "qwen3.5-4b-q4km-off"
+  ]
 }

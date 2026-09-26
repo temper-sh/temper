@@ -40,7 +40,7 @@ func TestHFCacheDiskAccounting(t *testing.T) {
 		MetalDeviceMemorySource: machine.MetalDeviceSourcePredicted, WiredLimitSource: budget.WiredSourcePredicted,
 	}
 	root := filepath.Join(t.TempDir(), "temper")
-	fresh, err := Build(root, facts, 100<<30, locks)
+	fresh, err := Build(root, facts, 100<<30, locks, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestHFCacheDiskAccounting(t *testing.T) {
 			if tc.cached {
 				material.hfModels = map[hfcache.Entry]cachedModel{entry: {copy: !tc.shared}}
 			}
-			plan, err := BuildWithMaterial(root, facts, 100<<30, locks, material)
+			plan, err := BuildWithMaterial(root, facts, 100<<30, locks, material, "")
 			if err != nil {
 				t.Fatal(err)
 			}

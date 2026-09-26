@@ -59,6 +59,16 @@ func ResolveLayouts(ctx context.Context, document manifest.Document, ids []strin
 			Files:    files,
 			Resolved: resolvedDate,
 		}
+		if layout.Draft != nil {
+			pin, err := resolveModel(ctx, source, layout.Draft.Repo, layout.Draft.Files)
+			if err != nil {
+				return nil, fmt.Errorf("resolve draft for %q: %w", id, err)
+			}
+			entry.Draft = &lockfile.Draft{Repo: layout.Draft.Repo, Revision: pin.Revision}
+			for _, file := range pin.Files {
+				entry.Draft.Files = append(entry.Draft.Files, lockfile.File{Name: file.Name, SHA256: file.SHA256})
+			}
+		}
 		if layout.ChatTemplate != "" {
 			finalHash, ok := patches[layout.ChatTemplate]
 			if !ok {
@@ -81,6 +91,19 @@ func ResolveLayouts(ctx context.Context, document manifest.Document, ids []strin
 func ValidateSelection(id string, layout manifest.Layout, entry lockfile.Entry) error {
 	if entry.Repo != layout.Model.Repo {
 		return fmt.Errorf("layout %q repo drift: manifest has %q, lock has %q", id, layout.Model.Repo, entry.Repo)
+	}
+	if (layout.Draft == nil) != (entry.Draft == nil) {
+		return fmt.Errorf("layout %q selected draft drift", id)
+	}
+	if layout.Draft != nil {
+		if layout.Draft.Repo != entry.Draft.Repo || len(layout.Draft.Files) != len(entry.Draft.Files) {
+			return fmt.Errorf("layout %q selected draft drift", id)
+		}
+		for i, file := range layout.Draft.Files {
+			if file != entry.Draft.Files[i].Name {
+				return fmt.Errorf("layout %q selected draft file drift", id)
+			}
+		}
 	}
 	wanted := layout.ModelFiles()
 	if len(entry.Files) != len(wanted) {

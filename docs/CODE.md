@@ -115,7 +115,12 @@ layout variants without a weight rehash during review. Fetch hashes staged hard
 links before publishing each new composition. Saving stages the complete set of
 Selection/Execution Lock pairs and commits the configuration directory with an
 exclusive rename under a kernel writer lock. Existing differing files are a
-refusal; resume consumes exact saved locks without upstream resolution.
+refusal; resume consumes exact saved locks without upstream resolution. Local
+install choices and the default foreground are independent. The default keeps
+the `local` pair; alternatives have `local.PROFILE` pairs, so preparation and
+resume preserve each complete configuration without a second default registry.
+Catalog presentation labels, memory tiers and editorial order remain outside
+execution identity.
 
 Primary tests live beside each package. They cover navigation and explicit
 choices, changing upstream resolution between previews, stale machine facts,
@@ -134,6 +139,7 @@ pure dry runs, preserved user edits, concurrent saves and exact resume.
 | `internal/hfcache` | Shared model-cache inspection and official hf invocation; HF owns cache writes, locking and recovery |
 | `internal/patch` | Pinned patch-source parsing and deterministic patch application |
 | `internal/artifactset` | Immutable layout-set identity, verification and receipt-based discovery of reusable model hashes |
+| `internal/splash` | Splash assembly identity, local metadata derivation using the selected release, atomic preparation and verification; source models stay in `artifactset` |
 | `internal/render` | Pure construction of the complete llama-swap/Pi configuration bundle |
 | `internal/render/engine` | Closed pure engine-launch family, typed adapters, specialized command builders, and safe llama-swap shell serialization |
 | `internal/runtimeconfig` | Canonical generation-owned, receipt-resolved executable requirements shared by render and probe |
@@ -196,7 +202,7 @@ stays in member packages:
 - `adapter/uv` translates version-matched uv/PEP 751 data into an exact managed
   Python closure and installs that locked closure into an inspected immutable
   environment using its exact managed runtime and local hashed wheelhouse.
-- `adapter/upstreamrelease` discovers latest or exact numbered GitHub releases,
+- `adapter/upstreamrelease` discovers latest or exact numbered/semantic GitHub releases,
   verifies archive identities/inventory, and installs, inspects and removes
   private release archives.
 

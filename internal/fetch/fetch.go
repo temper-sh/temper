@@ -143,8 +143,21 @@ func publish(ctx context.Context, materialization plan, source upstream.Reader, 
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	hashes := make([]string, 0, len(materialization.entry.Files))
-	for _, model := range materialization.entry.Files {
+	type selectedModel struct {
+		lockfile.File
+		Repo, Revision, Prefix string
+	}
+	var selected []selectedModel
+	for _, file := range materialization.entry.Files {
+		selected = append(selected, selectedModel{file, materialization.entry.Repo, materialization.entry.Revision, "model"})
+	}
+	if draft := materialization.entry.Draft; draft != nil {
+		for _, file := range draft.Files {
+			selected = append(selected, selectedModel{file, draft.Repo, draft.Revision, "draft"})
+		}
+	}
+	hashes := make([]string, 0, len(selected))
+	for _, model := range selected {
 		hashes = append(hashes, model.SHA256)
 	}
 	models, err := artifactset.FindModels(materialization.root, hashes)
@@ -179,11 +192,11 @@ func publish(ctx context.Context, materialization plan, source upstream.Reader, 
 	defer func() { _ = os.RemoveAll(stage) }()
 
 	var receiptFiles []artifactset.Record
-	for _, model := range materialization.entry.Files {
+	for _, model := range selected {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		modelPath := filepath.ToSlash(filepath.Join("model", model.Name))
+		modelPath := filepath.ToSlash(filepath.Join(model.Prefix, model.Name))
 		if existing, ok := models[model.SHA256]; ok {
 			if err := linkModel(ctx, existing, stage, modelPath, model.SHA256, false); err != nil {
 				return fmt.Errorf("reuse model %q: %w", model.Name, err)
@@ -191,7 +204,7 @@ func publish(ctx context.Context, materialization plan, source upstream.Reader, 
 			receiptFiles = append(receiptFiles, artifactset.Record{Path: modelPath, SHA256: model.SHA256, Size: existing.Size})
 			continue
 		}
-		entry := hfcache.Entry{Repo: materialization.entry.Repo, Revision: materialization.entry.Revision, Name: model.Name, SHA256: model.SHA256}
+		entry := hfcache.Entry{Repo: model.Repo, Revision: model.Revision, Name: model.Name, SHA256: model.SHA256}
 		cached, err := (hfcache.Cache{Root: cacheRoot}).Ensure(ctx, entry, download)
 		if err != nil {
 			return fmt.Errorf("cache model %q: %w", model.Name, err)

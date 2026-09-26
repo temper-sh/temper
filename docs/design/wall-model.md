@@ -34,20 +34,32 @@ All byte quantities are converted to MiB and integer results round toward the
 safer side: model bytes round up; percentage-derived capacities and allocation
 round down.
 
-The bootstrap hardware adapter uses the witnessed legacy approximations until a
-native Metal capability read replaces them:
+The macOS hardware adapter reads `MTLDevice.recommendedMaxWorkingSetSize`
+directly from the system Metal framework:
 
 ```text
-device_mib = floor(physical_mib × 0.81)
-wired_mib  = positive live iogpu.wired_limit_mb
-             or floor(physical_mib × 0.65) when macOS reports no override
+device_mib = floor(recommendedMaxWorkingSetSize / MiB)
+wired_mib  = device_mib
 os_floor_mib = 1024
 ```
 
-`0.81` is the predicted Metal recommended working-set share. `0.65` is the
-predicted macOS default wired wall when no live override is exposed. The
-1,024 MiB OS/transient floor is policy, not a measurement. Every output names
-whether the wired wall was live or predicted.
+The source is `live-metal`. Apple's value describes a working-set budget for
+good performance, not a hard maximum accepted by the sysctl override. Temper
+uses it as its admission budget. The 1,024 MiB OS/transient floor remains
+policy, not a measurement. The binary needs neither developer tools nor MLX
+to read Metal. If Metal cannot report a usable budget, detection fails rather
+than substituting a percentage of RAM.
+
+Canonical machine facts optionally include `wired_limit_override_mib`, the raw
+`iogpu.wired_limit_mb` setting. Zero means no override; omission means the
+setting could not be read. It never replaces the effective Metal reading.
+Historical facts retain their labeled 81% device prediction and 65% default
+wired prediction or live sysctl observation, with unchanged canonical bytes.
+
+See Apple's [working-set property](https://developer.apple.com/documentation/metal/mtldevice/recommendedmaxworkingsetsize)
+and MLX's [manual system override guidance](https://github.com/ml-explore/mlx-lm#large-models).
+Temper's separate [setup reserve policy](../contracts/init.md) does not claim
+to detect a maximum system override.
 
 For a local-foreground mode, the preferred resident coder is the budget
 holder. A member with `ngl: 0` is CPU-only and does not enter the GPU sum.

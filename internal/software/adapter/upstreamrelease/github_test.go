@@ -215,3 +215,22 @@ func TestReleaseVersionOrderIsNumericAndRequiresSameTagFamily(t *testing.T) {
 		}
 	}
 }
+
+func TestUnprefixedSplashSemanticReleaseKeepsExactTagAndInventory(t *testing.T) {
+	source, reader, _ := taggedDiscoveryFixture(t, "incoai/splash", "1.1.0")
+	for _, requested := range []string{"latest", "1.1.0"} {
+		release, err := Discover(context.Background(), reader, source, requested)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if release.Version != "1.1.0" || !strings.Contains(release.Artifact.Locator, "/1.1.0/") {
+			t.Fatal(release)
+		}
+	}
+	if order, err := CompareVersions("1.1.0", "v1.0.9"); err != nil || order <= 0 {
+		t.Fatal(order, err)
+	}
+	if _, err := CompareVersions("1.1.0", "v257"); err == nil {
+		t.Fatal("mixed release families accepted")
+	}
+}

@@ -25,13 +25,13 @@ authoring path retains its canonical document identity and issued-lock behavior.
 Choose one software value. `recorded` is the default and uses retained exact
 inputs without network access. `latest` discovers the newest downloadable
 llama.cpp numbered build (published upstream as a nightly), and the upstream
-stable release for llama-swap. `tested` explicitly selects the recorded minimum
+stable releases for llama-swap and Splash. `tested` explicitly selects the recorded minimum
 tested version; it refuses unknown or conflicting tested boundaries.
 All choices must satisfy required versions. A failed lookup never triggers an
 automatic fallback. A newer resolved lock needs a new output path.
 
 Latest/tested discovery supports the current GitHub release archives for
-llama.cpp and llama-swap on macOS ARM64. It resolves the release tag to a commit,
+llama.cpp, llama-swap and Splash on macOS ARM64. It resolves the release tag to a commit,
 selects the target archive, verifies its upstream SHA-256 and size, and computes
 the bounded archive inventory without writing files. llama.cpp discovery scans
 at most 100 recent releases, skipping drafts and builds missing the target
@@ -40,7 +40,7 @@ trying an older build. Only official llama.cpp `b<number>` builds may carry
 GitHub's prerelease flag; other sources require stable releases.
 
 Numbered `b...` and `v...` tags are compared numerically within their own family.
-Semantic `vMAJOR.MINOR.PATCH` tags use semantic version ordering. Ordering between
+Semantic `MAJOR.MINOR.PATCH` and `vMAJOR.MINOR.PATCH` tags use semantic version ordering. Ordering between
 families is never inferred. Unknown tag formats or missing integrity metadata
 refuse. See upstream's [versioning explanation](https://github.com/ggml-org/ggml/discussions/1579)
 and [release API](https://docs.github.com/en/rest/releases/releases).
@@ -57,6 +57,32 @@ metadata and archive bytes.
 ## Owned records and scope
 
 `temper-catalog/v2` has Artifact, Patch, Engine, Layout and Profile records.
+Optional presentation metadata keeps the chooser's Model / Weights / Engine
+labels distinct: Artifact owns `model_name` and `weights_name`; Engine owns
+`display_name`. A Layout's `memory_tier` is an estimated machine-capacity group
+(`XS`, `S`, `M`, `L`, `XL`, or `XXL`), not model file size or an admission rule.
+Missing labels fall back to existing record names; missing tiers stay
+unspecified. The optional catalog-level `layout_order` lists layout IDs in
+editorial order. IDs must exist and appear at most once; unlisted choices follow
+in stable profile-ID order within their tier. Setup groups available tiers from
+largest to smallest before applying that order. These fields change catalog
+source identity, but neither execution identity nor context evidence identity.
+
+The `splash/v1` engine variant uses `kv_cache` (`int8` or `bf16`),
+`max_memory_bytes`, `reasoning_effort` and `request_timeout_seconds`; llama.cpp
+fields cannot appear in that variant. A Splash Layout selects one target GGUF
+and `speculation: {method: dflash2, source: artifact, max_draft_tokens: 0,
+draft_artifact: ID}`. The draft Artifact pins its own repository, revision,
+`config.json` and `model.safetensors`. Splash's release-owned architecture mapping
+validates that this is the proper DFlash2 sidecar. It is included automatically
+with the Layout, without another user choice. The engine owns draft block size.
+
+The selected closure includes target, draft, template and software independently.
+Changing draft bytes invalidates the composition and artifact-set identity without
+changing target identity. Draftless issued locks retain their original digests.
+Compatibility exports represent the sidecar as `layout.draft` and `entry.draft`;
+Splash preparation is performed by `execution prepare`.
+
 Software supplies contain `package`, `target`, a GitHub `source` and optionally
 a retained exact `release`. The source names its repository, asset template and
 archive root. `{version}` expands to the tag and `{number}` to its numeric part.

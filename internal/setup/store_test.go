@@ -33,7 +33,8 @@ func TestDefaultRootSaveAndResumeExactLocks(t *testing.T) {
 	if len(entries) != 4 {
 		t.Fatalf("saved files = %d, want two complete pairs", len(entries))
 	}
-	locks, err := setup.Load(root)
+	saved, err := setup.Load(root)
+	locks := saved.Locks
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,7 +202,8 @@ func TestConcurrentConflictingSavesPublishOneCompleteChoice(t *testing.T) {
 	if successes != 1 {
 		t.Fatalf("successful conflicting saves = %d, want one", successes)
 	}
-	locks, err := setup.Load(root)
+	saved, err := setup.Load(root)
+	locks := saved.Locks
 	if err != nil {
 		t.Fatal(err)
 	}

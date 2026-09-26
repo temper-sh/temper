@@ -135,13 +135,10 @@ func InspectTarGzStream(ctx context.Context, input io.Reader, spec TarGzSpec) ([
 	if len(entries) == 0 {
 		return nil, fmt.Errorf("%s payload is empty", spec.label())
 	}
-	var trailing [1]byte
-	if count, trailingErr := compressed.Read(trailing[:]); count != 0 || !errors.Is(trailingErr, io.EOF) {
-		if trailingErr != nil && !errors.Is(trailingErr, io.EOF) {
-			return nil, fmt.Errorf("finish %s gzip stream: %w", spec.label(), trailingErr)
-		}
-		return nil, fmt.Errorf("%s has trailing decompressed content", spec.label())
+	if err := finishTarGz(ctx, compressed, spec.label()); err != nil {
+		return nil, err
 	}
+
 	addImplicitDirectories(entries)
 	if len(entries) > spec.MaxEntries {
 		return nil, fmt.Errorf("%s exceeds entry limit", spec.label())
@@ -253,6 +250,9 @@ func ExtractTarGz(ctx context.Context, archivePath, destination string, spec Tar
 		case "symlink":
 			symlinks = append(symlinks, entry)
 		}
+	}
+	if err := finishTarGz(ctx, compressed, spec.label()); err != nil {
+		return err
 	}
 	for _, entry := range expected {
 		if entry.Type != "directory" && !seen[entry.Path] {
@@ -575,6 +575,37 @@ func copyWithContext(ctx context.Context, destination io.Writer, source io.Reade
 		}
 		if readErr != nil {
 			return written, readErr
+		}
+	}
+}
+
+// Tar writers may pad the final record beyond the two end-of-archive blocks.
+// Admit bounded zero padding, consume the gzip checksum, and reject hidden data.
+func finishTarGz(ctx context.Context, input io.Reader, label string) error {
+	var buffer [4096]byte
+	total := 0
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		n, err := input.Read(buffer[:])
+		total += n
+		if total > 1<<20 {
+			return fmt.Errorf("%s trailing padding exceeds limit", label)
+		}
+		for _, value := range buffer[:n] {
+			if value != 0 {
+				return fmt.Errorf("%s has trailing decompressed content", label)
+			}
+		}
+		if errors.Is(err, io.EOF) {
+			if total%512 != 0 {
+				return fmt.Errorf("%s has incomplete trailing tar block", label)
+			}
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("finish %s gzip stream: %w", label, err)
 		}
 	}
 }

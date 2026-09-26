@@ -14,6 +14,8 @@ const (
 	StatusUnavailable   = "unavailable"
 	StatusNotApplicable = "not-applicable"
 
+	WiredSourceMetal = "live-metal"
+	// Legacy sources remain valid for historical machine facts.
 	WiredSourceLive      = "live-sysctl"
 	WiredSourcePredicted = "predicted-macos-default"
 
@@ -153,7 +155,7 @@ func validate(input Input) error {
 	if machine.DeviceMiB > machine.PhysicalMiB || machine.WiredLimitMiB > machine.PhysicalMiB {
 		return errors.New("machine device and wired capacities cannot exceed physical memory")
 	}
-	if machine.WiredSource != WiredSourceLive && machine.WiredSource != WiredSourcePredicted {
+	if machine.WiredSource != WiredSourceMetal && machine.WiredSource != WiredSourceLive && machine.WiredSource != WiredSourcePredicted {
 		return fmt.Errorf("unknown wired-limit source %q", machine.WiredSource)
 	}
 

@@ -8,7 +8,8 @@ executable. The read-only check analyzer/reader and provenance-guided removal
 planner, receipt release, adapter effect
 orchestration, and recovery path are executable as well. The public verbs now
 detect the exact macOS host target and compose two concrete isolated members:
-`upstream-release` for reviewed release archives and `uv` for exact managed-
+`upstream-release` for reviewed release archives (including Splash's bundled
+interpreter) and `uv` for exact managed-
 Python/wheel closures. Locks naming another installation adapter refuse
 without fallback. Their hermetic scratch gates cover dry-run purity, exact
 check, failed replacement, drift repair, and clean repeated install/remove. The canonical
@@ -487,10 +488,11 @@ machine:
   chip: <machdep.cpu.brand_string>
   os_build: <exact macOS build>
   physical_memory_bytes: <positive integer>
-  metal_device_memory_mib: <81-percent wall-model estimate>
-  metal_device_memory_source: predicted-metal-81-percent
-  wired_limit_mib: <live value or conservative predicted default>
-  wired_limit_source: live-sysctl|predicted-macos-default
+  metal_device_memory_mib: <Metal recommendedMaxWorkingSetSize rounded down to MiB>
+  metal_device_memory_source: live-metal
+  wired_limit_mib: <same effective Metal budget>
+  wired_limit_source: live-metal
+  wired_limit_override_mib: <optional raw sysctl setting; zero means no override>
 manifest_lock:
   schema: temper-lock/v1
   sha256: <sha256 of the exact validated manifest.lock.yaml bytes>
@@ -510,6 +512,16 @@ installations:
         receipt_sha256: <base canonical receipt sha256>
         requirements: []
 ```
+
+The live machine adapter uses Metal's recommended working set for both budget
+fields. The optional sysctl override records configuration separately; an
+unavailable override is omitted and never triggers a guessed default.
+Historical `temper-machine-facts/v1` records remain readable and retain their
+exact bytes and labels: `predicted-metal-81-percent` for device memory, and
+`live-sysctl` or `predicted-macos-default` for the wired budget. They are never
+relabelled as native observations. Metal's performance budget is not a hard
+maximum for system overrides; the [wall-model design](../design/wall-model.md)
+owns that distinction.
 
 The top-level installation list is ordered input, not a set that Temper sorts.
 Every installation ID is unique. A required receipt must occur earlier in that

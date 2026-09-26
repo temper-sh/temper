@@ -321,3 +321,42 @@ and old locks retain their original windows. Regressions check actual rendered
 context arguments, independent mode choices, invalid input, exact resume and
 unchanged weight identity. This applies the existing fact-ownership and
 assertion-strength guidance; no skill change is needed.
+
+## Catalog grouping and installed alternatives — 2026-09-26
+
+The [setup contract](contracts/init.md) separates the models selected for
+installation from the default local foreground. Data-modeling guidance kept
+catalog labels, estimated memory tiers and editorial order outside execution
+identity. The existing `local` selection/lock pair owns the default; alternatives
+have their own exact pairs, without a second mutable default registry.
+
+Reliable-effects guidance kept publication at the existing atomic configuration
+boundary. Testing guidance directed regressions at independent template/context
+choices, missing or ambiguous defaults, interrupted/refused saves, clean reruns
+and offline preparation from every saved lock. A native terminal dry run checked
+the grouped choices and per-model traversal. Existing guidance covered the
+change; no skill change is warranted.
+
+
+## Splash release integration — 2026-09-26
+
+The [execution contract](contracts/execution-runtime.md) keeps draft identity,
+source weights, derived tokenizer and native conversion cache at their own grains.
+Splash owns architecture matching and conversion; Temper invokes the selected
+release's metadata routine and owns exact inputs, publication and supervision.
+This avoided copying upstream model-loading algorithms or introducing another
+installer. The prebuilt archive exposed valid tar record padding that the shared
+archive reader previously refused; bounded zero padding is now admitted with
+checksum, payload and size-limit regressions.
+
+Failure tests cover draft hash rejection, retained shared-cache ownership,
+retry after cache repair, target reuse, concurrent preparation, changed metadata,
+and exact frontend/native command ancestry. Harmless native child processes test
+three-role ownership and shutdown. Existing craft guidance was sufficient.
+
+The authorized native check then caught a source-format boundary omitted by
+metadata-only tests: Splash requires a `model.json` descriptor to choose its
+source loader. A focused assertion now checks that contract; startup diagnostics
+are exposed through the router. After correction, the real 1.1.0 release served
+short chat and tool requests and proved owned shutdown. The integration smoke
+was kept separate from context-capacity and quality evidence.

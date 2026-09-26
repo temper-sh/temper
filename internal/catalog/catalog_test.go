@@ -33,8 +33,8 @@ func document() catalog.Document {
 		Layouts: map[string]catalog.Layout{"qwen-32k": {DisplayName: "Qwen source work", Artifact: "qwen-q4", Patches: []string{"template"}, Engine: "llama-b10936", Interface: "chat-completions", Modalities: []string{"text"}, ContextWindowTokens: 32768,
 			RequestDefaults: catalog.RequestDefaults{MaxOutputTokens: 4096, Reasoning: "off", Sampling: engine.SamplingDefaults{Temperature: 0, TopK: 1, TopP: 1, MinP: 0, RepeatPenalty: 1, PresencePenalty: 0, Seed: 17}},
 			Speculation:     catalog.Speculation{Method: "mtp", Source: "embedded", MaxDraftTokens: 3},
-			EngineConfig: catalog.LlamaConfig{Kind: "llama-server/v2", Parallel: 1, KVCache: "q8", FlashAttention: "on", BatchTokens: 512, MicrobatchTokens: 512, ContextCheckpoints: 16, PromptCacheRAMMiB: 0, GPULayers: 99,
-				Controls: engine.LlamaServerControls{CacheReuse: 16, ReasoningEffort: "medium", PreserveReasoning: true, ContextShift: false, CachePrompt: true, Fit: "off", Threads: 4, ThreadsBatch: 4, LoadMode: "mmap"}}}},
+			EngineConfig: catalog.EngineConfig{LlamaConfig: catalog.LlamaConfig{Kind: "llama-server/v2", Parallel: 1, KVCache: "q8", FlashAttention: "on", BatchTokens: 512, MicrobatchTokens: 512, ContextCheckpoints: 16, PromptCacheRAMMiB: 0, GPULayers: 99,
+				Controls: engine.LlamaServerControls{CacheReuse: 16, ReasoningEffort: "medium", PreserveReasoning: true, ContextShift: false, CachePrompt: true, Fit: "off", Threads: 4, ThreadsBatch: 4, LoadMode: "mmap"}}}}},
 		Profiles: map[string]catalog.Profile{"local-qwen": {GPUMemoryUtilization: .85, Bindings: []catalog.Binding{{Layout: "qwen-32k", Route: "default", Residency: "resident", IdleTTLSeconds: 1800}}}}}
 }
 

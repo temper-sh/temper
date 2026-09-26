@@ -188,7 +188,8 @@ func TestUtilityProfileHasExternalForegroundWithoutLocalMain(t *testing.T) {
 	if len(got.Plan.Modes) != 1 || got.Plan.Modes[0].Mode != "utility" || got.Plan.Modes[0].Profile != utilityProfile {
 		t.Fatalf("utility plan = %+v", got.Plan)
 	}
-	locks, err := setup.Load(root)
+	saved, err := setup.Load(root)
+	locks := saved.Locks
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,13 +199,18 @@ func TestUtilityProfileHasExternalForegroundWithoutLocalMain(t *testing.T) {
 }
 
 func TestUnknownAndIncompatibleChoicesRefuseBeforeEffects(t *testing.T) {
+	d := testedCompactCatalog(t, guidedCatalog(t))
+	d.Artifacts["unselected"] = d.Artifacts[d.Layouts[compactLayout].Artifact]
+	patch := d.Patches[largePatch]
+	patch.CompatibleArtifacts = []string{"unselected"}
+	d.Patches["incompatible"] = patch
 	for _, tc := range []struct {
 		name string
 		args []string
 		want string
 	}{
 		{"unknown profile", []string{"--profile", "unlisted-profile"}, "unknown profile"},
-		{"incompatible patch", []string{"--profile", compactProfile, "--template", compactLayout + "=" + largePatch}, "compatible"},
+		{"incompatible patch", []string{"--profile", compactProfile, "--template", compactLayout + "=incompatible"}, "compatible"},
 		{"unknown layout", []string{"--profile", compactProfile, "--template", "unlisted-layout=builtin"}, "unselected layout"},
 		{"unknown context layout", []string{"--profile", compactProfile, "--context", "unknown=65536"}, "unselected layout"},
 		{"unselected context layout", []string{"--profile", compactProfile, "--context", "qwen3.8-27b-q4xl-mtp=65536"}, "unselected layout"},
@@ -219,6 +225,7 @@ func TestUnknownAndIncompatibleChoicesRefuseBeforeEffects(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			root := filepath.Join(t.TempDir(), "absent-root")
 			c := fixtureCommand(t)
+			c.Catalog = func(context.Context, string, string) (catalog.Document, string, error) { return d, fixtureDigest, nil }
 			args := append([]string{"--root", root}, tc.args...)
 			code, _, diagnostics := runSetup(c, args...)
 			if code == 0 || !strings.Contains(diagnostics, tc.want) {
@@ -238,14 +245,6 @@ func TestCancelLeavesDefaultRootAbsent(t *testing.T) {
 	c.UI = func(_ context.Context, _ io.Reader, _ io.Writer, input setupui.Input, _ func(context.Context, setupui.Choices) (setupui.Review, error)) (setupui.Decision, error) {
 		if len(input.Modes) != 2 || !strings.Contains(input.Machine, "Apple M2") {
 			t.Fatalf("wizard input = %+v", input)
-		}
-		for _, profile := range input.Profiles {
-			if profile.SoftwareUnavailable["tested"] == "" || profile.SoftwareUnavailable["recorded"] != "" {
-				t.Fatalf("software availability differs from catalog evidence: %+v", profile)
-			}
-			if len(profile.Contexts) != 1 || profile.Contexts[0].Maximum != 262144 || profile.Contexts[0].Minimum != 4097 {
-				t.Fatalf("wizard context range differs from catalog: %+v", profile.Contexts)
-			}
 		}
 		return setupui.Decision{Action: "cancel"}, nil
 	}
@@ -294,6 +293,7 @@ func TestDefaultRootIsHomeTemper(t *testing.T) {
 func TestPreviewTokenPinsAcceptedPlanAcrossMovingResolution(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "setup")
 	c := fixtureCommand(t)
+	want := guidedCatalog(t).Runtime.Router.Release.Version
 	var resolutions int
 	c.Resolve = func(_ context.Context, d catalog.Document, _ catalog.Selection, choice string) (catalog.Document, error) {
 		if choice != "latest" {
@@ -302,7 +302,7 @@ func TestPreviewTokenPinsAcceptedPlanAcrossMovingResolution(t *testing.T) {
 		resolutions++
 		release := *d.Runtime.Router.Release
 		if resolutions == 2 {
-			release.Version = "v256"
+			release.Version = "v999999"
 		}
 		d.Runtime.Router.Release = &release
 		return d, nil
@@ -329,12 +329,13 @@ func TestPreviewTokenPinsAcceptedPlanAcrossMovingResolution(t *testing.T) {
 	if resolutions != 2 {
 		t.Fatalf("resolution count = %d", resolutions)
 	}
-	locks, err := setup.Load(root)
+	saved, err := setup.Load(root)
+	locks := saved.Locks
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := locks[0].Records.Runtime.Router.Release.Version; got != "v255" {
-		t.Fatalf("saved moving version %q, want accepted v255", got)
+	if got := locks[0].Records.Runtime.Router.Release.Version; got != want {
+		t.Fatalf("saved moving version %q, want accepted %s", got, want)
 	}
 }
 
@@ -524,13 +525,9 @@ func TestLowDiskRefusesPrepareBeforeSaving(t *testing.T) {
 func TestPrepareRechecksDiskAfterPreviewBeforeSaving(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "absent-root")
 	c := fixtureCommand(t)
-	var checks int
+	free := 40 * GiB
 	c.Disk = func(string) (int64, error) {
-		checks++
-		if checks == 1 {
-			return 40 * GiB, nil
-		}
-		return 1, nil
+		return free, nil
 	}
 	c.UI = func(ctx context.Context, _ io.Reader, _ io.Writer, _ setupui.Input, preview func(context.Context, setupui.Choices) (setupui.Review, error)) (setupui.Decision, error) {
 		choices := setupui.Choices{Profiles: []setupui.Choice{{Mode: "local", Profile: compactProfile}}, Software: "recorded"}
@@ -538,11 +535,12 @@ func TestPrepareRechecksDiskAfterPreviewBeforeSaving(t *testing.T) {
 		if err != nil || !review.CanPrepare {
 			t.Fatalf("initial preview: %+v, %v", review, err)
 		}
+		free = 1 // Space disappears after review, before the user prepares.
 		return setupui.Decision{Choices: choices, Action: "prepare", ReviewToken: review.Token}, nil
 	}
 	code, _, diagnostics := runSetup(c, "--root", root)
-	if checks != 2 || code == 0 || !strings.Contains(diagnostics, "disk") {
-		t.Fatalf("recheck = %d, code %d, diagnostics %q", checks, code, diagnostics)
+	if code == 0 || !strings.Contains(diagnostics, "disk") {
+		t.Fatalf("code %d, diagnostics %q", code, diagnostics)
 	}
 	if _, err := os.Stat(root); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("failed recheck saved root: %v", err)

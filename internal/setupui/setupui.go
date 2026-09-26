@@ -16,6 +16,8 @@ import (
 type Option struct {
 	ID, Name, Description, DisabledReason string
 	Details, AssessmentURL                string
+	Components                            string
+	Advice                                *Section
 }
 
 type Template struct {
@@ -26,6 +28,7 @@ type Template struct {
 type Profile struct {
 	Option
 	Mode                string
+	MemoryTier          string
 	Templates           []Template
 	Contexts            []ContextWindow
 	SoftwareUnavailable map[string]string // Software choice ID to unavailability reason.
@@ -44,14 +47,16 @@ type Choice struct {
 }
 
 type Choices struct {
-	Profiles []Choice
-	Software string // recorded, latest, or tested; explicitly selected.
+	Profiles       []Choice
+	DefaultProfile string // Explicit local foreground; installation is independent.
+	Software       string // recorded, latest, or tested; explicitly selected.
 }
 
 type Section struct {
 	Title     string
 	Lines     []string
 	Downloads []Download // Non-nil sections have a collapsible file table.
+	Warning   bool
 }
 
 type Download struct {
@@ -59,10 +64,11 @@ type Download struct {
 }
 
 type Review struct {
-	Sections      []Section
-	CanPrepare    bool
-	PrepareReason string
-	Token         string // Opaque identity of the exact plan shown to the user.
+	Sections        []Section
+	CanPrepare      bool
+	PrepareReason   string
+	Token           string          // Opaque identity of the exact plan shown to the user.
+	ContextRequired *ContextRequest // Missing input; no save or prepare token is issued.
 }
 
 type Decision struct {
@@ -97,8 +103,10 @@ type Model struct {
 	stage          stage
 	cursor         int
 	modeAt         int
+	profileAt      int
 	selected       map[string]bool
-	profiles       map[string]string
+	profiles       map[string]string                       // Default local profile and selected utility profile.
+	additional     map[string]bool                         // Other explicitly selected local profiles.
 	patches        map[string]map[string]map[string]string // mode -> profile -> layout -> patch
 	contexts       map[contextKey]textinput.Model
 	software       string
@@ -125,7 +133,8 @@ func NewModel(ctx context.Context, input Input, preview func(context.Context, Ch
 	v.SoftWrap = false // Lip Gloss wraps each block before viewport placement.
 	return &Model{input: input, preview: preview, ctx: ctx,
 		selected: make(map[string]bool), profiles: make(map[string]string),
-		patches: make(map[string]map[string]map[string]string), width: 80, height: 24,
+		additional: make(map[string]bool),
+		patches:    make(map[string]map[string]map[string]string), width: 80, height: 24,
 		contexts: make(map[contextKey]textinput.Model),
 		viewport: v, focusSelection: true}
 }
@@ -144,7 +153,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.cancelPreview()
 			m.loading, m.reviewErr = false, msg.err
 			if msg.err == nil {
-				m.review = msg.review
+				if msg.review.ContextRequired != nil {
+					m.review = Review{}
+					if !m.requestContext(*msg.review.ContextRequired) {
+						m.reviewErr = errors.New("preview requested context for an unselected model")
+					}
+				} else {
+					m.review = msg.review
+				}
 			} else {
 				m.review = Review{}
 			}
@@ -164,6 +180,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case hitChoice:
 				m.cursor = target.index
 				m.activate()
+			case hitInstall:
+				m.cursor = target.index
+				m.toggleInstall()
 			case hitReview:
 				m.cursor = target.index
 				return m.finish()
@@ -238,6 +257,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.cursor == m.optionCount() {
 				return m.advance()
 			}
+			if m.stage == stageProfile && m.currentMode() == "local" {
+				m.toggleInstall()
+				return m, nil
+			}
 			m.activate()
 			return m, nil
 		case "enter":
@@ -262,6 +285,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "d":
 			if m.stage == stageReview {
 				m.toggleDownloads()
+			} else if m.stage == stageProfile && m.currentMode() == "local" {
+				m.activate()
 			}
 			return m, nil
 		case "r":
@@ -325,6 +350,12 @@ func (m *Model) activate() {
 			m.notice = p.DisabledReason
 			return
 		}
+		if m.currentMode() == "local" {
+			if old := m.profiles["local"]; old != "" && old != p.ID {
+				m.additional[old] = true
+			}
+			delete(m.additional, p.ID)
+		}
 		m.profiles[m.currentMode()] = p.ID
 		m.initTemplates(m.currentMode(), p)
 		m.initContexts(m.currentMode(), p)
@@ -358,6 +389,29 @@ func (m *Model) activate() {
 	}
 }
 
+func (m *Model) toggleInstall() {
+	ps := m.availableProfiles()
+	if m.stage != stageProfile || m.currentMode() != "local" || m.cursor >= len(ps) {
+		return
+	}
+	p := ps[m.cursor]
+	m.notice, m.focusSelection = "", true
+	if p.DisabledReason != "" {
+		m.notice = p.DisabledReason
+		return
+	}
+	if m.profiles["local"] == p.ID {
+		delete(m.profiles, "local")
+		m.notice = "Default removed. Choose a default with Enter or d."
+	} else if m.additional[p.ID] {
+		delete(m.additional, p.ID)
+	} else {
+		m.additional[p.ID] = true
+		m.initTemplates("local", p)
+		m.initContexts("local", p)
+	}
+}
+
 func (m *Model) advance() (tea.Model, tea.Cmd) {
 	m.notice = ""
 	switch m.stage {
@@ -366,13 +420,17 @@ func (m *Model) advance() (tea.Model, tea.Cmd) {
 			m.notice = "Choose at least one available mode."
 			return m, nil
 		}
-		m.modeAt, m.stage, m.cursor = 0, stageProfile, 0
+		m.modeAt, m.profileAt, m.stage, m.cursor = 0, 0, stageProfile, 0
 	case stageProfile:
-		p, ok := m.currentProfile()
+		p, ok := m.profileForMode(m.currentMode())
 		if !ok {
 			m.notice = "Choose a profile for this mode."
+			if m.currentMode() == "local" && len(m.chosenProfiles("local")) > 0 {
+				m.notice = "Choose the default local model with Enter or d."
+			}
 			return m, nil
 		}
+		m.profileAt = 0
 		if hasTemplateChoices(p) {
 			m.stage, m.cursor = stageTemplates, 0
 		} else {
@@ -410,13 +468,23 @@ func (m *Model) advance() (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) nextMode() {
+	if m.profileAt+1 < len(m.chosenProfiles(m.currentMode())) {
+		m.profileAt++
+		p, _ := m.currentProfile()
+		if hasTemplateChoices(p) {
+			m.stage, m.cursor = stageTemplates, 0
+		} else {
+			m.contextOrNextMode()
+		}
+		return
+	}
 	if m.modeAt+1 < len(m.chosenModes()) {
 		m.modeAt++
 		m.stage = stageProfile
 	} else {
 		m.stage = stageSoftware
 	}
-	m.cursor = 0
+	m.profileAt, m.cursor = 0, 0
 }
 
 func (m Model) lastModelStage() stage {
@@ -431,6 +499,25 @@ func (m Model) lastModelStage() stage {
 	return stageProfile
 }
 
+func (m *Model) previousProfile() {
+	for m.profileAt > 0 {
+		m.profileAt--
+		m.stage = m.lastModelStage()
+		if m.stage != stageProfile {
+			return
+		}
+	}
+	m.stage = stageProfile
+}
+
+func (m *Model) lastProfile() {
+	m.profileAt = max(0, len(m.chosenProfiles(m.currentMode()))-1)
+	m.stage = m.lastModelStage()
+	if m.stage == stageProfile {
+		m.previousProfile()
+	}
+}
+
 func (m *Model) back() {
 	m.notice = ""
 	switch m.stage {
@@ -441,18 +528,19 @@ func (m *Model) back() {
 			m.stage = stageModes
 		} else {
 			m.modeAt--
-			m.stage = m.lastModelStage()
+			m.lastProfile()
 		}
 	case stageTemplates:
-		m.stage = stageProfile
+		m.previousProfile()
 	case stageContext:
-		m.stage = stageProfile
 		if p, ok := m.currentProfile(); ok && hasTemplateChoices(p) {
 			m.stage = stageTemplates
+		} else {
+			m.previousProfile()
 		}
 	case stageSoftware:
 		m.modeAt = len(m.chosenModes()) - 1
-		m.stage = m.lastModelStage()
+		m.lastProfile()
 	case stageReview:
 		m.seq++ // Ignore an in-flight preview from the old selection.
 		m.cancelPreview()
@@ -563,7 +651,28 @@ func (m Model) availableProfiles() []Profile {
 }
 
 func (m Model) currentProfile() (Profile, bool) {
-	return m.profileForMode(m.currentMode())
+	ps := m.chosenProfiles(m.currentMode())
+	if m.profileAt < 0 || m.profileAt >= len(ps) {
+		return Profile{}, false
+	}
+	return ps[m.profileAt], true
+}
+
+// Configure the default first, then the other installed choices in their
+// catalog order. Their template/context state remains keyed by profile.
+func (m Model) chosenProfiles(mode string) []Profile {
+	var result []Profile
+	if p, ok := m.profileForMode(mode); ok {
+		result = append(result, p)
+	}
+	if mode == "local" {
+		for _, p := range m.input.Profiles {
+			if p.Mode == mode && p.DisabledReason == "" && m.additional[p.ID] && p.ID != m.profiles[mode] {
+				result = append(result, p)
+			}
+		}
+	}
+	return result
 }
 
 func (m Model) profileForMode(mode string) (Profile, bool) {
@@ -638,12 +747,9 @@ var softwareOptions = []Option{
 func (m Model) softwareOption(o Option) Option {
 	var reasons []string
 	for _, mode := range m.chosenModes() {
-		for _, p := range m.input.Profiles {
-			if p.Mode == mode && p.ID == m.profiles[mode] {
-				if reason := p.SoftwareUnavailable[o.ID]; reason != "" {
-					reasons = append(reasons, mode+": "+reason)
-				}
-				break
+		for _, p := range m.chosenProfiles(mode) {
+			if reason := p.SoftwareUnavailable[o.ID]; reason != "" {
+				reasons = append(reasons, mode+": "+reason)
 			}
 		}
 	}
@@ -689,12 +795,16 @@ func (m Model) optionCount() int {
 func (m Model) choices() Choices {
 	c := Choices{Software: m.software}
 	for _, mode := range m.chosenModes() {
-		profile := m.profiles[mode]
-		patches := make(map[string]string)
-		for layout, patch := range m.patches[mode][profile] {
-			patches[layout] = patch
+		if mode == "local" {
+			c.DefaultProfile = m.profiles[mode]
 		}
-		c.Profiles = append(c.Profiles, Choice{Mode: mode, Profile: profile, Templates: patches, ContextWindows: m.contextChoices(mode, profile)})
+		for _, p := range m.chosenProfiles(mode) {
+			patches := make(map[string]string)
+			for layout, patch := range m.patches[mode][p.ID] {
+				patches[layout] = patch
+			}
+			c.Profiles = append(c.Profiles, Choice{Mode: mode, Profile: p.ID, Templates: patches, ContextWindows: m.contextChoices(mode, p.ID)})
+		}
 	}
 	return c
 }

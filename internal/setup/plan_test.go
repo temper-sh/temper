@@ -67,7 +67,7 @@ func planFor(t *testing.T, root string, gib int64, profiles ...string) setup.Pla
 	for _, profile := range profiles {
 		locks = append(locks, selectedLock(t, d, profile))
 	}
-	plan, err := setup.Build(root, facts(gib), 100<<30, locks)
+	plan, err := setup.Build(root, facts(gib), 100<<30, locks, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestCompactMainIsEligibleAtPredictedSmallMemoryWalls(t *testing.T) {
 	large := selectedLock(t, d, largeLocal)
 	for _, gib := range []int64{8, 16, 24, 32} {
 		t.Run(setup.Size(gib<<30), func(t *testing.T) {
-			plan, err := setup.Build(filepath.Join(t.TempDir(), "root"), facts(gib), 100<<30, []catalog.Lock{compact})
+			plan, err := setup.Build(filepath.Join(t.TempDir(), "root"), facts(gib), 100<<30, []catalog.Lock{compact}, "")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -90,7 +90,7 @@ func TestCompactMainIsEligibleAtPredictedSmallMemoryWalls(t *testing.T) {
 		})
 	}
 	for _, gib := range []int64{8, 16, 24} {
-		plan, err := setup.Build(filepath.Join(t.TempDir(), "root"), facts(gib), 100<<30, []catalog.Lock{large})
+		plan, err := setup.Build(filepath.Join(t.TempDir(), "root"), facts(gib), 100<<30, []catalog.Lock{large}, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -107,7 +107,7 @@ func TestUtilityGPUWeightsNeedWiredMemoryEvenWithoutLocalForeground(t *testing.T
 	utility.Bindings[0].Residency = "resident"
 	d.Profiles[compactUtility] = utility
 	locked := selectedLock(t, d, compactUtility)
-	plan, err := setup.Build(filepath.Join(t.TempDir(), "root"), facts(24), 100<<30, []catalog.Lock{locked})
+	plan, err := setup.Build(filepath.Join(t.TempDir(), "root"), facts(24), 100<<30, []catalog.Lock{locked}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +126,7 @@ func TestMultiLayoutChoiceIsReviewableButCannotBePrepared(t *testing.T) {
 	})
 	d.Profiles[compactLocal] = profile
 	locked := selectedLock(t, d, compactLocal)
-	plan, err := setup.Build(filepath.Join(t.TempDir(), "root"), facts(16), 100<<30, []catalog.Lock{locked})
+	plan, err := setup.Build(filepath.Join(t.TempDir(), "root"), facts(16), 100<<30, []catalog.Lock{locked}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +146,7 @@ func TestTwoModesShareOneModelSetButKeepSeparateSoftwareInstalls(t *testing.T) {
 	local := selectedLock(t, d, compactLocal)
 	utility := selectedLock(t, d, compactUtility)
 	root := filepath.Join(t.TempDir(), "root")
-	plan, err := setup.Build(root, facts(16), 100<<30, []catalog.Lock{utility, local})
+	plan, err := setup.Build(root, facts(16), 100<<30, []catalog.Lock{utility, local}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +177,7 @@ func TestTwoModesShareOneModelSetButKeepSeparateSoftwareInstalls(t *testing.T) {
 func TestDiskShortfallRefusesPreparationWithoutDiscardingChoices(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "root")
 	ready := planFor(t, root, 16, compactLocal)
-	plan, err := setup.Build(root, facts(16), ready.FreshDiskBytes-1, []catalog.Lock{ready.Modes[0].Lock})
+	plan, err := setup.Build(root, facts(16), ready.FreshDiskBytes-1, []catalog.Lock{ready.Modes[0].Lock}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -229,7 +229,7 @@ func writeTinyModelSet(t *testing.T, root string, locked catalog.Lock) string {
 func TestInspectedModelSetReducesRemainingDiskAndDownloadAllowance(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "root")
 	locks := tinyModelLocks(t)
-	fresh, err := setup.Build(root, facts(16), 100<<30, locks)
+	fresh, err := setup.Build(root, facts(16), 100<<30, locks, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -243,7 +243,7 @@ func TestInspectedModelSetReducesRemainingDiskAndDownloadAllowance(t *testing.T)
 	if _, err := os.Lstat(root); !os.IsNotExist(err) {
 		t.Fatalf("inspection created root: %v", err)
 	}
-	without, err := setup.BuildWithMaterial(root, facts(16), fresh.FreshDiskBytes-1, locks, absent)
+	without, err := setup.BuildWithMaterial(root, facts(16), fresh.FreshDiskBytes-1, locks, absent, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -263,7 +263,7 @@ func TestInspectedModelSetReducesRemainingDiskAndDownloadAllowance(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	remaining, err := setup.BuildWithMaterial(root, facts(16), fresh.FreshDiskBytes-1, locks, material)
+	remaining, err := setup.BuildWithMaterial(root, facts(16), fresh.FreshDiskBytes-1, locks, material, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -303,7 +303,7 @@ func TestInspectedModelSetReducesRemainingDiskAndDownloadAllowance(t *testing.T)
 func TestTemplateVariantsCountWeightsOnceAndCreditOtherInstalledComposition(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "root")
 	locks := tinyModelLocks(t)
-	baseline, err := setup.Build(root, facts(16), 100<<30, locks)
+	baseline, err := setup.Build(root, facts(16), 100<<30, locks, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -323,7 +323,7 @@ func TestTemplateVariantsCountWeightsOnceAndCreditOtherInstalledComposition(t *t
 		t.Fatal(err)
 	}
 	locks[1] = variant
-	fresh, err := setup.Build(root, facts(16), 100<<30, locks)
+	fresh, err := setup.Build(root, facts(16), 100<<30, locks, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -337,11 +337,11 @@ func TestTemplateVariantsCountWeightsOnceAndCreditOtherInstalledComposition(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	without, err := setup.Build(root, facts(16), 100<<30, selected)
+	without, err := setup.Build(root, facts(16), 100<<30, selected, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	remaining, err := setup.BuildWithMaterial(root, facts(16), without.FreshDiskBytes-1, selected, material)
+	remaining, err := setup.BuildWithMaterial(root, facts(16), without.FreshDiskBytes-1, selected, material, "")
 	if err != nil {
 		t.Fatal(err)
 	}

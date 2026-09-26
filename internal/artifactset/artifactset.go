@@ -86,6 +86,22 @@ func New(root, layoutID string, layout manifest.Layout, entry lockfile.Entry, pa
 		models = append(models, model)
 		files = append(files, File{Path: model, SHA256: entry.Files[index].SHA256})
 	}
+	if (layout.Draft == nil) != (entry.Draft == nil) {
+		return Set{}, fmt.Errorf("layout %q selected draft drift", layoutID)
+	}
+	if layout.Draft != nil {
+		if layout.Draft.Repo != entry.Draft.Repo || len(layout.Draft.Files) != len(entry.Draft.Files) {
+			return Set{}, fmt.Errorf("layout %q selected draft drift", layoutID)
+		}
+		for i, name := range layout.Draft.Files {
+			if name != entry.Draft.Files[i].Name {
+				return Set{}, fmt.Errorf("layout %q selected draft file drift", layoutID)
+			}
+			draft := "draft/" + name
+			models = append(models, draft)
+			files = append(files, File{Path: draft, SHA256: entry.Draft.Files[i].SHA256})
+		}
+	}
 	if layout.ChatTemplate == "" {
 		if len(entry.Patches) != 0 {
 			return Set{}, fmt.Errorf("layout %q selected patch drift: manifest selects no patch", layoutID)
@@ -261,7 +277,7 @@ func readReceipt(target, layoutID, digest string) (receipt, error) {
 	previous := ""
 	for _, entry := range recorded.Files {
 		if !fs.ValidPath(entry.Path) || strings.Contains(entry.Path, "\\") ||
-			(!strings.HasPrefix(entry.Path, "model/") && !strings.HasPrefix(entry.Path, "patches/")) ||
+			(!strings.HasPrefix(entry.Path, "model/") && !strings.HasPrefix(entry.Path, "patches/") && !strings.HasPrefix(entry.Path, "draft/")) ||
 			!validDigest(entry.SHA256) || entry.Size < 0 || entry.Path <= previous {
 			return receipt{}, fmt.Errorf("artifact receipt has invalid or noncanonical metadata for %q", entry.Path)
 		}

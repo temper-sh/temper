@@ -32,6 +32,18 @@ type ContextMachine struct {
 	MinimumWiredLimitMiB int64           `yaml:"minimum_wired_limit_mib" json:"minimum_wired_limit_mib"`
 }
 
+// ContextRequiredError identifies the selection that needs a manual window.
+// Callers can request that input without treating missing evidence as a failed
+// software lookup or guessing a machine capacity.
+type ContextRequiredError struct {
+	Profile, Layout, Name string
+	Limit                 int
+}
+
+func (e *ContextRequiredError) Error() string {
+	return fmt.Sprintf("%s: tested context is unknown for this machine and configuration; enter a window on the Context screen or pass --context %s=TOKENS (model limit %d)", e.Name, e.Layout, e.Limit)
+}
+
 // ContextLimit keeps issued catalogs' fixed-window behavior while allowing new
 // catalogs to distinguish an authored configuration from the model's ceiling.
 func (l Layout) ContextLimit() int {
@@ -168,7 +180,8 @@ func ResolveMachineContexts(d Document, s Selection, facts machine.Facts) (Selec
 			return Selection{}, err
 		}
 		if len(findings) == 0 {
-			return Selection{}, fmt.Errorf("%s: tested context is unknown for this machine and configuration; enter a window on the Context screen or pass --context %s=TOKENS (model limit %d)", d.Layouts[b.Layout].DisplayName, b.Layout, d.Layouts[b.Layout].ContextLimit())
+			layout := d.Layouts[b.Layout]
+			return Selection{}, &ContextRequiredError{Profile: s.Profile, Layout: b.Layout, Name: layout.DisplayName, Limit: layout.ContextLimit()}
 		}
 		resolved.ContextWindows[b.Layout] = findings[0].WindowTokens
 	}

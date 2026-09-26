@@ -32,7 +32,14 @@ type Document struct {
 	Entries map[string]Entry `yaml:"entries"`
 }
 
+type Draft struct {
+	Repo     string `yaml:"repo"`
+	Revision string `yaml:"revision"`
+	Files    []File `yaml:"files"`
+}
+
 type Entry struct {
+	Draft    *Draft  `yaml:"draft,omitempty"`
 	Repo     string  `yaml:"repo"`
 	Revision string  `yaml:"revision"`
 	Files    []File  `yaml:"files"`
@@ -118,6 +125,17 @@ func (d Document) Validate() error {
 			seenFiles[file.Name] = true
 			if !sha256Pattern.MatchString(file.SHA256) {
 				problem("%s sha256 must be 64 lowercase hexadecimal characters", location)
+			}
+		}
+		if entry.Draft != nil {
+			draft := entry.Draft
+			if !repoPattern.MatchString(draft.Repo) || !revisionPattern.MatchString(draft.Revision) || len(draft.Files) != 2 || draft.Files[0].Name != "config.json" || draft.Files[1].Name != "model.safetensors" {
+				problem("entry %q requires an exact complete DFlash2 draft", id)
+			}
+			for _, file := range draft.Files {
+				if !sha256Pattern.MatchString(file.SHA256) {
+					problem("entry %q draft sha256 is invalid", id)
+				}
 			}
 		}
 		seenPatches := map[string]bool{}
@@ -228,6 +246,16 @@ func (e Entry) Digest() string {
 	for _, patch := range patches {
 		writeHashPart(hash, patch.Name)
 		writeHashPart(hash, patch.SHA256)
+	}
+	if e.Draft != nil {
+		writeHashPart(hash, "draft/v1")
+		writeHashPart(hash, e.Draft.Repo)
+		writeHashPart(hash, e.Draft.Revision)
+		writeHashCount(hash, len(e.Draft.Files))
+		for _, file := range e.Draft.Files {
+			writeHashPart(hash, file.Name)
+			writeHashPart(hash, file.SHA256)
+		}
 	}
 	return hex.EncodeToString(hash.Sum(nil))
 }

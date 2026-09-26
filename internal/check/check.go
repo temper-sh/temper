@@ -16,6 +16,7 @@ import (
 	"github.com/temper-sh/temper/internal/datadir"
 	"github.com/temper-sh/temper/internal/lockfile"
 	"github.com/temper-sh/temper/internal/manifest"
+	"github.com/temper-sh/temper/internal/splash"
 )
 
 const (
@@ -164,6 +165,14 @@ func Run(ctx context.Context, options Options) (Result, error) {
 			inspection, verifyErr = set.InspectContent(ctx)
 		} else {
 			inspection, verifyErr = set.Inspect()
+		}
+		if verifyErr == nil && document.Layouts[layoutID].Splash != nil {
+			material, err := splash.New(root, layoutID, document.Layouts[layoutID], locked.Entries[layoutID], document.Patches)
+			if err != nil {
+				verifyErr = err
+			} else {
+				verifyErr = material.Verify()
+			}
 		}
 		if verifyErr == nil {
 			modelBytes[layoutID] = inspection.ModelBytes

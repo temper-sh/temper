@@ -19,8 +19,10 @@ const SchemaV1 = "temper-render-runtime/v1"
 var packagePattern = regexp.MustCompile(`^[a-z0-9]+(?:[.-][a-z0-9]+)*$`)
 
 type Requirement struct {
-	Package            string `json:"package"`
-	RelativeExecutable string `json:"relative_executable"`
+	Role               string   `json:"role,omitempty"`
+	Arguments          []string `json:"arguments,omitempty"`
+	Package            string   `json:"package"`
+	RelativeExecutable string   `json:"relative_executable"`
 }
 
 type Document struct {
@@ -75,12 +77,26 @@ func (d Document) Validate() error {
 	}
 	seen := map[string]bool{}
 	hasRouter := false
+	splashRoles := map[string]bool{}
 	for index, requirement := range d.Requirements {
 		if !packagePattern.MatchString(requirement.Package) {
 			return fmt.Errorf("runtime requirement %d package %q is not a lowercase stable id", index, requirement.Package)
 		}
 		if !safeRelativePath(requirement.RelativeExecutable) {
 			return fmt.Errorf("runtime requirement %d executable %q is not a safe relative path", index, requirement.RelativeExecutable)
+		}
+		if requirement.Package == "splash" {
+			if !(requirement.Role == "frontend" && requirement.RelativeExecutable == "python/bin/python3.13" || requirement.Role == "engine" && requirement.RelativeExecutable == "engine/splash") || len(requirement.Arguments) == 0 {
+				return errors.New("Splash requires its exact frontend and native command identities")
+			}
+			splashRoles[requirement.Role] = true
+			for _, arg := range requirement.Arguments {
+				if strings.ContainsRune(arg, 0) {
+					return errors.New("runtime argument contains NUL")
+				}
+			}
+		} else if requirement.Role != "" || requirement.Arguments != nil {
+			return errors.New("command identities currently require Splash")
 		}
 		key := requirement.Package + "\x00" + requirement.RelativeExecutable
 		if seen[key] {
@@ -98,6 +114,9 @@ func (d Document) Validate() error {
 		return d.Requirements[i].RelativeExecutable < d.Requirements[j].RelativeExecutable
 	}) {
 		return errors.New("runtime requirements must be sorted")
+	}
+	if len(splashRoles) > 0 && len(splashRoles) != 2 {
+		return errors.New("Splash runtime requires both frontend and native engine")
 	}
 	if !hasRouter {
 		return errors.New("runtime requirements must include the exact llama-swap router")

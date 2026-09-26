@@ -22,6 +22,28 @@ downloading. Both commands derive private temporary legacy inputs inside Temper;
 clients never coordinate or retain the four compatibility exports. `remove`
 uses the exact software receipt and retains system-managed packages.
 
+For Splash 1.1.0, `prepare` installs the complete prebuilt release, including its
+Python interpreter and Metal kernels. It fetches the locked target and DFlash2
+files, verifies the software, and invokes that interpreter only to derive GGUF
+metadata and validate the sidecar's architecture. It writes the native source descriptor, preserves the derived Qwen tokenization,
+applies the selected chat template, and atomically publishes an immutable assembly.
+Source weights are hard-linked; derived files have a receipt bound to the source
+artifact set and exact software archive. A changed assembly is refused. Apply,
+check, render and serve verify the prepared assembly. Preparation never starts
+inference or the native engine.
+
+Splash serving requires Apple M3 or newer and macOS 26.4 or later. The
+`server/server.py` frontend runs from the receipted bundled Python and starts the
+receipted `engine/splash` with local paths. No mutable launcher or model resolver
+runs. Splash startup and request diagnostics are forwarded through the router.
+The frontend's home and native weight cache are under the explicit Temper
+root. Request sampling defaults are set by llama-swap only when omitted, preserving
+client overrides. The first start may convert weights: setup discloses a separate
+cache-space estimate, and Splash checks its exact missing-cache requirement plus
+2 GiB free before conversion. This cache is retained with model artifacts when an
+installation's software is removed. The 24 GiB catalog memory ceiling is a runtime
+setting, not evidence that every context window fits.
+
 `--dry-run` validates the lock and arguments without writes, downloads or process
 effects. Preparation dry run describes the operation; it does not promise that
 missing installation prerequisites are already satisfied. Inspection has no
@@ -39,11 +61,27 @@ time, errors, and `safe_to_cleanup`. The caller must match its child PID and
 invocation and reject stale or incomplete observations.
 
 Temper discovers and validates router/engine ancestry and listener ownership.
+Splash also exposes a `frontend` role. Both Splash processes must match exact
+receipted executable paths and rendered argument vectors; the native engine
+must originate from that frontend. A changed or restarted frontend ends the
+supervised session, as does a changed or restarted native engine.
 The router may start the engine in its own process group. Each observed PID,
 start time, kernel executable path and group stays bound; an unrelated member,
 changed group or replacement process is refused. A basename in `ps` is not an
 executable identity. The status's `process_group_id` names the router group;
 each role carries its own actual group.
+
+The router's reviewed macOS hardware-inspection commands are also owned:
+`/usr/sbin/system_profiler` for hardware/display data (including its separate
+child groups), `/usr/sbin/sysctl -n kern.hv_vmm_present`, and
+`/usr/sbin/ioreg -r -c IOGPU -d 1 -f`. Temper verifies the kernel executable and
+exact read-only argument vectors as well as router ancestry. Arguments are
+read without retaining process environment. These short-lived helpers are not
+published as measured router/engine roles; their identities remain bound until
+reaped for safe shutdown. A later helper invocation may have a new PID without
+allowing replacement of a measured engine. Missing arguments, another path,
+unreviewed flags, an unrelated group member or a changed bound identity still
+refuse supervision. A status file does not grant ownership of any helper.
 
 SIGTERM to the foreground Temper child requests bounded shutdown; Temper
 rechecks every owned group before TERM and KILL, stopping child groups first.

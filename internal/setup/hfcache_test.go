@@ -17,7 +17,7 @@ func TestPreviewInspectsHFCacheWithoutCreatingRootsOrHashingWeights(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	fresh, err := setup.BuildWithMaterial(root, facts(16), 100<<30, locks, material)
+	fresh, err := setup.BuildWithMaterial(root, facts(16), 100<<30, locks, material, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +40,7 @@ func TestPreviewInspectsHFCacheWithoutCreatingRootsOrHashingWeights(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := setup.BuildWithMaterial(root, facts(16), 100<<30, locks, material)
+	plan, err := setup.BuildWithMaterial(root, facts(16), 100<<30, locks, material, "")
 	if err != nil {
 		t.Fatal(err)
 	}

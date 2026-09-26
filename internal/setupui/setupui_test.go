@@ -200,6 +200,8 @@ func TestSkippedTemplateNavigationAcrossModesAndProfileChanges(t *testing.T) {
 	press(m, tea.KeyEnter) // Sharp
 	press(m, tea.KeyEsc)
 	press(m, tea.KeyEnter) // Compact again
+	press(m, tea.KeyDown)
+	press(m, tea.KeySpace) // Stop installing Other; a default change retains it.
 	press(m, 'n')
 	if m.stage != stageProfile || m.currentMode() != "utility" {
 		t.Fatal("returning to a fixed profile retained the template screen")
@@ -387,6 +389,8 @@ func TestChangedProfileInvalidatesPreviousSoftwareChoice(t *testing.T) {
 	press(m, tea.KeyEsc)   // profile
 	press(m, tea.KeyDown)
 	press(m, tea.KeyEnter) // alternate profile
+	press(m, tea.KeyUp)
+	press(m, tea.KeySpace) // Remove the previously installed compact profile.
 	press(m, tea.KeyTab)   // No template alternatives: directly to software.
 	if m.software != "tested" {
 		t.Fatalf("previous explicit choice lost: %q", m.software)
@@ -505,7 +509,7 @@ func TestSelectionCursorStaysVisibleWhenRowsWrap(t *testing.T) {
 		cursor int
 		want   string
 	}{
-		{name: "profile", stage: stageProfile, cursor: 0, want: "> (*) Compact general"},
+		{name: "profile", stage: stageProfile, cursor: 0, want: "> [x] (*) Compact general"},
 		{name: "template", stage: stageTemplates, cursor: 1, want: "> ( ) Sharp"},
 		{name: "software", stage: stageSoftware, cursor: 2, want: "> ( ) Tested"},
 	} {

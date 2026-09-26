@@ -33,7 +33,8 @@ and managed activation remain separate work.
 
 The 2026-09-23 guided setup implementation adds `temper init`, using `~/.temper`
 by default. Its [command contract](contracts/init.md) defines the current
-modes-first screens, per-model template choices, combined preview, atomic
+modes-first screens, grouped model choices, an explicit default among installed
+local alternatives, per-model templates and context, combined preview, atomic
 Selection/Execution Lock save and optional preparation. This is unreleased
 source work; alpha.10 does not include the wizard. The broader screen designs
 below include tools, integrations and activation that this first slice does not
@@ -467,7 +468,8 @@ mode's witnessed resource profile.
 
 **Software ownership and installation backend are separate.** System package
 managers may install bootstrap prerequisites, support software and non-Python
-software. Python applications use the Python/uv path. A compiled adapter owns
+software. Python applications use the Python/uv path unless their reviewed
+release archive supplies the complete interpreter and application closure. A compiled adapter owns
 provider-specific reads and effects; the catalog describes source facts and
 resolution produces exact installable inputs. Do not mirror a package manager's
 dependency database or infer an installation method from ambient PATH contents.
@@ -488,7 +490,8 @@ version/usage state exists only for installation, checks, recovery and
 concurrency. Private Temper installations retain their explicit cleanup path.
 
 The wired macOS ARM64 installation members are isolated release archives for
-llama.cpp/llama-swap and managed Python/wheel closures through the uv member.
+llama.cpp, llama-swap and Splash (including its bundled Python), plus managed
+Python/wheel closures through the uv member.
 Homebrew and Linux system installers are policy options, not wired installers
 in this release. `catalog compile --software latest|tested` resolves the current
 release-archive sources; exact installation consumes the exported lock. There
@@ -735,8 +738,9 @@ Lifecycle:
   verified base-lock receipts and keep isolated software below their own named
   installation directories;
 - `temper init` — implemented guided setup: machine facts, local/utility mode
-  choices, one catalog profile per mode, compatible template options, software
-  policy, combined review and optional preparation. Saves the selected modes
+  choices, several installed local profiles with one explicit default, one
+  utility profile, compatible templates and context, software policy, combined
+  review and optional preparation. Saves the selected configurations
   atomically below `ROOT/configuration` and resumes from those exact locks.
   Activity-support choices, harness integration and managed activation remain
   later parts of the broader design. Existing manifests are preserved.

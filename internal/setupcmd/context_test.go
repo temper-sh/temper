@@ -40,6 +40,43 @@ func TestUnknownContextRequiresExplicitChoiceWithoutCreatingRoot(t *testing.T) {
 	}
 }
 
+func TestWizardRequestsMissingContextAndReviewsTheCorrectionBeforeSave(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "setup")
+	c := fixtureCommand(t)
+	c.Catalog = func(context.Context, string, string) (catalog.Document, string, error) {
+		return guidedCatalog(t), fixtureDigest, nil
+	}
+	c.UI = func(ctx context.Context, _ io.Reader, _ io.Writer, input setupui.Input, preview func(context.Context, setupui.Choices) (setupui.Review, error)) (setupui.Decision, error) {
+		for _, p := range input.Profiles {
+			if p.ID == utilityProfile && !p.Contexts[0].ManualRequired {
+				t.Fatal("wizard offered automatic context without any catalog findings")
+			}
+		}
+		choices := setupui.Choices{Profiles: []setupui.Choice{{Mode: "utility", Profile: utilityProfile}}, Software: "recorded"}
+		review, err := preview(ctx, choices)
+		if err != nil || review.ContextRequired == nil || review.ContextRequired.Profile != utilityProfile || review.ContextRequired.Layout != compactLayout || review.Token != "" {
+			t.Fatalf("missing context did not become an input request: %+v, %v", review, err)
+		}
+		if _, err := os.Stat(root); !os.IsNotExist(err) {
+			t.Fatal("input request created the setup root")
+		}
+		choices.Profiles[0].ContextWindows = map[string]int{compactLayout: 16384}
+		review, err = preview(ctx, choices)
+		if err != nil || review.ContextRequired != nil || review.Token == "" || !review.CanPrepare {
+			t.Fatalf("explicit context did not produce a usable review: %+v, %v", review, err)
+		}
+		return setupui.Decision{Choices: choices, Action: "save", ReviewToken: review.Token}, nil
+	}
+	if code, _, diagnostics := runSetup(c, "--root", root); code != 0 {
+		t.Fatal(diagnostics)
+	}
+	saved, err := setup.Load(root)
+	locks := saved.Locks
+	if err != nil || len(locks) != 1 || locks[0].Selection.ContextWindows[compactLayout] != 16384 {
+		t.Fatalf("saved context differs from the corrected review: %+v, %v", locks, err)
+	}
+}
+
 func TestAutomaticContextChecksResolvedSoftwareAndTemplate(t *testing.T) {
 	for _, change := range []string{"release", "template"} {
 		t.Run(change, func(t *testing.T) {
@@ -58,13 +95,13 @@ func TestAutomaticContextChecksResolvedSoftwareAndTemplate(t *testing.T) {
 			if change == "template" {
 				d := testedCompactCatalog(t, guidedCatalog(t))
 				p := d.Patches[largePatch]
-				p.CompatibleArtifacts = append(p.CompatibleArtifacts, d.Layouts[compactLayout].Artifact)
-				d.Patches[largePatch] = p
+				p.CompatibleArtifacts = []string{d.Layouts[compactLayout].Artifact}
+				d.Patches["alternative"] = p
 				c.Catalog = func(context.Context, string, string) (catalog.Document, string, error) { return d, fixtureDigest, nil }
 			}
 			args := []string{"--root", filepath.Join(t.TempDir(), "absent"), "--profile", compactProfile, "--software", "latest", "--dry-run"}
 			if change == "template" {
-				args = append(args, "--template", compactLayout+"="+largePatch)
+				args = append(args, "--template", compactLayout+"=alternative")
 			}
 			if code, _, diag := runSetup(c, args...); code == 0 || !strings.Contains(diag, "tested context is unknown") {
 				t.Fatalf("changed %s inherited evidence: %d %s", change, code, diag)
@@ -126,7 +163,8 @@ func TestScriptContextIsReviewedSavedForBothModesAndResumedExactly(t *testing.T)
 	if code != 0 {
 		t.Fatal(diagnostics)
 	}
-	locks, err := setup.Load(root)
+	saved, err := setup.Load(root)
+	locks := saved.Locks
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +213,8 @@ func TestContextPreviewTokenSavesTheReviewedWindow(t *testing.T) {
 	if code != 0 {
 		t.Fatal(diagnostics)
 	}
-	locks, err := setup.Load(root)
+	saved, err := setup.Load(root)
+	locks := saved.Locks
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -67,7 +67,7 @@ func FindModels(root string, hashes []string) (map[string]ModelFile, error) {
 			}
 			relevant := false
 			for _, file := range recorded.Files {
-				if wanted[file.SHA256] && strings.HasPrefix(file.Path, "model/") {
+				if wanted[file.SHA256] && (strings.HasPrefix(file.Path, "model/") || strings.HasPrefix(file.Path, "draft/")) {
 					relevant = true
 					break
 				}
@@ -79,7 +79,7 @@ func FindModels(root string, hashes []string) (map[string]ModelFile, error) {
 				return nil, fmt.Errorf("inspect reusable model set %s: %w", path, err)
 			}
 			for _, file := range recorded.Files {
-				if wanted[file.SHA256] && strings.HasPrefix(file.Path, "model/") {
+				if wanted[file.SHA256] && (strings.HasPrefix(file.Path, "model/") || strings.HasPrefix(file.Path, "draft/")) {
 					found[file.SHA256] = ModelFile{Path: filepath.Join(path, filepath.FromSlash(file.Path)), Size: file.Size}
 					delete(wanted, file.SHA256)
 				}

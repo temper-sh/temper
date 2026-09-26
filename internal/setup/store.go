@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 
 	"github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/datadir"
@@ -213,74 +214,86 @@ func readRegular(path string, limit int64) ([]byte, error) {
 	return raw, nil
 }
 
+// Saved contains the exact configurations and the selected local default.
+type Saved struct {
+	Locks          []catalog.Lock
+	DefaultProfile string
+}
+
 // Load resumes the saved exact locks without contacting a moving catalog.
 // Edited selections are refused until the user explicitly resolves new locks.
-func Load(root string) ([]catalog.Lock, error) {
+func Load(root string) (Saved, error) {
 	root, err := datadir.Resolve(root)
 	if err != nil {
-		return nil, err
+		return Saved{}, err
 	}
 	if _, err := ExistingDirectory(root); err != nil {
-		return nil, err
+		return Saved{}, err
 	}
 	path := filepath.Join(root, ConfigurationDir)
 	info, err := os.Lstat(path)
 	if err != nil {
-		return nil, err
+		return Saved{}, err
 	}
 	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-		return nil, errors.New("configuration must be a real directory")
+		return Saved{}, errors.New("configuration must be a real directory")
 	}
 	entries, err := os.ReadDir(path)
 	if err != nil {
-		return nil, err
+		return Saved{}, err
 	}
-	allowed := map[string]bool{}
-	for _, mode := range []string{"local", "utility"} {
-		allowed[mode+".selection.json"] = true
-		allowed[mode+".execution.lock.json"] = true
-	}
+	names := map[string]bool{}
 	for _, entry := range entries {
-		if !allowed[entry.Name()] {
-			return nil, fmt.Errorf("unrecognized configuration file %q", entry.Name())
+		name := strings.TrimSuffix(entry.Name(), ".selection.json")
+		if name == entry.Name() {
+			name = strings.TrimSuffix(entry.Name(), ".execution.lock.json")
 		}
+		if name == entry.Name() || name != "local" && name != "utility" && !strings.HasPrefix(name, "local.") {
+			return Saved{}, fmt.Errorf("unrecognized configuration file %q", entry.Name())
+		}
+		names[name] = true
 	}
-	var result []catalog.Lock
-	for _, mode := range []string{"local", "utility"} {
-		selectionPath := filepath.Join(path, mode+".selection.json")
-		lockPath := filepath.Join(path, mode+".execution.lock.json")
-		if _, err := os.Lstat(selectionPath); errors.Is(err, fs.ErrNotExist) {
-			if _, lockErr := os.Lstat(lockPath); !errors.Is(lockErr, fs.ErrNotExist) {
-				return nil, fmt.Errorf("%s selection is missing", mode)
-			}
-			continue
-		}
+	var result Saved
+	for _, name := range keys(names) {
+		selectionPath := filepath.Join(path, name+".selection.json")
+		lockPath := filepath.Join(path, name+".execution.lock.json")
 		raw, err := readRegular(selectionPath, 256<<10)
 		if err != nil {
-			return nil, err
+			return Saved{}, err
 		}
 		selection, err := catalog.ParseSelection(raw)
 		if err != nil {
-			return nil, err
+			return Saved{}, err
 		}
 		raw, err = readRegular(lockPath, 4<<20)
 		if err != nil {
-			return nil, err
+			return Saved{}, err
 		}
 		locked, err := catalog.ParseLock(raw)
 		if err != nil {
-			return nil, err
+			return Saved{}, err
 		}
 		if !reflect.DeepEqual(selection, locked.Selection) {
-			return nil, fmt.Errorf("%s selection differs from its exact lock; resolve the edited choices explicitly", mode)
+			return Saved{}, fmt.Errorf("%s selection differs from its exact lock; resolve the edited choices explicitly", name)
 		}
-		if Mode(locked.Records.Profiles[selection.Profile]) != mode {
-			return nil, fmt.Errorf("%s lock belongs to another mode", mode)
+		mode := Mode(locked.Records.Profiles[selection.Profile])
+		if name == "local" {
+			result.DefaultProfile = selection.Profile
 		}
-		result = append(result, locked)
+		if configurationName(mode, selection.Profile, result.DefaultProfile) != name {
+			return Saved{}, fmt.Errorf("%s lock belongs to another mode or profile", name)
+		}
+		result.Locks = append(result.Locks, locked)
 	}
-	if len(result) == 0 {
-		return nil, errors.New("no saved setup found")
+	if len(result.Locks) == 0 {
+		return Saved{}, errors.New("no saved setup found")
+	}
+	selected, err := selectedDefault(result.Locks, result.DefaultProfile)
+	if err != nil {
+		return Saved{}, err
+	}
+	if selected != result.DefaultProfile {
+		return Saved{}, errors.New("saved setup is missing its default local configuration")
 	}
 	return result, nil
 }

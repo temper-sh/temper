@@ -38,14 +38,15 @@ var revisionPattern = regexp.MustCompile(`^[0-9a-f]{40}$`)
 var hashPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 type Document struct {
-	Schema    string              `yaml:"schema" json:"schema"`
-	Date      string              `yaml:"date" json:"date"`
-	Runtime   Runtime             `yaml:"runtime" json:"runtime"`
-	Artifacts map[string]Artifact `yaml:"artifacts" json:"artifacts"`
-	Patches   map[string]Patch    `yaml:"patches" json:"patches"`
-	Engines   map[string]Engine   `yaml:"engines" json:"engines"`
-	Layouts   map[string]Layout   `yaml:"layouts" json:"layouts"`
-	Profiles  map[string]Profile  `yaml:"profiles" json:"profiles"`
+	Schema      string              `yaml:"schema" json:"schema"`
+	Date        string              `yaml:"date" json:"date"`
+	Runtime     Runtime             `yaml:"runtime" json:"runtime"`
+	Artifacts   map[string]Artifact `yaml:"artifacts" json:"artifacts"`
+	Patches     map[string]Patch    `yaml:"patches" json:"patches"`
+	Engines     map[string]Engine   `yaml:"engines" json:"engines"`
+	Layouts     map[string]Layout   `yaml:"layouts" json:"layouts"`
+	Profiles    map[string]Profile  `yaml:"profiles" json:"profiles"`
+	LayoutOrder []string            `yaml:"layout_order,omitempty" json:"layout_order,omitempty"`
 }
 
 type Runtime struct {
@@ -59,6 +60,8 @@ type File struct {
 }
 
 type Artifact struct {
+	ModelName     string `yaml:"model_name,omitempty" json:"model_name,omitempty"`
+	WeightsName   string `yaml:"weights_name,omitempty" json:"weights_name,omitempty"`
 	Repo          string `yaml:"repo" json:"repo"`
 	Revision      string `yaml:"revision" json:"revision"`
 	Format        string `yaml:"format" json:"format"`
@@ -90,11 +93,12 @@ type Supply struct {
 }
 
 type Engine struct {
-	Family     string   `yaml:"family" json:"family"`
-	Adapter    string   `yaml:"adapter" json:"adapter"`
-	Supply     Supply   `yaml:"supply" json:"supply"`
-	Interfaces []string `yaml:"interfaces" json:"interfaces"`
-	Modalities []string `yaml:"modalities" json:"modalities"`
+	DisplayName string   `yaml:"display_name,omitempty" json:"display_name,omitempty"`
+	Family      string   `yaml:"family" json:"family"`
+	Adapter     string   `yaml:"adapter" json:"adapter"`
+	Supply      Supply   `yaml:"supply" json:"supply"`
+	Interfaces  []string `yaml:"interfaces" json:"interfaces"`
+	Modalities  []string `yaml:"modalities" json:"modalities"`
 }
 
 type RequestDefaults struct {
@@ -104,6 +108,7 @@ type RequestDefaults struct {
 }
 
 type Speculation struct {
+	DraftArtifact  string `yaml:"draft_artifact,omitempty" json:"draft_artifact,omitempty"`
 	Method         string `yaml:"method" json:"method"`
 	Source         string `yaml:"source" json:"source"`
 	MaxDraftTokens int    `yaml:"max_draft_tokens" json:"max_draft_tokens"`
@@ -124,6 +129,7 @@ type LlamaConfig struct {
 
 type Layout struct {
 	DisplayName         string           `yaml:"display_name" json:"display_name"`
+	MemoryTier          string           `yaml:"memory_tier,omitempty" json:"memory_tier,omitempty"`
 	Artifact            string           `yaml:"artifact" json:"artifact"`
 	Patches             []string         `yaml:"patches" json:"patches"`
 	Engine              string           `yaml:"engine" json:"engine"`
@@ -134,7 +140,7 @@ type Layout struct {
 	ContextFindings     []ContextFinding `yaml:"context_findings,omitempty" json:"context_findings,omitempty"`
 	RequestDefaults     RequestDefaults  `yaml:"request_defaults" json:"request_defaults"`
 	Speculation         Speculation      `yaml:"speculation" json:"speculation"`
-	EngineConfig        LlamaConfig      `yaml:"engine_config" json:"engine_config"`
+	EngineConfig        EngineConfig     `yaml:"engine_config" json:"engine_config"`
 	EngineVersions      *Versions        `yaml:"engine_versions,omitempty" json:"engine_versions,omitempty"`
 }
 
@@ -231,6 +237,9 @@ func (d Document) Validate() error {
 	if len(d.Artifacts) == 0 || len(d.Engines) == 0 || len(d.Layouts) == 0 || len(d.Profiles) == 0 {
 		return errors.New("catalog requires artifacts, engines, layouts and profiles")
 	}
+	if err := d.validatePresentation(); err != nil {
+		return err
+	}
 	if d.Runtime.Router.Package != "llama-swap" {
 		return errors.New("runtime router must supply llama-swap")
 	}
@@ -246,6 +255,9 @@ func (d Document) Validate() error {
 		}
 		if err := validateMaterial(id, a.Repo, a.Revision, a.Files, a.License); err != nil {
 			return fmt.Errorf("artifact: %w", err)
+		}
+		if a.Format == "safetensors" && len(a.Files) == 2 && a.Files[0].Path == "config.json" && a.Files[1].Path == "model.safetensors" {
+			continue
 		}
 		if a.Format != "gguf" || len(a.Files) != 1 || !strings.HasSuffix(a.Files[0].Path, ".gguf") {
 			return fmt.Errorf("artifact %q: this executable slice requires one complete GGUF", id)
@@ -269,11 +281,12 @@ func (d Document) Validate() error {
 		}
 	}
 	for id, e := range d.Engines {
-		if !idPattern.MatchString(id) || e.Family != engine.LlamaServer || e.Adapter != "llama-server/v2" {
-			return fmt.Errorf("engine %q requires the supported llama-server/v2 adapter and a complete release closure", id)
+		supported := e.Family == engine.LlamaServer && e.Adapter == "llama-server/v2" && e.Supply.Package == "llama-cpp" || e.Family == engine.Splash && e.Adapter == "splash/v1" && e.Supply.Package == "splash" && d.Schema == Schema
+		if !idPattern.MatchString(id) || !supported {
+			return fmt.Errorf("engine %q requires a supported engine adapter and a complete release closure", id)
 		}
-		if e.Supply.Package != "llama-cpp" || !slices.Equal(e.Interfaces, []string{engine.InterfaceChatCompletions}) || !slices.Equal(e.Modalities, []string{"text"}) {
-			return fmt.Errorf("engine %q requires the text chat llama-cpp closure", id)
+		if !slices.Equal(e.Interfaces, []string{engine.InterfaceChatCompletions}) || !slices.Equal(e.Modalities, []string{"text"}) {
+			return fmt.Errorf("engine %q requires a text chat release closure", id)
 		}
 		if e.Supply.Versions != nil {
 			return fmt.Errorf("engine %q version requirements belong to the consuming layout", id)
@@ -300,6 +313,9 @@ func (d Document) Validate() error {
 		if !ok {
 			return fmt.Errorf("layout %q references unknown engine %q", id, l.Engine)
 		}
+		if _, err := l.EngineConfig.value(); err != nil {
+			return fmt.Errorf("layout %q: %w", id, err)
+		}
 		if l.EngineConfig.Kind != e.Adapter {
 			return fmt.Errorf("layout %q engine config does not match its adapter", id)
 		}
@@ -321,7 +337,15 @@ func (d Document) Validate() error {
 		if l.Interface != engine.InterfaceChatCompletions || !slices.Equal(l.Modalities, []string{"text"}) {
 			return fmt.Errorf("layout %q requires text chat completions", id)
 		}
-		if l.Speculation.Method == "none" {
+		if l.Speculation.Method != "dflash2" && l.Speculation.DraftArtifact != "" {
+			return fmt.Errorf("layout %q: draft artifact requires dflash2", id)
+		}
+		if l.Speculation.Method == "dflash2" {
+			draft, ok := d.Artifacts[l.Speculation.DraftArtifact]
+			if !ok || draft.Format != "safetensors" || e.Family != engine.Splash || l.Speculation.Source != "artifact" || l.Speculation.MaxDraftTokens != 0 {
+				return fmt.Errorf("layout %q requires a complete DFlash2 sidecar and Splash", id)
+			}
+		} else if l.Speculation.Method == "none" {
 			if l.Speculation.Source != "none" || l.Speculation.MaxDraftTokens != 0 {
 				return fmt.Errorf("layout %q none speculation cannot carry a draft source", id)
 			}
@@ -367,7 +391,7 @@ func (d Document) Validate() error {
 				return fmt.Errorf("profile %q has invalid TTL or preload", id)
 			}
 			if engineID != "" && engineID != l.Engine {
-				return fmt.Errorf("profile %q selects conflicting llama-cpp closures", id)
+				return fmt.Errorf("profile %q selects conflicting engine closures", id)
 			}
 			engineID = l.Engine
 		}
@@ -436,10 +460,16 @@ func (l Layout) request(id string, a Artifact, modelPath, templatePath string) e
 	if len(l.Patches) == 0 {
 		templatePath = ""
 	}
-	return engine.Request{Engine: engine.LlamaServer, LayoutID: id, ModelPath: modelPath, ArtifactFormat: a.Format, KVCache: c.KVCache,
+	r := engine.Request{Engine: engine.LlamaServer, LayoutID: id, ModelPath: modelPath, ArtifactFormat: a.Format, KVCache: c.KVCache,
 		Interface: l.Interface, Modalities: l.Modalities, Window: l.ContextWindowTokens, MaxTokens: l.RequestDefaults.MaxOutputTokens,
 		Thinking: l.RequestDefaults.Reasoning, Speculation: l.Speculation.Method, SpeculativeTokens: l.Speculation.MaxDraftTokens,
 		ChatTemplatePath: templatePath, NGL: &c.GPULayers, Sampling: &l.RequestDefaults.Sampling,
 		LlamaServer: &engine.LlamaServerTuning{Parallel: c.Parallel, FlashAttention: c.FlashAttention, Batch: c.BatchTokens, UBatch: c.MicrobatchTokens,
 			ContextCheckpoints: &c.ContextCheckpoints, PromptCacheRAMMiB: &c.PromptCacheRAMMiB, Controls: &c.Controls}}
+	if c.Splash != nil {
+		r.Engine, r.LlamaServer, r.NGL = engine.Splash, nil, nil
+		r.KVCache = c.Splash.KVCache
+		r.Splash = &engine.SplashTuning{SplashConfig: c.Splash.SplashConfig, ModelID: a.Repo, AssemblyPath: "/prepared", StatePath: "/state"}
+	}
+	return r
 }

@@ -6,6 +6,7 @@ package engine
 import (
 	"errors"
 	"fmt"
+	"maps"
 )
 
 const (
@@ -13,6 +14,7 @@ const (
 	RapidMLX    = "rapid-mlx"
 	MLXVLM      = "mlx-vlm"
 	VLLMMetal   = "vllm-metal"
+	Splash      = "splash"
 
 	InterfaceChatCompletions = "chat-completions"
 	InterfaceReranking       = "reranking"
@@ -39,6 +41,7 @@ type Request struct {
 	RapidMLX          *RapidMLXTuning
 	MLXVLM            *MLXVLMTuning
 	VLLMMetal         *VLLMMetalTuning
+	Splash            *SplashTuning
 	Sampling          *SamplingDefaults
 }
 
@@ -122,18 +125,22 @@ type EnvironmentAssignment struct {
 // RuntimeRequirement describes one executable required by a rendered launch.
 // RelativeExecutable is resolved below the receipted package payload.
 type RuntimeRequirement struct {
-	Package            string `json:"package"`
-	RelativeExecutable string `json:"relative_executable"`
+	Package            string   `json:"package"`
+	RelativeExecutable string   `json:"relative_executable"`
+	Role               string   `json:"role,omitempty"`
+	Arguments          []string `json:"arguments,omitempty"`
 }
 
 // Runtime describes supervisor metadata which is not part of shell command
 // serialization.
 type Runtime struct {
-	Requirement   RuntimeRequirement
-	Environment   []EnvironmentAssignment
-	CheckEndpoint string
-	UseModelName  string
-	ContextWindow int
+	Requirement            RuntimeRequirement
+	Environment            []EnvironmentAssignment
+	CheckEndpoint          string
+	UseModelName           string
+	ContextWindow          int
+	AdditionalRequirements []RuntimeRequirement
+	DefaultParameters      map[string]any
 }
 
 // Command is an exact, safely serialized command for a process supervisor.
@@ -152,16 +159,22 @@ func (c Command) Lines() []string {
 func (c Command) Runtime() Runtime {
 	runtime := c.runtime
 	runtime.Environment = append([]EnvironmentAssignment(nil), c.runtime.Environment...)
+	runtime.Requirement.Arguments = append([]string(nil), runtime.Requirement.Arguments...)
+	runtime.AdditionalRequirements = append([]RuntimeRequirement(nil), runtime.AdditionalRequirements...)
+	for i := range runtime.AdditionalRequirements {
+		runtime.AdditionalRequirements[i].Arguments = append([]string(nil), runtime.AdditionalRequirements[i].Arguments...)
+	}
+	runtime.DefaultParameters = maps.Clone(runtime.DefaultParameters)
 	return runtime
 }
 
 // Build dispatches one fresh request to its owned engine adapter.
 func Build(request Request) (Command, error) {
-	if request.Sampling != nil && request.Engine != LlamaServer {
+	if request.Sampling != nil && request.Engine != LlamaServer && request.Engine != Splash {
 		return Command{}, errors.New("explicit sampling defaults currently require llama-server")
 	}
 	switch request.Engine {
-	case LlamaServer, RapidMLX, MLXVLM, VLLMMetal:
+	case LlamaServer, RapidMLX, MLXVLM, VLLMMetal, Splash:
 	default:
 		return Command{}, fmt.Errorf("engine %q is not supported", request.Engine)
 	}
@@ -177,6 +190,8 @@ func Build(request Request) (Command, error) {
 		return buildMLXVLM(request)
 	case VLLMMetal:
 		return buildVLLMMetal(request)
+	case Splash:
+		return buildSplash(request)
 	}
 	panic("unreachable engine dispatch")
 }
@@ -188,6 +203,7 @@ func validateVariant(request Request) error {
 		request.RapidMLX != nil,
 		request.MLXVLM != nil,
 		request.VLLMMetal != nil,
+		request.Splash != nil,
 	} {
 		if present {
 			selected++
@@ -199,7 +215,8 @@ func validateVariant(request Request) error {
 	matches := request.Engine == LlamaServer && request.LlamaServer != nil ||
 		request.Engine == RapidMLX && request.RapidMLX != nil ||
 		request.Engine == MLXVLM && request.MLXVLM != nil ||
-		request.Engine == VLLMMetal && request.VLLMMetal != nil
+		request.Engine == VLLMMetal && request.VLLMMetal != nil ||
+		request.Engine == Splash && request.Splash != nil
 	if !matches {
 		return fmt.Errorf("engine %q does not match its tuning variant", request.Engine)
 	}

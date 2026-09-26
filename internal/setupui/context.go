@@ -16,6 +16,13 @@ type ContextWindow struct {
 	Layout, Name     string
 	Minimum, Maximum int
 	RecordedDefaults map[string]int // Template ID to highest tested point with recorded software.
+	ManualRequired   bool           // No findings exist for this layout under any software choice.
+}
+
+// ContextRequest returns a user to the affected field after exact software
+// resolution finds no applicable automatic window. Other choices stay intact.
+type ContextRequest struct {
+	Profile, Layout string
 }
 
 type contextKey struct{ mode, profile, layout string }
@@ -37,7 +44,10 @@ func (m *Model) initContexts(mode string, p Profile) {
 		styles.Blurred.Prompt = lipgloss.NewStyle().Foreground(nightMuted)
 		styles.Cursor.Color, styles.Cursor.Blink = nightBlue, false
 		input.SetStyles(styles)
-		input.SetValue("auto")
+		input.Placeholder = "token count"
+		if !window.ManualRequired {
+			input.SetValue("auto")
+		}
 		m.contexts[key] = input
 	}
 }
@@ -75,8 +85,12 @@ func (m *Model) updateContext(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) resetContext() {
-	key, _, ok := m.currentContext()
+	key, window, ok := m.currentContext()
 	if !ok {
+		return
+	}
+	if window.ManualRequired {
+		m.notice = "Automatic context is unavailable. Enter a token count to continue."
 		return
 	}
 	input := m.contexts[key]
@@ -95,6 +109,9 @@ func (m Model) validateContexts() error {
 	for _, window := range p.Contexts {
 		input := m.contexts[contextKey{m.currentMode(), p.ID, window.Layout}]
 		if strings.TrimSpace(input.Value()) == "auto" {
+			if window.ManualRequired {
+				return fmt.Errorf("%s: automatic context is unavailable. Enter a token count to continue.", window.Name)
+			}
 			continue
 		}
 		tokens, err := strconv.Atoi(input.Value())
@@ -103,6 +120,35 @@ func (m Model) validateContexts() error {
 		}
 	}
 	return nil
+}
+
+func (m *Model) requestContext(request ContextRequest) bool {
+	for modeAt, mode := range m.chosenModes() {
+		for profileAt, p := range m.chosenProfiles(mode) {
+			if p.ID != request.Profile {
+				continue
+			}
+			for row, window := range p.Contexts {
+				if window.Layout != request.Layout {
+					continue
+				}
+				m.modeAt, m.stage, m.cursor = modeAt, stageContext, row
+				m.profileAt = profileAt
+				key := contextKey{mode, p.ID, window.Layout}
+				input := m.contexts[key]
+				if strings.TrimSpace(input.Value()) == "auto" {
+					input.SetValue("")
+					m.contexts[key] = input
+				}
+				m.notice = "Enter a token count; no tested context matches the selected setup."
+				m.viewport.SetYOffset(0)
+				m.focusSelection = true
+				m.hitTargets = nil
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (m Model) contextChoices(mode, profile string) map[string]int {
@@ -135,7 +181,9 @@ func (m Model) contextCard(p Profile, window ContextWindow, row, width int) (str
 	heading := lipgloss.NewStyle().Foreground(nightCyan).Bold(true).Width(inner).Render(window.Name)
 	known := "Recorded software: tested context unknown for this machine and template."
 	patch := m.patches[m.currentMode()][p.ID][window.Layout]
-	if tokens := window.RecordedDefaults[patch]; tokens > 0 {
+	if window.ManualRequired {
+		known = "Automatic context is unavailable. Enter a token count to continue; its fit remains unverified."
+	} else if tokens := window.RecordedDefaults[patch]; tokens > 0 {
 		known = fmt.Sprintf("Recorded software: largest verified window %d tokens.", tokens)
 	}
 	text := heading + "\n" + input.View() + "\n" +

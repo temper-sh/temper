@@ -76,6 +76,23 @@ func TestAutomaticContextChoosesLargestApplicableTestNotNativeLimitOrLatencyCap(
 	}
 }
 
+func TestContextMatchingUsesEffectiveMetalBudgetNotConfiguredOverride(t *testing.T) {
+	d, facts := contextCatalog(t)
+	override := int64(28672)
+	facts.WiredLimitOverrideMiB = &override
+	facts.MetalDeviceMemorySource, facts.WiredLimitSource = machine.MetalDeviceSourceLive, budget.WiredSourceMetal
+	facts.MetalDeviceMemoryMiB, facts.WiredLimitMiB = 23000, 23000
+	s := catalog.Selection{Schema: catalog.SelectionSchema, Profile: "local-qwen"}
+	if _, err := catalog.ResolveMachineContexts(d, s, facts); err == nil || !strings.Contains(err.Error(), "tested context is unknown") {
+		t.Fatalf("configured override admitted a context above the actual Metal budget: %v", err)
+	}
+	facts.MetalDeviceMemoryMiB, facts.WiredLimitMiB = 24576, 24576
+	resolved, err := catalog.ResolveMachineContexts(d, s, facts)
+	if err != nil || resolved.ContextWindows["qwen-32k"] != 65536 {
+		t.Fatalf("effective budget did not admit matching evidence: %+v, %v", resolved, err)
+	}
+}
+
 func TestContextEvidenceDoesNotTransferAcrossMachinesOrExecutionChanges(t *testing.T) {
 	for _, name := range []string{"chip", "larger RAM", "hardware model", "OS", "wired allowance", "template choice", "template bytes", "weights", "engine", "router", "output allowance", "kv", "mtp", "parallel", "cache", "batch"} {
 		t.Run(name, func(t *testing.T) {

@@ -47,6 +47,8 @@ type Patch struct {
 }
 
 type Layout struct {
+	Splash       *SplashTuning            `yaml:"splash,omitempty"`
+	Draft        *Model                   `yaml:"draft,omitempty"`
 	DisplayName  string                   `yaml:"display_name"`
 	Model        Model                    `yaml:"model"`
 	Engine       string                   `yaml:"engine"`
@@ -64,6 +66,11 @@ type Layout struct {
 	MLXVLM       *MLXVLMTuning            `yaml:"mlx_vlm,omitempty"`
 	VLLMMetal    *VLLMMetalTuning         `yaml:"vllm_metal,omitempty"`
 	Sampling     *engine.SamplingDefaults `yaml:"sampling,omitempty"`
+}
+
+type SplashTuning struct {
+	engine.SplashConfig `yaml:",inline"`
+	SoftwareSHA256      string `yaml:"software_sha256"`
 }
 
 type Model struct {
@@ -183,8 +190,8 @@ func (d Document) Validate() error {
 	for _, id := range sortedKeys(d.Layouts) {
 		layout := d.Layouts[id]
 		if layout.Sampling != nil {
-			if layout.Engine != engine.LlamaServer {
-				problems = append(problems, fmt.Sprintf("layout %q explicit sampling requires llama-server", id))
+			if layout.Engine != engine.LlamaServer && layout.Engine != engine.Splash {
+				problems = append(problems, fmt.Sprintf("layout %q explicit sampling requires llama-server or Splash", id))
 			} else if err := layout.Sampling.Validate(); err != nil {
 				problems = append(problems, fmt.Sprintf("layout %q: %v", id, err))
 			}
@@ -262,7 +269,7 @@ func (d Document) validateV1() error {
 		if layout.Engine != "llama-server" {
 			problem("layout %q engine %q is not supported by manifest v1", id, layout.Engine)
 		}
-		if layout.Interface != "" || len(layout.Modalities) != 0 || layout.Speculation != nil || layout.RapidMLX != nil || layout.MLXVLM != nil || layout.VLLMMetal != nil {
+		if layout.Interface != "" || len(layout.Modalities) != 0 || layout.Speculation != nil || layout.RapidMLX != nil || layout.MLXVLM != nil || layout.VLLMMetal != nil || layout.Splash != nil || layout.Draft != nil {
 			problem("layout %q declares successor-only engine fields in manifest v1", id)
 		}
 		if layout.Role != "coder" && layout.Role != "rerank" {
@@ -534,7 +541,7 @@ func (d Document) validateV2() error {
 		}
 
 		variants := 0
-		for _, selected := range []bool{layout.Llama != nil, layout.RapidMLX != nil, layout.MLXVLM != nil, layout.VLLMMetal != nil} {
+		for _, selected := range []bool{layout.Llama != nil, layout.RapidMLX != nil, layout.MLXVLM != nil, layout.VLLMMetal != nil, layout.Splash != nil} {
 			if selected {
 				variants++
 			}
@@ -545,7 +552,8 @@ func (d Document) validateV2() error {
 		matches := layout.Engine == "llama-server" && layout.Llama != nil ||
 			layout.Engine == "rapid-mlx" && layout.RapidMLX != nil ||
 			layout.Engine == "mlx-vlm" && layout.MLXVLM != nil ||
-			layout.Engine == "vllm-metal" && layout.VLLMMetal != nil
+			layout.Engine == "vllm-metal" && layout.VLLMMetal != nil ||
+			layout.Engine == "splash" && layout.Splash != nil
 		if !matches {
 			problem("layout %q engine %q does not match its tuning block", id, layout.Engine)
 		}
@@ -573,7 +581,7 @@ func (d Document) validateV2() error {
 		}
 
 		if layout.ChatTemplate != "" {
-			if layout.Engine != "llama-server" {
+			if layout.Engine != "llama-server" && layout.Engine != "splash" {
 				problem("layout %q engine %q does not support Temper chat-template patches", id, layout.Engine)
 			}
 			if _, ok := d.Patches[layout.ChatTemplate]; !ok {
@@ -581,6 +589,9 @@ func (d Document) validateV2() error {
 			}
 		}
 
+		if layout.Engine != "splash" && (layout.Draft != nil || layout.Speculation != nil && layout.Speculation.Method == "dflash2") {
+			problem("layout %q: DFlash2 draft requires Splash", id)
+		}
 		validateV2EngineTuning(id, layout, problem)
 	}
 
@@ -617,6 +628,25 @@ func (d Document) validateV2() error {
 
 func validateV2EngineTuning(id string, layout Layout, problem func(string, ...any)) {
 	switch layout.Engine {
+	case "splash":
+		if layout.Splash == nil {
+			return
+		}
+		if err := layout.Splash.SplashConfig.Validate(); err != nil {
+			problem("layout %q: %v", id, err)
+		}
+		if !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(layout.Splash.SoftwareSHA256) {
+			problem("layout %q Splash requires exact software_sha256", id)
+		}
+		if layout.Model.Format != "gguf" || layout.Interface != "chat-completions" || !equalStringSlices(layout.Modalities, []string{"text"}) {
+			problem("layout %q Splash requires text GGUF chat completions", id)
+		}
+		if layout.Draft == nil || !repoPattern.MatchString(layout.Draft.Repo) || layout.Draft.Format != "safetensors" || layout.Draft.File != "" || !equalStringSlices(layout.Draft.Files, []string{"config.json", "model.safetensors"}) {
+			problem("layout %q Splash requires a complete DFlash2 draft", id)
+		}
+		if layout.Speculation == nil || layout.Speculation.Method != "dflash2" || layout.Speculation.MaxTokens != 0 {
+			problem("layout %q Splash requires engine-owned DFlash2 speculation", id)
+		}
 	case "llama-server":
 		if layout.Llama == nil {
 			return
@@ -759,7 +789,7 @@ func validateV2EngineTuning(id string, layout Layout, problem func(string, ...an
 
 func validateManifestSpeculation(id, field, method string, tokens int, interfaceName string, problem func(string, ...any)) {
 	switch method {
-	case "none":
+	case "none", "dflash2":
 		if tokens != 0 {
 			problem("layout %q %s max_tokens requires mtp", id, field)
 		}
@@ -927,6 +957,9 @@ func (l Layout) ModelFormat() string {
 }
 
 func (l Layout) KVCache() string {
+	if l.Splash != nil {
+		return l.Splash.KVCache
+	}
 	if l.Llama != nil && l.Llama.KV != "" {
 		return l.Llama.KV
 	}

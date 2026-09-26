@@ -76,6 +76,7 @@ type processRow struct {
 	pid, ppid, pgid     int
 	started, executable string
 	state               string
+	arguments           string // NUL-separated kernel argv, only for OS inspection helpers
 }
 
 func (p processRow) exited() bool {
@@ -109,7 +110,7 @@ func parseRows(raw string) ([]processRow, error) {
 			}
 			executable = strings.TrimLeft(executable[separator:], " \t")
 		}
-		rows = append(rows, processRow{pid, ppid, pgid, strings.Join(fields[3:8], " "), executable, fields[8]})
+		rows = append(rows, processRow{pid: pid, ppid: ppid, pgid: pgid, started: strings.Join(fields[3:8], " "), executable: executable, state: fields[8]})
 	}
 	return rows, nil
 }
@@ -142,6 +143,12 @@ func readMembers(group int, invocation Invocation, known map[int]processRow) ([]
 			return nil, nil, err
 		}
 	}
+	if invocation.FrontendPath != "" {
+		invocation.FrontendPath, err = filepath.EvalSymlinks(invocation.FrontendPath)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
 	for attempt := 0; ; attempt++ {
 		rows, err := readRows()
 		if err != nil {
@@ -153,6 +160,9 @@ func readMembers(group int, invocation Invocation, known map[int]processRow) ([]
 				continue
 			}
 			rows[i].executable, err = processExecutable(row.pid)
+			if err == nil && (inspectionExecutable(rows[i].executable) || rows[i].executable == invocation.FrontendPath || rows[i].executable == invocation.EnginePath && invocation.EngineArguments != nil) {
+				rows[i].arguments, err = processArguments(row.pid)
+			}
 			if err != nil {
 				err = fmt.Errorf("%w: PID %d: %v", errCommandUnavailable, row.pid, err)
 				break
@@ -221,17 +231,18 @@ func members(rows []processRow, group int, invocation Invocation, known map[int]
 				return nil, nil, errors.New("unverified exited process in owned group")
 			}
 			row.executable = prior.executable
+			row.arguments = prior.arguments
 			found = append(found, row)
 			continue
 		}
 		if tracked {
 			// A launch shell may exec the expected engine without changing PID or
 			// start time. Once it is an engine, its identity cannot rebind.
-			expectedExec := isLaunchShell(prior.executable) && row.executable == invocation.EnginePath
+			expectedExec := isLaunchShell(prior.executable) && (row.executable == invocation.EnginePath || row.executable == invocation.FrontendPath)
 			if !prior.exited() && prior.started == row.started && row.executable == "("+filepath.Base(prior.executable)+")" {
 				return nil, nil, fmt.Errorf("%w: PID %d", errCommandUnavailable, row.pid)
 			}
-			if prior.exited() || prior.started != row.started || (prior.executable != row.executable && !expectedExec) {
+			if prior.exited() || prior.started != row.started || (prior.executable != row.executable && !expectedExec) || !expectedExec && prior.arguments != row.arguments {
 				return nil, nil, fmt.Errorf("owned process %d identity changed: start %q -> %q, executable %q -> %q, state %q -> %q", row.pid, prior.started, row.started, prior.executable, row.executable, prior.state, row.state)
 			}
 		}
@@ -239,9 +250,31 @@ func members(rows []processRow, group int, invocation Invocation, known map[int]
 		switch {
 		case row.pid == group && row.executable == invocation.Path:
 			role = "router"
+		case invocation.FrontendPath != "" && row.executable == invocation.FrontendPath:
+			if !exactArguments(row.arguments, invocation.FrontendArguments) {
+				return nil, nil, errors.New("Splash frontend command differs from rendered selection")
+			}
+			role = "frontend"
 		case invocation.EnginePath != "" && row.executable == invocation.EnginePath:
+			if invocation.EngineArguments != nil && !exactArguments(row.arguments, invocation.EngineArguments) {
+				return nil, nil, errors.New("Splash native command differs from rendered selection")
+			}
+			if invocation.FrontendPath != "" && !tracked {
+				parentOK := false
+				for _, parent := range rows {
+					if parent.pid == row.ppid && parent.executable == invocation.FrontendPath && exactArguments(parent.arguments, invocation.FrontendArguments) {
+						parentOK = true
+					}
+				}
+				if !parentOK {
+					return nil, nil, errors.New("Splash native engine is not owned by the selected frontend")
+				}
+			}
 			role = "engine"
 		case isLaunchShell(row.executable):
+		case routerInspection(row, rows, group, invocation, known):
+			// Router hardware inspection is not a measured engine role. Its
+			// exact identity is still retained for reaping and owned shutdown.
 		default:
 			return nil, nil, fmt.Errorf("unexpected process %d in owned group", row.pid)
 		}
@@ -413,8 +446,8 @@ func runSupervised(ctx context.Context, invocation Invocation, stdout, stderr io
 			return errors.New("probe router disappeared")
 		}
 		for _, prior := range status.Roles {
-			if prior.ID == "engine" && !containsRole(roles, "engine") {
-				return errors.New("probe engine disappeared")
+			if (prior.ID == "engine" || prior.ID == "frontend") && !containsRole(roles, prior.ID) {
+				return fmt.Errorf("probe %s disappeared", prior.ID)
 			}
 		}
 		ready, err := readListeners(owned, group, s.Listen)
@@ -542,4 +575,17 @@ func shutdownGroup(group int, invocation Invocation, known map[int]processRow, g
 		}
 	}
 	return errors.New("owned process group remained after KILL")
+}
+
+func exactArguments(observed string, expected []string) bool {
+	args := strings.Split(observed, "\x00")
+	if len(args) != len(expected)+1 {
+		return false
+	}
+	for i, arg := range expected {
+		if args[i+1] != arg {
+			return false
+		}
+	}
+	return true
 }

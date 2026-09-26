@@ -15,8 +15,11 @@ import (
 
 	"github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/datadir"
+	"github.com/temper-sh/temper/internal/machine"
 	"github.com/temper-sh/temper/internal/probecmd"
 	"github.com/temper-sh/temper/internal/render"
+	"github.com/temper-sh/temper/internal/render/engine"
+	"github.com/temper-sh/temper/internal/splash"
 )
 
 // Dispatch invokes the existing CLI primitives in-process. Temporary legacy
@@ -124,6 +127,20 @@ func Runtime(ctx context.Context, args []string, stdout, stderr io.Writer, dispa
 	if err := ctx.Err(); err != nil {
 		return failed(stderr, err)
 	}
+	if operation == "prepare" || operation == "serve" {
+		for _, layout := range p.Manifest.Layouts {
+			if layout.Splash != nil {
+				facts, err := machine.DetectFacts(ctx)
+				if err != nil {
+					return failed(stderr, err)
+				}
+				if err := engine.SplashCompatibility(facts.Chip, facts.Target.DistributionVersion); err != nil {
+					return failed(stderr, err)
+				}
+				break
+			}
+		}
+	}
 	files, err := p.Files()
 	if err != nil {
 		return failed(stderr, err)
@@ -147,6 +164,22 @@ func Runtime(ctx context.Context, args []string, stdout, stderr io.Writer, dispa
 		return dispatch(ctx, append([]string{"software", "remove"}, softwareArgs...), stdout, stderr)
 	}
 	if operation == "serve" {
+		for _, id := range sortedKeys(p.Manifest.Layouts) {
+			layout := p.Manifest.Layouts[id]
+			if layout.Splash == nil {
+				continue
+			}
+			material, err := splash.New(resolved, id, layout, p.Artifacts.Entries[id], p.Manifest.Patches)
+			if err != nil {
+				return failed(stderr, err)
+			}
+			if err := material.Verify(); err != nil {
+				return failed(stderr, fmt.Errorf("Splash assembly: %w; run execution prepare", err))
+			}
+			if err := material.PrepareState(); err != nil {
+				return failed(stderr, err)
+			}
+		}
 		return dispatch(ctx, []string{"probe", "serve", "--root", resolved, "--installation", *installation,
 			"--software-lock", softwareLock, "--generation", *generation, "--listen", *listen, "--status-file", *statusFile}, stdout, stderr)
 	}
@@ -170,6 +203,27 @@ func Runtime(ctx context.Context, args []string, stdout, stderr io.Writer, dispa
 	}
 	if _, err := run(append([]string{"software", "check"}, softwareArgs...)); err != nil {
 		return failed(stderr, err)
+	}
+	for _, id := range sortedKeys(p.Manifest.Layouts) {
+		layout := p.Manifest.Layouts[id]
+		if layout.Splash == nil {
+			continue
+		}
+		material, err := splash.New(resolved, id, layout, p.Artifacts.Entries[id], p.Manifest.Patches)
+		if err != nil {
+			return failed(stderr, err)
+		}
+		if operation == "prepare" {
+			python, err := probecmd.InstalledExecutable(resolved, *installation, softwareLock, engine.Splash, engine.SplashPython)
+			if err != nil {
+				return failed(stderr, err)
+			}
+			if err := material.Prepare(ctx, python, splash.Derive); err != nil {
+				return failed(stderr, err)
+			}
+		} else if err := material.Verify(); err != nil {
+			return failed(stderr, err)
+		}
 	}
 	output, err := run(append(append([]string{"apply"}, modelArgs...), "--mode", l.Selection.Profile))
 	if err != nil {

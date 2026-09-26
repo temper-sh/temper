@@ -93,18 +93,23 @@ go build -o build/temper ./cmd/temper
 ./build/temper init --dry-run
 ```
 
-It defaults to `~/.temper`, shows machine limits, and asks for a local main model
-and/or local helpers alongside a harness-owned main model. Model size does not
+It defaults to `~/.temper`, shows machine limits, and asks for local models
+and/or a local helper alongside a harness-owned main model. You can install
+several local choices and select one as the default. The catalog groups them by
+memory tier and shows Model, Weights and Engine separately. Model size does not
 determine its role. You choose templates, context windows and software versions, review the
 complete plan, then save or prepare explicitly. The
 [setup contract](docs/contracts/init.md) also documents scripted selection and
 exact resume. The [compact authoring candidate](catalog/README.md) is available
 through an explicit `--catalog catalog/guided-setup.json`; it is not in the
-published catalog and its new runtime composition remains unmeasured.
-The Context tab defaults to automatic: the largest reviewed context matching
-the machine and selected configuration. The candidate records a 262,144-token
-model ceiling but has no reviewed machine-context findings yet, so preview
-requires an explicit window in the Context tab or with `--context LAYOUT=TOKENS`.
+published catalog. Its guide links the measured task/context combinations and
+their limits; optional templates and real 8/16 GiB fit remain unmeasured.
+The Context tab uses automatic selection where reviewed measurements are
+available: the largest context matching the machine and selected configuration.
+The candidate contains no published machine-context findings, so the Context tab
+asks for an explicit window before continuing, or scripts can supply
+`--context LAYOUT=TOKENS`. Model ceilings bound those choices; they do not
+establish the largest window that fits your machine.
 It labels that choice's fit as unknown. Brief model descriptions appear beneath
 the names, separately from download and memory details. The released catalog
 and existing saved configurations retain their original windows.

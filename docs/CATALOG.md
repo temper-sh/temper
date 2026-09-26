@@ -50,14 +50,25 @@ LAYOUT=PATCH|builtin`. New selections record the accepted defaults explicitly;
 `builtin` chooses the model's embedded template. Compatible patches are offered
 per model, and changing the catalog default does not change saved selections.
 Source also supports `--context LAYOUT=TOKENS` to choose an explicit
-window. The [guided authoring candidate](../catalog/README.md) records the
-262,144-token native ceiling for both Qwen models, with an editable Context tab.
+window. The [guided authoring candidate](../catalog/README.md) offers Qwen3.8
+27B, Qwen3.5 4B and Gemma E2B/E4B as local main models, plus Qwen3.5 as an
+on-demand utility. Both Qwen models offer embedded, Frog v22.5 and Sharp
+v22.5.0 templates; template defaults remain unchanged. Sharp adds instructions
+favoring concise output. Gemma uses its embedded template.
+
+The candidate records native ceilings of 262,144 tokens for Qwen and 131,072
+for Gemma, with an editable Context tab.
 Guided setup uses the largest matching reviewed context finding automatically;
 without one, it requests an explicit window and reports fit as unknown. The
-candidate has no reviewed machine-context findings yet. Model descriptions are
+candidate has no canonical machine-context findings yet: the reviewed shadow
+observations have no real public HTTP(S) evidence destination. Model descriptions are
 catalog text, editable through Workshop or `temper catalog describe`; see the
 [authoring guide](../catalog/README.md).
-That candidate is unpublished; the stable catalog above still supplies 32k.
+That candidate authors a 40,960-token Qwen3.8 window and 16,384-token small-model
+windows. Its [M5 / 32 GiB assessment](../catalog/README.md#context) distinguishes
+the qualified Qwen b11157 point from small-model observations on b11149.
+It remains unpublished; the signed stable catalog above still supplies 32k,
+and saved selections and issued execution locks retain their exact identities.
 The [guided setup contract](contracts/init.md) describes the terminal and
 scripted paths using the same choices.
 
@@ -76,8 +87,12 @@ activate the new software.
 
 `--software tested` is an explicit fallback to recorded minimum tested versions
 when the catalog supplies that evidence. It refuses an unknown tested boundary;
-the first profile does not declare one. A minimum required version is a separate
-compatibility floor that every choice must satisfy. See the
+the published first profile does not declare one. The unpublished guided
+candidate records observed fallback versions with their evidence boundaries
+and, as of 24 September 2026, llama.cpp b11157 / llama-swap v257 as its recorded
+releases. Template and software changes still need behavioral checks; prior
+capability observations retain their original conditions. A minimum required
+version is a separate compatibility floor that every choice must satisfy. See the
 [version-selection contract](contracts/execution-lock.md#owned-records-and-scope).
 
 ## Update or roll back the catalog

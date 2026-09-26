@@ -1,6 +1,7 @@
 package machine_test
 
 import (
+	"bytes"
 	"reflect"
 	"strings"
 	"testing"
@@ -9,6 +10,53 @@ import (
 	"github.com/temper-sh/temper/internal/machine"
 	"github.com/temper-sh/temper/internal/software"
 )
+
+func TestHistoricalFactsKeepTheirExactCanonicalBytes(t *testing.T) {
+	const historical = `schema: temper-machine-facts/v1
+target:
+  os: darwin
+  arch: arm64
+  distribution: macos
+  distribution_version: "15.6"
+hardware_model: Mac17,3
+chip: Apple M5
+os_build: 24G90
+physical_memory_bytes: 34359738368
+metal_device_memory_mib: 26542
+metal_device_memory_source: predicted-metal-81-percent
+wired_limit_mib: 24576
+wired_limit_source: live-sysctl
+`
+	facts, err := machine.ParseFacts([]byte(historical))
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := machine.MarshalFacts(facts)
+	if err != nil || string(raw) != historical {
+		t.Fatalf("historical bytes changed: %s, %v", raw, err)
+	}
+}
+
+func TestLiveFactsRoundTripPreservesZeroAndAbsentOverrides(t *testing.T) {
+	zero := int64(0)
+	for _, override := range []*int64{nil, &zero} {
+		facts := canonicalFacts()
+		facts.MetalDeviceMemoryMiB, facts.WiredLimitMiB = 24576, 24576
+		facts.MetalDeviceMemorySource, facts.WiredLimitSource = machine.MetalDeviceSourceLive, budget.WiredSourceMetal
+		facts.WiredLimitOverrideMiB = override
+		raw, err := machine.MarshalFacts(facts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		parsed, err := machine.ParseFacts(raw)
+		if err != nil || !reflect.DeepEqual(parsed, facts) {
+			t.Fatalf("round trip lost live facts: %#v, %v", parsed, err)
+		}
+		if bytes.Contains(raw, []byte("wired_limit_override_mib:")) != (override != nil) {
+			t.Fatalf("zero confused with unavailable: %s", raw)
+		}
+	}
+}
 
 func TestFactsCanonicalRoundTrip(t *testing.T) {
 	facts := canonicalFacts()

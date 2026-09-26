@@ -52,15 +52,16 @@ Every completed audit also emits the bootstrap wall model defined in
 [`docs/design/wall-model.md`](../design/wall-model.md). The prediction uses:
 
 - the manifest's `gpu_memory_utilization` policy;
-- physical memory and the live `iogpu.wired_limit_mb` machine read (falling
-  back to an explicitly labeled macOS-default prediction when absent); and
+- physical memory and Metal's live `recommendedMaxWorkingSetSize` budget; and
 - model-byte sizes from successfully admitted resident artifact sets.
 
 The preferred GPU-resident coder is the allocation holder. Other resident
 members with GPU placement are co-tenants; `ngl: 0` and all on-demand members
-are excluded. The holder envelope is the greater of its fraction of predicted
-Metal device memory and its model-file lower bound. The envelope, co-tenants,
-and a 1,024 MiB OS/transient policy floor must fit the wired limit.
+are excluded. The holder envelope is the greater of its fraction of the
+reported Metal budget and its model-file lower bound. The envelope, co-tenants,
+and a 1,024 MiB OS/transient policy floor must fit that budget. An unavailable
+Metal reading fails detection; a sysctl override or fixed RAM percentage does
+not substitute for it.
 
 This is always labeled `prediction`. It is not a runtime measurement or a
 catalog qualification. A mode with no GPU-resident local foreground is
@@ -87,7 +88,7 @@ claim that every file passed when the layout status is `failed`.
 One budget line follows the layouts:
 
 ```text
-BUDGET prediction fits|exceeded holder=<layout-id> physical-mib=<n> device-mib=<n> utilization=<fraction> allocation-mib=<n> holder-minimum-mib=<n> co-tenants-mib=<n> os-floor-mib=<n> required-mib=<n> wired-limit-mib=<n> spare-mib=<signed-n> source=live-sysctl|predicted-macos-default
+BUDGET prediction fits|exceeded holder=<layout-id> physical-mib=<n> device-mib=<n> utilization=<fraction> allocation-mib=<n> holder-minimum-mib=<n> co-tenants-mib=<n> os-floor-mib=<n> required-mib=<n> wired-limit-mib=<n> spare-mib=<signed-n> source=live-metal
 BUDGET prediction unavailable|not-applicable reason=<quoted-string>
 ```
 

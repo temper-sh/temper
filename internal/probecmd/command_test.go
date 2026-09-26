@@ -489,3 +489,74 @@ func materialize(t *testing.T) fixture {
 	router, _ := filepath.EvalSymlinks(filepath.Join(locations["upstream-release:router:llama-swap"], "llama-swap"))
 	return fixture{root: root, lockPath: lockPath, generation: generation, config: config, router: router, engine: engine}
 }
+
+func TestSplashPlanResolvesBothProcessesFromOneExactRelease(t *testing.T) {
+	f := materialize(t)
+	raw, err := os.ReadFile(f.lockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	locked, err := softwarelock.Parse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	selection := locked.Selections["llama-cpp"]
+	locked.Selections["splash"] = selection
+	delete(locked.Selections, "llama-cpp")
+	raw, err = softwarelock.Marshal(locked)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(f.lockPath, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := receiptstore.Read(f.root, "field-kit-qwen")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := stored.Document
+	rec.Selections["splash"] = rec.Selections["llama-cpp"]
+	delete(rec.Selections, "llama-cpp")
+	rec.SoftwareLockDigest, err = locked.SemanticDigest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := stored.Commit(context.Background(), rec); err != nil {
+		t.Fatal(err)
+	}
+	payload := rec.Units[selection.RootUnit].Location
+	for _, path := range []string{"engine/splash", "python/bin/python3.13"} {
+		full := filepath.Join(payload, path)
+		if err := os.MkdirAll(filepath.Dir(full), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte("fixture"), 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	requirements := runtimeconfig.Document{Schema: runtimeconfig.SchemaV1, Requirements: []runtimeconfig.Requirement{
+		{Package: "llama-swap", RelativeExecutable: "llama-swap"},
+		{Package: "splash", RelativeExecutable: "engine/splash", Role: "engine", Arguments: []string{"serve-native", "/target", "/draft", "32768", "25769803776"}},
+		{Package: "splash", RelativeExecutable: "python/bin/python3.13", Role: "frontend", Arguments: []string{"-I", "-B", "-c", "bootstrap", "--port", "${PORT}"}},
+	}}
+	raw, err = runtimeconfig.Marshal(requirements)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(f.root, "rendered", "generations", f.generation, "runtime", "requirements.json"), raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	inv, err := probecmd.Plan(probecmd.Options{Root: f.root, Installation: "field-kit-qwen", SoftwareLockPath: f.lockPath, Generation: f.generation, Listen: "127.0.0.1:18080"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	native, _ := filepath.EvalSymlinks(filepath.Join(payload, "engine/splash"))
+	frontend, _ := filepath.EvalSymlinks(filepath.Join(payload, "python/bin/python3.13"))
+	if inv.EnginePath != native || inv.FrontendPath != frontend || strings.Join(inv.FrontendArguments, " ") != "-I -B -c bootstrap --port 10001" || len(inv.EngineArguments) != 5 {
+		t.Fatalf("lost exact runtime identity: %+v", inv)
+	}
+	preparedPython, err := probecmd.InstalledExecutable(f.root, "field-kit-qwen", f.lockPath, "splash", "python/bin/python3.13")
+	if err != nil || preparedPython != frontend {
+		t.Fatal(preparedPython, err)
+	}
+}

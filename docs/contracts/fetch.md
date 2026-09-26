@@ -98,7 +98,11 @@ or a verified copy when linking reports a different filesystem. Other link
 failures are reported. The prepared model is a regular file beneath the Temper
 root: removing the HF cache does not invalidate it, and removing a Temper
 installation does not remove the shared cache. Templates, transformed patches
-and receipts stay in the Temper artifact set.
+and receipts stay in the Temper artifact set. A selected DFlash2 sidecar uses
+its own exact repository/revision and hashes under `draft/` in the same atomic
+set. Its model bytes count toward disk and memory checks, and its hashes can
+reuse verified files just like target weights. Fetch never derives tokenizer
+metadata or starts Splash conversion; `execution prepare` owns that next step.
 
 ## Existing installations and preview
 

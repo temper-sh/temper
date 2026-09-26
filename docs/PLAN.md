@@ -2,7 +2,7 @@
 
 Status: **GUIDED SETUP IMPLEMENTED — UNRELEASED**
 
-Updated: **2026-09-23**
+Updated: **2026-09-26**
 
 [`SPEC.md`](SPEC.md) retains the product specification and live-path contracts.
 [V3 requirements](../../v3/REQUIREMENTS.md) govern the current catalog and
@@ -23,10 +23,11 @@ promotion, resolver and bootstrap proposals are no longer an active backlog.
 | Software selection | Source records are separate from resolved releases. `catalog compile --software recorded\|latest\|tested` supports the current llama.cpp/llama-swap macOS ARM64 sources. Recorded inputs are the offline default; fallback is explicit. |
 | Installation | Exact isolated release/Python installation, receipts, version checks and recovery remain. System-managed software is always retained. Removing the unused Homebrew reader did not add a new Homebrew or Linux installer. |
 | Field Kit host | `execution inspect/prepare/render/serve/remove` and supervised probes are implemented. The [runtime contract](contracts/execution-runtime.md) owns process identities, listener checks and final shutdown proof. |
-| Source and build | Catalog delivery `a9b4a7f` is pushed and tagged alpha.10. Guided setup and its follow-up corrections are committed in source and await release; `build/temper` is the verified development build. |
+| Current router compatibility | The working tree recognizes llama-swap v257's narrowly scoped macOS inspection helpers using kernel executable/argv and router ancestry. Engine lifetime remains fixed for measurements; unknown children still refuse ownership. Full tests, race, vet and Linux compilation pass. Native catalog attempts are retained in [Labs](../../v3/labs/workstreams/model-runtime-optimization/method/catalog-refresh-2026-09-24.md). |
+| Source and build | Catalog delivery `a9b4a7f` is pushed and tagged alpha.10. Guided setup baseline `ffeee88` is committed locally and awaits release; native Metal detection and wired-memory guidance are subsequent source work. |
 | Public binary | Signed/notarized [0.1.0-alpha.10](https://github.com/temper-sh/temper/releases/tag/v0.1.0-alpha.10) adds catalog commands. Its downloaded checksum, signing identity, notarization and live-catalog compilation pass. Field Kit `01dd867` keeps its verified alpha.9 host; alpha.7 remains the dispatched revision 1 host. |
 | Catalog distribution | The [stable channel](https://temper-sh.github.io/temper/catalog/channels/stable/channel.yaml) publishes signed sequence 2 with one Qwen profile. Explicit update, inspection, selection, compilation and offline rollback are delivered. [The catalog guide](CATALOG.md) owns use. |
-| Compact candidate | [The authoring catalog](../catalog/README.md) adds Qwen3.5 4B as either a main model or an on-demand utility helper. Exact weights have prior assessment; the new engine/configuration and low-memory fit remain unmeasured. It is not published. |
+| Catalog candidate | [The authoring catalog](../catalog/README.md) offers Qwen3.8, Qwen3.5 and Gemma E2B/E4B as main models, plus Qwen3.5 as an on-demand utility. It records b11157/v257 and authors 40,960 tokens for Qwen3.8 after discovery, fresh confirmation and a full-output resource check on M5/32 GiB. Small-model context and focused task observations retain b11149; they do not qualify all profiles on b11157. Optional Sharp compositions and real 8/16 GiB fit remain unmeasured. It is not published. |
 
 The 22 September native check used the frozen `qwen-machine-study@2` lock and
 cached model on Apple M5 / 32 GiB. Preparation replay and rendering agreed; one
@@ -40,6 +41,20 @@ was not proved, so cleanup was refused. The exact owned processes were stopped
 after independent identity verification. The fix uses kernel executable paths,
 binds each observed group, and has a native regression matching that topology.
 
+The 24 September catalog investigation found another startup boundary: v257's
+macOS hardware detection starts `system_profiler`, including children in separate
+groups. The initial attempt refused the unrecognized child and could not prove
+shutdown. Its isolated router was stopped only after independent ownership
+verification; the first unsafe status remains intact. The new narrow helper
+classification binds executable, exact NUL-delimited kernel argv, ancestry,
+start time and group. Only the reviewed read-only inspection invocations are
+accepted, and helpers never replace measured router/engine roles. Tests include
+unrelated children, changed identities, write-capable arguments and engine
+descendants. A subsequent native start/shutdown passed, then exposed a separate
+Field Kit Python 3.9 timestamp parser defect, now repaired in that owner's tree.
+These local compatibility fixes do not add persistent serving or change the
+published alpha.10/Field Kit alpha.9 binaries.
+
 The catalog delivery verified the Pages-served bytes with the existing signing
 trust root. A fresh update, unchanged replay, no-write dry run, offline selection
 and compilation passed. The downloaded signed alpha.10 compiled byte-identical
@@ -50,7 +65,15 @@ recorded Qwen inputs and unknown required/tested boundaries were not changed.
 
 ## Next delivery
 
-**Incorporate reviewed context findings, validate the compositions, then release guided setup.**
+**Close catalog evidence gaps and plan the usable stack through Workshop.**
+
+The authorized 24 September overnight catalog review, bounded native
+investigation and managed-serving/tool/integration research are complete.
+The [workspace plan](../../v3/PLAN.md#full-stack-workstreams) retains all six
+layers. Guided setup is implemented; the next work establishes practical
+portfolio coverage, current-composition evidence, actual machine fit and the
+tool/integration offering. Publication follows a reviewed delivery decision.
+Persistent service installation and live cutover are outside this research run.
 
 Catalog context guidance is implemented in source. The catalog separates the
 model ceiling from the authored window and reviewed test points. Setup resolves
@@ -61,13 +84,85 @@ guidance remains separate. There is no interpolation or new memory estimator.
 The [catalog contract](contracts/execution-lock.md) owns the fields and matching
 rules; the [product policy](SPEC.md) owns the intended default.
 
-The Context tab starts at `auto`; explicit numbers remain available up to the
-model ceiling. Review requests an explicit value when no finding matches and
-labels its fit unknown. The accepted number is frozen in Selection and the
-execution lock. The authoring candidate retains authored 32k/16k configurations
-and separate 262,144-token ceilings, but **contains no reviewed machine-context
+The Context tab starts at `auto` where reviewed findings exist; otherwise it
+asks for an explicit number before continuing. If resolved software or refreshed
+machine facts invalidate an automatic choice, review returns to the affected
+Context field with other selections intact. Missing evidence is an input
+request, not a generic preview failure. Manual values remain bounded by the
+model ceiling; unmeasured choices have unknown fit. The accepted number is
+frozen in Selection and the
+execution lock. The authoring candidate retains authored 40,960/16,384-token configurations
+and separate native ceilings (262,144 for Qwen; 131,072 for Gemma), but **contains no canonical machine-context
 findings yet**. The signed stable catalog and saved configurations remain
 unchanged. Benchmark windows are not universal defaults or machine ceilings.
+
+The 24 September [b11149 native record](../../v3/labs/workstreams/model-runtime-optimization/results/catalog-defaults-m5.json)
+contains reviewed candidate fields for the earlier 16k/32k windows on the
+tested M5/32 GiB, reserving 4,096 output tokens. Gemma needed a separately frozen
+semantic lookup check after strict JSON controls failed on Markdown fences.
+No public HTTP(S) evidence destination exists for these shadow records yet;
+the current contract therefore cannot accept them as canonical findings.
+Keep this concrete publication dependency separate from missing measurements.
+Actual low-memory machines and optional templates remain different evidence
+questions.
+
+The [Qwen3.8 capacity result](../../v3/labs/workstreams/model-runtime-optimization/results/qwen27-capacity-m5.json)
+qualifies the authored 40,960-token point on b11157/v257 with discovery and fresh
+confirmation. Ordinary 36,352-token initial requests took 487.83/506.28 seconds;
+continuations took 21.00/21.08 seconds, reusing 36,348 tokens and processing 94
+new tokens. A forced resource test consumed 36,570 input plus all 4,096 output
+tokens and ended at the length limit in 535.64 seconds. This output-budget check
+is not answer-quality evidence. Confirmation peak RSS was 20.829 GiB with no
+swap growth, memory-pressure, thermal or CPU-limit event and verified shutdown.
+Larger stopped points do not establish a numeric ceiling. Only the authoring
+candidate's Qwen context scalar and shared recorded engine release change;
+the signed stable catalog, historical specimen and issued configurations retain
+their older identities. Canonical context findings still await a real public
+HTTP(S) evidence destination.
+
+The [Qwen3.5 checkpoint comparison](../../v3/labs/workstreams/model-runtime-optimization/results/qwen35-checkpoint-reuse-m5.json)
+supports a narrow optimization candidate: one checkpoint reduced filled-context
+continuation by 89% in both order blocks, preserving all sixteen answers. Review
+representative multistep and rewind behavior before changing the canonical
+zero-checkpoint setting. Spark also completed five focused specimens on the
+official engine; wider work and context capacity still precede a portfolio
+addition. No catalog record was promoted from either diagnostic.
+
+Catalog content now reuses the closed capability portfolio and maintained
+Workshop suite. The selected GGUF files and Frog template remain current;
+Sharp is an optional per-Qwen choice and preserves the existing defaults.
+Recorded software is llama.cpp b11157 / llama-swap v257. Exact fallback archives
+for the cited tested versions also resolve and compile. These are mechanical
+checks; historical assessments retain their original engine/template/settings.
+Required compatibility floors remain unknown. Context regressions use synthetic
+fixtures; catalog content is checked by compiling its declared choices.
+
+Tight memory budgets now receive a prominent wired-limit recommendation in
+model selection and above the review's download summary. The same guidance is
+available to scripted setup and blocked preparation. It prints bounded manual
+sysctl instructions, verification, restart and rollback steps; Temper changes
+no system setting. The [setup contract](contracts/init.md) owns the advisory
+threshold and macOS memory reserve. That reserve is explicitly Temper policy,
+not a detected maximum system override.
+
+Live detection now queries Metal's recommended working set through the system
+framework, with no Swift, Xcode or MLX dependency on the user's machine. The
+cgo-free release build is preserved. Machine facts label the effective budget
+`live-metal` and keep the optional raw sysctl override separate. Old canonical
+facts retain their original bytes and prediction labels. Setup rereads facts
+on review/retry and preparation, and manual instructions verify the resulting
+Metal budget. Recommendations account for the fraction allocation growing with
+an increased budget.
+
+Focused regressions, the full race-test suite and vet pass; `build/temper` is
+rebuilt. The release build and local packaging check pass, including the new
+binding's license notice; the non-macOS build still compiles. Native read-only
+checks on the M5/32 GiB report a 24 GiB Metal budget. The Qwen scripted preview
+uses it, recognizes the shared cached weights and leaves its root absent. Its
+21.40 GiB prediction has 2.60 GiB spare, so the earlier 26 GiB recommendation
+from the percentage estimate is gone. This remains an admission prediction,
+not a new context measurement. No sysctl change, model run or download was
+performed during these checks.
 
 Model descriptions are implemented as editable artifact metadata, shared by
 main/helper choices. The chooser shows the description and optional assessment
@@ -105,28 +200,42 @@ allowances. Shared cache deletion remains user-controlled.
 
 The first implementation follows the existing
 [modes-first design](SPEC.md#wizard-set-and-profiles-settled-2026-08-13).
-It saves one Selection/Execution Lock pair per chosen mode. Review binds the
-exact resolved software bytes; accepting a preview never re-resolves moving
+It saves one Selection/Execution Lock pair per selected configuration. Local
+models have separate install checkboxes and one explicit default. The chooser
+groups estimated memory tiers largest first, then uses catalog-owned ordering
+within each group, with distinct Model / Weights / Engine labels. The default
+retains the `local` pair; alternatives get named pairs and private installation
+IDs. No ordering edit changes execution identity or the user's saved default.
+Regression checks cover multi-model save and exact offline resume, explicit
+defaults, independent templates/context and presentation-only identity changes.
+Full tests, vet and race checks pass. A native M5/32 GiB terminal dry run showed
+S before XS, configured Qwen and Gemma independently and kept its root absent.
+Review binds the exact resolved software bytes; accepting a preview never re-resolves moving
 latest releases. Templates are explicit per-layout choices, including the
 model's embedded template. Utility profiles leave the foreground with the
 harness and expose their local helper without a generic main-model route.
 
 The immediate remaining work is:
 
-1. Review available and returned context observations through Workshop before
-   adding applicable findings to the catalog. Keep missing measurements unknown;
-   automatic matching is implemented, while numerical recommendations still
-   need evidence for the exact output allowance and runtime configuration.
-2. Run a separately authorized bounded native check of the compact candidate
-   with its exact new engine and launch controls. Prior assessment used a
-   different engine/configuration, so it does not establish this composition.
+1. Give reviewed current-context observations a real public evidence destination
+   before incorporating the applicable findings through Workshop. Automatic
+   matching is implemented; retained candidate points bind exact defaults,
+   output allowance and machine. Keep unmeasured choices unknown.
+2. Review the checkpoint candidate on representative multistep/rewind work and
+   optional Sharp compositions on affected Workshop cases when selected for
+   investigation. Retained b11149 task checks and the b11157 Qwen context point
+   do not cover optional templates or establish universal engine compatibility.
 3. Obtain real low-memory observations before claiming 8/16 GiB runtime fit.
    Synthetic machine facts prove eligibility logic, not model behavior.
-4. After review, publish the signed catalog candidate and the next signed binary.
-   The public alpha.10 and stable catalog remain unchanged until that release.
+4. Use the [managed-tools findings](../../v3/labs/workstreams/managed-tools/README.md)
+   to implement an explicit start/stop/status boundary when engineering begins.
+   Keep the fixed-process experiment supervisor separate. Shared tool work
+   needs the identified access, validation and cancellation repairs plus a
+   completed-work comparison before an installable integration offering.
 
-The first wizard offers one profile per mode and requires a single layout for
-its foreground execution path. The broader design's tools, integrations,
+The wizard offers several installed local configurations and one utility
+profile, and requires a single layout for each foreground execution path.
+The broader design's tools, integrations,
 arbitrary model composition and managed mode transitions remain subsequent
 work. Pi keeps its existing home and live configuration; setup does not activate
 an integration or migrate a root. Managed activation and live service cutover
@@ -194,6 +303,49 @@ silently replay them. The [Field Kit plan](../../v3/FIELD-KIT-PLAN.md#next-deliv
 owns the remaining study work.
 
 ## Following product work
+
+### Splash 1.1.0 integration
+
+Splash 1.1.0 integration is implemented in the candidate catalog. Qwen–Splash
+leads S on compatible machines; Qwen–llama remains its baseline. The prebuilt
+release carries its own Python and Metal kernels. Its architecture mapping
+validates the exact DFlash2 sidecar, and `execution prepare` derives the tokenizer
+from the selected GGUF and applies Frog. Target and draft downloads, preparation
+receipts, and runtime conversion cache have separate ownership. Serving uses
+local material and supervises both Python frontend and native engine. Historical
+coding results retain their tested source identity.
+
+Verification on 26 September: full Go and race suites, `go vet`, and diff checks
+passed. The actual release archive passed bounded inspection, extraction and
+inventory comparison (8,118 entries; 230,045,665 unpacked bytes). Bundled Python
+derived tokenizer metadata from the cached target and validated the pinned
+DFlash2 configuration without loading weights. The real CLI dry run selected
+Splash as default alongside the llama.cpp alternative, credited shared target
+weights, exposed draft/cache space, and created no root. Harmless native helper
+processes proved three-role supervision and owned shutdown.
+
+The authorized isolated native smoke passed on Apple M5 / 32 GiB with Splash
+1.1.0 and llama-swap v257. It used the locked Unsloth UD-Q4_K_XL target, the
+architecture-matched DFlash2 sidecar, Frog v22.5, int8 KV and a 24 GiB engine
+ceiling. The loaded frontend reported 32,768 context tokens. With reasoning
+disabled per request, a 128-token-capped chat returned exactly `SPLASH_OK` and a
+second 128-token-capped request returned the required `report_status` tool call
+with `{"status":"ok","count":2}`. Temper observed router, frontend and native
+engine identities and proved all processes stopped and both listeners closed.
+Repeated preparation preserved selection and generation. Public software removal
+succeeded, and the isolated root and conversion cache were removed; the shared
+Hugging Face cache remains available. These are installation
+and short-request integration checks, not full-window capacity, default-medium
+reasoning quality or performance qualification. No context finding was added.
+The catalog now records 1.1.0 / v257 as tested software under these conditions.
+
+Initial native attempts exposed a missing source-assembly `model.json` descriptor;
+Splash consequently attempted its legacy packed-model path. The adapter now
+writes and receipts the required descriptor, with a regression for its semantic
+fields. Splash startup logs are forwarded through the router. The bundled
+Transformers loader's generic Mistral heuristic is explicitly disabled for the
+Qwen tokenizer already derived by Splash; the serialized Qwen tokenizer remains
+unchanged. Failed attempts also ended with proved owned shutdown.
 
 ### Additional engine closures
 

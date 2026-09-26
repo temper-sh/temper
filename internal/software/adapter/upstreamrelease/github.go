@@ -46,7 +46,7 @@ type githubRelease struct {
 
 var githubRepo = regexp.MustCompile(`^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$`)
 var buildTag = regexp.MustCompile(`^([bv])([0-9]+)$`)
-var semanticTag = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
+var semanticTag = regexp.MustCompile(`^v?[0-9]+\.[0-9]+\.[0-9]+$`)
 var commitSHA = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
 func (s GitHubSource) Validate() error {
@@ -68,7 +68,7 @@ func CompareVersions(left, right string) (int, error) {
 	}
 	l, r := buildTag.FindStringSubmatch(left), buildTag.FindStringSubmatch(right)
 	if l == nil || r == nil || l[1] != r[1] {
-		return 0, fmt.Errorf("cannot compare release versions %q and %q: expected matching b<number>, v<number>, or vMAJOR.MINOR.PATCH tags", left, right)
+		return 0, fmt.Errorf("cannot compare release versions %q and %q: expected matching b<number>, v<number>, or optional-v MAJOR.MINOR.PATCH tags", left, right)
 	}
 	a, _ := new(big.Int).SetString(l[2], 10)
 	b, _ := new(big.Int).SetString(r[2], 10)

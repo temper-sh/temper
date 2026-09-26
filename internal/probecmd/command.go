@@ -34,12 +34,15 @@ var generationPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 // Invocation is the complete, validated foreground process boundary.
 type Invocation struct {
-	Path        string
-	Arguments   []string
-	Environment []string
-	Input       []byte
-	EnginePath  string
-	Supervision *Supervision
+	Path              string
+	Arguments         []string
+	Environment       []string
+	Input             []byte
+	EnginePath        string
+	EngineArguments   []string
+	FrontendPath      string
+	FrontendArguments []string
+	Supervision       *Supervision
 }
 
 // Runner is deliberately narrower than os/exec so command tests can prove
@@ -379,6 +382,8 @@ func Plan(options Options) (Invocation, error) {
 
 	router := ""
 	enginePath := ""
+	frontendPath := ""
+	var engineArguments, frontendArguments []string
 	var executableDirectories []string
 	for _, requirement := range requirements.Requirements {
 		location, err := selectionLocation(installed.Document, requirement.Package)
@@ -397,6 +402,19 @@ func Plan(options Options) (Invocation, error) {
 		if requirement.Package == "llama-cpp" {
 			enginePath = executable
 		}
+		if requirement.Package == "splash" {
+			args := append([]string(nil), requirement.Arguments...)
+			for i, arg := range args {
+				if arg == "${PORT}" {
+					args[i] = "10001"
+				}
+			}
+			if requirement.Role == "frontend" {
+				frontendPath, frontendArguments = executable, args
+			} else {
+				enginePath, engineArguments = executable, args
+			}
+		}
 	}
 
 	config := filepath.Join(generationRoot, "llama-swap", "config.yaml")
@@ -404,9 +422,10 @@ func Plan(options Options) (Invocation, error) {
 		return Invocation{}, fmt.Errorf("rendered config: %w", err)
 	}
 	return Invocation{
-		Path:       router,
-		EnginePath: enginePath,
-		Arguments:  []string{"--config", config, "--listen", options.Listen},
+		Path:            router,
+		EnginePath:      enginePath,
+		EngineArguments: engineArguments, FrontendPath: frontendPath, FrontendArguments: frontendArguments,
+		Arguments: []string{"--config", config, "--listen", options.Listen},
 		Environment: []string{
 			"PATH=" + strings.Join(append(executableDirectories, "/usr/bin", "/bin", "/usr/sbin", "/sbin"), string(os.PathListSeparator)),
 		},
@@ -515,4 +534,28 @@ func usage(writer io.Writer) {
 	fmt.Fprintln(writer, "usage:")
 	fmt.Fprintln(writer, "  temper probe serve --root PATH --installation ID --generation SHA256 [--software-lock PATH] [--listen 127.0.0.1:PORT] [--status-file PATH] [--dry-run]")
 	fmt.Fprintln(writer, "  temper probe tokenize --root PATH --installation ID --layout ID [--software-lock PATH] [--manifest PATH] [--lock PATH] < rendered-prompt.bin")
+}
+
+// InstalledExecutable resolves an executable only through a matching immutable
+// software receipt. Callers verify software content before invoking it.
+func InstalledExecutable(root, installation, lockPath, packageID, relative string) (string, error) {
+	locked, err := lockstore.Read(lockPath)
+	if err != nil {
+		return "", err
+	}
+	installed, err := receiptstore.Read(root, installation)
+	if err != nil {
+		return "", err
+	}
+	if !locked.Exists() || !installed.Exists() {
+		return "", errors.New("software lock and receipt are required")
+	}
+	if err := installed.Document.ValidateAgainst(locked.Document, installplan.Installation{ID: installation, Root: root}); err != nil {
+		return "", err
+	}
+	location, err := selectionLocation(installed.Document, packageID)
+	if err != nil {
+		return "", err
+	}
+	return executableAt(root, installation, location, relative)
 }

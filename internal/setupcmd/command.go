@@ -66,6 +66,8 @@ type report struct {
 }
 type prepared struct {
 	Mode       string `json:"mode"`
+	Profile    string `json:"profile"`
+	Default    bool   `json:"default"`
 	Generation string `json:"generation"`
 	Command    string `json:"command"`
 }
@@ -78,12 +80,13 @@ func (c Command) Run(ctx context.Context, args []string, in io.Reader, out, diag
 	rootArg := f.String("root", "", "configuration and state root (default ~/.temper)")
 	catalogPath := f.String("catalog", "", "explicit local authoring catalog")
 	softwareChoice := f.String("software", "recorded", "recorded, latest or tested software")
+	defaultProfile := f.String("default-profile", "", "selected local profile to load by default; required with alternatives")
 	prepare := f.Bool("prepare", false, "save and prepare explicitly selected configurations")
 	resume := f.Bool("resume", false, "use saved exact choices and locks without re-resolving")
 	dry := f.Bool("dry-run", false, "preview without filesystem or installation changes")
 	jsonOutput := f.Bool("json", false, "emit the noninteractive setup result as JSON")
 	var profiles, templates, contexts stringsFlag
-	f.Var(&profiles, "profile", "explicit profile ID; repeat for another mode")
+	f.Var(&profiles, "profile", "explicit profile ID; repeat to install another model")
 	f.Var(&templates, "template", "LAYOUT=PATCH or LAYOUT=builtin; repeat per model")
 	f.Var(&contexts, "context", "LAYOUT=TOKENS; otherwise use the largest applicable tested context")
 	if err := f.Parse(args); err != nil {
@@ -101,10 +104,10 @@ func (c Command) Run(ctx context.Context, args []string, in io.Reader, out, diag
 			explicitSoftware = true
 		}
 	})
-	if *resume && (len(profiles) > 0 || len(templates) > 0 || len(contexts) > 0 || *catalogPath != "" || explicitSoftware) {
-		return fail(diagnostics, errors.New("--resume uses saved choices; omit --profile, --template, --context, --catalog and --software"))
+	if *resume && (len(profiles) > 0 || len(templates) > 0 || len(contexts) > 0 || *catalogPath != "" || explicitSoftware || *defaultProfile != "") {
+		return fail(diagnostics, errors.New("--resume uses saved choices; omit --profile, --default-profile, --template, --context, --catalog and --software"))
 	}
-	if !*resume && len(profiles) == 0 && (len(templates) > 0 || len(contexts) > 0 || explicitSoftware || *prepare || *jsonOutput) {
+	if !*resume && len(profiles) == 0 && (len(templates) > 0 || len(contexts) > 0 || explicitSoftware || *prepare || *jsonOutput || *defaultProfile != "") {
 		return fail(diagnostics, errors.New("scripted options require --profile or --resume; interactive init asks for those choices"))
 	}
 	home := ""
@@ -132,11 +135,11 @@ func (c Command) Run(ctx context.Context, args []string, in io.Reader, out, diag
 	}
 	var plan setup.Plan
 	if *resume {
-		locks, err := setup.Load(root)
+		saved, err := setup.Load(root)
 		if err != nil {
 			return fail(diagnostics, err)
 		}
-		plan, err = c.inspectPlan(root, facts, free, locks)
+		plan, err = c.inspectPlan(root, facts, free, saved.Locks, saved.DefaultProfile)
 		if err != nil {
 			return fail(diagnostics, err)
 		}
@@ -150,6 +153,7 @@ func (c Command) Run(ctx context.Context, args []string, in io.Reader, out, diag
 			if err != nil {
 				return fail(diagnostics, err)
 			}
+			choices.DefaultProfile = *defaultProfile
 			plan, err = c.compile(ctx, root, d, snapshot, facts, free, choices)
 			if err != nil {
 				return fail(diagnostics, err)
@@ -168,8 +172,22 @@ func (c Command) Run(ctx context.Context, args []string, in io.Reader, out, diag
 			var mu sync.Mutex
 			plans := map[string]setup.Plan{}
 			preview := func(ctx context.Context, choices setupui.Choices) (setupui.Review, error) {
-				p, err := c.compile(ctx, root, d, snapshot, facts, free, choices)
+				// A retry must see resource changes made while the wizard is open.
+				// Keep reads local: previews may be cancelled and overlap.
+				currentFacts, err := c.Detect(ctx)
 				if err != nil {
+					return setupui.Review{}, err
+				}
+				currentFree, err := c.Disk(root)
+				if err != nil {
+					return setupui.Review{}, err
+				}
+				p, err := c.compile(ctx, root, d, snapshot, currentFacts, currentFree, choices)
+				if err != nil {
+					var missing *catalog.ContextRequiredError
+					if errors.As(err, &missing) {
+						return setupui.Review{ContextRequired: &setupui.ContextRequest{Profile: missing.Profile, Layout: missing.Layout}}, nil
+					}
 					return setupui.Review{}, err
 				}
 				files, err := p.Files()
@@ -187,7 +205,7 @@ func (c Command) Run(ctx context.Context, args []string, in io.Reader, out, diag
 				mu.Unlock()
 				var sections []setupui.Section
 				for _, section := range p.Sections() {
-					block := setupui.Section{Title: section.Title, Lines: section.Lines}
+					block := setupui.Section{Title: section.Title, Lines: section.Lines, Warning: section.Warning}
 					if section.Downloads != nil {
 						block.Downloads = make([]setupui.Download, 0, len(section.Downloads))
 						for _, item := range section.Downloads {
@@ -234,12 +252,18 @@ func (c Command) Run(ctx context.Context, args []string, in io.Reader, out, diag
 		for _, mode := range plan.Modes {
 			locks = append(locks, mode.Lock)
 		}
-		plan, err = c.inspectPlan(root, facts, free, locks)
+		plan, err = c.inspectPlan(root, facts, free, locks, plan.DefaultProfile)
 		if err != nil {
 			return fail(diagnostics, err)
 		}
 	}
 	if *prepare && !plan.CanPrepare && !*dry {
+		for _, section := range plan.Sections() {
+			if section.Warning {
+				fmt.Fprintln(diagnostics, section.Title)
+				fmt.Fprintln(diagnostics, strings.Join(section.Lines, "\n"))
+			}
+		}
 		return fail(diagnostics, errors.New(strings.Join(plan.Refusals, "; ")))
 	}
 	changed := false
@@ -270,8 +294,9 @@ func (c Command) Run(ctx context.Context, args []string, in io.Reader, out, diag
 			if err := ctx.Err(); err != nil {
 				return fail(diagnostics, fmt.Errorf("configuration saved; preparation interrupted: %w", err))
 			}
-			lockPath := filepath.Join(root, setup.ConfigurationDir, mode.Mode+".execution.lock.json")
-			exactPath := filepath.Join(preparedLocks, mode.Mode+".execution.lock.json")
+			name := plan.ConfigurationName(mode)
+			lockPath := filepath.Join(root, setup.ConfigurationDir, name+".execution.lock.json")
+			exactPath := filepath.Join(preparedLocks, name+".execution.lock.json")
 			exact, err := catalog.MarshalLock(mode.Lock)
 			if err != nil {
 				return fail(diagnostics, err)
@@ -280,10 +305,10 @@ func (c Command) Run(ctx context.Context, args []string, in io.Reader, out, diag
 				return fail(diagnostics, err)
 			}
 			var output strings.Builder
-			fmt.Fprintln(diagnostics, "Preparing "+mode.Mode+" configuration…")
-			code := c.Dispatch(ctx, []string{"execution", "prepare", "--root", root, "--installation", "setup-" + mode.Mode, "--lock", exactPath}, &output, diagnostics)
+			fmt.Fprintln(diagnostics, "Preparing "+mode.Profile+"…")
+			code := c.Dispatch(ctx, []string{"execution", "prepare", "--root", root, "--installation", "setup-" + name, "--lock", exactPath}, &output, diagnostics)
 			if code != 0 {
-				return fail(diagnostics, fmt.Errorf("configuration saved; %s preparation failed (exit %d). Resume with temper init --root %s --resume --prepare", mode.Mode, code, quote(root)))
+				return fail(diagnostics, fmt.Errorf("configuration saved; %s preparation failed (exit %d). Resume with temper init --root %s --resume --prepare", mode.Profile, code, quote(root)))
 			}
 			var material struct {
 				Generation string `json:"generation"`
@@ -295,11 +320,16 @@ func (c Command) Run(ctx context.Context, args []string, in io.Reader, out, diag
 			if decodeErr != nil || len(material.Generation) != 64 {
 				return fail(diagnostics, errors.New("configuration saved; preparation did not report a valid rendered generation"))
 			}
-			statusPath := filepath.Join(root, "setup-"+mode.Mode+"-"+time.Now().UTC().Format("20060102T150405.000000000Z")+".status.json")
-			command := "temper execution serve --root " + quote(root) + " --installation setup-" + mode.Mode + " --lock " + quote(lockPath) + " --generation " + material.Generation + " --status-file " + quote(statusPath)
-			result.Prepared = append(result.Prepared, prepared{Mode: mode.Mode, Generation: material.Generation, Command: command})
+			statusPath := filepath.Join(root, "setup-"+name+"-"+time.Now().UTC().Format("20060102T150405.000000000Z")+".status.json")
+			command := "temper execution serve --root " + quote(root) + " --installation setup-" + name + " --lock " + quote(lockPath) + " --generation " + material.Generation + " --status-file " + quote(statusPath)
+			isDefault := mode.Profile == plan.DefaultProfile
+			result.Prepared = append(result.Prepared, prepared{Mode: mode.Mode, Profile: mode.Profile, Default: isDefault, Generation: material.Generation, Command: command})
 			if !*jsonOutput {
-				fmt.Fprintln(out, "Prepared "+mode.Mode+". Run a temporary supervised session with:\n"+command)
+				label := mode.Profile
+				if isDefault {
+					label += " (default local model)"
+				}
+				fmt.Fprintln(out, "Prepared "+label+". Run a temporary supervised session with:\n"+command)
 				fmt.Fprintln(out, "After first use, an idle engine unload or restart ends the session.")
 				fmt.Fprintln(out, "Use a new --status-file path for each subsequent start.")
 			}
@@ -351,10 +381,10 @@ func (c Command) compile(ctx context.Context, root string, d catalog.Document, s
 		}
 		locks = append(locks, locked)
 	}
-	return c.inspectPlan(root, facts, free, locks)
+	return c.inspectPlan(root, facts, free, locks, choices.DefaultProfile)
 }
 
-func (c Command) inspectPlan(root string, facts machine.Facts, free int64, locks []catalog.Lock) (setup.Plan, error) {
+func (c Command) inspectPlan(root string, facts machine.Facts, free int64, locks []catalog.Lock, defaultProfile string) (setup.Plan, error) {
 	cache := ""
 	if c.CacheRoot != nil {
 		var err error
@@ -367,7 +397,7 @@ func (c Command) inspectPlan(root string, facts machine.Facts, free int64, locks
 	if err != nil {
 		return setup.Plan{}, err
 	}
-	return setup.BuildWithMaterial(root, facts, free, locks, material)
+	return setup.BuildWithMaterial(root, facts, free, locks, material, defaultProfile)
 }
 
 func scriptChoices(d catalog.Document, profiles, overrides, contexts []string, softwareChoice string) (setupui.Choices, error) {
@@ -446,18 +476,35 @@ func options(d catalog.Document, facts machine.Facts, free int64, authoring bool
 	for _, id := range ids {
 		p := d.Profiles[id]
 		option := setupui.Profile{Option: setupui.Option{ID: id, Name: id}, Mode: setup.Mode(p), SoftwareUnavailable: map[string]string{}}
-		var names, descriptions, links []string
+		var names, components, descriptions, links []string
 		for _, binding := range p.Bindings {
 			layout := d.Layouts[binding.Layout]
-			names = append(names, layout.DisplayName)
 			artifact := d.Artifacts[layout.Artifact]
+			modelName := artifact.ModelName
+			if modelName == "" {
+				modelName = layout.DisplayName
+			}
+			names = append(names, modelName)
+			weightsName := artifact.WeightsName
+			if weightsName == "" {
+				weightsName = artifact.Repo + " · " + strings.ToUpper(artifact.Format)
+			}
+			engine := d.Engines[layout.Engine]
+			engineName := engine.DisplayName
+			if engineName == "" {
+				engineName = engine.Family
+			}
+			components = append(components, "Weights: "+weightsName, "Engine: "+engineName)
+			if catalog.MemoryTier(layout.MemoryTier).Rank() > catalog.MemoryTier(option.MemoryTier).Rank() {
+				option.MemoryTier = layout.MemoryTier
+			}
 			if artifact.Description != "" {
 				descriptions = append(descriptions, artifact.Description)
 			}
 			if artifact.AssessmentURL != "" {
 				links = append(links, artifact.AssessmentURL)
 			}
-			window := setupui.ContextWindow{Layout: binding.Layout, Name: layout.DisplayName, Minimum: layout.RequestDefaults.MaxOutputTokens + 1, Maximum: layout.ContextLimit(), RecordedDefaults: map[string]int{}}
+			window := setupui.ContextWindow{Layout: binding.Layout, Name: layout.DisplayName, Minimum: layout.RequestDefaults.MaxOutputTokens + 1, Maximum: layout.ContextLimit(), RecordedDefaults: map[string]int{}, ManualRequired: len(layout.ContextFindings) == 0}
 			t := setupui.Template{Layout: binding.Layout, Name: layout.DisplayName, Options: []setupui.Option{{ID: "", Name: "Model's embedded template"}}}
 			if len(layout.Patches) > 0 {
 				t.Default = layout.Patches[0]
@@ -486,7 +533,8 @@ func options(d catalog.Document, facts machine.Facts, free int64, authoring bool
 			}
 			option.Contexts = append(option.Contexts, window)
 		}
-		option.Name = strings.Join(names, " + ")
+		option.Name = "Model: " + strings.Join(names, " + ")
+		option.Components = strings.Join(components, "\n")
 		option.Description = strings.Join(descriptions, "\n")
 		option.AssessmentURL = strings.Join(links, "\n")
 		selection, err := catalog.ResolveSelection(d, catalog.Selection{Schema: catalog.SelectionSchema, Profile: id})
@@ -506,6 +554,10 @@ func options(d catalog.Document, facts machine.Facts, free int64, authoring bool
 				return input, err
 			}
 			option.Details = fmt.Sprintf("Model files %s; memory wall %s (prediction).", setup.Size(assessment.ModelBytes), assessment.Budget.Status)
+			if assessment.WiredMemory != nil {
+				advice := assessment.WiredMemory.Section()
+				option.Advice = &setupui.Section{Title: advice.Title, Lines: advice.Lines, Warning: true}
+			}
 			option.DisabledReason = strings.Join(assessment.Refusals, "; ")
 		}
 		if option.DisabledReason == "" {
@@ -513,9 +565,43 @@ func options(d catalog.Document, facts machine.Facts, free int64, authoring bool
 		}
 		input.Profiles = append(input.Profiles, option)
 	}
+	// Availability and descending capacity group the choices. The author's
+	// order ranks layouts only within a group, never as a selection/default.
+	rank := func(id string) int {
+		best := len(d.LayoutOrder)
+		for _, binding := range d.Profiles[id].Bindings {
+			if i := slices.Index(d.LayoutOrder, binding.Layout); i >= 0 {
+				best = min(best, i)
+			}
+		}
+		return best
+	}
+	slices.SortStableFunc(input.Profiles, func(a, b setupui.Profile) int {
+		if (a.DisabledReason == "") != (b.DisabledReason == "") {
+			if a.DisabledReason == "" {
+				return -1
+			}
+			return 1
+		}
+		if diff := catalog.MemoryTier(b.MemoryTier).Rank() - catalog.MemoryTier(a.MemoryTier).Rank(); diff != 0 {
+			return diff
+		}
+		if diff := rank(a.ID) - rank(b.ID); diff != 0 {
+			return diff
+		}
+		return strings.Compare(a.ID, b.ID)
+	})
 	for i := range input.Modes {
 		if !available[input.Modes[i].ID] {
 			input.Modes[i].DisabledReason = "No compatible profile in this catalog fits the current machine's declared limits."
+			// A catalog containing only a blocked profile must still show the
+			// manual remedy before the user can reach its model screen.
+			for _, profile := range input.Profiles {
+				if profile.Mode == input.Modes[i].ID && profile.Advice != nil {
+					input.Modes[i].Advice = profile.Advice
+					break
+				}
+			}
 		}
 	}
 	return input, nil

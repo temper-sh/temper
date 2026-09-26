@@ -150,3 +150,57 @@ func tarGzFixture(t *testing.T, entries []archiveTestEntry) []byte {
 	}
 	return output.Bytes()
 }
+
+func TestTarRecordPaddingIsAcceptedButTrailingPayloadAndCorruptionAreRefused(t *testing.T) {
+	original := tarGzFixture(t, []archiveTestEntry{{name: "bundle/value", body: "abc", mode: 0644, kind: tar.TypeReg}})
+	input, err := gzip.NewReader(bytes.NewReader(original))
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := io.ReadAll(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input.Close()
+	for _, tc := range []struct {
+		name      string
+		extra     []byte
+		corrupt   bool
+		wantError bool
+	}{
+		{name: "tar record padding", extra: make([]byte, 8192)},
+		{name: "hidden payload", extra: append(make([]byte, 512), []byte("hidden")...), wantError: true},
+		{name: "incomplete block", extra: make([]byte, 1), wantError: true},
+		{name: "unbounded zeros", extra: make([]byte, (1<<20)+512), wantError: true},
+		{name: "gzip checksum", extra: make([]byte, 512), corrupt: true, wantError: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var data bytes.Buffer
+			zip := gzip.NewWriter(&data)
+			zip.Write(raw)
+			zip.Write(tc.extra)
+			if err := zip.Close(); err != nil {
+				t.Fatal(err)
+			}
+			payload := data.Bytes()
+			if tc.corrupt {
+				payload[len(payload)-8] ^= 0xff
+			}
+			path := filepath.Join(t.TempDir(), "archive.tar.gz")
+			if err := os.WriteFile(path, payload, 0600); err != nil {
+				t.Fatal(err)
+			}
+			spec := TarGzSpec{Root: "bundle", MaxEntries: 10, MaxUnpackedBytes: 10}
+			entries, err := InspectTarGz(context.Background(), path, spec)
+			if (err != nil) != tc.wantError {
+				t.Fatalf("inspection error = %v", err)
+			}
+			if err == nil {
+				dest := filepath.Join(t.TempDir(), "out")
+				if err := ExtractTarGz(context.Background(), path, dest, spec, entries); err != nil {
+					t.Fatal(err)
+				}
+			}
+		})
+	}
+}

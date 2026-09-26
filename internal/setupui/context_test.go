@@ -23,6 +23,88 @@ func ctrl(m *Model, key rune) {
 	m.Update(tea.KeyPressMsg{Code: key, Mod: tea.ModCtrl})
 }
 
+func TestMissingContextFindingsAskForInputBeforeReview(t *testing.T) {
+	in := contextInput()
+	in.Profiles[1].Contexts = []ContextWindow{{Layout: "small", Name: "Helper", Minimum: 4097, Maximum: 65536, ManualRequired: true}}
+	m := NewModel(context.Background(), in, readyPreview)
+	press(m, tea.KeyDown)
+	press(m, tea.KeyEnter) // utility
+	press(m, 'n')
+	press(m, tea.KeyEnter) // helper profile
+	press(m, 'n')
+	view := ansi.Strip(m.View().Content)
+	if m.stage != stageContext || strings.Contains(view, "Tokens: auto") || !strings.Contains(view, "Enter a token count") {
+		t.Fatalf("unavailable automatic context was offered: %s", view)
+	}
+	press(m, 'a') // An unavailable automatic choice must not replace manual input.
+	if cmd := press(m, 'n'); cmd != nil || m.stage != stageContext || m.notice == "" {
+		t.Fatal("missing context advanced to a failing preview")
+	}
+	m.Update(tea.PasteMsg{Content: "16384"})
+	press(m, 'n')
+	press(m, tea.KeyEnter) // recorded
+	cmd := press(m, 'n')
+	if cmd == nil {
+		t.Fatal("explicit context could not reach review")
+	}
+	m.Update(cmd())
+	press(m, tea.KeyEnter) // save
+	if m.decision.Action != "save" || m.decision.Choices.Profiles[0].ContextWindows["small"] != 16384 {
+		t.Fatalf("manual context lost at save: %+v", m.decision)
+	}
+}
+
+func TestResolvedContextRequestReturnsToItsModeAndPreservesOtherChoices(t *testing.T) {
+	var reviewed Choices
+	m := NewModel(context.Background(), contextInput(), func(ctx context.Context, choices Choices) (Review, error) {
+		if choices.Profiles[1].ContextWindows["small"] == 0 {
+			return Review{ContextRequired: &ContextRequest{Profile: "specialists", Layout: "small"}}, nil
+		}
+		reviewed = choices
+		return readyPreview(ctx, choices)
+	})
+	press(m, tea.KeyEnter) // local
+	press(m, tea.KeyDown)
+	press(m, tea.KeyEnter) // utility too
+	press(m, 'n')
+	press(m, tea.KeyEnter)
+	press(m, 'n') // local context
+	ctrl(m, 'u')
+	m.Update(tea.PasteMsg{Content: "65536"})
+	press(m, 'n')
+	press(m, tea.KeyEnter)
+	press(m, 'n') // utility context stays automatic
+	press(m, 'n')
+	press(m, tea.KeyDown)
+	press(m, tea.KeyEnter) // latest
+	cmd := press(m, 'n')
+	if cmd == nil {
+		t.Fatal("preview not started")
+	}
+	m.Update(cmd())
+	if m.stage != stageContext || m.currentMode() != "utility" || m.reviewErr != nil || m.loading {
+		t.Fatalf("context requirement became a preview error: stage=%v, mode=%s, error=%v", m.stage, m.currentMode(), m.reviewErr)
+	}
+	if choices := m.choices(); choices.Software != "latest" || choices.Profiles[0].ContextWindows["small"] != 65536 {
+		t.Fatalf("returning to context lost other choices: %+v", choices)
+	}
+	if view := ansi.Strip(m.View().Content); strings.Contains(view, "Preview error") || !strings.Contains(view, "Enter a token count") {
+		t.Fatalf("missing contextual recovery instructions: %s", view)
+	}
+	ctrl(m, 'u')
+	m.Update(tea.PasteMsg{Content: "32768"})
+	press(m, 'n') // retains latest
+	cmd = press(m, 'n')
+	if cmd == nil {
+		t.Fatal("corrected context could not reach review")
+	}
+	m.Update(cmd())
+	press(m, tea.KeyEnter)
+	if m.decision.Action != "save" || reviewed.Software != "latest" || reviewed.Profiles[0].ContextWindows["small"] != 65536 || reviewed.Profiles[1].ContextWindows["small"] != 32768 {
+		t.Fatalf("context recovery failed to save the reviewed choices: %+v", m.decision)
+	}
+}
+
 func TestContextAutomaticDefaultAndEditableWindowReachReview(t *testing.T) {
 	var reviewed Choices
 	m := NewModel(context.Background(), contextInput(), func(ctx context.Context, c Choices) (Review, error) {

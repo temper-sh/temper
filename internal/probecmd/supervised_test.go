@@ -21,14 +21,14 @@ import (
 
 func TestMembershipDoesNotAdoptAnotherExecutableOrReusedIdentity(t *testing.T) {
 	inv := Invocation{Path: "/owned/router", EnginePath: "/owned/engine"}
-	router := processRow{100, 1, 100, "Tue Sep 22 12:00:00 2026", "/owned/router", "S"}
-	engine := processRow{101, 100, 100, router.started, "/owned/engine", "S"}
+	router := processRow{100, 1, 100, "Tue Sep 22 12:00:00 2026", "/owned/router", "S", ""}
+	engine := processRow{101, 100, 100, router.started, "/owned/engine", "S", ""}
 	known := map[int]processRow{}
-	_, roles, err := members([]processRow{router, engine, {200, 1, 200, router.started, "/other/engine", "S"}}, 100, inv, known)
+	_, roles, err := members([]processRow{router, engine, {200, 1, 200, router.started, "/other/engine", "S", ""}}, 100, inv, known)
 	if err != nil || len(roles) != 2 || roles[0].ID != "engine" {
 		t.Fatal(roles, err)
 	}
-	for _, other := range []processRow{{101, 100, 100, "new start", "/owned/engine", "S"}, {102, 100, 100, router.started, "/owned/engine", "S"}, {102, 100, 100, router.started, "/other/engine", "S"}} {
+	for _, other := range []processRow{{101, 100, 100, "new start", "/owned/engine", "S", ""}, {102, 100, 100, router.started, "/owned/engine", "S", ""}, {102, 100, 100, router.started, "/other/engine", "S", ""}} {
 		if _, _, err := members([]processRow{router, other}, 100, inv, known); err == nil {
 			t.Fatal("adopted changed process", other)
 		}
@@ -37,7 +37,7 @@ func TestMembershipDoesNotAdoptAnotherExecutableOrReusedIdentity(t *testing.T) {
 
 func TestLaunchShellMayExecOnlyTheExpectedEngine(t *testing.T) {
 	inv := Invocation{Path: "/owned/router", EnginePath: "/owned/engine"}
-	shell := processRow{101, 100, 100, "Tue Sep 22 12:00:00 2026", "/bin/sh", "S"}
+	shell := processRow{101, 100, 100, "Tue Sep 22 12:00:00 2026", "/bin/sh", "S", ""}
 	known := map[int]processRow{shell.pid: shell}
 	engine := shell
 	engine.executable = inv.EnginePath
@@ -51,8 +51,8 @@ func TestLaunchShellMayExecOnlyTheExpectedEngine(t *testing.T) {
 
 func TestEngineMayStartItsOwnGroupButCannotMoveAfterObservation(t *testing.T) {
 	inv := Invocation{Path: "/owned/router", EnginePath: "/owned/engine"}
-	router := processRow{100, 1, 100, "Tue Sep 22 12:00:00 2026", inv.Path, "S"}
-	engine := processRow{101, 100, 101, router.started, inv.EnginePath, "S"}
+	router := processRow{100, 1, 100, "Tue Sep 22 12:00:00 2026", inv.Path, "S", ""}
+	engine := processRow{101, 100, 101, router.started, inv.EnginePath, "S", ""}
 	known := map[int]processRow{}
 	if _, roles, err := members([]processRow{router, engine}, 100, inv, known); err != nil || len(roles) != 2 || roles[0].PGID != engine.pid {
 		t.Fatal("refused the router's engine group", roles, err)
@@ -66,7 +66,7 @@ func TestEngineMayStartItsOwnGroupButCannotMoveAfterObservation(t *testing.T) {
 		t.Fatal("accepted a changed process group")
 	}
 	engine.pgid = 101
-	stranger := processRow{102, 1, 101, router.started, inv.EnginePath, "S"}
+	stranger := processRow{102, 1, 101, router.started, inv.EnginePath, "S", ""}
 	if _, _, err := members([]processRow{engine, stranger}, 100, inv, known); err == nil {
 		t.Fatal("adopted an unrelated member of the engine group")
 	}
@@ -74,8 +74,8 @@ func TestEngineMayStartItsOwnGroupButCannotMoveAfterObservation(t *testing.T) {
 
 func TestExitedProcessRemainsOwnedUntilReaped(t *testing.T) {
 	inv := Invocation{Path: "/owned/router", EnginePath: "/owned/engine"}
-	router := processRow{100, 1, 100, "Tue Sep 22 12:00:00 2026", inv.Path, "S"}
-	engine := processRow{101, 100, 100, router.started, inv.EnginePath, "S"}
+	router := processRow{100, 1, 100, "Tue Sep 22 12:00:00 2026", inv.Path, "S", ""}
+	engine := processRow{101, 100, 100, router.started, inv.EnginePath, "S", ""}
 	known := map[int]processRow{100: router, 101: engine}
 	exited := engine
 	exited.executable, exited.state = "<defunct>", "Z"
@@ -97,12 +97,12 @@ func TestExitedProcessRemainsOwnedUntilReaped(t *testing.T) {
 
 func TestExitStateDoesNotAdoptUnknownReusedOrMovedProcesses(t *testing.T) {
 	inv := Invocation{Path: "/owned/router", EnginePath: "/owned/engine"}
-	engine := processRow{101, 100, 100, "Tue Sep 22 12:00:00 2026", inv.EnginePath, "S"}
+	engine := processRow{101, 100, 100, "Tue Sep 22 12:00:00 2026", inv.EnginePath, "S", ""}
 	for _, child := range []processRow{
-		{102, 100, 100, engine.started, "<defunct>", "Z"},
-		{101, 100, 100, "new start", "<defunct>", "Z"},
-		{101, 1, 101, engine.started, "<defunct>", "Z"},
-		{101, 100, 100, engine.started, "<defunct>", "S"},
+		{102, 100, 100, engine.started, "<defunct>", "Z", ""},
+		{101, 100, 100, "new start", "<defunct>", "Z", ""},
+		{101, 1, 101, engine.started, "<defunct>", "Z", ""},
+		{101, 100, 100, engine.started, "<defunct>", "S", ""},
 	} {
 		if _, _, err := members([]processRow{child}, 100, inv, map[int]processRow{101: engine}); err == nil {
 			t.Fatal("accepted unverified process", child)
@@ -112,7 +112,7 @@ func TestExitStateDoesNotAdoptUnknownReusedOrMovedProcesses(t *testing.T) {
 
 func TestUnavailableCommandRequiresFreshObservationBeforeSignaling(t *testing.T) {
 	inv := Invocation{Path: "/owned/router"}
-	router := processRow{100, 1, 100, "Tue Sep 22 12:00:00 2026", inv.Path, "S"}
+	router := processRow{100, 1, 100, "Tue Sep 22 12:00:00 2026", inv.Path, "S", ""}
 	known := map[int]processRow{100: router}
 	unavailable := router
 	unavailable.executable = "(router)"
@@ -257,12 +257,12 @@ func TestProcessAndListenerParsersPreserveExactBoundaries(t *testing.T) {
 func TestSupervisedForegroundStopsOwnedRouterAndEngine(t *testing.T) {
 	for _, separateGroup := range []bool{false, true} {
 		t.Run(fmt.Sprintf("separate-engine-group=%t", separateGroup), func(t *testing.T) {
-			testSupervisedForeground(t, separateGroup)
+			testSupervisedForeground(t, separateGroup, false)
 		})
 	}
 }
 
-func testSupervisedForeground(t *testing.T, separateGroup bool) {
+func testSupervisedForeground(t *testing.T, separateGroup, withFrontend bool) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("macOS listener observation")
 	}
@@ -279,7 +279,8 @@ func testSupervisedForeground(t *testing.T, separateGroup bool) {
 		t.Fatal(err)
 	}
 	router, engine := filepath.Join(parent, "router"), filepath.Join(parent, "engine")
-	for _, path := range []string{router, engine} {
+	frontend := filepath.Join(parent, "python3.13")
+	for _, path := range []string{router, engine, frontend} {
 		if err := os.WriteFile(path, raw, 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -299,13 +300,21 @@ func testSupervisedForeground(t *testing.T, separateGroup bool) {
 		Environment: append(os.Environ(), "TEMPER_TEST_PROBE=router", "TEMPER_TEST_LISTEN="+listen, "TEMPER_TEST_ENGINE="+engine,
 			fmt.Sprintf("TEMPER_TEST_ENGINE_GROUP=%t", separateGroup)),
 		Supervision: &Supervision{StatusPath: statusPath, Root: parent, Installation: "fixture", Generation: strings.Repeat("b", 64), Listen: listen}}
+	expectedRoles := 2
+	if withFrontend {
+		expectedRoles = 3
+		inv.FrontendPath = frontend
+		inv.FrontendArguments = []string{"-test.run=^TestProbeProcessHelper$"}
+		inv.EngineArguments = []string{"-test.run=^TestProbeProcessHelper$"}
+		inv.Environment = append(inv.Environment, "TEMPER_TEST_FRONTEND="+frontend)
+	}
 	go func() { done <- runSupervised(ctx, inv, &processOutput, &processOutput) }()
 	var observed probeStatus
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
 		raw, _ := os.ReadFile(statusPath)
 		_ = json.Unmarshal(raw, &observed)
-		if observed.State == "running" && len(observed.Roles) == 2 {
+		if observed.State == "running" && len(observed.Roles) == expectedRoles {
 			break
 		}
 		time.Sleep(20 * time.Millisecond)
@@ -319,7 +328,7 @@ func testSupervisedForeground(t *testing.T, separateGroup bool) {
 	case <-time.After(45 * time.Second):
 		t.Fatal("supervisor did not stop")
 	}
-	if observed.State != "running" || !observed.ListenersVerified || len(observed.Roles) != 2 {
+	if observed.State != "running" || !observed.ListenersVerified || len(observed.Roles) != expectedRoles {
 		t.Fatalf("no owned live boundary: %+v; helper output: %s", observed, processOutput.String())
 	}
 	if separateGroup && observed.Roles[0].PGID != observed.Roles[0].PID {
@@ -370,20 +379,70 @@ func TestProbeProcessHelper(t *testing.T) {
 		<-ctx.Done()
 		return
 	}
-	listener, err := net.Listen("tcp4", os.Getenv("TEMPER_TEST_LISTEN"))
-	if err != nil {
-		os.Exit(2)
+	if role == "router" {
+		listener, err := net.Listen("tcp4", os.Getenv("TEMPER_TEST_LISTEN"))
+		if err != nil {
+			os.Exit(2)
+		}
+		defer listener.Close()
 	}
-	defer listener.Close()
-	child := exec.Command(os.Getenv("TEMPER_TEST_ENGINE"), "-test.run=^TestProbeProcessHelper$")
+	path, childRole := os.Getenv("TEMPER_TEST_ENGINE"), "engine"
+	if role == "router" && os.Getenv("TEMPER_TEST_FRONTEND") != "" {
+		path, childRole = os.Getenv("TEMPER_TEST_FRONTEND"), "frontend"
+	}
+	child := exec.Command(path, "-test.run=^TestProbeProcessHelper$")
 	// Real llama-swap launches by basename and gives the engine its own group.
 	// argv[0] is deliberately insufficient to establish executable identity.
 	child.Args[0] = filepath.Base(child.Path)
 	child.SysProcAttr = &syscall.SysProcAttr{Setpgid: os.Getenv("TEMPER_TEST_ENGINE_GROUP") == "true"}
-	child.Env = append(os.Environ(), "TEMPER_TEST_PROBE=engine")
+	child.Env = append(os.Environ(), "TEMPER_TEST_PROBE="+childRole)
 	if err := child.Start(); err != nil {
 		os.Exit(3)
 	}
 	<-ctx.Done()
 	_ = child.Wait()
+}
+
+func TestSplashBindsBothExecutablePathsArgumentsAndParentage(t *testing.T) {
+	inv := Invocation{Path: "/owned/router", FrontendPath: "/owned/python3.13", FrontendArguments: []string{"-I", "-B", "-c", "bootstrap", "/target"}, EnginePath: "/owned/splash", EngineArguments: []string{"serve-native", "/target", "/draft", "32768", "25769803776"}}
+	router := processRow{100, 1, 100, "Tue Sep 22 12:00:00 2026", inv.Path, "S", ""}
+	frontend := processRow{101, 100, 101, router.started, inv.FrontendPath, "S", inv.FrontendPath + "\x00" + strings.Join(inv.FrontendArguments, "\x00")}
+	native := processRow{102, 101, 102, router.started, inv.EnginePath, "S", inv.EnginePath + "\x00" + strings.Join(inv.EngineArguments, "\x00")}
+	known := map[int]processRow{}
+	if _, roles, err := members([]processRow{router, frontend, native}, 100, inv, known); err != nil || len(roles) != 3 {
+		t.Fatal(roles, err)
+	}
+	// Bound descendants remain owned after reparenting for reliable shutdown.
+	detached := native
+	detached.ppid = 1
+	if _, _, err := members([]processRow{router, frontend, detached}, 100, inv, known); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name   string
+		change func(*processRow, *processRow)
+	}{
+		{"other Python command", func(f, n *processRow) { f.arguments += "\x00arbitrary.py" }},
+		{"different target", func(f, n *processRow) { n.arguments = strings.Replace(n.arguments, "/target", "/another", 1) }},
+		{"bypassed frontend", func(f, n *processRow) { n.ppid = 100 }},
+		{"unselected interpreter", func(f, n *processRow) { f.executable = "/usr/bin/python3" }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f, n := frontend, native
+			tc.change(&f, &n)
+			if _, _, err := members([]processRow{router, f, n}, 100, inv, map[int]processRow{}); err == nil {
+				t.Fatal("unselected process accepted")
+			}
+		})
+	}
+	shell := frontend
+	shell.executable = "/bin/sh"
+	shell.arguments = ""
+	if _, _, err := members([]processRow{router, frontend, native}, 100, inv, map[int]processRow{shell.pid: shell}); err != nil {
+		t.Fatal("shell could not exec exact frontend", err)
+	}
+}
+
+func TestSupervisedForegroundOwnsFrontendAndNativeChild(t *testing.T) {
+	testSupervisedForeground(t, true, true)
 }

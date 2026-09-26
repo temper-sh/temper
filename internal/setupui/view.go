@@ -8,6 +8,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/temper-sh/temper/internal/catalog"
 )
 
 // Tokyo Night: https://github.com/enkia/tokyo-night-vscode-theme#color-palette.
@@ -27,9 +28,10 @@ var (
 )
 
 type screenTab struct {
-	label  string
-	stage  stage
-	modeAt int
+	label     string
+	stage     stage
+	modeAt    int
+	profileAt int
 }
 
 type hitKind uint8
@@ -39,6 +41,7 @@ const (
 	hitChoice
 	hitReview
 	hitDownloads
+	hitInstall
 )
 
 type hitTarget struct {
@@ -59,16 +62,26 @@ func (m Model) tabs() ([]screenTab, int) {
 	}
 	for i, mode := range modes {
 		tabs = append(tabs, screenTab{label: m.modeName(mode), stage: stageProfile, modeAt: i})
-		if profile, ok := m.profileForMode(mode); ok && hasTemplateChoices(profile) {
-			tabs = append(tabs, screenTab{label: "Templates", stage: stageTemplates, modeAt: i})
-		}
-		if profile, ok := m.profileForMode(mode); ok && len(profile.Contexts) > 0 {
-			tabs = append(tabs, screenTab{label: "Context", stage: stageContext, modeAt: i})
+		profiles := m.chosenProfiles(mode)
+		for j, profile := range profiles {
+			suffix := ""
+			if len(profiles) > 1 {
+				suffix = fmt.Sprintf(" %d/%d", j+1, len(profiles))
+			}
+			if hasTemplateChoices(profile) {
+				tabs = append(tabs, screenTab{label: "Templates" + suffix, stage: stageTemplates, modeAt: i, profileAt: j})
+			}
+			if len(profile.Contexts) > 0 {
+				tabs = append(tabs, screenTab{label: "Context" + suffix, stage: stageContext, modeAt: i, profileAt: j})
+			}
 		}
 	}
 	tabs = append(tabs, screenTab{label: "Software", stage: stageSoftware}, screenTab{label: "Review", stage: stageReview})
 	active := 0
 	for i, tab := range tabs {
+		if (m.stage == stageTemplates || m.stage == stageContext) && tab.profileAt != m.profileAt {
+			continue
+		}
 		if tab.stage == m.stage && (m.stage != stageProfile && m.stage != stageTemplates && m.stage != stageContext || tab.modeAt == m.modeAt) {
 			active = i
 		}
@@ -243,17 +256,25 @@ func (m Model) screenContent(width int, compact bool) screenBody {
 	var title, subtitle string
 	switch m.stage {
 	case stageModes:
-		title, subtitle = "Choose your modes", "Select one or both ways of working. Each mode gets its own configuration."
+		title, subtitle = "Choose your modes", "Select local models, utility helpers, or both. Modes run separately."
 	case stageProfile:
 		title, subtitle = m.modeName(m.currentMode())+" · Model setup", "Choose a profile for this mode. Machine limits appear with each choice."
+		if m.currentMode() == "local" {
+			subtitle = "Space selects models to install. Enter or d chooses the default. Only the chosen model runs; alternatives stay installed."
+		}
 	case stageTemplates:
 		title, subtitle = m.modeName(m.currentMode())+" · Templates", "Keep the proposed defaults or choose another template for each model."
 	case stageContext:
-		title, subtitle = m.modeName(m.currentMode())+" · Context", "Automatic uses the largest applicable tested window. You can enter an explicit token count."
+		title, subtitle = m.modeName(m.currentMode())+" · Context", "Choose how much text the model can keep in context. Automatic is available where reviewed measurements apply."
 	case stageSoftware:
 		title, subtitle = "Choose software", "Select which engine and router releases Temper should prepare."
 	case stageReview:
 		title, subtitle = "Review selected setup", "Check your selections, downloads and machine limits before continuing."
+	}
+	if m.stage == stageTemplates || m.stage == stageContext {
+		if profile, ok := m.currentProfile(); ok {
+			title += " · " + profile.Name
+		}
 	}
 	if !compact {
 		body.add(lipgloss.NewStyle().Foreground(nightCyan).Bold(true).Width(width).Render(title)+"\n"+
@@ -263,6 +284,9 @@ func (m Model) screenContent(width int, compact bool) screenBody {
 		card := m.optionCard(row, mark, option, width)
 		top := body.add(card, row == m.cursor)
 		body.targets = append(body.targets, hitTarget{kind: hitChoice, index: row, y: top, width: width, height: lipgloss.Height(card)})
+		if row == m.cursor && option.Advice != nil {
+			body.add(warningBlock(option.Advice.Title, option.Advice.Lines, width), false)
+		}
 	}
 	switch m.stage {
 	case stageModes:
@@ -283,9 +307,30 @@ func (m Model) screenContent(width int, compact bool) screenBody {
 			body.add(infoBlock("No profiles available", []string{"No catalog profile is available for this mode. Return to Modes to choose another."}, width), false)
 		}
 		for i, profile := range profiles {
+			group := catalog.MemoryTier(profile.MemoryTier).Label()
+			if profile.MemoryTier != "" {
+				group += " · estimated placement"
+			}
+			if profile.DisabledReason != "" {
+				group = "Unavailable on this machine · " + group
+			}
+			if i == 0 || profile.MemoryTier != profiles[i-1].MemoryTier || (profile.DisabledReason == "") != (profiles[i-1].DisabledReason == "") {
+				body.add(lipgloss.NewStyle().Foreground(nightPurple).Bold(true).Width(width).Render(group), false)
+			}
 			mark := "( )"
 			if m.profiles[m.currentMode()] == profile.ID {
 				mark = "(*)"
+			}
+			if m.currentMode() == "local" {
+				check := "[ ]"
+				if m.profiles["local"] == profile.ID || m.additional[profile.ID] {
+					check = "[x]"
+				}
+				mark = check + " " + mark
+				// The checkbox toggles installation; the rest of the card chooses
+				// the default, matching Space and Enter respectively.
+				top := body.height + 1
+				body.targets = append(body.targets, hitTarget{kind: hitInstall, index: i, x: 4, y: top + 1, width: 3, height: 1})
 			}
 			addOption(i, mark, profile.Option)
 		}
@@ -321,7 +366,7 @@ func (m Model) screenContent(width int, compact bool) screenBody {
 				body.targets = append(body.targets, hitTarget{kind: hitChoice, index: i, y: top, width: width, height: lipgloss.Height(card)})
 			}
 		}
-		body.add(infoBlock("Context and memory", []string{"The window includes input and output. Automatic matches catalog evidence to this machine, template and the software selected next. If no finding matches, review will ask for an explicit value.", "Next keeps automatic. Ctrl+U clears the field for a number; a restores automatic. The model limit alone does not establish memory fit."}, width), false)
+		body.add(infoBlock("Context and memory", []string{"The window includes input and output. Enter a number where automatic context is unavailable. Otherwise, automatic selects the largest tested window matching this machine, template and the software selected next.", "Ctrl+U clears the field; a restores automatic where available. A model's limit alone does not establish memory fit."}, width), false)
 	case stageSoftware:
 		for i, option := range softwareOptions {
 			mark := "( )"
@@ -334,9 +379,14 @@ func (m Model) screenContent(width int, compact bool) screenBody {
 		if m.loading {
 			body.add(infoBlock("Calculating preview…", []string{"Resolving your choices and checking downloads and machine limits.", "Latest/Tested may read software archives to verify their contents."}, width), false)
 		} else if m.reviewErr != nil {
-			body.add(infoBlock("Preview error", []string{m.reviewErr.Error(), "Press r to retry, or return to Software to change your choice."}, width), false)
+			body.add(infoBlock("Preview error", []string{m.reviewErr.Error(), "Press r to retry, or go back to change your choices."}, width), false)
 		} else {
-			// Keep the transfer decision visible before the detailed configuration.
+			// Memory actions lead review, ahead of even the transfer summary.
+			for _, section := range m.review.Sections {
+				if section.Warning {
+					body.add(warningBlock(section.Title, section.Lines, width), false)
+				}
+			}
 			for _, section := range m.review.Sections {
 				if section.Downloads != nil {
 					block, headingHeight := m.downloadsBlock(section, width)
@@ -348,7 +398,7 @@ func (m Model) screenContent(width int, compact bool) screenBody {
 				body.add(lipgloss.NewStyle().Foreground(nightPurple).Width(width).Render("Software: "+m.software), false)
 			}
 			for _, section := range m.review.Sections {
-				if section.Downloads == nil {
+				if section.Downloads == nil && !section.Warning {
 					body.add(infoBlock(section.Title, section.Lines, width), false)
 				}
 			}
@@ -429,11 +479,21 @@ func (m Model) optionCard(row int, mark string, option Option, width int) string
 		border, background = nightBlue, nightSurface
 		prefix = "> "
 	}
-	if mark == "[x]" || mark == "(*)" {
+	if strings.Contains(mark, "[x]") || strings.Contains(mark, "(*)") {
 		titleColor = nightGreen
 	}
 	inner := width - 4
 	lines := []string{lipgloss.NewStyle().Foreground(titleColor).Background(background).Bold(true).Width(inner).Render(prefix + mark + " " + name)}
+	if option.Components != "" {
+		lines = append(lines, lipgloss.NewStyle().Foreground(nightCyan).Background(background).Width(inner).Render(option.Components))
+	}
+	if option.Advice != nil {
+		warning := "! " + option.Advice.Title
+		if len(option.Advice.Lines) > 0 {
+			warning += "\n" + option.Advice.Lines[0]
+		}
+		lines = append(lines, lipgloss.NewStyle().Foreground(nightAmber).Background(background).Bold(true).Width(inner).Render(warning))
+	}
 	if option.Description != "" {
 		lines = append(lines, lipgloss.NewStyle().Foreground(nightText).Background(background).Width(inner).Render(option.Description))
 	}
@@ -461,6 +521,14 @@ func infoBlock(title string, lines []string, width int) string {
 	heading := lipgloss.NewStyle().Foreground(color).Bold(true).Width(inner).Render(title)
 	content := lipgloss.NewStyle().Foreground(nightText).Width(inner).Render(strings.Join(lines, "\n"))
 	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(nightBorder).
+		Padding(0, 1).Width(width).Render(heading + "\n" + content)
+}
+
+func warningBlock(title string, lines []string, width int) string {
+	inner := width - 4
+	heading := lipgloss.NewStyle().Foreground(nightAmber).Bold(true).Width(inner).Render("! " + title)
+	content := lipgloss.NewStyle().Foreground(nightText).Width(inner).Render(strings.Join(lines, "\n"))
+	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(nightAmber).
 		Padding(0, 1).Width(width).Render(heading + "\n" + content)
 }
 
@@ -508,6 +576,12 @@ func (m Model) footer(width int, compact bool) (string, []hitTarget) {
 		help = "↑↓ field · ←→ edit · Ctrl+U clear · a automatic · Enter/Tab next · Esc back · q cancel"
 		if compact {
 			help = "↑↓ field · ←→ edit\nCtrl+U clear · a auto\nTab next · Esc back · q"
+		}
+	}
+	if m.stage == stageProfile && m.currentMode() == "local" {
+		help = "↑↓ move · Space install · Enter/d default · Tab/n next · Esc back · q cancel"
+		if compact {
+			help = "↑↓ move · Space install\nEnter/d default · Tab next\nEsc back · q cancel"
 		}
 	}
 	parts = append(parts, lipgloss.NewStyle().Foreground(nightMuted).Width(width).Render(help))

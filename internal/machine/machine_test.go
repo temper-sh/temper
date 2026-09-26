@@ -10,44 +10,41 @@ import (
 	"github.com/temper-sh/temper/internal/software"
 )
 
-func TestDetectUsesLiveWiredLimit(t *testing.T) {
+func TestDetectUsesMetalWorkingSetInsteadOfPercentagesOrOverride(t *testing.T) {
 	machine, err := detect(context.Background(), cannedQuery(map[string]string{
 		"hw.memsize":           "34359738368\n",
-		"iogpu.wired_limit_mb": "24576\n",
-	}))
+		"iogpu.wired_limit_mb": "28672\n",
+	}), metalReading(24576))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if machine.PhysicalMiB != 32768 || machine.DeviceMiB != 26542 || machine.WiredLimitMiB != 24576 || machine.WiredSource != budget.WiredSourceLive {
+	if machine.PhysicalMiB != 32768 || machine.DeviceMiB != 24576 || machine.WiredLimitMiB != 24576 || machine.WiredSource != budget.WiredSourceMetal {
 		t.Fatalf("machine = %#v", machine)
 	}
 }
 
-func TestDetectLabelsThePredictedDefaultWhenLiveLimitIsAbsent(t *testing.T) {
-	machine, err := detect(context.Background(), func(_ context.Context, name string) (string, error) {
-		if name == "hw.memsize" {
-			return "34359738368", nil
-		}
-		return "", errors.New("unknown oid")
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if machine.WiredLimitMiB != 21299 || machine.WiredSource != budget.WiredSourcePredicted {
-		t.Fatalf("machine = %#v", machine)
-	}
-}
-
-func TestDetectTreatsANonpositiveLiveLimitAsAbsent(t *testing.T) {
-	machine, err := detect(context.Background(), cannedQuery(map[string]string{
-		"hw.memsize":           "34359738368",
-		"iogpu.wired_limit_mb": "0",
-	}))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if machine.WiredLimitMiB != 21299 || machine.WiredSource != budget.WiredSourcePredicted {
-		t.Fatalf("machine = %#v", machine)
+func TestDetectRefusesUnavailableOrImpossibleMetalBudget(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		bytes uint64
+		err   error
+	}{
+		{"no device", 0, errors.New("no default Metal device")},
+		{"zero", 0, nil},
+		{"below one MiB", uint64(bytesPerMiB - 1), nil},
+		{"above physical memory", 34359738369, nil},
+		{"overflow", ^uint64(0), nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := detect(context.Background(), cannedQuery(map[string]string{"hw.memsize": "34359738368"}),
+				func(context.Context) (uint64, error) { return tc.bytes, tc.err })
+			if err == nil || !strings.Contains(err.Error(), "Metal") {
+				t.Fatalf("missing Metal reading silently became an estimate: %v", err)
+			}
+			if tc.err != nil && !errors.Is(err, tc.err) {
+				t.Fatalf("underlying failure lost: %v", err)
+			}
+		})
 	}
 }
 
@@ -57,14 +54,14 @@ func TestDetectRefusesAnUnreadablePhysicalCapacity(t *testing.T) {
 		func(context.Context, string) (string, error) { return "not-a-number", nil },
 	}
 	for _, query := range tests {
-		_, err := detect(context.Background(), query)
+		_, err := detect(context.Background(), query, metalReading(24576))
 		if err == nil || !strings.Contains(err.Error(), "physical memory") {
 			t.Fatalf("error = %v", err)
 		}
 	}
 }
 
-func TestDetectHonorsCancellationDuringTheOptionalRead(t *testing.T) {
+func TestDetectHonorsCancellationBeforeMetalRead(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	_, err := detect(ctx, func(_ context.Context, name string) (string, error) {
 		if name == "hw.memsize" {
@@ -72,7 +69,16 @@ func TestDetectHonorsCancellationDuringTheOptionalRead(t *testing.T) {
 			return "34359738368", nil
 		}
 		return "", context.Canceled
-	})
+	}, func(context.Context) (uint64, error) { t.Fatal("Metal queried after cancellation"); return 0, nil })
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("error = %v, want context.Canceled", err)
+	}
+}
+
+func TestDetectHonorsCancellationDuringMetalRead(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	_, err := detect(ctx, cannedQuery(map[string]string{"hw.memsize": "34359738368"}),
+		func(context.Context) (uint64, error) { cancel(); return 24576 * uint64(bytesPerMiB), nil })
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("error = %v, want context.Canceled", err)
 	}
@@ -86,7 +92,7 @@ func TestDetectFactsReturnsCanonicalFieldKitMachineScope(t *testing.T) {
 		"machdep.cpu.brand_string": "Apple M5\n",
 		"kern.osproductversion":    "15.6\n",
 		"kern.osversion":           "24G90\n",
-	}), "darwin", "arm64")
+	}), metalReading(24576), "darwin", "arm64")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,17 +102,17 @@ func TestDetectFactsReturnsCanonicalFieldKitMachineScope(t *testing.T) {
 	if facts.Schema != FactsSchemaV1 || facts.Target != wantTarget || facts.HardwareModel != "Mac17,3" || facts.Chip != "Apple M5" || facts.OSBuild != "24G90" {
 		t.Fatalf("facts identity = %#v", facts)
 	}
-	if facts.PhysicalMemoryBytes != 34359738368 || facts.MetalDeviceMemoryMiB != 26542 || facts.MetalDeviceMemorySource != MetalDeviceSourcePredicted {
+	if facts.PhysicalMemoryBytes != 34359738368 || facts.MetalDeviceMemoryMiB != 24576 || facts.MetalDeviceMemorySource != MetalDeviceSourceLive {
 		t.Fatalf("facts memory = %#v", facts)
 	}
-	if facts.WiredLimitMiB != 24576 || facts.WiredLimitSource != budget.WiredSourceLive {
+	if facts.WiredLimitMiB != 24576 || facts.WiredLimitSource != budget.WiredSourceMetal || facts.WiredLimitOverrideMiB == nil || *facts.WiredLimitOverrideMiB != 24576 {
 		t.Fatalf("facts wired limit = %#v", facts)
 	}
 	memory, err := facts.Budget()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if memory != (budget.Machine{PhysicalMiB: 32768, DeviceMiB: 26542, WiredLimitMiB: 24576, WiredSource: budget.WiredSourceLive}) {
+	if memory != (budget.Machine{PhysicalMiB: 32768, DeviceMiB: 24576, WiredLimitMiB: 24576, WiredSource: budget.WiredSourceMetal}) {
 		t.Fatalf("Budget() = %#v", memory)
 	}
 }
@@ -136,26 +142,66 @@ func TestDetectTargetRefusesAnUnreadableOrInvalidVersion(t *testing.T) {
 	}
 }
 
-func TestDetectFactsLabelsPredictedWiredLimit(t *testing.T) {
-	facts, err := detectFacts(context.Background(), func(_ context.Context, name string) (string, error) {
-		values := map[string]string{
-			"hw.memsize":               "34359738368",
-			"hw.model":                 "Mac17,3",
-			"machdep.cpu.brand_string": "Apple M5",
-			"kern.osproductversion":    "15.6",
-			"kern.osversion":           "24G90",
-		}
-		value, ok := values[name]
-		if !ok {
-			return "", errors.New("unknown oid")
-		}
-		return value, nil
-	}, "darwin", "arm64")
-	if err != nil {
+func TestDetectFactsKeepsOverrideSeparateFromEffectiveBudget(t *testing.T) {
+	for _, tc := range []struct {
+		name, value string
+		known       bool
+		want        int64
+	}{
+		{"different override", "28672\n", true, 28672},
+		{"OS default", "0\n", true, 0},
+		{"unavailable", "", false, 0},
+		{"malformed", "unknown", false, 0},
+		{"negative", "-1", false, 0},
+		{"above RAM", "65536", true, 65536},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			values := map[string]string{
+				"hw.memsize":               "34359738368",
+				"hw.model":                 "Mac17,3",
+				"machdep.cpu.brand_string": "Apple M5",
+				"kern.osproductversion":    "15.6",
+				"kern.osversion":           "24G90",
+			}
+			if tc.value != "" {
+				values["iogpu.wired_limit_mb"] = tc.value
+			}
+			facts, err := detectFacts(context.Background(), cannedQuery(values),
+				func(context.Context) (uint64, error) { return 24576*uint64(bytesPerMiB) + 1023, nil }, "darwin", "arm64")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if facts.WiredLimitMiB != 24576 || facts.MetalDeviceMemoryMiB != 24576 || facts.WiredLimitSource != budget.WiredSourceMetal {
+				t.Fatalf("override replaced effective Metal budget: %#v", facts)
+			}
+			if (facts.WiredLimitOverrideMiB != nil) != tc.known || tc.known && *facts.WiredLimitOverrideMiB != tc.want {
+				t.Fatalf("wrong optional override: %#v", facts)
+			}
+		})
+	}
+}
+
+func TestLiveMetalFactsRefuseInconsistentReadings(t *testing.T) {
+	facts := Facts{Schema: FactsSchemaV1,
+		Target:        software.Target{OS: "darwin", Arch: "arm64", Distribution: "macos", DistributionVersion: "26.6"},
+		HardwareModel: "Mac17,3", Chip: "Apple M5", OSBuild: "25G76", PhysicalMemoryBytes: 34359738368,
+		MetalDeviceMemoryMiB: 24576, MetalDeviceMemorySource: MetalDeviceSourceLive,
+		WiredLimitMiB: 24576, WiredLimitSource: budget.WiredSourceMetal}
+	if err := facts.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	if facts.WiredLimitMiB != 21299 || facts.WiredLimitSource != budget.WiredSourcePredicted {
-		t.Fatalf("facts = %#v", facts)
+	for _, mutate := range []func(*Facts){
+		func(f *Facts) { f.WiredLimitMiB++ },
+		func(f *Facts) { f.MetalDeviceMemorySource = MetalDeviceSourcePredicted },
+		func(f *Facts) { f.WiredLimitSource = budget.WiredSourceLive },
+		func(f *Facts) { f.MetalDeviceMemoryMiB = 0 },
+		func(f *Facts) { negative := int64(-1); f.WiredLimitOverrideMiB = &negative },
+	} {
+		invalid := facts
+		mutate(&invalid)
+		if err := invalid.Validate(); err == nil {
+			t.Fatalf("invalid facts accepted: %#v", invalid)
+		}
 	}
 }
 
@@ -188,4 +234,8 @@ func cannedQuery(values map[string]string) queryFunc {
 		}
 		return value, nil
 	}
+}
+
+func metalReading(mib int64) metalQueryFunc {
+	return func(context.Context) (uint64, error) { return uint64(mib * bytesPerMiB), nil }
 }

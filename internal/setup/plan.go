@@ -18,6 +18,7 @@ import (
 	"github.com/temper-sh/temper/internal/datadir"
 	"github.com/temper-sh/temper/internal/hfcache"
 	"github.com/temper-sh/temper/internal/machine"
+	"github.com/temper-sh/temper/internal/render/engine"
 )
 
 const ConfigurationDir = "configuration"
@@ -45,14 +46,16 @@ func (d Download) Action() string {
 }
 
 type ModePlan struct {
-	Mode       string                       `json:"mode"`
-	Profile    string                       `json:"profile"`
-	Selection  catalog.Selection            `json:"selection"`
-	Lock       catalog.Lock                 `json:"-"`
-	ModelBytes int64                        `json:"model_bytes"`
-	Budget     budget.Prediction            `json:"memory_prediction"`
-	Contexts   map[string]ContextAssessment `json:"contexts,omitempty"`
-	Refusals   []string                     `json:"refusals,omitempty"`
+	RuntimeDiskEstimateBytes int64                        `json:"runtime_disk_estimate_bytes,omitempty"`
+	Mode                     string                       `json:"mode"`
+	Profile                  string                       `json:"profile"`
+	Selection                catalog.Selection            `json:"selection"`
+	Lock                     catalog.Lock                 `json:"-"`
+	ModelBytes               int64                        `json:"model_bytes"`
+	Budget                   budget.Prediction            `json:"memory_prediction"`
+	WiredMemory              *WiredMemoryAdvice           `json:"wired_memory_advice,omitempty"`
+	Contexts                 map[string]ContextAssessment `json:"contexts,omitempty"`
+	Refusals                 []string                     `json:"refusals,omitempty"`
 }
 
 type ContextAssessment struct {
@@ -63,6 +66,7 @@ type ContextAssessment struct {
 
 type Plan struct {
 	Root                   string     `json:"root"`
+	DefaultProfile         string     `json:"default_profile,omitempty"`
 	Modes                  []ModePlan `json:"modes"`
 	Downloads              []Download `json:"downloads"`
 	DownloadBytes          int64      `json:"download_bytes"`
@@ -139,8 +143,22 @@ func Assess(locked catalog.Lock, facts machine.Facts) (ModePlan, error) {
 	for _, binding := range p.Bindings {
 		layout := locked.Records.Layouts[binding.Layout]
 		var size int64
-		for _, file := range locked.Records.Artifacts[layout.Artifact].Files {
+		files := append([]catalog.File(nil), locked.Records.Artifacts[layout.Artifact].Files...)
+		if layout.Speculation.DraftArtifact != "" {
+			files = append(files, locked.Records.Artifacts[layout.Speculation.DraftArtifact].Files...)
+		}
+		for _, file := range files {
 			if err := add(&size, file.Bytes); err != nil {
+				return ModePlan{}, err
+			}
+		}
+		if layout.EngineConfig.Splash != nil {
+			if err := engine.SplashCompatibility(facts.Chip, facts.Target.DistributionVersion); err != nil {
+				result.Refusals = append(result.Refusals, err.Error())
+			}
+			// A planning estimate for the additional native copy, not an installed-size
+			// fact. Splash admits exact missing files and its 2 GiB reserve at startup.
+			if err := add(&result.RuntimeDiskEstimateBytes, size); err != nil {
 				return ModePlan{}, err
 			}
 		}
@@ -152,14 +170,14 @@ func Assess(locked catalog.Lock, facts machine.Facts) (ModePlan, error) {
 			if err := add(&residentBytes, size); err != nil {
 				return ModePlan{}, err
 			}
-			if layout.EngineConfig.GPULayers > 0 {
+			if layout.EngineConfig.Splash != nil || layout.EngineConfig.GPULayers > 0 {
 				if err := add(&residentGPU, size); err != nil {
 					return ModePlan{}, err
 				}
 			}
 		} else {
 			onDemandBytes = max(onDemandBytes, size)
-			if layout.EngineConfig.GPULayers > 0 {
+			if layout.EngineConfig.Splash != nil || layout.EngineConfig.GPULayers > 0 {
 				onDemandGPU = max(onDemandGPU, size)
 			}
 		}
@@ -194,19 +212,24 @@ func Assess(locked catalog.Lock, facts machine.Facts) (ModePlan, error) {
 	if result.Budget.Status == budget.StatusExceeded {
 		result.Refusals = append(result.Refusals, fmt.Sprintf("configured memory allocation exceeds the %s wired-memory limit (prediction)", Size(result.Budget.WiredLimitMiB*MiB)))
 	}
+	gpuMinimumMiB := gpuMinimum / MiB
+	if gpuMinimum%MiB != 0 {
+		gpuMinimumMiB++
+	}
+	result.WiredMemory = wiredMemoryAdvice(max(gpuMinimumMiB, result.Budget.RequiredMiB), facts, result.Budget)
 	return result, nil
 }
 
-// Build combines alternative modes into one installation preview. Identical
+// Build combines selected configurations into one installation preview. Identical
 // model bytes count once across layouts and templates. Software installations are
-// separate per mode, matching the actual execution-prepare calls.
-func Build(root string, facts machine.Facts, freeBytes int64, locks []catalog.Lock) (Plan, error) {
-	return BuildWithMaterial(root, facts, freeBytes, locks, Material{})
+// separate per configuration, matching the actual execution-prepare calls.
+func Build(root string, facts machine.Facts, freeBytes int64, locks []catalog.Lock, defaultProfile string) (Plan, error) {
+	return BuildWithMaterial(root, facts, freeBytes, locks, Material{}, defaultProfile)
 }
 
 // BuildWithMaterial keeps fresh totals for review and subtracts only material
 // admitted by InspectModels from the remaining preparation allowance.
-func BuildWithMaterial(root string, facts machine.Facts, freeBytes int64, locks []catalog.Lock, material Material) (Plan, error) {
+func BuildWithMaterial(root string, facts machine.Facts, freeBytes int64, locks []catalog.Lock, material Material, defaultProfile string) (Plan, error) {
 	resolved, err := datadir.Resolve(root)
 	if err != nil {
 		return Plan{}, err
@@ -214,37 +237,37 @@ func BuildWithMaterial(root string, facts machine.Facts, freeBytes int64, locks 
 	if material.root != "" && material.root != resolved {
 		return Plan{}, errors.New("inspected model material belongs to another root")
 	}
-	if len(locks) == 0 || len(locks) > 2 {
-		return Plan{}, errors.New("choose one profile per selected local or utility mode")
+	if len(locks) == 0 {
+		return Plan{}, errors.New("choose at least one profile")
+	}
+	defaultProfile, err = selectedDefault(locks, defaultProfile)
+	if err != nil {
+		return Plan{}, err
 	}
 	if freeBytes < 0 {
 		return Plan{}, errors.New("free disk space is unavailable")
 	}
-	// Match preparation order when two modes share weights: a later mode can
-	// reuse the first installation, while the first must find its own HF entry.
+	// Match preparation order when configurations share weights. The default
+	// local configuration is prepared first, then alternatives, then helpers.
 	locks = slices.Clone(locks)
 	slices.SortFunc(locks, func(a, b catalog.Lock) int {
-		return strings.Compare(Mode(a.Records.Profiles[a.Selection.Profile]), Mode(b.Records.Profiles[b.Selection.Profile]))
+		return strings.Compare(configurationName(Mode(a.Records.Profiles[a.Selection.Profile]), a.Selection.Profile, defaultProfile), configurationName(Mode(b.Records.Profiles[b.Selection.Profile]), b.Selection.Profile, defaultProfile))
 	})
-	plan := Plan{Root: resolved, FreeDiskBytes: freeBytes, CanPrepare: true}
+	plan := Plan{Root: resolved, DefaultProfile: defaultProfile, FreeDiskBytes: freeBytes, CanPrepare: true}
 	if material.hfCache != nil {
 		cache := *material.hfCache
 		plan.HFCache = &cache
 	}
-	modes, seenSets := map[string]bool{}, map[string]bool{}
+	seenSets := map[string]bool{}
 	seenModels := map[string]int64{}
 	for _, locked := range locks {
 		mode, err := Assess(locked, facts)
 		if err != nil {
 			return Plan{}, err
 		}
-		if modes[mode.Mode] {
-			return Plan{}, fmt.Errorf("select only one %s profile", mode.Mode)
-		}
-		modes[mode.Mode] = true
 		plan.Modes = append(plan.Modes, mode)
 		for _, refusal := range mode.Refusals {
-			plan.Refusals = append(plan.Refusals, mode.Mode+": "+refusal)
+			plan.Refusals = append(plan.Refusals, mode.Profile+": "+refusal)
 		}
 		projection, err := locked.Projections()
 		if err != nil {
@@ -257,41 +280,46 @@ func BuildWithMaterial(root string, facts machine.Facts, freeBytes int64, locks 
 				return Plan{}, err
 			}
 			remaining := !material.verified[set.Path()]
-			artifact := locked.Records.Artifacts[layout.Artifact]
-			for _, file := range artifact.Files {
-				if size, seen := seenModels[file.SHA256]; seen {
-					if size != file.Bytes {
-						return Plan{}, fmt.Errorf("model %q has conflicting sizes for the same SHA-256", file.Path)
-					}
-					continue
-				}
-				seenModels[file.SHA256] = file.Bytes
-				existing, reusable := material.models[file.SHA256]
-				if reusable && existing.Size != file.Bytes {
-					return Plan{}, fmt.Errorf("model %q catalog size %d differs from installed receipt size %d", file.Path, file.Bytes, existing.Size)
-				}
-				hf, cached := material.hfModels[hfcache.Entry{Repo: artifact.Repo, Revision: artifact.Revision, Name: file.Path, SHA256: file.SHA256}]
-				if err := plan.download("model", file.Path, file.Bytes, file.Bytes, !reusable && !cached); err != nil {
-					return Plan{}, err
-				}
-				if cached && !reusable {
-					plan.Downloads[len(plan.Downloads)-1].Cache = "huggingface"
-					if hf.copy {
-						if err := add(&plan.RemainingDiskBytes, file.Bytes); err != nil {
-							return Plan{}, err
+			artifacts := []catalog.Artifact{locked.Records.Artifacts[layout.Artifact]}
+			if layout.Speculation.DraftArtifact != "" {
+				artifacts = append(artifacts, locked.Records.Artifacts[layout.Speculation.DraftArtifact])
+			}
+			for _, artifact := range artifacts {
+				for _, file := range artifact.Files {
+					if size, seen := seenModels[file.SHA256]; seen {
+						if size != file.Bytes {
+							return Plan{}, fmt.Errorf("model %q has conflicting sizes for the same SHA-256", file.Path)
 						}
-						if err := add(&plan.HFCache.CopyBytes, file.Bytes); err != nil {
-							return Plan{}, err
-						}
+						continue
 					}
-				}
-				if plan.HFCache != nil && !cached && !reusable {
-					if err := add(&plan.HFCache.RemainingDiskBytes, file.Bytes); err != nil {
+					seenModels[file.SHA256] = file.Bytes
+					existing, reusable := material.models[file.SHA256]
+					if reusable && existing.Size != file.Bytes {
+						return Plan{}, fmt.Errorf("model %q catalog size %d differs from installed receipt size %d", file.Path, file.Bytes, existing.Size)
+					}
+					hf, cached := material.hfModels[hfcache.Entry{Repo: artifact.Repo, Revision: artifact.Revision, Name: file.Path, SHA256: file.SHA256}]
+					if err := plan.download("model", file.Path, file.Bytes, file.Bytes, !reusable && !cached); err != nil {
 						return Plan{}, err
 					}
-					if !plan.HFCache.SharedFilesystem {
-						if err := add(&plan.HFCache.CopyBytes, file.Bytes); err != nil {
+					if cached && !reusable {
+						plan.Downloads[len(plan.Downloads)-1].Cache = "huggingface"
+						if hf.copy {
+							if err := add(&plan.RemainingDiskBytes, file.Bytes); err != nil {
+								return Plan{}, err
+							}
+							if err := add(&plan.HFCache.CopyBytes, file.Bytes); err != nil {
+								return Plan{}, err
+							}
+						}
+					}
+					if plan.HFCache != nil && !cached && !reusable {
+						if err := add(&plan.HFCache.RemainingDiskBytes, file.Bytes); err != nil {
 							return Plan{}, err
+						}
+						if !plan.HFCache.SharedFilesystem {
+							if err := add(&plan.HFCache.CopyBytes, file.Bytes); err != nil {
+								return Plan{}, err
+							}
 						}
 					}
 				}
@@ -326,12 +354,11 @@ func BuildWithMaterial(root string, facts machine.Facts, freeBytes int64, locks 
 			if err := add(&disk, artifact.UnpackedSize); err != nil {
 				return Plan{}, err
 			}
-			if err := plan.download("software", mode.Mode+"/"+supply.Package+" "+supply.Release.Version, artifact.Size, disk, true); err != nil {
+			if err := plan.download("software", plan.ConfigurationName(mode)+"/"+supply.Package+" "+supply.Release.Version, artifact.Size, disk, true); err != nil {
 				return Plan{}, err
 			}
 		}
 	}
-	slices.SortFunc(plan.Modes, func(a, b ModePlan) int { return strings.Compare(a.Mode, b.Mode) })
 	// Configuration and receipt overhead; this is explicitly a planning allowance.
 	if err := add(&plan.FreshDiskBytes, 16*MiB); err != nil {
 		return Plan{}, err
@@ -347,6 +374,58 @@ func BuildWithMaterial(root string, facts machine.Facts, freeBytes int64, locks 
 	}
 	plan.CanPrepare = len(plan.Refusals) == 0
 	return plan, nil
+}
+
+// A sole explicitly selected local profile is necessarily the default. With
+// alternatives, the caller must name it; catalog order never chooses it.
+func selectedDefault(locks []catalog.Lock, selected string) (string, error) {
+	seen := map[string]bool{}
+	var local []string
+	utilities := 0
+	for _, locked := range locks {
+		if err := locked.Validate(); err != nil {
+			return "", err
+		}
+		id := locked.Selection.Profile
+		if seen[id] {
+			return "", fmt.Errorf("profile %q was selected more than once", id)
+		}
+		seen[id] = true
+		if Mode(locked.Records.Profiles[id]) == "local" {
+			local = append(local, id)
+		} else {
+			utilities++
+		}
+	}
+	if utilities > 1 {
+		return "", errors.New("select only one utility profile")
+	}
+	if selected == "" && len(local) == 1 {
+		return local[0], nil
+	}
+	if selected == "" && len(local) == 0 {
+		return "", nil
+	}
+	if selected == "" {
+		return "", errors.New("choose a default profile when selecting multiple local models")
+	}
+	if !slices.Contains(local, selected) {
+		return "", fmt.Errorf("default profile %q must be one of the selected local models", selected)
+	}
+	return selected, nil
+}
+
+// ConfigurationName keeps the default local and utility paths stable. Other
+// installed local configurations have their own complete selection/lock pair.
+func (p Plan) ConfigurationName(mode ModePlan) string {
+	return configurationName(mode.Mode, mode.Profile, p.DefaultProfile)
+}
+
+func configurationName(mode, profile, defaultProfile string) string {
+	if mode == "local" && profile != defaultProfile {
+		return "local." + profile
+	}
+	return mode
 }
 
 func (p *Plan) download(kind, name string, transfer, disk int64, remaining bool) error {
@@ -436,12 +515,38 @@ type Section struct {
 	Title     string
 	Lines     []string
 	Downloads []Download // Non-nil for the collapsible transfer table.
+	Warning   bool
 }
 
 func (p Plan) Sections() []Section {
-	sections := []Section{{Title: "Configuration", Lines: []string{"Configuration: " + filepath.Join(p.Root, ConfigurationDir)}}}
+	var sections []Section
+	var advice *WiredMemoryAdvice
+	var tightModes []string
+	for _, mode := range p.Modes {
+		if mode.WiredMemory != nil {
+			tightModes = append(tightModes, mode.Mode)
+			if advice == nil || mode.WiredMemory.RequiredMiB > advice.RequiredMiB {
+				advice = mode.WiredMemory
+			}
+		}
+	}
+	if advice != nil {
+		// Modes are alternatives; the largest requirement determines one system
+		// setting. Printing a lower command afterward could undo that remedy.
+		section := advice.Section()
+		section.Title += " · " + strings.Join(tightModes, ", ")
+		sections = append(sections, section)
+	}
+	sections = append(sections, Section{Title: "Configuration", Lines: []string{"Configuration: " + filepath.Join(p.Root, ConfigurationDir)}})
 	for _, mode := range p.Modes {
 		lines := []string{mode.Mode + ": " + mode.Profile}
+		if mode.Mode == "local" {
+			if mode.Profile == p.DefaultProfile {
+				lines = append(lines, "Default local model; used by the default foreground command.")
+			} else {
+				lines = append(lines, "Installed alternative; starts only when explicitly chosen.")
+			}
+		}
 		for _, id := range keys(mode.Lock.Records.Layouts) {
 			layout := mode.Lock.Records.Layouts[id]
 			lines = append(lines, fmt.Sprintf("  %s: context %d tokens (input + output); output default %d", layout.DisplayName, layout.ContextWindowTokens, layout.RequestDefaults.MaxOutputTokens))
@@ -470,6 +575,9 @@ func (p Plan) Sections() []Section {
 			lines = append(lines, "  "+layout+" — "+template)
 		}
 		lines = append(lines, "  Model files: "+Size(mode.ModelBytes)+"; memory wall: "+mode.Budget.Status+" (prediction)")
+		if mode.RuntimeDiskEstimateBytes > 0 {
+			lines = append(lines, "  Splash first-start weight cache: allow roughly another "+Size(mode.RuntimeDiskEstimateBytes)+", plus 2 GiB free. This estimate is additional to installation totals; Splash checks exact space before conversion.")
+		}
 		sections = append(sections, Section{Title: "Mode · " + mode.Mode, Lines: lines})
 	}
 	downloads := []string{p.WeightSummary(), "Save downloads no weights. Prepare fetches missing files and verifies cached weights.",
@@ -489,7 +597,8 @@ func (p Plan) Sections() []Section {
 		"GPU allowance counts full model files when offload is enabled; partial-offload savings are unknown.",
 		"Foreground serving is a temporary supervised session; an idle engine unload or restart ends it.",
 	}}, Section{Title: "What happens next", Lines: []string{
-		"Modes run separately. Pi retains its own configuration. Save downloads no models; Prepare installs the listed files without starting a model.",
+		"Local models run one at a time; the default is the primary launch choice. Utility mode runs separately. Pi retains its own configuration.",
+		"Save downloads no models; Prepare installs the listed files without starting a model.",
 	}})
 	if p.HFCache != nil {
 		lines := []string{"Shared model cache: " + p.HFCache.Root, "New cached model files: " + DownloadSize(p.HFCache.RemainingDiskBytes)}
@@ -517,6 +626,9 @@ func (p Plan) Sections() []Section {
 func (p Plan) Lines() []string {
 	var lines []string
 	for _, section := range p.Sections() {
+		if section.Warning {
+			lines = append(lines, section.Title)
+		}
 		lines = append(lines, section.Lines...)
 		for _, item := range section.Downloads {
 			lines = append(lines, item.Name+" — "+DownloadSize(item.Bytes)+" — "+item.Action())
@@ -527,15 +639,24 @@ func (p Plan) Lines() []string {
 
 func (p Plan) Files() (map[string][]byte, error) {
 	files := make(map[string][]byte)
-	seen := map[string]bool{}
+	var locks []catalog.Lock
+	for _, mode := range p.Modes {
+		locks = append(locks, mode.Lock)
+	}
+	selected, err := selectedDefault(locks, p.DefaultProfile)
+	if err != nil {
+		return nil, err
+	}
+	if selected != p.DefaultProfile {
+		return nil, errors.New("plan does not record its default local model")
+	}
 	for _, mode := range p.Modes {
 		if mode.Mode != "local" && mode.Mode != "utility" {
 			return nil, errors.New("invalid setup mode")
 		}
-		if seen[mode.Mode] {
-			return nil, errors.New("duplicate setup mode")
+		if mode.Profile != mode.Selection.Profile {
+			return nil, errors.New("plan profile differs from selection")
 		}
-		seen[mode.Mode] = true
 		if !EqualChoices(mode.Selection, mode.Lock.Selection) {
 			return nil, errors.New("selection differs from the exact execution lock")
 		}
@@ -553,8 +674,9 @@ func (p Plan) Files() (map[string][]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		files[mode.Mode+".selection.json"] = append(selection, '\n')
-		files[mode.Mode+".execution.lock.json"] = locked
+		name := p.ConfigurationName(mode)
+		files[name+".selection.json"] = append(selection, '\n')
+		files[name+".execution.lock.json"] = locked
 	}
 	return files, nil
 }
