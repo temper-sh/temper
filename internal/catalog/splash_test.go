@@ -118,6 +118,41 @@ func TestSplashDraftChangesInvalidateCompositionButLeaveTargetIdentity(t *testin
 	}
 }
 
+func TestSplashContextChangesReuseInstalledSoftware(t *testing.T) {
+	doc := splashCatalog(t)
+	baseline := compileSplash(t, doc)
+	projection, err := baseline.Projections()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := projection.Software.SemanticDigest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, window := range []int{16384, 65536} {
+		selection := baseline.Selection
+		selection.ContextWindows = map[string]int{splashLayout: window}
+		candidate, err := catalog.Compile(doc, selection, doc.Runtime.Router.Target)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if candidate.Digests.Profile == baseline.Digests.Profile {
+			t.Fatal("context change did not change execution identity")
+		}
+		material, err := candidate.Projections()
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := material.Software.SemanticDigest()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != want {
+			t.Fatalf("Splash context %d invalidated unchanged installed software", window)
+		}
+	}
+}
+
 func TestSplashRejectsMixedEngineFieldsAndMissingDraft(t *testing.T) {
 	for _, mutate := range []func(*catalog.Document){
 		func(d *catalog.Document) {

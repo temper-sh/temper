@@ -47,6 +47,49 @@ func compile(t *testing.T, d catalog.Document) catalog.Lock {
 	return l
 }
 
+func TestRuntimeSettingsReuseInstalledSoftware(t *testing.T) {
+	baseline := compile(t, document())
+	projection, err := baseline.Projections()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := projection.Software.SemanticDigest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, change := range []struct {
+		name  string
+		apply func(*catalog.Layout)
+	}{
+		{"batch size", func(l *catalog.Layout) { l.EngineConfig.BatchTokens = 1024 }},
+		{"context window", func(l *catalog.Layout) { l.ContextWindowTokens = 65536 }},
+		{"cache precision", func(l *catalog.Layout) { l.EngineConfig.KVCache = "q4" }},
+		{"speculation", func(l *catalog.Layout) { l.Speculation = catalog.Speculation{Method: "none", Source: "none"} }},
+	} {
+		t.Run(change.name, func(t *testing.T) {
+			d := document()
+			layout := d.Layouts["qwen-32k"]
+			change.apply(&layout)
+			d.Layouts["qwen-32k"] = layout
+			candidate := compile(t, d)
+			if candidate.Digests.Profile == baseline.Digests.Profile {
+				t.Fatal("execution configuration did not change")
+			}
+			p, err := candidate.Projections()
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := p.Software.SemanticDigest()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != want {
+				t.Fatal("runtime settings invalidated unchanged installed software")
+			}
+		})
+	}
+}
+
 func TestTemplateChoiceChangesOnlySelectedExecutionClosure(t *testing.T) {
 	d := document()
 	alt := d.Patches["template"]

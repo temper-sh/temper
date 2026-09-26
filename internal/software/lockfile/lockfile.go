@@ -460,17 +460,25 @@ func (d Document) ValidateAgainst(supply catalog.Document, snapshotDigest string
 	return nil
 }
 
+// SemanticDigest identifies the desired installed software for transaction
+// recovery and dependency references. Provenance explains where a request came
+// from; it is not installed material. A changed model setting or source snapshot
+// must not invalidate receipts for identical software.
 func (d Document) SemanticDigest() (string, error) {
 	if err := d.Validate(); err != nil {
 		return "", err
 	}
+	selections := cloneSelections(d.Selections)
+	for id, selection := range selections {
+		selection.Provenance = ""
+		selections[id] = selection
+	}
 	projection := digestDocument{
 		Schema:     d.Schema,
-		Provenance: d.Provenance,
 		Requires:   canonicalRequirements(d.Requires),
 		Target:     d.Target,
 		TargetMode: d.TargetMode,
-		Selections: cloneSelections(d.Selections),
+		Selections: selections,
 		Units:      canonicalUnits(d.Units),
 	}
 	return digestJSON(projection)
@@ -510,7 +518,6 @@ func (d Document) ClosureDigest(selectionID string) (string, error) {
 
 type digestDocument struct {
 	Schema     string                    `json:"schema"`
-	Provenance Provenance                `json:"provenance"`
 	Requires   []InstallationRequirement `json:"requires"`
 	Target     software.Target           `json:"target"`
 	TargetMode string                    `json:"target_mode,omitempty"`

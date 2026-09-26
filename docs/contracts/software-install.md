@@ -36,6 +36,12 @@ carry a fresh experimental runtime without exempting the catalog selections
 from catalog validation. If an experiment changes a catalog package's closure,
 that complete selection is marked experimental.
 
+Provenance records where the request came from. It is excluded from the software
+semantic digest, including each selection's provenance label. Runtime settings
+and source snapshot changes therefore do not change installed-software identity.
+Transaction recovery and dependency references still use the software digest;
+receipts compare the desired selections and units directly.
+
 ## Invocation, identity, and paths
 
 ```text
@@ -192,19 +198,24 @@ With no receipt for this installation:
 - exact unregistered units have `pre-existing` acquisition and units installed
   by Temper have `temper-added` acquisition.
 
-With a receipt for the same lock digest, exact units retain their recorded
+With a receipt for the same desired software, exact units retain their recorded
 relation. A missing shared unit may be repaired only when root state proves
 Temper originally added it and this installation still has a claim. A wholly
 Temper-owned isolated group may be republished in full; an isolated group that
 contains any pre-existing unit is never replaced. Shared identity drift is a
 refusal rather than an implicit upgrade or downgrade.
 
-A receipt for a different lock is also a first-slice refusal. The explicit
+A receipt for different desired software is also a first-slice refusal. The explicit
 software-update workflow must define obsolete-unit removal and shared-package
 migration. A different lock can coexist immediately under a different
 installation ID. Unknown observation, an extra prior unit, requirement drift,
 target/root/installation drift, or an adapter/scope mismatch refuses before
 effects.
+
+Historical prepared operations whose digests included provenance require their
+producing runtime for recovery; they are not migrated implicitly. Completed
+receipts can be checked by their retained software facts without requiring the
+old digest calculation.
 
 ## `temper-software-state/v1`: operations and shared claims
 
@@ -326,7 +337,9 @@ units:
     shared_claim: <shared-unit sha256, only when adapter is shared>
 ```
 
-Selections and unit identities exactly equal the bound lock. Requirements
+Selection material and unit identities exactly equal the desired lock. A
+selection's provenance retains its original attribution and need not match a
+later request for the same software. Requirements
 exactly equal the lock's required digests and add the actual base installation
 and canonical receipt identity used. `location`, `ownership`, `shared_claim`,
 `root`, and `observed_at` are observed history. For isolated units, ownership

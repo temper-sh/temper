@@ -16,7 +16,7 @@ import (
 
 const stateRoot = "/tmp/temper-state-test"
 
-func TestPreCleanupIsolatedOperationStillRecovers(t *testing.T) {
+func TestHistoricalPreparedOperationRequiresItsProducingRuntime(t *testing.T) {
 	data, err := os.ReadFile("testdata/prepared-v1.yaml")
 	if err != nil {
 		t.Fatal(err)
@@ -36,10 +36,9 @@ func TestPreCleanupIsolatedOperationStillRecovers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan := buildStatePlan(t, desired, installation, observed, projection)
-	_, changed, fence, err := rootstate.Prepare(&prepared, desired, plan, observed, rootstate.Lease{InvocationID: "recovery", Now: time.Date(2026, 8, 23, 9, 2, 0, 0, time.UTC), Duration: time.Minute})
-	if err != nil || !changed || fence != 2 {
-		t.Fatalf("existing operation recovery: changed=%v fence=%d err=%v", changed, fence, err)
+	_, err = installplan.Build(desired, installation, map[string]installplan.EffectModel{"uv": installplan.EffectIsolated}, observed, projection)
+	if err == nil || !strings.Contains(err.Error(), "different software lock") {
+		t.Fatalf("historical prepared state must not migrate implicitly: %v", err)
 	}
 }
 

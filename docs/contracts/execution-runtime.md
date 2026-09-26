@@ -22,6 +22,11 @@ downloading. Both commands derive private temporary legacy inputs inside Temper;
 clients never coordinate or retain the four compatibility exports. `remove`
 uses the exact software receipt and retains system-managed packages.
 
+Changing context, batch, cache or speculation settings reuses the installed
+software when its units and installation identity are unchanged. The new
+execution lock still produces and verifies its own rendered generation;
+execution provenance is not a software reinstallation requirement.
+
 For Splash 1.1.0, `prepare` installs the complete prebuilt release, including its
 Python interpreter and Metal kernels. It fetches the locked target and DFlash2
 files, verifies the software, and invokes that interpreter only to derive GGUF

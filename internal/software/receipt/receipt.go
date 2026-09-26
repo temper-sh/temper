@@ -328,12 +328,8 @@ func (d Document) ValidateAgainst(desired softwarelock.Document, installation in
 	if err := desired.Validate(); err != nil {
 		return err
 	}
-	digest, err := desired.SemanticDigest()
-	if err != nil {
-		return err
-	}
-	if d.SoftwareLockDigest != digest || d.Target != desired.Target {
-		return errors.New("software installation receipt belongs to another lock or target")
+	if d.Target != desired.Target {
+		return errors.New("software installation receipt belongs to another target")
 	}
 	if d.Installation != installation.ID || d.Root != installation.Root {
 		return errors.New("software installation receipt belongs to another installation or root")
@@ -343,7 +339,10 @@ func (d Document) ValidateAgainst(desired softwarelock.Document, installation in
 	}
 	for packageID, locked := range desired.Selections {
 		got, ok := d.Selections[packageID]
-		if !ok || got != (Selection{Provenance: locked.Provenance, Method: locked.Method, Adapter: locked.Adapter, RecipeRevision: locked.RecipeRevision, RootUnit: locked.RootUnit}) {
+		// The receipt keeps the original source attribution. Reusing identical
+		// installed software does not require the new request to share that source.
+		got.Provenance = ""
+		if !ok || got != (Selection{Method: locked.Method, Adapter: locked.Adapter, RecipeRevision: locked.RecipeRevision, RootUnit: locked.RootUnit}) {
 			return fmt.Errorf("software installation receipt selection %q differs from its lock", packageID)
 		}
 	}

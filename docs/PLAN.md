@@ -21,13 +21,21 @@ promotion, resolver and bootstrap proposals are no longer an active backlog.
 | Maintained catalog | Artifact, Patch, Engine, Layout and Profile compile with an explicit Selection to a self-contained Execution Lock. [The execution-lock contract](contracts/execution-lock.md) owns v2 and issued-v1 compatibility. |
 | Guided setup | `temper init` provides modes-first Bubble Tea screens, explicit per-model templates and contexts, software choice, combined review, atomic save and optional preparation. `~/.temper` is the default; exact saved locks support offline resume. [The setup contract](contracts/init.md) owns the implemented scope. |
 | Software selection | Source records are separate from resolved releases. `catalog compile --software recorded\|latest\|tested` supports the current llama.cpp/llama-swap macOS ARM64 sources. Recorded inputs are the offline default; fallback is explicit. |
-| Installation | Exact isolated release/Python installation, receipts, version checks and recovery remain. System-managed software is always retained. Removing the unused Homebrew reader did not add a new Homebrew or Linux installer. |
+| Installation | Exact isolated release/Python installation, receipts, version checks and recovery remain. Receipt reuse now compares installed software facts independently of execution provenance. Context and other runtime changes reuse unchanged software for llama.cpp and Splash. System-managed software is always retained. |
 | Field Kit host | `execution inspect/prepare/render/serve/remove` and supervised probes are implemented. The [runtime contract](contracts/execution-runtime.md) owns process identities, listener checks and final shutdown proof. |
 | Current router compatibility | The working tree recognizes llama-swap v257's narrowly scoped macOS inspection helpers using kernel executable/argv and router ancestry. Engine lifetime remains fixed for measurements; unknown children still refuse ownership. Full tests, race, vet and Linux compilation pass. Native catalog attempts are retained in [Labs](../../v3/labs/workstreams/model-runtime-optimization/method/catalog-refresh-2026-09-24.md). |
-| Source and build | Catalog delivery `a9b4a7f` is pushed and tagged alpha.10. Guided setup baseline `ffeee88` is committed locally and awaits release; native Metal detection and wired-memory guidance are subsequent source work. |
+| Source and build | Catalog delivery `a9b4a7f` is pushed and tagged alpha.10. Guided setup, native Metal detection and Splash are committed in `3ba7813`. The software receipt simplification is integrated in the working tree and `build/temper` is rebuilt; these changes await release. |
 | Public binary | Signed/notarized [0.1.0-alpha.10](https://github.com/temper-sh/temper/releases/tag/v0.1.0-alpha.10) adds catalog commands. Its downloaded checksum, signing identity, notarization and live-catalog compilation pass. Field Kit `01dd867` keeps its verified alpha.9 host; alpha.7 remains the dispatched revision 1 host. |
 | Catalog distribution | The [stable channel](https://temper-sh.github.io/temper/catalog/channels/stable/channel.yaml) publishes signed sequence 2 with one Qwen profile. Explicit update, inspection, selection, compilation and offline rollback are delivered. [The catalog guide](CATALOG.md) owns use. |
 | Catalog candidate | [The authoring catalog](../catalog/README.md) offers Qwen3.8, Qwen3.5 and Gemma E2B/E4B as main models, plus Qwen3.5 as an on-demand utility. It records b11157/v257 and authors 40,960 tokens for Qwen3.8 after discovery, fresh confirmation and a full-output resource check on M5/32 GiB. Small-model context and focused task observations retain b11149; they do not qualify all profiles on b11157. Optional Sharp compositions and real 8/16 GiB fit remain unmeasured. It is not published. |
+
+The receipt simplification passes full Go tests, vet and race checks after
+integration with `3ba7813`. Regressions cover llama.cpp settings and Splash
+context changes retaining installed-software identity while execution identity
+changes. Historical prepared operations whose digests included provenance
+still require their producing runtime for recovery. All 15 current Field Kit
+configurations compile unchanged, and consent planning accepts the live Metal
+facts. No new model run was part of this integration.
 
 The 22 September native check used the frozen `qwen-machine-study@2` lock and
 cached model on Apple M5 / 32 GiB. Preparation replay and rendering agreed; one
@@ -175,7 +183,9 @@ changes leave execution identity and measured facts intact.
 The [current Field Kit study](../../v3/field-kit/docs/experiments/qwen-machine-study.md#context-tests)
 already checks actual input, correctness, continuation, Q8/Q4 KV and resource
 limits. Its largest target is 131,072 tokens; passing that point establishes a
-lower bound, not the machine's maximum. First dispatched results remain pending.
+lower bound, not the machine's maximum. The first returned revision 2 report
+passed review; its baseline completed and tuning stopped before inference on
+the now-corrected receipt invalidation. See the [Field Kit plan](../../v3/FIELD-KIT-PLAN.md).
 Workshop must review observations before they become maintained catalog facts;
 the existing 102,400-token M5 observation reserves only 512 output tokens and
 does not establish that window with the candidate's 4,096-token allowance.
@@ -296,8 +306,9 @@ eviction or restart ends it after first use. Persistent helper availability
 requires an explicit managed-lifecycle design; do not relax historical Field
 Kit supervision as an incidental wizard change.
 
-The normal Field Kit bootstrap is delivered. Pending revision 1 results are
-independent of this catalog work. Preserve their original package, producer,
+The published Field Kit bootstrap remains on alpha.9; local revision 3 requires
+the integrated development host until a compatible signed release ships.
+Historical study results are independent of this catalog work. Preserve their original package, producer,
 Python, Temper and session identities; the new client must not resume or
 silently replay them. The [Field Kit plan](../../v3/FIELD-KIT-PLAN.md#next-delivery)
 owns the remaining study work.

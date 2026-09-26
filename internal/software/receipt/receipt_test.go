@@ -13,6 +13,49 @@ import (
 
 const receiptRoot = "/tmp/temper-receipt-test"
 
+func TestReceiptReuseDependsOnSoftwareRatherThanExperimentDefinition(t *testing.T) {
+	desired := receiptLock(t)
+	plan, observed := receiptPlan(t, desired)
+	installed, err := receipt.Build(desired, plan, observed, time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	desired.Provenance.Experiment.DefinitionSHA256 = strings.Repeat("c", 64)
+	if err := installed.ValidateAgainst(desired, plan.Installation); err != nil {
+		t.Fatalf("unchanged software rejected after an experiment change: %v", err)
+	}
+	desired.Provenance = softwarelock.Provenance{Execution: &softwarelock.ExecutionIdentity{Schema: "temper-execution-lock/v2", Profile: "another-profile", SHA256: strings.Repeat("e", 64)}}
+	selection := desired.Selections["tool"]
+	selection.Provenance = softwarelock.ProvenanceExecution
+	desired.Selections["tool"] = selection
+	if err := installed.ValidateAgainst(desired, plan.Installation); err != nil {
+		t.Fatalf("unchanged software rejected from another source: %v", err)
+	}
+	for _, change := range []struct {
+		name  string
+		apply func(*softwarelock.Document)
+	}{
+		{"version", func(d *softwarelock.Document) {
+			u := d.Units["uv:probe:tool"]
+			u.Version = "2.0.0"
+			d.Units["uv:probe:tool"] = u
+		}},
+		{"artifact bytes", func(d *softwarelock.Document) {
+			u := d.Units["uv:probe:tool"]
+			u.Artifacts[0].SHA256 = strings.Repeat("d", 64)
+		}},
+		{"target", func(d *softwarelock.Document) { d.Target.DistributionVersion = "26.0" }},
+	} {
+		t.Run(change.name, func(t *testing.T) {
+			changed := receiptLock(t)
+			change.apply(&changed)
+			if err := installed.ValidateAgainst(changed, plan.Installation); err == nil {
+				t.Fatal("changed installed software was accepted")
+			}
+		})
+	}
+}
+
 func TestBuildRoundTripsCanonicalObservedHistory(t *testing.T) {
 	desired := receiptLock(t)
 	plan, observed := receiptPlan(t, desired)
