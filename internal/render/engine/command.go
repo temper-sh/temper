@@ -42,6 +42,21 @@ func portWord() commandWord {
 }
 
 func commandFromLaunch(spec launchSpec, runtime Runtime) (Command, error) {
+	if runtime.Requirement.Package == RapidMLX || runtime.Requirement.Package == VLLMMetal {
+		runtime.Requirement.Role = "engine"
+		if runtime.Requirement.Package == VLLMMetal {
+			runtime.Requirement.Role = "frontend"
+		}
+		for _, group := range spec.argumentGroups {
+			for _, word := range group {
+				value := word.value
+				if word.kind == portWordKind {
+					value = "${PORT}"
+				}
+				runtime.Requirement.Arguments = append(runtime.Requirement.Arguments, value)
+			}
+		}
+	}
 	executable, err := renderCommandWord(spec.executable)
 	if err != nil {
 		return Command{}, fmt.Errorf("render executable: %w", err)

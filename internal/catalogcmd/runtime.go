@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 
+	"github.com/temper-sh/temper/internal/artifactset"
 	"github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/datadir"
 	"github.com/temper-sh/temper/internal/machine"
@@ -32,7 +33,7 @@ func Runtime(ctx context.Context, args []string, stdout, stderr io.Writer, dispa
 	}
 	operation := args[0]
 	switch operation {
-	case "inspect", "prepare", "render", "serve", "remove":
+	case "inspect", "prepare", "render", "serve", "remove", "paths":
 	default:
 		return failed(stderr, fmt.Errorf("unknown execution operation %q", operation))
 	}
@@ -160,6 +161,30 @@ func Runtime(ctx context.Context, args []string, stdout, stderr io.Writer, dispa
 	manifest := filepath.Join(temporary, "manifest.yaml")
 	softwareArgs := []string{"--root", resolved, "--installation", *installation, "--lock", softwareLock}
 	modelArgs := []string{"--root", resolved, "--manifest", manifest, "--lock", manifestLock}
+	if operation == "paths" {
+		models, interpreters := map[string]string{}, map[string]string{}
+		for id, layout := range p.Manifest.Layouts {
+			set, err := artifactset.New(resolved, id, layout, p.Artifacts.Entries[id], p.Manifest.Patches)
+			if err != nil {
+				return failed(stderr, err)
+			}
+			if err := set.Verify(); err != nil {
+				return failed(stderr, err)
+			}
+			models[id] = set.ModelPath()
+		}
+		for id, selection := range p.Software.Selections {
+			if selection.Adapter != "uv" {
+				continue
+			}
+			executable, err := probecmd.InstalledExecutable(resolved, *installation, softwareLock, id, "bin/python3")
+			if err != nil {
+				return failed(stderr, err)
+			}
+			interpreters[id] = executable
+		}
+		return encode(stdout, stderr, map[string]any{"schema": "temper-execution-paths/v1", "execution": identity, "models": models, "python": interpreters})
+	}
 	if operation == "remove" {
 		return dispatch(ctx, append([]string{"software", "remove"}, softwareArgs...), stdout, stderr)
 	}

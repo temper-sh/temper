@@ -559,7 +559,7 @@ func usage(writer io.Writer) {
 	fmt.Fprintln(writer, "  temper catalog compile (--catalog FILE | --root ROOT) --selection FILE --target darwin/arm64 --out FILE [--software recorded|latest|tested] [--dry-run]")
 	fmt.Fprintln(writer, "  temper execution export --lock FILE --out DIRECTORY [--dry-run]")
 	fmt.Fprintln(writer, "  temper execution inspect --lock FILE")
-	fmt.Fprintln(writer, "  temper execution prepare|render|remove --lock FILE --root PATH --installation ID [--dry-run]")
+	fmt.Fprintln(writer, "  temper execution prepare|render|paths|remove --lock FILE --root PATH --installation ID [--dry-run]")
 	fmt.Fprintln(writer, "  temper execution serve --lock FILE --root PATH --installation ID --generation SHA256 --status-file FILE [--listen 127.0.0.1:PORT] [--dry-run]")
 	fmt.Fprintln(writer, "  temper version")
 	fmt.Fprintln(writer, "  temper help")

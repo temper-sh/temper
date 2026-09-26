@@ -22,6 +22,15 @@ func rapidMLXCommand(options rapidMLXOptions) (Command, error) {
 	} else {
 		groups = append(groups, []commandWord{knownWord("--disable-prefix-cache")})
 	}
+	if options.toolCallParser != "" {
+		groups = append(groups, []commandWord{knownWord("--enable-auto-tool-choice"), knownWord("--tool-call-parser"), dataWord(options.toolCallParser)})
+	}
+	if options.prefillStepSize > 0 {
+		groups = append(groups, []commandWord{knownWord("--prefill-step-size"), knownWord(strconv.Itoa(options.prefillStepSize))})
+	}
+	if options.requestTimeoutSeconds > 0 {
+		groups = append(groups, []commandWord{knownWord("--timeout"), knownWord(strconv.Itoa(options.requestTimeoutSeconds))})
+	}
 	if options.cacheMemoryMiB != nil {
 		groups = append(groups, []commandWord{knownWord("--cache-memory-mb"), knownWord(strconv.Itoa(*options.cacheMemoryMiB))})
 	}
@@ -51,7 +60,10 @@ func rapidMLXCommand(options rapidMLXOptions) (Command, error) {
 	}, Runtime{
 		Requirement: RuntimeRequirement{Package: RapidMLX, RelativeExecutable: "bin/rapid-mlx"},
 		Environment: offlineEnvironment(
+			EnvironmentAssignment{Name: "PYTHONDONTWRITEBYTECODE", Value: "1"},
+			EnvironmentAssignment{Name: "PYTHONNOUSERSITE", Value: "1"},
 			EnvironmentAssignment{Name: "RAPID_MLX_TELEMETRY", Value: "0"},
+			EnvironmentAssignment{Name: "RAPID_MLX_PREFIX_CACHE_AUTOLOAD", Value: "0"},
 		),
 		CheckEndpoint: "/health/ready",
 		ContextWindow: options.contextWindow,

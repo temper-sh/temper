@@ -89,7 +89,7 @@ func ContextExecutionSHA256(d Document, layoutID, template string, window int) (
 	if window <= l.RequestDefaults.MaxOutputTokens || window > l.ContextLimit() {
 		return "", errors.New("context window is outside the layout's bounds")
 	}
-	if d.Schema == Schema && (d.Engines[l.Engine].Supply.Release == nil || d.Runtime.Router.Release == nil) {
+	if d.Schema == Schema && (d.Engines[l.Engine].Supply.Release == nil && d.Engines[l.Engine].Supply.Python == nil || d.Runtime.Router.Release == nil) {
 		return "", errors.New("context evidence requires resolved software")
 	}
 	if template != "" {

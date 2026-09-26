@@ -22,9 +22,9 @@ promotion, resolver and bootstrap proposals are no longer an active backlog.
 | Guided setup | `temper init` provides modes-first Bubble Tea screens, explicit per-model templates and contexts, software choice, combined review, atomic save and optional preparation. `~/.temper` is the default; exact saved locks support offline resume. [The setup contract](contracts/init.md) owns the implemented scope. |
 | Software selection | Source records are separate from resolved releases. `catalog compile --software recorded\|latest\|tested` supports the current llama.cpp/llama-swap macOS ARM64 sources. Recorded inputs are the offline default; fallback is explicit. |
 | Installation | Exact isolated release/Python installation, receipts, version checks and recovery remain. Receipt reuse now compares installed software facts independently of execution provenance. Context and other runtime changes reuse unchanged software for llama.cpp and Splash. System-managed software is always retained. |
-| Field Kit host | `execution inspect/prepare/render/serve/remove` and supervised probes are implemented. The [runtime contract](contracts/execution-runtime.md) owns process identities, listener checks and final shutdown proof. |
+| Field Kit host | `execution inspect/prepare/render/paths/serve/remove` and supervised probes are implemented. The [runtime contract](contracts/execution-runtime.md) owns process identities, listener checks and final shutdown proof. |
 | Current router compatibility | The working tree recognizes llama-swap v257's narrowly scoped macOS inspection helpers using kernel executable/argv and router ancestry. Engine lifetime remains fixed for measurements; unknown children still refuse ownership. Full tests, race, vet and Linux compilation pass. Native catalog attempts are retained in [Labs](../../v3/labs/workstreams/model-runtime-optimization/method/catalog-refresh-2026-09-24.md). |
-| Source and build | Catalog delivery `a9b4a7f` is pushed and tagged alpha.10. Guided setup, native Metal detection and Splash are committed in `3ba7813`. The software receipt simplification is integrated in the working tree and `build/temper` is rebuilt; these changes await release. |
+| Source and build | Catalog delivery `a9b4a7f` is pushed and tagged alpha.10. Guided setup, native Metal detection and Splash are committed in `3ba7813`. The software receipt simplification is committed in `98b99ce`; the Qwen study preparation adds exact Python closures and probe identities. These changes await release. |
 | Public binary | Signed/notarized [0.1.0-alpha.10](https://github.com/temper-sh/temper/releases/tag/v0.1.0-alpha.10) adds catalog commands. Its downloaded checksum, signing identity, notarization and live-catalog compilation pass. Field Kit `01dd867` keeps its verified alpha.9 host; alpha.7 remains the dispatched revision 1 host. |
 | Catalog distribution | The [stable channel](https://temper-sh.github.io/temper/catalog/channels/stable/channel.yaml) publishes signed sequence 2 with one Qwen profile. Explicit update, inspection, selection, compilation and offline rollback are delivered. [The catalog guide](CATALOG.md) owns use. |
 | Catalog candidate | [The authoring catalog](../catalog/README.md) offers Qwen3.8, Qwen3.5 and Gemma E2B/E4B as main models, plus Qwen3.5 as an on-demand utility. It records b11157/v257 and authors 40,960 tokens for Qwen3.8 after discovery, fresh confirmation and a full-output resource check on M5/32 GiB. Small-model context and focused task observations retain b11149; they do not qualify all profiles on b11157. Optional Sharp compositions and real 8/16 GiB fit remain unmeasured. It is not published. |
@@ -360,10 +360,18 @@ unchanged. Failed attempts also ended with proved owned shutdown.
 
 ### Additional engine closures
 
-Rapid-MLX, MLX-VLM and vLLM-Metal remain experimental. Add a closure when a named
-consumer needs it, including exact Python/dependency material, typed launch
-controls, parser acceptance, readiness and actual loaded/effective-runtime
-observation. A reachable port alone is insufficient.
+The Qwen Field Kit revision 4 is the named consumer for Rapid MLX 0.15.2,
+vLLM Metal 0.30.0 / vLLM 0.30.0+cpu, and an independent coding evaluator.
+`catalog/experiments/qwen-study.json` freezes eight compositions. Exact Python
+closures compile/render offline; both engine environments installed, passed pip
+checks and accepted their CLI options on the development Mac. The evaluator
+reproduced retained controls. The probe now binds the Python console process,
+vLLM worker and tracker; Field Kit owns the two RAM routes and stop thresholds.
+
+No weight download or model inference qualified these new routes. Native model
+loading, readiness, filled context and completed-work performance on 36 GiB and
+48 GiB+ machines remain pending. MLX-VLM and other topologies still need a named
+consumer and exact closure; a reachable port alone is insufficient.
 
 Reuse unchanged runtime evidence. Changed closures require an authorized native
 smoke before support claims. Generic CUDA/Linux vLLM needs an appropriate device;

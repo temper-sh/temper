@@ -99,6 +99,9 @@ type LlamaTuning struct {
 }
 
 type RapidMLXTuning struct {
+	ToolCallParser        string  `yaml:"tool_call_parser,omitempty"`
+	PrefillStepSize       int     `yaml:"prefill_step_size,omitempty"`
+	RequestTimeoutSeconds int     `yaml:"request_timeout_seconds,omitempty"`
 	MaxNumSeqs            int     `yaml:"max_num_seqs"`
 	MaxConcurrentRequests int     `yaml:"max_concurrent_requests"`
 	PrefillBatchSize      int     `yaml:"prefill_batch_size"`
@@ -122,6 +125,11 @@ type MLXVLMTuning struct {
 }
 
 type VLLMMetalTuning struct {
+	LanguageModelOnly    bool    `yaml:"language_model_only,omitempty"`
+	ChunkedPrefill       bool    `yaml:"chunked_prefill,omitempty"`
+	BlockSize            int     `yaml:"block_size,omitempty"`
+	ToolCallParser       string  `yaml:"tool_call_parser,omitempty"`
+	ReasoningParser      string  `yaml:"reasoning_parser,omitempty"`
 	MaxNumSeqs           int     `yaml:"max_num_seqs"`
 	MaxNumBatchedTokens  int     `yaml:"max_num_batched_tokens"`
 	GPUMemoryUtilization float64 `yaml:"gpu_memory_utilization"`

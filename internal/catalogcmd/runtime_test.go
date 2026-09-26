@@ -256,6 +256,7 @@ func TestExecutionInspectionAndDryRunDoNotWriteOrInvokeEffects(t *testing.T) {
 	invoke(t, compileArgs(lock)...)
 	for _, args := range [][]string{
 		{"inspect", "--lock", lock},
+		{"paths", "--lock", lock, "--root", filepath.Join(parent, "installation"), "--installation", "fixture", "--dry-run"},
 		{"prepare", "--lock", lock, "--root", filepath.Join(parent, "installation"), "--installation", "fixture", "--dry-run"},
 	} {
 		var out, diagnostics bytes.Buffer

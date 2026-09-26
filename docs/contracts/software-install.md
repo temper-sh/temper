@@ -10,7 +10,7 @@ orchestration, and recovery path are executable as well. The public verbs now
 detect the exact macOS host target and compose two concrete isolated members:
 `upstream-release` for reviewed release archives (including Splash's bundled
 interpreter) and `uv` for exact managed-
-Python/wheel closures. Locks naming another installation adapter refuse
+Python/package closures. Locks naming another installation adapter refuse
 without fallback. Their hermetic scratch gates cover dry-run purity, exact
 check, failed replacement, drift repair, and clean repeated install/remove. The canonical
 Temper-to-Field-Kit material identity binding described below is executable as
@@ -98,24 +98,37 @@ The compiled `uv` adapter uses the parallel isolated shape:
   current -> generations/<immutable generation>
   generations/<immutable generation>/
     environment/                     # receipt location and runnable Python environment
-    .temper/artifacts/               # exact runtime archive and validly named wheels
+    .temper/artifacts/               # exact runtime, wheels and pinned source archives
     .temper/requirements.txt         # exact versions plus every allowed wheel hash
     .temper/unit.json                # canonical closure/artifact/tree marker
 ```
 
-It accepts one uv-resolved wheel-only scope with one exact managed CPython
-runtime. The same internal archive boundary used by `upstream-release` owns
-bounded inspection, safe extraction, and canonical tree inventory; the
-adapters retain separate receipts and publication lifecycles. Runtime
-extraction rejects traversal, special files, privileged modes, duplicate paths,
-and unsafe links. Installation invokes only
-pip bundled in that locked runtime against the local retained wheelhouse with
-hashes required, dependency resolution and indexes disabled, and no ambient
-Python/package-manager settings. The environment is built at its final
-unpublished path so console-script interpreter paths remain valid, then the
-same atomic relative-pointer commit publishes it. Inspection re-hashes the
-retained artifacts and every installed file; a failed repair leaves the old
-pointer selected. Multiple uv scopes remain independent.
+It accepts one resolved scope with one exact managed CPython runtime. Catalog
+`python` supplies carry the runtime, root package and complete package set;
+`runtime.python_environments` adds an independent auxiliary scope such as a
+coding evaluator. Locks contain exact versions, locations and artifact hashes.
+There is no installation-time dependency resolution.
+
+The shared archive boundary owns bounded inspection, safe extraction and tree
+inventory. It rejects traversal, special files, privileged modes, duplicate
+paths and unsafe links. An internal CPython executable symlink must resolve
+inside its environment. Wheel installation uses that runtime's pip, local
+artifacts, required hashes, no dependencies and no package index.
+
+The Qwen consumer also needs a pinned MLX-LM Git commit. A source package must
+use a `codeload.github.com` commit tarball, exact SHA-256, size and matching
+revision/root. Extraction is bounded to 64 MiB compressed, 256 MiB expanded and
+10,000 entries. Git's informational PAX commit comment is accepted; path/size
+metadata overrides remain refused. Explicit setuptools and wheel packages must
+be in the closure. The source builds in private staging with no build isolation,
+index or dependency resolution, then `pip check` verifies the resulting closure.
+Build staging is removed before inventory and publication. Package build code is
+part of the selected software, not an isolated candidate-code sandbox.
+
+The environment is built at its final unpublished path so console-script
+interpreter paths remain valid. An atomic relative pointer publishes it only
+after validation. Inspection re-hashes retained artifacts and installed files;
+a failed repair leaves the old pointer selected. Scopes remain independent.
 
 Each lock `requires` zero or more base software-lock semantic digests. The
 caller supplies exactly one canonical receipt for every required digest with

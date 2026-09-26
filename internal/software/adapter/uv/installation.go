@@ -48,10 +48,11 @@ type EnvironmentInstaller interface {
 }
 
 type EnvironmentInstallRequest struct {
-	PythonPath       string
-	EnvironmentPath  string
-	WheelhousePath   string
-	RequirementsPath string
+	PythonPath        string
+	EnvironmentPath   string
+	WheelhousePath    string
+	RequirementsPath  string
+	SourceDirectories []string
 }
 
 // InstallationAdapter owns isolated publication, inspection, repair, and
@@ -255,15 +256,51 @@ func (a *InstallationAdapter) Install(ctx context.Context, request adapter.Insta
 	if err := writeUVFile(requirementsPath, requirementsData, 0o644); err != nil {
 		return err
 	}
-	pythonPath := filepath.Join(environmentPath, "bin", "python3")
-	if !regularUVExecutable(pythonPath) {
+	resolvedEnvironment, err := filepath.EvalSymlinks(environmentPath)
+	if err != nil {
+		return err
+	}
+	resolvedPython, err := filepath.EvalSymlinks(filepath.Join(environmentPath, "bin", "python3"))
+	if err != nil || !strictlyBelowUV(resolvedEnvironment, resolvedPython) || !regularUVExecutable(resolvedPython) {
 		return errors.New("managed Python archive has no executable bin/python3")
+	}
+	pythonRelative, err := filepath.Rel(resolvedEnvironment, resolvedPython)
+	if err != nil {
+		return err
+	}
+	pythonPath := filepath.Join(environmentPath, pythonRelative)
+	var sourceDirectories []string
+	buildRoot := filepath.Join(generation, ".source-build")
+	for _, artifact := range group.artifacts {
+		if artifact.artifact.Format != "tar.gz" {
+			continue
+		}
+		if err := os.MkdirAll(buildRoot, 0o700); err != nil {
+			return err
+		}
+		source := filepath.Join(buildRoot, group.scope+"-"+filepath.Base(artifact.path))
+		spec := softwarearchive.TarGzSpec{Root: artifact.artifact.ArchiveRoot, MaxEntries: artifact.artifact.InstalledEntries, MaxUnpackedBytes: artifact.artifact.UnpackedSize, Label: "locked Python source"}
+		archivePath := filepath.Join(generation, artifact.path)
+		entries, err := softwarearchive.InspectTarGz(ctx, archivePath, spec)
+		if err != nil {
+			return err
+		}
+		if err := softwarearchive.ExtractTarGz(ctx, archivePath, source, spec, entries); err != nil {
+			return err
+		}
+		sourceDirectories = append(sourceDirectories, source)
 	}
 	if err := a.installer.Install(ctx, EnvironmentInstallRequest{
 		PythonPath: pythonPath, EnvironmentPath: environmentPath,
 		WheelhousePath: wheelhousePath, RequirementsPath: requirementsPath,
+		SourceDirectories: sourceDirectories,
 	}); err != nil {
 		return fmt.Errorf("install exact wheel closure: %w", err)
+	}
+	if len(sourceDirectories) > 0 {
+		if err := os.RemoveAll(buildRoot); err != nil {
+			return err
+		}
 	}
 	entries, err := scanEnvironment(ctx, environmentPath)
 	if err != nil {
@@ -433,13 +470,20 @@ func validateLockedGroup(target software.Target, installation installplan.Instal
 	}
 
 	seenArtifactPaths := map[string]bool{}
+	hasSource, hasSetuptools, hasWheel := false, false, false
 	for _, marker := range group.units {
+		hasSetuptools = hasSetuptools || marker.NativeName == "setuptools"
+		hasWheel = hasWheel || marker.NativeName == "wheel"
 		for _, artifact := range marker.Artifacts {
 			runtime := marker.ID == group.runtimeID
 			name := "managed-python.tar.gz"
 			if !runtime {
 				parsed, _ := url.Parse(artifact.Locator)
 				name, _ = url.PathUnescape(path.Base(parsed.Path))
+				if artifact.Format == "tar.gz" {
+					hasSource = true
+					name = marker.NativeName + "-" + marker.Version + ".tar.gz"
+				}
 			}
 			relative := filepath.ToSlash(filepath.Join(".temper", "artifacts", name))
 			if seenArtifactPaths[relative] {
@@ -448,6 +492,9 @@ func validateLockedGroup(target software.Target, installation installplan.Instal
 			seenArtifactPaths[relative] = true
 			group.artifacts = append(group.artifacts, lockedArtifact{unitID: marker.ID, artifact: artifact, path: relative, runtime: runtime})
 		}
+	}
+	if hasSource && (!hasSetuptools || !hasWheel) {
+		return lockedGroup{}, errors.New("locked Python source requires explicit setuptools and wheel build dependencies")
 	}
 	return group, nil
 }
@@ -474,8 +521,19 @@ func validateRuntimeUnit(id string, unit softwarelock.Unit) error {
 
 func validateLockedWheel(unit softwarelock.Unit, runtimeVersion string, artifact software.Artifact) error {
 	parsed, err := url.Parse(artifact.Locator)
-	if err != nil || parsed.Scheme != "https" || parsed.Host != "files.pythonhosted.org" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.RawPath != "" {
-		return errors.New("wheel locator must be credential-free files.pythonhosted.org HTTPS")
+	if err != nil || parsed.Scheme != "https" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return errors.New("Python artifact requires credential-free HTTPS")
+	}
+	if artifact.Format == "tar.gz" {
+		parts := strings.Split(strings.Trim(parsed.Path, "/"), "/")
+		if parsed.Host != "codeload.github.com" || len(parts) != 4 || parts[2] != "tar.gz" || !sourceCommit.MatchString(parts[3]) || unit.Revision != parts[3] || artifact.ArchiveRoot != parts[1]+"-"+parts[3] || artifact.Size <= 0 || artifact.Size > 64<<20 || artifact.UnpackedSize <= 0 || artifact.UnpackedSize > 256<<20 || artifact.InstalledEntries <= 0 || artifact.InstalledEntries > 10000 || !sha256Pattern.MatchString(artifact.SHA256) {
+			return errors.New("Python source requires a bounded, hashed GitHub commit archive")
+		}
+		return nil
+	}
+	githubWheel := parsed.Host == "github.com" && (strings.HasPrefix(parsed.Path, "/vllm-project/vllm/releases/download/") || strings.HasPrefix(parsed.Path, "/vllm-project/vllm-metal/releases/download/"))
+	if parsed.Host != "files.pythonhosted.org" && !githubWheel {
+		return errors.New("wheel locator must use PyPI or the vLLM upstream releases")
 	}
 	filename, err := url.PathUnescape(path.Base(parsed.Path))
 	if err != nil {
@@ -626,6 +684,9 @@ func writeHashedUVArtifact(ctx context.Context, destination string, source io.Re
 func lockedRequirements(group lockedGroup) []byte {
 	var output strings.Builder
 	for _, unit := range group.packages {
+		if len(unit.Artifacts) == 1 && unit.Artifacts[0].Format == "tar.gz" {
+			continue
+		}
 		fmt.Fprintf(&output, "%s==%s", unit.NativeName, unit.Version)
 		for _, artifact := range unit.Artifacts {
 			fmt.Fprintf(&output, " --hash=sha256:%s", artifact.SHA256)

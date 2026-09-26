@@ -443,6 +443,46 @@ func TestSplashBindsBothExecutablePathsArgumentsAndParentage(t *testing.T) {
 	}
 }
 
+func TestVLLMPythonWorkersBindInterpreterCommandParentAndRole(t *testing.T) {
+	inv := Invocation{Path: "/owned/router", EnginePath: "/owned/python3.12", FrontendPath: "/owned/python3.12",
+		FrontendArguments: []string{"/owned/bin/vllm", "serve", "/model"}, PythonMultiprocessing: true}
+	router := processRow{100, 1, 100, "Tue Sep 22 12:00:00 2026", inv.Path, "S", ""}
+	frontend := processRow{101, 100, 101, router.started, inv.FrontendPath, "S", inv.FrontendPath + "\x00" + strings.Join(inv.FrontendArguments, "\x00")}
+	worker := processRow{102, 101, 101, router.started, inv.EnginePath, "S", inv.EnginePath + "\x00-c\x00from multiprocessing.spawn import spawn_main; spawn_main(tracker_fd=8, pipe_handle=9)\x00--multiprocessing-fork"}
+	tracker := processRow{103, 101, 101, router.started, inv.EnginePath, "S", inv.EnginePath + "\x00-c\x00from multiprocessing.resource_tracker import main;main(8)"}
+	known := map[int]processRow{}
+	if _, roles, err := members([]processRow{router, frontend, worker, tracker}, 100, inv, known); err != nil || len(roles) != 4 {
+		t.Fatal(roles, err)
+	}
+	worker.arguments = "VLLM::EngineCore\x00\x00"
+	if _, _, err := members([]processRow{router, frontend, worker, tracker}, 100, inv, known); err != nil {
+		t.Fatal(err)
+	}
+	worker.ppid = 1
+	if _, _, err := members([]processRow{router, frontend, worker, tracker}, 100, inv, known); err != nil {
+		t.Fatal(err)
+	}
+	for _, change := range []func(*processRow){
+		func(r *processRow) { r.executable = "/unselected/python3.12" },
+		func(r *processRow) { r.arguments = inv.EnginePath + "\x00-c\x00arbitrary()" },
+		func(r *processRow) { r.ppid = 100 },
+		func(r *processRow) { r.pgid = 104 },
+	} {
+		bad := worker
+		bad.ppid = 101
+		change(&bad)
+		if _, _, err := members([]processRow{router, frontend, bad, tracker}, 100, inv, map[int]processRow{}); err == nil {
+			t.Fatal("unbound worker was admitted")
+		}
+	}
+	restarted := worker
+	restarted.pid = 104
+	restarted.ppid = 101
+	if _, _, err := members([]processRow{router, frontend, restarted, tracker}, 100, inv, known); err == nil {
+		t.Fatal("worker restart was admitted")
+	}
+}
+
 func TestSupervisedForegroundOwnsFrontendAndNativeChild(t *testing.T) {
 	testSupervisedForeground(t, true, true)
 }

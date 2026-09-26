@@ -50,7 +50,8 @@ type Document struct {
 }
 
 type Runtime struct {
-	Router Supply `yaml:"router" json:"router"`
+	Router             Supply   `yaml:"router" json:"router"`
+	PythonEnvironments []Supply `yaml:"python_environments,omitempty" json:"python_environments,omitempty"`
 }
 
 type File struct {
@@ -82,6 +83,7 @@ type Patch struct {
 // Supply separates an upstream source from its resolved release. Complete
 // archives include the executable and its libraries. Installer rows are derived.
 type Supply struct {
+	Python   *PythonSupply                 `yaml:"python,omitempty" json:"python,omitempty"`
 	Package  string                        `yaml:"package" json:"package"`
 	Target   software.Target               `yaml:"target" json:"target"`
 	Source   *upstreamrelease.GitHubSource `yaml:"source,omitempty" json:"source,omitempty"`
@@ -246,6 +248,16 @@ func (d Document) Validate() error {
 	if err := d.Runtime.Router.validate(d.Date, d.Schema == legacySchema); err != nil {
 		return fmt.Errorf("router: %w", err)
 	}
+	seenPython := map[string]bool{}
+	for _, supply := range d.Runtime.PythonEnvironments {
+		if d.Schema != Schema || supply.Python == nil || seenPython[supply.Package] {
+			return errors.New("runtime Python environments require distinct exact v2 supplies")
+		}
+		if err := supply.validate(d.Date, false); err != nil {
+			return fmt.Errorf("runtime Python environment: %w", err)
+		}
+		seenPython[supply.Package] = true
+	}
 	for id, a := range d.Artifacts {
 		if err := a.validateDescription(); err != nil {
 			return fmt.Errorf("artifact %q: %w", id, err)
@@ -258,6 +270,18 @@ func (d Document) Validate() error {
 		}
 		if a.Format == "safetensors" && len(a.Files) == 2 && a.Files[0].Path == "config.json" && a.Files[1].Path == "model.safetensors" {
 			continue
+		}
+		if a.Format == "mlx-safetensors" || a.Format == "safetensors" {
+			config, weights, tokenizer := false, false, false
+			for _, f := range a.Files {
+				config = config || f.Path == "config.json"
+				weights = weights || strings.HasSuffix(f.Path, ".safetensors")
+				tokenizer = tokenizer || f.Path == "tokenizer.json"
+			}
+			if config && weights && tokenizer {
+				continue
+			}
+			return fmt.Errorf("artifact %q requires config, tokenizer and safetensors weights", id)
 		}
 		if a.Format != "gguf" || len(a.Files) != 1 || !strings.HasSuffix(a.Files[0].Path, ".gguf") {
 			return fmt.Errorf("artifact %q: this executable slice requires one complete GGUF", id)
@@ -282,6 +306,9 @@ func (d Document) Validate() error {
 	}
 	for id, e := range d.Engines {
 		supported := e.Family == engine.LlamaServer && e.Adapter == "llama-server/v2" && e.Supply.Package == "llama-cpp" || e.Family == engine.Splash && e.Adapter == "splash/v1" && e.Supply.Package == "splash" && d.Schema == Schema
+		supported = supported || d.Schema == Schema && e.Supply.Python != nil &&
+			(e.Family == engine.RapidMLX && e.Adapter == "rapid-mlx/v1" && e.Supply.Package == "rapid-mlx" ||
+				e.Family == engine.VLLMMetal && e.Adapter == "vllm-metal/v1" && e.Supply.Package == "vllm-metal")
 		if !idPattern.MatchString(id) || !supported {
 			return fmt.Errorf("engine %q requires a supported engine adapter and a complete release closure", id)
 		}
@@ -431,7 +458,7 @@ func (s Supply) validate(date string, legacy bool) error {
 	if !legacy {
 		return s.validateSource()
 	}
-	if s.Source != nil || s.Release != nil || s.Versions != nil {
+	if s.Source != nil || s.Release != nil || s.Versions != nil || s.Python != nil {
 		return errors.New("v1 supply cannot carry v2 source fields")
 	}
 	if !idPattern.MatchString(s.Package) || s.Selection == nil || s.Selection.Provenance != softwarelock.ProvenanceExperiment || s.Selection.Method != "release-artifact" || s.Selection.Adapter != "upstream-release" {
@@ -470,6 +497,20 @@ func (l Layout) request(id string, a Artifact, modelPath, templatePath string) e
 		r.Engine, r.LlamaServer, r.NGL = engine.Splash, nil, nil
 		r.KVCache = c.Splash.KVCache
 		r.Splash = &engine.SplashTuning{SplashConfig: c.Splash.SplashConfig, ModelID: a.Repo, AssemblyPath: "/prepared", StatePath: "/state"}
+	} else if c.Python != nil {
+		r.LlamaServer, r.NGL, r.Sampling = nil, nil, nil
+		r.KVCache = ""
+		if t := c.Python.RapidMLX; t != nil {
+			r.Engine = engine.RapidMLX
+			r.RapidMLX = &engine.RapidMLXTuning{MaxNumSeqs: t.MaxNumSeqs, MaxConcurrentRequests: t.MaxConcurrentRequests, PrefillBatchSize: t.PrefillBatchSize, CompletionBatchSize: t.CompletionBatchSize, GPUMemoryUtilization: t.GPUMemoryUtilization, PrefixCache: t.PrefixCache, CacheMemoryMiB: t.CacheMemoryMiB, KVCacheDType: t.KVCacheDType, PFlash: t.PFlash, ReasoningParser: t.ReasoningParser}
+			r.RapidMLX.ToolCallParser, r.RapidMLX.PrefillStepSize, r.RapidMLX.RequestTimeoutSeconds = t.ToolCallParser, t.PrefillStepSize, t.RequestTimeoutSeconds
+		}
+		if t := c.Python.VLLMMetal; t != nil {
+			r.Engine = engine.VLLMMetal
+			r.VLLMMetal = &engine.VLLMMetalTuning{MaxNumSeqs: t.MaxNumSeqs, MaxNumBatchedTokens: t.MaxNumBatchedTokens, GPUMemoryUtilization: t.GPUMemoryUtilization, KVCacheDType: t.KVCacheDType, PrefixCache: t.PrefixCache}
+			r.VLLMMetal.ToolCallParser, r.VLLMMetal.ReasoningParser = t.ToolCallParser, t.ReasoningParser
+			r.VLLMMetal.LanguageModelOnly, r.VLLMMetal.ChunkedPrefill, r.VLLMMetal.BlockSize = t.LanguageModelOnly, t.ChunkedPrefill, t.BlockSize
+		}
 	}
 	return r
 }

@@ -215,6 +215,12 @@ func deriveDigests(d Document, s Selection, target software.Target) Digests {
 		Router  Supply
 		Profile Profile
 	}{"profile-execution/v1", target, router, p})
+	if len(d.Runtime.PythonEnvironments) > 0 {
+		digests.Profile = digest(struct {
+			Execution string
+			Python    []Supply
+		}{digests.Profile, d.Runtime.PythonEnvironments})
+	}
 	if d.Schema == Schema {
 		return Digests{Profile: digests.Profile}
 	}
@@ -323,6 +329,11 @@ func (l Lock) projections() (Projections, error) {
 	if err := addSupply(d.Runtime.Router); err != nil {
 		return Projections{}, err
 	}
+	for _, supply := range d.Runtime.PythonEnvironments {
+		if err := addSupply(supply); err != nil {
+			return Projections{}, err
+		}
+	}
 	for _, e := range d.Engines {
 		if err := addSupply(e.Supply); err != nil {
 			return Projections{}, err
@@ -338,6 +349,15 @@ func (l Lock) projections() (Projections, error) {
 			Speculation: &manifest.Speculation{Method: layout.Speculation.Method, MaxTokens: layout.Speculation.MaxDraftTokens}, Sampling: &layout.RequestDefaults.Sampling,
 			Llama: &manifest.LlamaTuning{KV: c.KVCache, Parallel: c.Parallel, FlashAttention: c.FlashAttention, Batch: c.BatchTokens, UBatch: c.MicrobatchTokens, ContextCheckpoints: &c.ContextCheckpoints, PromptCacheRAMMiB: &c.PromptCacheRAMMiB, Controls: &c.Controls}}
 		entry := lockfile.Entry{Repo: a.Repo, Revision: a.Revision, Resolved: d.Date, Files: []lockfile.File{{Name: a.Files[0].Path, SHA256: a.Files[0].SHA256}}}
+		m.Model.Files, entry.Files = []string{}, []lockfile.File{}
+		for _, f := range a.Files {
+			m.Model.Files = append(m.Model.Files, f.Path)
+			entry.Files = append(entry.Files, lockfile.File{Name: f.Path, SHA256: f.SHA256})
+		}
+		if c.Python != nil {
+			m.Llama, m.Sampling = nil, nil
+			m.RapidMLX, m.VLLMMetal = c.Python.RapidMLX, c.Python.VLLMMetal
+		}
 		if c.Splash != nil {
 			m.Llama = nil
 			m.Splash = &manifest.SplashTuning{SplashConfig: c.Splash.SplashConfig, SoftwareSHA256: d.Engines[layout.Engine].Supply.Release.Artifact.SHA256}
@@ -365,7 +385,7 @@ func (l Lock) projections() (Projections, error) {
 	for _, b := range profile.Bindings {
 		c := d.Layouts[b.Layout].EngineConfig
 		member := manifest.Member{Layout: b.Layout, TTL: &b.IdleTTLSeconds, Preload: b.Preload}
-		if c.Splash == nil {
+		if c.Kind == "llama-server/v2" {
 			member.NGL = &c.GPULayers
 		}
 		if b.Route == "default" {

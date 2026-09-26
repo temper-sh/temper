@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
@@ -242,7 +243,8 @@ func members(rows []processRow, group int, invocation Invocation, known map[int]
 			if !prior.exited() && prior.started == row.started && row.executable == "("+filepath.Base(prior.executable)+")" {
 				return nil, nil, fmt.Errorf("%w: PID %d", errCommandUnavailable, row.pid)
 			}
-			if prior.exited() || prior.started != row.started || (prior.executable != row.executable && !expectedExec) || !expectedExec && prior.arguments != row.arguments {
+			expectedTitle := invocation.PythonMultiprocessing && prior.executable == row.executable && pythonChildRole(prior.arguments) == "engine" && isEngineTitle(row.arguments)
+			if prior.exited() || prior.started != row.started || (prior.executable != row.executable && !expectedExec) || !expectedExec && !expectedTitle && prior.arguments != row.arguments {
 				return nil, nil, fmt.Errorf("owned process %d identity changed: start %q -> %q, executable %q -> %q, state %q -> %q", row.pid, prior.started, row.started, prior.executable, row.executable, prior.state, row.state)
 			}
 		}
@@ -250,11 +252,27 @@ func members(rows []processRow, group int, invocation Invocation, known map[int]
 		switch {
 		case row.pid == group && row.executable == invocation.Path:
 			role = "router"
-		case invocation.FrontendPath != "" && row.executable == invocation.FrontendPath:
+		case invocation.FrontendPath != "" && row.executable == invocation.FrontendPath && (!invocation.PythonMultiprocessing || exactArguments(row.arguments, invocation.FrontendArguments)):
 			if !exactArguments(row.arguments, invocation.FrontendArguments) {
 				return nil, nil, errors.New("Splash frontend command differs from rendered selection")
 			}
 			role = "frontend"
+		case invocation.PythonMultiprocessing && row.executable == invocation.EnginePath:
+			role = pythonChildRole(row.arguments)
+			if role == "" {
+				return nil, nil, errors.New("unselected Python worker command")
+			}
+			if !tracked {
+				parentOK := false
+				for _, parent := range rows {
+					if parent.pid == row.ppid && parent.executable == invocation.FrontendPath && exactArguments(parent.arguments, invocation.FrontendArguments) {
+						parentOK = true
+					}
+				}
+				if !parentOK {
+					return nil, nil, errors.New("Python worker is not owned by the selected frontend")
+				}
+			}
 		case invocation.EnginePath != "" && row.executable == invocation.EnginePath:
 			if invocation.EngineArguments != nil && !exactArguments(row.arguments, invocation.EngineArguments) {
 				return nil, nil, errors.New("Splash native command differs from rendered selection")
@@ -283,7 +301,14 @@ func members(rows []processRow, group int, invocation Invocation, known map[int]
 				return nil, nil, fmt.Errorf("multiple %s processes in owned group", role)
 			}
 			for _, prior := range known {
-				if prior.executable == row.executable && prior.pid != row.pid {
+				priorRole := role
+				if invocation.PythonMultiprocessing && prior.executable == invocation.EnginePath {
+					priorRole = pythonChildRole(prior.arguments)
+					if exactArguments(prior.arguments, invocation.FrontendArguments) {
+						priorRole = "frontend"
+					}
+				}
+				if prior.executable == row.executable && prior.pid != row.pid && priorRole == role {
 					return nil, nil, fmt.Errorf("%s process restarted", role)
 				}
 			}
@@ -301,6 +326,37 @@ func members(rows []processRow, group int, invocation Invocation, known map[int]
 
 func isLaunchShell(path string) bool {
 	return path == "/bin/sh" || path == "/bin/bash" || path == "sh" || path == "bash"
+}
+
+var pythonSpawn = regexp.MustCompile(`^from multiprocessing\.spawn import spawn_main; ?spawn_main\(tracker_fd=[0-9]+, pipe_handle=[0-9]+\)$`)
+var pythonTracker = regexp.MustCompile(`^from multiprocessing\.resource_tracker import main; ?main\([0-9]+\)$`)
+
+func isEngineTitle(arguments string) bool {
+	return strings.TrimRight(arguments, "\x00") == "VLLM::EngineCore"
+}
+
+// vLLM's single engine worker uses CPython spawn, then its fixed process title.
+// The interpreter, frontend parent, start time and group remain independently
+// bound. Arbitrary Python children and additional workers are refused.
+func pythonChildRole(arguments string) string {
+	if isEngineTitle(arguments) {
+		return "engine"
+	}
+	args := strings.Split(arguments, "\x00")
+	if len(args) < 3 {
+		return ""
+	}
+	args = args[1:]
+	for len(args) > 0 && (args[0] == "-B" || args[0] == "-s") {
+		args = args[1:]
+	}
+	if len(args) == 2 && args[0] == "-c" && pythonTracker.MatchString(args[1]) {
+		return "resource-tracker"
+	}
+	if len(args) == 3 && args[0] == "-c" && pythonSpawn.MatchString(args[1]) && args[2] == "--multiprocessing-fork" {
+		return "engine"
+	}
+	return ""
 }
 
 func containsRole(roles []ProcessIdentity, id string) bool {

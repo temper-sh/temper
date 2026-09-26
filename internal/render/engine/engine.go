@@ -84,6 +84,9 @@ type SamplingDefaults struct {
 
 // RapidMLXTuning is the typed Rapid-MLX-only tuning variant.
 type RapidMLXTuning struct {
+	ToolCallParser        string
+	PrefillStepSize       int
+	RequestTimeoutSeconds int
 	MaxNumSeqs            int
 	MaxConcurrentRequests int
 	PrefillBatchSize      int
@@ -109,6 +112,11 @@ type MLXVLMTuning struct {
 
 // VLLMMetalTuning is the typed vLLM-Metal-only tuning variant.
 type VLLMMetalTuning struct {
+	LanguageModelOnly    bool
+	ChunkedPrefill       bool
+	BlockSize            int
+	ToolCallParser       string
+	ReasoningParser      string
 	MaxNumSeqs           int
 	MaxNumBatchedTokens  int
 	GPUMemoryUtilization float64

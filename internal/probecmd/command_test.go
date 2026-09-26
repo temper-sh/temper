@@ -206,6 +206,10 @@ func TestPlanUsesReceiptedUVEngineFromItsExactEnvironment(t *testing.T) {
 	if err := os.WriteFile(engine, []byte("fixture"), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	python := filepath.Join(environment, "bin", "python3")
+	if err := os.WriteFile(python, []byte("fixture interpreter"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.Symlink(filepath.Join("generations", "fixture"), filepath.Join(scopeRoot, "current")); err != nil {
 		t.Fatal(err)
 	}
@@ -240,7 +244,7 @@ func TestPlanUsesReceiptedUVEngineFromItsExactEnvironment(t *testing.T) {
 		Schema: runtimeconfig.SchemaV1,
 		Requirements: []runtimeconfig.Requirement{
 			{Package: "llama-swap", RelativeExecutable: "llama-swap"},
-			{Package: "rapid-mlx", RelativeExecutable: "bin/rapid-mlx"},
+			{Package: "rapid-mlx", RelativeExecutable: "bin/rapid-mlx", Role: "engine", Arguments: []string{"--no-telemetry", "serve", "--port", "${PORT}"}},
 		},
 	})
 	if err != nil {
@@ -264,6 +268,13 @@ func TestPlanUsesReceiptedUVEngineFromItsExactEnvironment(t *testing.T) {
 	}
 	if got := invocation.Environment; len(got) != 1 || !strings.HasPrefix(got[0], "PATH="+filepath.Dir(resolvedEngine)+string(os.PathListSeparator)) {
 		t.Fatalf("environment = %q", got)
+	}
+	resolvedPython, err := filepath.EvalSymlinks(python)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if invocation.EnginePath != resolvedPython || strings.Join(invocation.EngineArguments, "|") != resolvedEngine+"|--no-telemetry|serve|--port|10001" {
+		t.Fatalf("Python process identity = %q %q", invocation.EnginePath, invocation.EngineArguments)
 	}
 }
 

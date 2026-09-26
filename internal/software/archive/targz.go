@@ -21,6 +21,16 @@ import (
 	"strings"
 )
 
+// gitArchiveComment admits Git's informational commit header. It cannot
+// override a file path, link, size or extraction permission.
+func gitArchiveComment(header *tar.Header) bool {
+	if header.Typeflag != tar.TypeXGlobalHeader || len(header.PAXRecords) != 1 || len(header.PAXRecords["comment"]) != 40 {
+		return false
+	}
+	_, err := hex.DecodeString(header.PAXRecords["comment"])
+	return err == nil
+}
+
 // TarGzSpec is the complete extraction policy for one archive. Exact values
 // are optional; maxima are always required so untrusted compressed input is
 // bounded even when upstream metadata does not publish exact expanded facts.
@@ -90,6 +100,9 @@ func InspectTarGzStream(ctx context.Context, input io.Reader, spec TarGzSpec) ([
 		}
 		if header.Mode < 0 || header.Mode&0o7000 != 0 {
 			return nil, fmt.Errorf("%s path %q has privileged mode bits", spec.label(), header.Name)
+		}
+		if gitArchiveComment(header) {
+			continue
 		}
 		relative, included, err := RelativePath(header.Name, spec.Root, header.Typeflag == tar.TypeDir)
 		if err != nil {
@@ -218,6 +231,9 @@ func ExtractTarGz(ctx context.Context, archivePath, destination string, spec Tar
 		}
 		if header.Mode < 0 || header.Mode&0o7000 != 0 {
 			return fmt.Errorf("%s path %q has privileged mode bits during extraction", spec.label(), header.Name)
+		}
+		if gitArchiveComment(header) {
+			continue
 		}
 		relative, included, err := RelativePath(header.Name, spec.Root, header.Typeflag == tar.TypeDir)
 		if err != nil {

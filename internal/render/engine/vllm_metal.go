@@ -6,6 +6,11 @@ import (
 )
 
 type vllmMetalOptions struct {
+	languageModelOnly    bool
+	chunkedPrefill       bool
+	blockSize            int
+	toolCallParser       string
+	reasoningParser      string
 	layoutID             string
 	modelPath            string
 	window               int
@@ -25,6 +30,8 @@ func buildVLLMMetal(request Request) (Command, error) {
 	}
 	tuning := *request.VLLMMetal
 	return vllmMetalCommand(vllmMetalOptions{
+		languageModelOnly: tuning.LanguageModelOnly, chunkedPrefill: tuning.ChunkedPrefill, blockSize: tuning.BlockSize,
+		toolCallParser: tuning.ToolCallParser, reasoningParser: tuning.ReasoningParser,
 		layoutID:             request.LayoutID,
 		modelPath:            request.ModelPath,
 		window:               request.Window,
@@ -44,6 +51,16 @@ func validateVLLMMetalRequest(request Request) error {
 		return err
 	}
 	tuning := *request.VLLMMetal
+	if tuning.BlockSize != 0 && tuning.BlockSize != 16 {
+		return errors.New("vllm-metal explicit block size must be 16")
+	}
+	for _, option := range []string{tuning.ToolCallParser, tuning.ReasoningParser} {
+		if option != "" {
+			if err := requireStableOption(VLLMMetal, "parser", option); err != nil {
+				return err
+			}
+		}
+	}
 	if err := validatePositiveBatching(VLLMMetal, tuning.MaxNumSeqs, tuning.MaxNumBatchedTokens); err != nil {
 		return err
 	}

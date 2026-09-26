@@ -184,7 +184,7 @@ func TestPipInstallerUsesOnlyTheLockedManagedEnvironment(t *testing.T) {
 		t.Fatal(err)
 	}
 	python := filepath.Join(environment, "bin", "python3")
-	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" > pip-invocation\nenv | sort >> pip-invocation\n"
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >> pip-invocation\nenv | sort >> pip-invocation\n"
 	if err := os.WriteFile(python, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}

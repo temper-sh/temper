@@ -113,13 +113,14 @@ func Build(inputs Inputs) (Bundle, error) {
 }
 
 type resolvedMember struct {
-	ID        string
-	Layout    manifest.Layout
-	Member    manifest.Member
-	Placement string
-	ModelPath string
-	PatchPath string
-	Splash    *engine.SplashTuning
+	ID              string
+	Layout          manifest.Layout
+	Member          manifest.Member
+	Placement       string
+	ModelPath       string
+	PatchPath       string
+	PythonStatePath string
+	Splash          *engine.SplashTuning
 }
 
 func resolveMembers(document manifest.Document, lock lockfile.Document, mode manifest.Mode, root string) ([]resolvedMember, error) {
@@ -150,6 +151,9 @@ func resolveMembers(document manifest.Document, lock lockfile.Document, mode man
 				Member:    member,
 				Placement: placement.name,
 				ModelPath: set.ModelPath(),
+			}
+			if layout.Engine == engine.RapidMLX || layout.Engine == engine.VLLMMetal {
+				item.PythonStatePath = filepath.Join(root, "runtime-state", member.Layout)
 			}
 			if layout.Splash != nil {
 				assembly, state := splash.Paths(root, member.Layout, entry.Digest(), layout.Splash.SoftwareSHA256)
@@ -212,6 +216,12 @@ func renderLlamaSwap(defaults manifest.Defaults, members []resolvedMember, group
 			return nil, nil, fmt.Errorf("render layout %q command: %w", member.ID, err)
 		}
 		runtime := command.Runtime()
+		if member.PythonStatePath != "" {
+			runtime.Environment = append(runtime.Environment,
+				engine.EnvironmentAssignment{Name: "HOME", Value: filepath.Join(member.PythonStatePath, "home")},
+				engine.EnvironmentAssignment{Name: "XDG_CACHE_HOME", Value: filepath.Join(member.PythonStatePath, "cache")},
+				engine.EnvironmentAssignment{Name: "HF_HOME", Value: filepath.Join(member.PythonStatePath, "huggingface")})
+		}
 		if runtime.ContextWindow <= 0 {
 			return nil, nil, fmt.Errorf("render layout %q command: engine omitted the effective context window", member.ID)
 		}
@@ -333,6 +343,7 @@ func rapidMLXTuning(tuning *manifest.RapidMLXTuning) *engine.RapidMLXTuning {
 		return nil
 	}
 	return &engine.RapidMLXTuning{
+		ToolCallParser: tuning.ToolCallParser, PrefillStepSize: tuning.PrefillStepSize, RequestTimeoutSeconds: tuning.RequestTimeoutSeconds,
 		MaxNumSeqs: tuning.MaxNumSeqs, MaxConcurrentRequests: tuning.MaxConcurrentRequests,
 		PrefillBatchSize: tuning.PrefillBatchSize, CompletionBatchSize: tuning.CompletionBatchSize,
 		GPUMemoryUtilization: tuning.GPUMemoryUtilization, PrefixCache: tuning.PrefixCache,
@@ -358,6 +369,8 @@ func vllmMetalTuning(tuning *manifest.VLLMMetalTuning) *engine.VLLMMetalTuning {
 		return nil
 	}
 	return &engine.VLLMMetalTuning{
+		ToolCallParser: tuning.ToolCallParser, ReasoningParser: tuning.ReasoningParser,
+		LanguageModelOnly: tuning.LanguageModelOnly, ChunkedPrefill: tuning.ChunkedPrefill, BlockSize: tuning.BlockSize,
 		MaxNumSeqs: tuning.MaxNumSeqs, MaxNumBatchedTokens: tuning.MaxNumBatchedTokens,
 		GPUMemoryUtilization: tuning.GPUMemoryUtilization, KVCacheDType: tuning.KVCacheDType,
 		PrefixCache: tuning.PrefixCache,

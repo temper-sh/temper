@@ -24,8 +24,9 @@ func (PipInstaller) Install(ctx context.Context, request EnvironmentInstallReque
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	command := exec.CommandContext(ctx, request.PythonPath,
+	arguments := [][]string{{
 		"-m", "pip", "install",
+		"--quiet",
 		"--disable-pip-version-check",
 		"--no-index",
 		"--no-deps",
@@ -36,37 +37,45 @@ func (PipInstaller) Install(ctx context.Context, request EnvironmentInstallReque
 		"--require-hashes",
 		"--find-links", request.WheelhousePath,
 		"--requirement", request.RequirementsPath,
-	)
-	command.Dir = request.EnvironmentPath
-	command.Env = []string{
-		"HOME=" + filepath.Join(request.EnvironmentPath, ".temper-home"),
-		"LC_ALL=C",
-		"NO_COLOR=1",
-		"PATH=" + filepath.Join(request.EnvironmentPath, "bin") + ":/usr/bin:/bin:/usr/sbin:/sbin",
-		"PIP_CONFIG_FILE=/dev/null",
-		"PIP_DISABLE_PIP_VERSION_CHECK=1",
-		"PIP_NO_INDEX=1",
-		"PYTHONDONTWRITEBYTECODE=1",
-		"PYTHONNOUSERSITE=1",
+	}}
+	for _, source := range request.SourceDirectories {
+		arguments = append(arguments, []string{"-m", "pip", "install", "--quiet", "--disable-pip-version-check", "--no-index", "--no-deps", "--no-build-isolation", "--no-compile", "--no-cache-dir", "--no-input", source})
 	}
-	var diagnostic boundedInstallBuffer
-	command.Stdout = &diagnostic
-	command.Stderr = &diagnostic
-	err := command.Run()
-	if contextErr := ctx.Err(); contextErr != nil {
-		return contextErr
+	arguments = append(arguments, []string{"-m", "pip", "check", "--disable-pip-version-check"})
+	for _, args := range arguments {
+		command := exec.CommandContext(ctx, request.PythonPath, args...)
+		command.Dir = request.EnvironmentPath
+		command.Env = []string{
+			"HOME=" + filepath.Join(request.EnvironmentPath, ".temper-home"),
+			"LC_ALL=C",
+			"NO_COLOR=1",
+			"PATH=" + filepath.Join(request.EnvironmentPath, "bin") + ":/usr/bin:/bin:/usr/sbin:/sbin",
+			"PIP_CONFIG_FILE=/dev/null",
+			"PIP_DISABLE_PIP_VERSION_CHECK=1",
+			"PIP_NO_INDEX=1",
+			"PYTHONDONTWRITEBYTECODE=1",
+			"PYTHONNOUSERSITE=1",
+		}
+		var diagnostic boundedInstallBuffer
+		command.Stdout = &diagnostic
+		command.Stderr = &diagnostic
+		err := command.Run()
+		if contextErr := ctx.Err(); contextErr != nil {
+			return contextErr
+		}
+		if diagnostic.overflow {
+			return fmt.Errorf("run managed Python pip: output exceeds %d bytes", maxPipDiagnosticBytes)
+		}
+		if err == nil {
+			continue
+		}
+		detail := strings.TrimSpace(diagnostic.String())
+		if detail == "" {
+			return fmt.Errorf("run managed Python pip: %w", err)
+		}
+		return fmt.Errorf("run managed Python pip: %w: %s", err, detail)
 	}
-	if diagnostic.overflow {
-		return fmt.Errorf("run managed Python pip: output exceeds %d bytes", maxPipDiagnosticBytes)
-	}
-	if err == nil {
-		return nil
-	}
-	detail := strings.TrimSpace(diagnostic.String())
-	if detail == "" {
-		return fmt.Errorf("run managed Python pip: %w", err)
-	}
-	return fmt.Errorf("run managed Python pip: %w: %s", err, detail)
+	return nil
 }
 
 func validateEnvironmentInstallRequest(request EnvironmentInstallRequest) error {
@@ -87,6 +96,11 @@ func validateEnvironmentInstallRequest(request EnvironmentInstallRequest) error 
 	}
 	if !regularUVExecutable(request.PythonPath) || !realUVDirectory(request.WheelhousePath) || !regularUVFile(request.RequirementsPath) {
 		return errors.New("uv environment installer inputs are absent or have unsafe shape")
+	}
+	for _, source := range request.SourceDirectories {
+		if !strictlyBelowUV(filepath.Dir(request.EnvironmentPath), source) || !realUVDirectory(source) {
+			return errors.New("Python source must be an extracted directory in this staged generation")
+		}
 	}
 	return nil
 }

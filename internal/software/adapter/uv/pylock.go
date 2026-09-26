@@ -298,7 +298,11 @@ func pythonABICompatible(pythonTag, abiTag string, runtimeMajor, runtimeMinor in
 		if digits == strconv.Itoa(runtimeMajor) {
 			return true
 		}
-		return digits == strconv.Itoa(runtimeMajor)+strconv.Itoa(runtimeMinor)
+		if len(digits) < 2 || digits[0] != '3' || runtimeMajor != 3 {
+			return false
+		}
+		tagMinor, err := strconv.Atoi(digits[1:])
+		return err == nil && tagMinor <= runtimeMinor
 	}
 	if len(digits) < 2 || digits[0] != '3' || runtimeMajor != 3 {
 		return false

@@ -56,6 +56,10 @@ func (v *Versions) require(selected string) error {
 }
 
 func (s Supply) validateSource() error {
+	if s.Python != nil {
+		_, _, err := s.pythonInputs()
+		return err
+	}
 	if !idPattern.MatchString(s.Package) || s.Source == nil || s.Selection != nil || s.Units != nil {
 		return errors.New("v2 supply requires package, target and source; installer selection and units are derived")
 	}
@@ -84,6 +88,9 @@ func (s Supply) validateSource() error {
 }
 
 func (s Supply) installerInputs() (softwarelock.Selection, map[string]softwarelock.Unit, error) {
+	if s.Python != nil {
+		return s.pythonInputs()
+	}
 	if s.Selection != nil {
 		return *s.Selection, s.Units, nil
 	}
@@ -187,6 +194,9 @@ func ResolveSoftware(ctx context.Context, d Document, s Selection, choice string
 	}
 	d = canonicalDocument(d)
 	resolve := func(supply Supply, rules []*Versions) (Supply, error) {
+		if supply.Python != nil {
+			return Supply{}, fmt.Errorf("software %q is an exact Python closure; use recorded software and resolve a new closure explicitly", supply.Package)
+		}
 		requested := "latest"
 		if choice == "tested" {
 			var err error

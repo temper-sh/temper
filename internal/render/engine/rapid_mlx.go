@@ -6,6 +6,9 @@ import (
 )
 
 type rapidMLXOptions struct {
+	toolCallParser        string
+	prefillStepSize       int
+	requestTimeoutSeconds int
 	layoutID              string
 	modelPath             string
 	contextWindow         int
@@ -32,6 +35,7 @@ func buildRapidMLX(request Request) (Command, error) {
 	}
 	tuning := *request.RapidMLX
 	return rapidMLXCommand(rapidMLXOptions{
+		toolCallParser: tuning.ToolCallParser, prefillStepSize: tuning.PrefillStepSize, requestTimeoutSeconds: tuning.RequestTimeoutSeconds,
 		layoutID:              request.LayoutID,
 		modelPath:             request.ModelPath,
 		contextWindow:         request.Window,
@@ -58,6 +62,14 @@ func validateRapidMLXRequest(request Request) error {
 		return err
 	}
 	tuning := *request.RapidMLX
+	if tuning.PrefillStepSize < 0 || tuning.RequestTimeoutSeconds < 0 {
+		return errors.New("Rapid prefill and timeout must be nonnegative")
+	}
+	if tuning.ToolCallParser != "" {
+		if err := requireStableOption(RapidMLX, "tool call parser", tuning.ToolCallParser); err != nil {
+			return err
+		}
+	}
 	if err := validatePositiveBatching(RapidMLX, tuning.MaxNumSeqs, tuning.MaxConcurrentRequests, tuning.PrefillBatchSize, tuning.CompletionBatchSize); err != nil {
 		return err
 	}

@@ -34,15 +34,16 @@ var generationPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 // Invocation is the complete, validated foreground process boundary.
 type Invocation struct {
-	Path              string
-	Arguments         []string
-	Environment       []string
-	Input             []byte
-	EnginePath        string
-	EngineArguments   []string
-	FrontendPath      string
-	FrontendArguments []string
-	Supervision       *Supervision
+	PythonMultiprocessing bool
+	Path                  string
+	Arguments             []string
+	Environment           []string
+	Input                 []byte
+	EnginePath            string
+	EngineArguments       []string
+	FrontendPath          string
+	FrontendArguments     []string
+	Supervision           *Supervision
 }
 
 // Runner is deliberately narrower than os/exec so command tests can prove
@@ -384,6 +385,7 @@ func Plan(options Options) (Invocation, error) {
 	enginePath := ""
 	frontendPath := ""
 	var engineArguments, frontendArguments []string
+	pythonMultiprocessing := false
 	var executableDirectories []string
 	for _, requirement := range requirements.Requirements {
 		location, err := selectionLocation(installed.Document, requirement.Package)
@@ -401,6 +403,24 @@ func Plan(options Options) (Invocation, error) {
 		}
 		if requirement.Package == "llama-cpp" {
 			enginePath = executable
+		}
+		if (requirement.Package == "rapid-mlx" || requirement.Package == "vllm-metal") && requirement.Role != "" {
+			python, err := executableAt(root, options.Installation, location, "bin/python3")
+			if err != nil {
+				return Invocation{}, fmt.Errorf("Python engine interpreter: %w", err)
+			}
+			args := append([]string{executable}, requirement.Arguments...)
+			for i, arg := range args {
+				if arg == "${PORT}" {
+					args[i] = "10001"
+				}
+			}
+			enginePath = python
+			if requirement.Package == "rapid-mlx" {
+				engineArguments = args
+			} else {
+				frontendPath, frontendArguments, pythonMultiprocessing = python, args, true
+			}
 		}
 		if requirement.Package == "splash" {
 			args := append([]string(nil), requirement.Arguments...)
@@ -422,9 +442,10 @@ func Plan(options Options) (Invocation, error) {
 		return Invocation{}, fmt.Errorf("rendered config: %w", err)
 	}
 	return Invocation{
-		Path:            router,
-		EnginePath:      enginePath,
-		EngineArguments: engineArguments, FrontendPath: frontendPath, FrontendArguments: frontendArguments,
+		PythonMultiprocessing: pythonMultiprocessing,
+		Path:                  router,
+		EnginePath:            enginePath,
+		EngineArguments:       engineArguments, FrontendPath: frontendPath, FrontendArguments: frontendArguments,
 		Arguments: []string{"--config", config, "--listen", options.Listen},
 		Environment: []string{
 			"PATH=" + strings.Join(append(executableDirectories, "/usr/bin", "/bin", "/usr/sbin", "/sbin"), string(os.PathListSeparator)),

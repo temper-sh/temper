@@ -115,6 +115,48 @@ type archiveTestEntry struct {
 	kind byte
 }
 
+func TestGitSourceCommentIsMetadataAndCannotOverrideExtraction(t *testing.T) {
+	for _, unsafe := range []bool{false, true} {
+		var output bytes.Buffer
+		compressed := gzip.NewWriter(&output)
+		writer := tar.NewWriter(compressed)
+		records := map[string]string{"comment": strings.Repeat("a", 40)}
+		if unsafe {
+			records["path"] = "../escape"
+		}
+		if err := writer.WriteHeader(&tar.Header{Name: "pax_global_header", Typeflag: tar.TypeXGlobalHeader, PAXRecords: records}); err != nil {
+			t.Fatal(err)
+		}
+		if err := writer.WriteHeader(&tar.Header{Name: "source/value", Typeflag: tar.TypeReg, Mode: 0644, Size: 3}); err != nil {
+			t.Fatal(err)
+		}
+		writer.Write([]byte("abc"))
+		writer.Close()
+		compressed.Close()
+		path := filepath.Join(t.TempDir(), "source.tar.gz")
+		os.WriteFile(path, output.Bytes(), 0600)
+		spec := TarGzSpec{Root: "source", MaxEntries: 2, MaxUnpackedBytes: 3}
+		entries, err := InspectTarGz(context.Background(), path, spec)
+		if unsafe {
+			if err == nil {
+				t.Fatal("global path override admitted")
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		destination := filepath.Join(t.TempDir(), "extracted")
+		if err := ExtractTarGz(context.Background(), path, destination, spec, entries); err != nil {
+			t.Fatal(err)
+		}
+		data, err := os.ReadFile(filepath.Join(destination, "value"))
+		if err != nil || string(data) != "abc" {
+			t.Fatalf("%q %v", data, err)
+		}
+	}
+}
+
 func tarGzFixture(t *testing.T, entries []archiveTestEntry) []byte {
 	t.Helper()
 	var output bytes.Buffer

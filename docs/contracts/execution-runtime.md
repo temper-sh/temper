@@ -8,6 +8,7 @@ remain available for issued clients.
 temper execution inspect --lock FILE
 temper execution prepare --lock FILE --root PATH --installation ID
 temper execution render --lock FILE --root PATH --installation ID
+temper execution paths --lock FILE --root PATH --installation ID
 temper execution serve --lock FILE --root PATH --installation ID --generation SHA256 --listen 127.0.0.1:PORT --status-file FILE
 temper execution remove --lock FILE --root PATH --installation ID
 ```
@@ -21,6 +22,12 @@ recoverable and repeatable; a failed preparation can leave a partial installatio
 downloading. Both commands derive private temporary legacy inputs inside Temper;
 clients never coordinate or retain the four compatibility exports. `remove`
 uses the exact software receipt and retains system-managed packages.
+
+`paths` is read-only. It verifies the selected artifact sets and software
+receipts, then returns `temper-execution-paths/v1` with the same `execution`
+inspection document, model paths by layout, and exact managed interpreter paths
+by Python package. This lets an experiment use its locked tokenizer or evaluator
+without reconstructing Temper's storage paths. It starts no model or evaluator.
 
 Changing context, batch, cache or speculation settings reuses the installed
 software when its units and installation identity are unchanged. The new
@@ -70,6 +77,15 @@ Splash also exposes a `frontend` role. Both Splash processes must match exact
 receipted executable paths and rendered argument vectors; the native engine
 must originate from that frontend. A changed or restarted frontend ends the
 supervised session, as does a changed or restarted native engine.
+Rapid MLX binds the exact receipted interpreter, console script and rendered
+arguments as its `engine`. vLLM Metal binds the same facts as `frontend` and
+admits only its CPython spawn worker and resource tracker from that frontend.
+The worker's fixed `VLLM::EngineCore` process title is accepted without changing
+its bound interpreter, PID, start time or group. Its `engine` and
+`resource-tracker` roles retain their own identities. Additional workers,
+arbitrary Python children and replacements are refused. These are the selected
+single-worker launch shapes; broader worker topologies remain unsupported.
+
 The router may start the engine in its own process group. Each observed PID,
 start time, kernel executable path and group stays bound; an unrelated member,
 changed group or replacement process is refused. A basename in `ps` is not an

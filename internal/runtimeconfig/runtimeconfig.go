@@ -95,8 +95,21 @@ func (d Document) Validate() error {
 					return errors.New("runtime argument contains NUL")
 				}
 			}
+		} else if (requirement.Package == "rapid-mlx" || requirement.Package == "vllm-metal") && requirement.Role != "" {
+			wantRole, wantExecutable := "engine", "bin/rapid-mlx"
+			if requirement.Package == "vllm-metal" {
+				wantRole, wantExecutable = "frontend", "bin/vllm"
+			}
+			if requirement.Role != wantRole || requirement.RelativeExecutable != wantExecutable || len(requirement.Arguments) == 0 {
+				return errors.New("Python engine requires its exact console command identity")
+			}
+			for _, arg := range requirement.Arguments {
+				if strings.ContainsRune(arg, 0) {
+					return errors.New("runtime argument contains NUL")
+				}
+			}
 		} else if requirement.Role != "" || requirement.Arguments != nil {
-			return errors.New("command identities currently require Splash")
+			return errors.New("command identities require a supported engine package")
 		}
 		key := requirement.Package + "\x00" + requirement.RelativeExecutable
 		if seen[key] {
