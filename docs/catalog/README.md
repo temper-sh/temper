@@ -4,10 +4,11 @@ GitHub Pages serves this directory from `master:/docs` at
 `https://temper-sh.github.io/temper/catalog/`. The current entry is
 [`channels/stable/channel.yaml`](channels/stable/channel.yaml).
 
-The checked-in stable publication is signed catalog v3, sequence 3, prepared
-for Temper 0.1.0-alpha.11. It contains eight presets, including five Recommended
+The stable publication is signed catalog v3, sequence 3, for
+Temper 0.1.0-alpha.11. It contains eight presets, including five Recommended
 choices. Its source is `catalog/guided-setup.json`; the snapshot and channel
-verify with the production trust key. Deployment is a separate release step.
+verify with the production trust key. The served publication passes update,
+replay and authenticated compilation checks.
 
 Historical v2 source remains at `f59c281:catalog/qwen38-m5-refresh.json`. Its retained software
 versions reproduce the reviewed configuration; they do not assert minimum

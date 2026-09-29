@@ -1,14 +1,15 @@
 # Set up and manage presets and layouts
 
 `temper init` and `temper configure` open the same editors. The default root is
-`~/.temper`; `--root PATH` selects an isolated root. The current authoring
-catalog is unpublished, so use `--catalog catalog/guided-setup.json` from source.
-Without it, Temper uses a verified local catalog or reads the signed stable
-publication in memory. Invalid local inputs never trigger a network fallback.
+`~/.temper`; `--root PATH` selects an isolated root. Temper uses a verified local
+catalog or reads the signed stable publication in memory. Invalid local inputs
+never trigger a network fallback.
+Local authoring may pass `--catalog catalog/guided-setup.json` explicitly.
+Use a fresh root when upgrading from alpha.10 or earlier.
 
 ```sh
-./build/temper init --catalog catalog/guided-setup.json --dry-run
-./build/temper configure --root /private/temper-root --catalog catalog/guided-setup.json
+temper init --dry-run
+temper configure --root /private/temper-root
 ```
 
 ## Choose presets

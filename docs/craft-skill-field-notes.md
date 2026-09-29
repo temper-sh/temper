@@ -413,3 +413,14 @@ an `ESRCH` race between two reads; bounded complete-snapshot retries preserve
 ownership refusals while handling that normal lifecycle transition. Cold-cache
 timeout and startup admission remain limits of the observation. Existing craft
 guidance was sufficient; no skill edits or new evidence registry were needed.
+
+## Alpha schema cleanup and release — 2026-09-29
+
+Data-modeling guidance kept historical context identities and issued snapshots
+unchanged while removing obsolete runtime readers. Testing used the public
+compiler and configuration commands across Field Kit's frozen matrix. A real-host
+preview exposed an output-parent precondition missing from the fake; the preview
+now uses the existing private directory without writing a lock. Reliable-effects
+guidance kept the bootstrap pin tied to the downloaded signed archive and checked
+fresh setup plus unchanged replay. [Delivery verification](PLAN.md#alpha11-delivery)
+records the result. Existing guidance was sufficient; no skill change is proposed.

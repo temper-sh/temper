@@ -60,5 +60,5 @@ Private signing material enters the release tool only through stdin.
 Older catalog and software-publication schemas are rejected. Published historical
 bytes remain immutable for their pinned older clients; they are not accepted
 rollback targets for the current binary. The checked-in stable pointer names
-signed v3 sequence 3 for alpha.11. Deploy and verify that publication before
-announcing the new client.
+signed v3 sequence 3 for alpha.11. The served publication passes signature,
+update/replay and authenticated compilation checks.

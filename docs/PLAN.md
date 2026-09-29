@@ -1,6 +1,6 @@
 # Temper — execution plan
 
-Status: **GUIDED SETUP IMPLEMENTED — UNRELEASED**
+Status: **ALPHA.11 PUBLISHED — GUIDED SETUP AND FIELD KIT HOST**
 
 Updated: **2026-09-29**
 
@@ -23,11 +23,11 @@ promotion, resolver and bootstrap proposals are no longer an active backlog.
 | Software selection | Source records are separate from resolved releases. `catalog compile --software recorded\|latest\|tested` supports the current llama.cpp/llama-swap macOS ARM64 sources. Recorded inputs are the offline default; fallback is explicit. |
 | Installation | Exact isolated release/Python installation, receipts, version checks and recovery remain. Receipt reuse now compares installed software facts independently of execution provenance. Context and other runtime changes reuse unchanged software for llama.cpp and Splash. System-managed software is always retained. |
 | Field Kit host | `catalog compile --preset` and `execution configure/inspect/prepare/render/paths/serve/remove` and supervised probes are implemented. The [runtime contract](contracts/execution-runtime.md) owns process identities, listener checks and final shutdown proof. |
-| Current router compatibility | The working tree recognizes llama-swap's narrowly scoped macOS inspection helpers and Rapid 0.15.2's reviewed crash-log child, using kernel identity and ancestry. v260 passed native writing/context work. Engine lifetime remains fixed for measurements; unknown children still refuse ownership. Full Go tests, vet and race checks pass; failures and recovery remain in [Labs](../../v3/labs/workstreams/writing-and-orchestration/README.md). |
-| Source and build | Catalog delivery `a9b4a7f` is pushed and tagged alpha.10. Guided setup, native Metal detection and Splash are committed in `3ba7813`. The software receipt simplification is committed in `98b99ce`; the Qwen study preparation adds exact Python closures and probe identities. These changes await release. |
-| Public binary | Signed/notarized [0.1.0-alpha.10](https://github.com/temper-sh/temper/releases/tag/v0.1.0-alpha.10) adds catalog commands. Its downloaded checksum, signing identity, notarization and live-catalog compilation pass. Field Kit `01dd867` keeps its verified alpha.9 host; alpha.7 remains the dispatched revision 1 host. |
-| Catalog distribution | The live [stable channel](https://temper-sh.github.io/temper/catalog/channels/stable/channel.yaml) serves sequence 2. Signed v3 sequence 3 is prepared and locally verified for alpha.11. [The catalog guide](CATALOG.md) owns use. |
-| Catalog candidate | V3 authoring has five Recommended presets: Qwen/Splash, Glimmer, Gemma 26B, Gemma 31B and Qwen/llama. All retains Gemma E2B/E4B and Qwen3.5. The writing presets use b11205; Qwen/llama and smaller presets retain their exact closures. The router is v260. Historical evidence keeps its producing versions. The catalog is unpublished. |
+| Current router compatibility | The runtime recognizes llama-swap's narrowly scoped macOS inspection helpers and Rapid 0.15.2's reviewed crash-log child, using kernel identity and ancestry. v260 passed native writing/context work. Engine lifetime remains fixed for measurements; unknown children still refuse ownership. Full Go tests, vet and race checks pass; failures and recovery remain in [Labs](../../v3/labs/workstreams/writing-and-orchestration/README.md). |
+| Source and build | `08558c4` is published as `v0.1.0-alpha.11`, including guided setup, managed layouts, native Metal detection, Splash, reusable software receipts and the Qwen study host. Legacy schema removal is committed in `24df332`. |
+| Public binary | Signed/notarized [0.1.0-alpha.11](https://github.com/temper-sh/temper/releases/tag/v0.1.0-alpha.11) passes downloaded checksum, signing identity, notarization and execution checks. Field Kit revision 4 pins this host; issued older studies keep their original hosts. |
+| Catalog distribution | The live [stable channel](https://temper-sh.github.io/temper/catalog/channels/stable/channel.yaml) serves signed v3 sequence 3. Update, unchanged replay and authenticated compilation pass. [The catalog guide](CATALOG.md) owns use. |
+| Published presets | Sequence 3 has five Recommended presets: Qwen/Splash, Glimmer, Gemma 26B, Gemma 31B and Qwen/llama. All retains Gemma E2B/E4B and Qwen3.5. The writing presets use b11205; Qwen/llama and smaller presets retain their exact closures. The router is v260. Historical evidence keeps its producing versions. |
 
 The receipt simplification passes full Go tests, vet and race checks after
 integration with `3ba7813`. Regressions cover llama.cpp settings and Splash
@@ -60,8 +60,8 @@ accepted, and helpers never replace measured router/engine roles. Tests include
 unrelated children, changed identities, write-capable arguments and engine
 descendants. A subsequent native start/shutdown passed, then exposed a separate
 Field Kit Python 3.9 timestamp parser defect, now repaired in that owner's tree.
-These local compatibility fixes do not add persistent serving or change the
-published alpha.10/Field Kit alpha.9 binaries.
+At that point, these local compatibility fixes did not change the published
+alpha.10/Field Kit alpha.9 binaries. Alpha.11 now includes them.
 
 The catalog delivery verified the Pages-served bytes with the existing signing
 trust root. A fresh update, unchanged replay, no-write dry run, offline selection
@@ -90,27 +90,32 @@ dry runs left no runtime root, and repeated configuration left output untouched.
 The subsequent owner-authorized release preparation regenerates the current
 Field Kit package with alpha.11; older packages and the live service are unchanged.
 
-## Alpha.11 release preparation
+## Alpha.11 delivery
 
-The release candidate is `0.1.0-alpha.11`; remote tags were checked before
-preparation. Signed catalog sequence 3 contains the exact guided catalog
+Tag `v0.1.0-alpha.11` publishes `08558c4`. Signed catalog sequence 3 contains the
+exact guided catalog
 snapshot `951f957516566a44d7c45e948b85f4ce10cda6c46be2fb1f09bc7aed74dc0d7d`.
 Both signatures and their channel/snapshot join verify with the production key.
 [Release notes](releases/0.1.0-alpha.11.md) cover the new operations and explicit
 format break. The tag workflow requires those notes and a valid publication.
 
-Local packaging uses `build/release-0.1.0-alpha.11/temper` and
-`dist/unsigned-0.1.0-alpha.11/`. This is an unsigned rehearsal. Publishing the
-master commit deploys the catalog; pushing `v0.1.0-alpha.11` starts signing,
-notarization and release publication. Verify the downloaded signed assets before
-updating Field Kit's bootstrap version and checksum. That final pin cannot use
-the unsigned rehearsal's checksum.
+The tag workflow passed tests, signing and notarization and published both
+release assets. The downloaded archive passes checksum, exact contents, file
+modes, Developer ID, notarization and version checks. Its compiled inputs match
+the candidate byte for byte for the same catalog source; authoring and signed
+snapshot provenance retain the same execution identity. The live catalog passes
+no-write update, fresh installation, unchanged replay and authenticated compilation.
 
-The candidate passes the full Go suite, vet and race checks. Building and
+Field Kit `515a9da` pins the actual signed archive checksum. Fresh software-only
+setup and unchanged replay pass with the private Python 3.14.7 installation.
+The default command reaches machine admission; no study session is created on
+the ineligible development Mac. Older packages and unfinished runs remain unchanged.
+
+The tagged source passes the full Go suite, vet and race checks. Building and
 packaging twice leaves identical output. The cleanly extracted archive passes
 version, shape, checksum, compile/configure/replay and execution dry-run checks.
 Field Kit verifies and passes 97 tests on Python 3.9 and 3.14. Both synthetic RAM
-routes pass real-host preview without writes, and all 17 route cells pass exact
+routes pass signed-host preview without writes, and all 17 route cells pass exact
 configuration and inspection. No study inference is implied by these checks.
 
 ## Next delivery
@@ -122,7 +127,7 @@ returns the existing context-evidence identity consumed by wizard findings;
 reviewed study results supply exact-machine context, per-role memory and latency
 evidence. No result is automatically recommended or imported into the catalog.
 
-**Preset selection and user-owned layouts — implemented in source; bounded
+**Preset selection and user-owned layouts — shipped in alpha.11; bounded
 M5 native lifecycle checks completed with fixes.**
 
 The [implementation plan](design/presets-and-layouts-plan.md) now has the five
@@ -188,7 +193,8 @@ A closing connection briefly refused stop; explicit retry and an unchanged
 second stop passed. Runtime stayed below seven minutes and output reservations
 below 512 tokens. All private runtime material was removed after verified stop;
 shared caches and the live stack were preserved. Full Go tests, vet and race
-checks pass. Live cutover, publication and release remain separate approvals.
+checks pass. Publication and release were subsequently authorized and completed
+with alpha.11; live cutover remains separate.
 Older setup implementation notes below retain historical evidence; current
 behavior is defined by the command contract.
 
@@ -199,7 +205,7 @@ investigation and managed-serving/tool/integration research are complete.
 The [workspace plan](../../v3/PLAN.md#full-stack-workstreams) retains all six
 layers. Guided setup is implemented; the next work establishes practical
 portfolio coverage, current-composition evidence, actual machine fit and the
-tool/integration offering. Publication follows a reviewed delivery decision.
+tool/integration offering. Alpha.11 publishes the reviewed delivery.
 Persistent service installation and live cutover are outside this research run.
 
 Catalog context guidance is implemented in source. The catalog separates the
@@ -408,7 +414,7 @@ disclosure, mouse coordinates, narrow/short windows, full filenames and refusal
 to confirm hidden actions. Full Go tests, vet and race checks pass. A native
 terminal dry run exercised mouse choices and Next, skipped templates, table
 expansion/collapse, arrow/trackpad scrolling, resize and Save, leaving its root
-absent. This remains part of the unreleased wizard.
+absent. This historical check predates the preset editors shipped in alpha.11.
 
 The shared-cache regressions cover environment precedence, exact scope passed
 to hf/uv, offline cache reuse, corrupt bytes, cancellation of child processes,
@@ -425,9 +431,8 @@ eviction or restart ends it after first use. Persistent helper availability
 requires an explicit managed-lifecycle design; do not relax historical Field
 Kit supervision as an incidental wizard change.
 
-The published Field Kit bootstrap remains on alpha.9; local revision 3 requires
-the integrated development host until a compatible signed release ships.
-Historical study results are independent of this catalog work. Preserve their original package, producer,
+Field Kit revision 4 now uses signed alpha.11. Historical study results are
+independent of this catalog work. Preserve their original package, producer,
 Python, Temper and session identities; the new client must not resume or
 silently replay them. The [Field Kit plan](../../v3/FIELD-KIT-PLAN.md#next-delivery)
 owns the remaining study work.

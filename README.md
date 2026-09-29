@@ -4,10 +4,9 @@ Temper installs and verifies exact local-AI configurations on Apple Silicon,
 so an experiment runs the model files, serving software, and settings it claims
 to run.
 
-**Alpha (September 2026):** Temper is usable today by collaborators with a
-reviewed configuration file, catalog preset or Field Kit experiment. The
-guided setup wizard is still in development and independent Field Kit
-observations are pending.
+**Alpha (September 2026):** choose catalog presets, compose named layouts, or run
+a reviewed Field Kit experiment. Independent Field Kit observations are pending;
+the linked evidence describes the configurations exercised so far.
 
 ## Why this is useful
 
@@ -78,19 +77,18 @@ steps.
 
 ### Choose a catalog configuration
 
-The current source compiles catalog presets to exact execution-lock v3 inputs.
-[Browse and use the catalog](docs/CATALOG.md). Use the local authoring catalog
-until signed sequence 3 is deployed with alpha.11; the live alpha publication
-still serves older clients.
+Alpha.11 compiles catalog presets to exact execution-lock v3 inputs.
+[Browse and use the signed catalog](docs/CATALOG.md). Upgrading from an older
+alpha requires a fresh Temper root; see the
+[upgrade boundary](docs/releases/0.1.0-alpha.11.md#upgrade-boundary).
 
-### Preview guided setup from source
+### Preview guided setup
 
-The source wizard lets you select presets, compose named layouts, and review
+The wizard lets you select presets, compose named layouts, and review
 what will be saved or downloaded:
 
 ```sh
-go build -o build/temper ./cmd/temper
-./build/temper init --catalog catalog/guided-setup.json --dry-run
+temper init --dry-run
 ```
 
 A **preset** combines model weights, an engine and its settings. Recommended
@@ -109,7 +107,7 @@ installs missing material, reuses exact software and weights, and starts no
 service. Later, `temper configure` opens the same editors. Explicit
 `temper layout activate NAME`, `layout status`, and `layout stop` manage one
 active layout per root. Idle models can unload and reload on demand. This
-managed launchd path is source-only. Its
+managed launchd path is available in alpha.11. Its
 [bounded M5 smoke](docs/design/managed-layout-smoke.md#observed-result) exercised
 mixed engines, idle reload and owned shutdown. Splash's first cache conversion
 can exceed a short client timeout, and startup remains subject to memory checks.
@@ -118,8 +116,8 @@ It does not change the running legacy service.
 [Set up and manage presets and layouts](docs/contracts/init.md) covers scripted
 editing, offline resume, activation and recovery. The
 [authoring catalog guide](catalog/README.md) links measured configurations and
-limitations. Its five recommendations are signed in the prepared sequence 3;
-deployment remains pending. Memory figures are predictions
+limitations. Signed sequence 3 contains its five recommendations.
+Memory figures are predictions
 unless tied to exact applicable evidence; 8/16 GiB machine fit remains
 unmeasured.
 
@@ -153,7 +151,7 @@ The current release target and safety boundary are deliberately narrow:
 | Configuration | User choices are never mechanically overwritten. Setup saves exact preset locks and layouts in configuration.json; manifest v2 remains available. |
 | Cleanup | Temper can remove its receipted private installations. It never removes system-managed packages, including packages it requested. |
 
-The path exercised with a real model currently uses `llama-server`.
+Native checks have exercised llama.cpp and Splash on the reviewed Macs.
 Alternative serving engines—the programs that load a model and answer
 requests—can be selected for Rapid-MLX, MLX-VLM, and vLLM-Metal experiments,
 but they remain experimental until their exact dependencies and model families
@@ -165,8 +163,8 @@ status and refusal rules.
 ## Temper and Field Kit
 
 [Field Kit](docs/contracts/field-kit.md) is the participant-facing layer. It
-will present one bounded question, disclose the exact time, storage, network,
-and cleanup effects, record consent, and use Temper for machine facts,
+presents one bounded question, discloses the exact time, storage, network,
+and cleanup effects, records consent, and uses Temper for machine facts,
 installation, artifact checks, rendering, and an isolated model process.
 For experiments that require an exact rendered token count, Field Kit can also
 ask Temper to run the tokenizer from the receipted llama.cpp installation
@@ -186,8 +184,9 @@ consent. No question has completed external-machine qualification yet.
 
 The [direct execution commands](docs/contracts/execution-runtime.md) consume
 execution-lock v3 inputs directly and return supervised process
-identities and shutdown results. Field Kit's revision 2 study pins the published
-alpha.9 host; catalog updates do not change its frozen experiment inputs.
+identities and shutdown results. Field Kit's revision 4 study pins the published
+alpha.11 host. Older studies retain their producing hosts and frozen inputs;
+catalog updates do not change them.
 
 ## Learn more
 

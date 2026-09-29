@@ -1,8 +1,8 @@
 # temper — product spec
 
-**Current preset/layout contract, 2026-09-28:** the
+**Current preset/layout contract, 2026-09-29:** the
 [accepted decisions](design/presets-and-layouts-plan.md#accepted-decisions)
-are implemented in source. A preset owns weights, engine and settings; a layout
+ship in alpha.11. A preset owns weights, engine and settings; a layout
 is the user's named composition with independent membership, startup loading
 and optional default. Five presets are Recommended and require manual copy;
 All remains available. [Setup and operations](contracts/init.md) and
@@ -44,9 +44,8 @@ per-run limits and engine controls. [Distribution](contracts/catalog-distributio
 owns signed catalog updates and verified offline rollback. The independent
 manifest workflow accepts v2 only.
 
-The guided setup implementation uses `~/.temper` by default and is unreleased
-source work. Presets → Layouts → Review and prepare replaces the modes-first
-screen flow. Saving and preparing remain separate from explicit managed
+Guided setup uses `~/.temper` by default. Presets → Layouts → Review and prepare
+replaces the modes-first screen flow. Saving and preparing remain separate from explicit managed
 activation. Tools and harness integrations still require their own implemented
 catalog and rendering paths; the editors do not invent them.
 
@@ -881,8 +880,8 @@ location. An explicitly selected integration manages its reviewed configuration
 entries and preserves unrelated Pi providers and settings. This same ownership
 boundary applies to other harnesses.
 
-The released alpha.10 commands still require explicit roots. The current source
-applies this default in guided setup; lower-level primitives remain root-explicit.
+Alpha.11 applies this default in guided setup; lower-level primitives remain
+root-explicit.
 Adoption does not migrate existing roots or installations.
 
 ## What ships where (the org, reshaped 2026-08-08 — owner)

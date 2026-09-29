@@ -1,6 +1,6 @@
 # Curated presets for guided setup
 
-[`guided-setup.json`](guided-setup.json) is the unpublished macOS ARM64 authoring
+[`guided-setup.json`](guided-setup.json) is the macOS ARM64 authoring
 catalog, using `temper-catalog/v3`. A preset fixes model weights, engine,
 templates and inference settings. Your named layouts compose selected presets;
 the catalog does not decide their membership, startup loading or default.
@@ -71,7 +71,7 @@ For scripted choices:
   --context qwen3.8-27b-q4xl-mtp=40960 --dry-run --json
 ```
 
-Signed sequence 3 is prepared from this catalog for alpha.11. Historical signed
+Signed sequence 3 publishes this catalog for alpha.11. Historical signed
 snapshots retain their issued schemas and 32k configuration for pinned clients.
 
 ## Assessed uses and boundaries

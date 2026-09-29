@@ -5,11 +5,10 @@ combines your selected presets and independently chooses startup loading and an
 optional default. [The authoring guide](../catalog/README.md) describes the
 available presets and their evidence.
 
-Build the current source and review explicit choices:
+Install alpha.11 or newer and review explicit choices:
 
 ```sh
-go build -o build/temper ./cmd/temper
-./build/temper init --catalog catalog/guided-setup.json --dry-run
+temper init --dry-run
 ```
 
 Nothing starts selected. Save retains exact choices in `configuration.json`;
@@ -19,10 +18,11 @@ later edits, offline reuse, and explicit activation.
 ## Compile an independent execution
 
 ```sh
-./build/temper catalog compile --catalog catalog/guided-setup.json \
+temper catalog update --root "$HOME/.temper"
+temper catalog compile --root "$HOME/.temper" \
   --preset qwen3.8-27b-q4xl-mtp --target darwin/arm64 \
   --out execution.lock.json
-./build/temper execution inspect --lock execution.lock.json
+temper execution inspect --lock execution.lock.json
 ```
 
 The lock owns everything needed to reproduce the selected execution. Compilation
@@ -38,11 +38,9 @@ satisfy required versions; failures never select a fallback automatically.
 
 ## Signed catalog updates
 
-Current source accepts only catalog v3 and execution-lock v3. Signed sequence 3
-is prepared in `docs/catalog` for alpha.11. The live channel still serves v2
-until that commit is deployed; use the explicit authoring catalog until then.
-
-Once a v3 catalog is published:
+Alpha.11 accepts only catalog v3 and execution-lock v3. The live stable channel
+serves signed sequence 3 with eight presets. Local authoring can instead pass
+`--catalog catalog/guided-setup.json` explicitly.
 
 ```sh
 temper catalog update --root "$HOME/.temper"
