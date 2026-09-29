@@ -129,10 +129,15 @@ func (d Document) Validate() error {
 		}
 		if entry.Draft != nil {
 			draft := entry.Draft
-			if !repoPattern.MatchString(draft.Repo) || !revisionPattern.MatchString(draft.Revision) || len(draft.Files) != 2 || draft.Files[0].Name != "config.json" || draft.Files[1].Name != "model.safetensors" {
-				problem("entry %q requires an exact complete DFlash2 draft", id)
+			gguf := len(draft.Files) == 1 && strings.HasSuffix(draft.Files[0].Name, ".gguf")
+			safetensors := len(draft.Files) == 2 && draft.Files[0].Name == "config.json" && draft.Files[1].Name == "model.safetensors"
+			if !repoPattern.MatchString(draft.Repo) || !revisionPattern.MatchString(draft.Revision) || (!gguf && !safetensors) {
+				problem("entry %q requires an exact complete GGUF or DFlash2 safetensors draft", id)
 			}
 			for _, file := range draft.Files {
+				if !safeRelativePath(file.Name) {
+					problem("entry %q draft path is unsafe", id)
+				}
 				if !sha256Pattern.MatchString(file.SHA256) {
 					problem("entry %q draft sha256 is invalid", id)
 				}

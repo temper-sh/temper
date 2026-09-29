@@ -19,6 +19,7 @@ import (
 	"github.com/temper-sh/temper/internal/setup"
 	"github.com/temper-sh/temper/internal/setupui"
 	"github.com/temper-sh/temper/internal/software"
+	"github.com/temper-sh/temper/internal/testfixture"
 )
 
 const (
@@ -36,7 +37,7 @@ func guidedCatalog(t *testing.T) catalog.Document {
 	if err != nil {
 		t.Fatal(err)
 	}
-	doc, err := catalog.Parse(raw)
+	doc, err := testfixture.LegacySetupCatalog(raw)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,72 +1,79 @@
-# Guided setup catalog candidate
+# Curated presets for guided setup
 
-[`guided-setup.json`](guided-setup.json) is an unpublished authoring catalog for
-macOS ARM64. It offers four local main models and a compact utility profile for
-a harness-owned foreground model. Descriptions draw on the existing
-[capability-work suite](../../v3/workshop/suites/capability-work/README.md) and
-its [assessed portfolio](../../v3/labs/workstreams/small-model-capability-portfolio/README.md).
-They describe observed tasks and limitations; they are editable starting points
-for the owner's assessment.
+[`guided-setup.json`](guided-setup.json) is the unpublished macOS ARM64 authoring
+catalog, using `temper-catalog/v3`. A preset fixes model weights, engine,
+templates and inference settings. Your named layouts compose selected presets;
+the catalog does not decide their membership, startup loading or default.
 
-| Profile | User choice | Route |
-|---|---|---|
-| `gemma-4-e2b-local` | Small local main, Q4_K_M | One `default` route, resident |
-| `gemma-4-e4b-local` | Small local main, Q4_K_M | One `default` route, resident |
-| `qwen3.5-4b-local` | Compact local main, Q4_K_M | One `default` route, resident |
-| `qwen3.5-4b-utility` | Local text utility beside an external foreground | One `available` route, loaded on demand |
-| `qwen3.8-27b-q4xl-local` | Larger local main | Existing `default` route, resident |
+Recommended contains exactly these five presets, in this S-tier order:
+
+| Preset ID | Useful role and tradeoff |
+|---|---|
+| `qwen3.8-27b-q4xl-splash` | Coding with Splash/DFlash2; platform and cache-conversion requirements apply |
+| `muse-glimmer-30b-q4xl-llama` | Technical drafts, planning, orchestration and a second review; verify operational claims |
+| `gemma-4-26b-a4b-qat-ud-q4-k-xl-llama` | Creative drafting and chat with shorter waits; check facts and narrative continuity |
+| `gemma-4-31b-qat-ud-q4-k-xl-llama` | Creative drafting and revision with longer waits; no established human preference advantage over 26B |
+| `qwen3.8-27b-q4xl-mtp` | Qwen's llama.cpp baseline for coding and document work; strict formats still need review |
+
+All includes those five plus `gemma-4-e2b-q4km-off`,
+`gemma-4-e4b-q4km-off`, and `qwen3.5-4b-q4km-off`. A smaller preset can be your
+main model or a helper. Recommendation membership is an editorial choice;
+compatibility and local speed observations can support an All entry without
+making it Recommended. Intended roles do not claim completed-work evidence
+for every application.
 
 ```sh
 ./build/temper init --catalog catalog/guided-setup.json --dry-run
 ```
 
-Users explicitly choose a profile before compilation or installation. A local
-compile checks the authoring contract and produces an exact execution lock; it
-does not test behavior, download weights, install software or publish this
-candidate. See the [execution-lock contract](../docs/contracts/execution-lock.md).
+Nothing starts selected. Recommended and All share one selection. Presets have
+independent context/template settings and reusable material. The next screen
+composes arbitrary layouts; Local and Utility are removable empty starters.
+[The setup guide](../docs/contracts/init.md) covers editing, preparation and
+managed activation. Save/prepare does not activate a layout.
 
-The chooser shows **S (>16–32 GB)** before **XS (up to 16 GB)** when both have
-available choices. These placements are estimates, separate from machine checks.
-Use Space to select models to install and Enter or `d` to choose the default
-local model. Other selected configurations remain installed alternatives.
-Each has independent template and context choices.
+Current presets default to **medium thinking**, and supporting clients can
+override it per request. A different default needs a test establishing why it
+is preferable; historical runs with thinking off do not alone justify that
+exception. Wizard cards omit thinking settings. Existing saved locks and the
+measurements below keep their exact original settings. The smaller presets'
+IDs retain their historical `-off` suffix so saved references remain valid;
+the request defaults, not those IDs, control thinking.
 
-To change the shared display order, reorder layout IDs in `layout_order` in
-[`guided-setup.json`](guided-setup.json). The order applies within each tier;
-unlisted choices follow in stable profile-ID order. Model and weight labels live
-on their artifact, engine labels on the engine, and memory tiers on layouts.
-Editing these fields does not alter execution settings or saved user defaults.
-The S order is Qwen–Splash first and Qwen–llama last. The Splash choice installs
-[Splash 1.1.0](https://github.com/incoai/splash/releases/tag/1.1.0), the shared
-Unsloth UD-Q4_K_XL target, and its matching DFlash2 draft. Frog remains the selected
-template. Splash requires Apple M3 or newer and macOS 26.4 or later; incompatible
-machines show it among unavailable choices.
+The chooser places available **S (>16–32 GB)** choices before **XS (up to
+16 GB)**, with incompatible choices afterwards. Tiers are estimates, not machine
+qualification. Edit `preset_order` to change order within a bucket. Model and
+weight labels belong to artifacts, engine labels to engines, and memory tiers
+and descriptions to presets. Editorial changes preserve execution identity and
+saved selections.
 
-`qwen3.8-27b-splash-local` is the profile and `qwen3.8-27b-q4xl-splash` its layout.
-The draft is included automatically, pinned at its own revision. Preparing the
-selection derives a local tokenizer without loading the model. First start also
-builds Splash's weight cache, requiring additional disk space shown in review.
-The catalog uses int8 KV, medium reasoning, and a 24 GiB engine memory ceiling.
-Context remains an explicit choice without a new 1.1.0 capacity finding.
-Historical Splash coding evidence retains its original engine identity.
-A [native integration check](../docs/PLAN.md#splash-110-integration) passed for
-1.1.0 / llama-swap v257 at 32k advertised context with short chat and tool requests;
-these versions are available through the explicit tested-software choice.
+The Splash preset uses Splash 1.1.0, the exact Unsloth target, Frog template and
+matching DFlash2 draft. It requires Apple M3 or newer and macOS 26.4 or later.
+Preparation derives its tokenizer without loading weights; first start builds
+an additional runtime weight cache. Its int8 KV, medium reasoning, 24 GiB memory
+cap and authored 118,000-token window remain explicit settings, not a new 1.1.0
+capacity measurement. The prior [integration check](../docs/PLAN.md#splash-110-integration)
+used 1.1.0/v257 at 32k with short chat/tool requests; it does not qualify v260
+or the larger authored window.
 
-For scripted installation choices:
+Gemma 31B's weights and launch configuration come from the retained
+[`gemma31-ud-mtp0-final` composition](../../v3/labs/workstreams/writing-and-orchestration/results/qat-m5-2026-09-28.json):
+Unsloth QAT UD-Q4_K_XL, llama.cpp b11205, plain decoding, Q8 KV, two checkpoints
+and a 40,960-token window. That measurement used thinking off; the current
+medium default is a different execution configuration and inherits no exact
+context or performance witness from it.
+
+For scripted choices:
 
 ```sh
 ./build/temper init --catalog catalog/guided-setup.json \
-  --profile qwen3.8-27b-q4xl-local --profile gemma-4-e2b-local \
-  --default-profile qwen3.8-27b-q4xl-local \
-  --context qwen3.8-27b-q4xl-mtp=40960 \
-  --context gemma-4-e2b-q4km-off=16384 --dry-run
+  --preset qwen3.8-27b-q4xl-mtp --preset gemma-4-e2b-q4km-off \
+  --context qwen3.8-27b-q4xl-mtp=40960 --dry-run --json
 ```
 
-The published stable catalog and [`qwen38-m5-refresh.json`](qwen38-m5-refresh.json)
-retain their original 32k configuration. That specimen reproduces the old
-setup and protects issued execution identities; this candidate supplies the
-new choices. Saved user choices are never silently expanded.
+The signed stable catalog and [`qwen38-m5-refresh.json`](qwen38-m5-refresh.json)
+retain their issued schemas and 32k configuration. They are historical exact
+inputs, not parallel mutable authoring sources.
 
 ## Assessed uses and boundaries
 
@@ -84,12 +91,28 @@ configuration and workload matter more than a model-level memory ranking.
 | [Gemma E4B](../../v3/results/models/gemma-4-e4b/README.md) | Short sourced drafts, extraction and tool workflows | Longer edits retained false claims after feedback |
 | [Qwen3.5 4B](../../v3/results/models/qwen3.5-4b/README.md) | Short extraction, classification and tool workflows | Editing changed supplied facts and retained superseded instructions |
 | [Qwen3.8 27B](../../v3/results/models/qwen3.8-27b/README.md) | Source-based document work and verified tool workflows | Strict output formats and Swedish prose need review |
+| [Muse Glimmer 30B](../../v3/results/models/muse-glimmer-30b/README.md) | Technical explanation, structured drafts, critical review and a completed conflict-recovery workflow | Migration SQL, atomicity and rollout guarantees needed material corrections; Q5 and high reasoning did not repair them |
+| [Gemma 4 26B-A4B](../../v3/results/models/gemma-4-26b-a4b/README.md) | Creative scenes, dialogue revision and general explanation with short waits | Length and factual constraints still need review; strict operational guarantees were unsound |
+| [Gemma 4 31B](../../v3/results/models/gemma-4-31b/README.md) | Creative drafting, revision and explanation | Longer waits; continuity edits and independent checking of operational advice remain necessary |
+
+The [writing and orchestration comparison](../../v3/labs/workstreams/writing-and-orchestration/README.md)
+measured Glimmer's Q4 XL target with medium reasoning and plain decoding, plus
+Unsloth's Gemma 26B QAT UD-Q4_K_XL with thinking off and plain decoding. Both
+use llama.cpp b11205, F16 KV and two bounded context checkpoints. Glimmer's
+draft variants did not establish a useful local speed gain. Gemma's MTP
+candidates were faster but did not clear the writing screen; plain decoding
+also retains a deadline-coherence failure in the final scene. The QAT
+conversion comparison found modest speed gains and mixed writing outcomes,
+not a demonstrated literary-quality improvement. Gemma 31B is another recommended S preset with
+[its own assessment](../../v3/results/models/gemma-4-31b/README.md),
+longer waits and no demonstrated human preference advantage. These are text-only observations on M5/32 GiB,
+not vision, multilingual or autonomous-operation qualifications.
 
 The small-model observations used text-only Q4_K_M, embedded templates,
 thinking off, Q8 K/V, 256-token batches and a 16,384-token window on Apple M5 /
 32 GiB. They include simulated tools and AI assessment; general chat quality,
-human time saved and low-memory machine fit were not established. The utility
-profile exposes the same Qwen3.5 model to a harness; its standalone successes
+human time saved and low-memory machine fit were not established. A helper layout can
+expose the same Qwen3.5 preset to a harness; its standalone successes
 do not prove that offloading improves a complete job.
 
 The candidate retains those core sampling and cache settings, with explicit
@@ -100,9 +123,10 @@ specimens preserve important limits: all four changed a supplied plural while
 proofreading; both Gemmas mishandled absent evidence; E2B left conflict recovery
 unfinished. These observations extend the linked cards without replacing their
 broader historical assessments; they do not qualify all task behavior on the
-newly recorded b11157. Small-model profiles use a 0.50
-`gpu_memory_utilization` preparation policy: this is an admission assumption,
-not an enforced llama.cpp memory limit or evidence of 8/16 GiB fit.
+newly recorded b11157. The historical small-model profiles used a 0.50
+`gpu_memory_utilization` admission assumption. New preset selection does not
+reserve that profile-wide fraction: layouts budget their actual active set.
+Neither policy establishes 8/16 GiB fit.
 
 ## Templates
 
@@ -111,7 +135,8 @@ weights and creates a distinct execution identity.
 
 | Choice | Offered for | Default |
 |---|---|---|
-| Embedded template | All four models | Gemma E2B/E4B and Qwen3.5 |
+| Embedded template | All catalog models | Gemma E2B/E4B, Gemma 26B/31B and Qwen3.5 |
+| Meta official template | Muse Glimmer 30B | Glimmer |
 | [Frog v22.5](https://huggingface.co/froggeric/Qwen-Fixed-Chat-Templates/blob/855bffc49448e299789730ff92c9b8d834d6cc14/README.md) | Both Qwen models | Qwen3.8 |
 | [Sharp v22.5.0](https://huggingface.co/peculiar-ragdoll/Qwen-Sharp-Chat-Templates/blob/85461fc118aaf25e7319c7ecf2481f944aac3a32/README.md) | Both Qwen models | Optional |
 
@@ -128,8 +153,8 @@ Gemma has only its embedded choice, so its Template tab is omitted.
 
 ## Context
 
-Both Qwen models declare a **262,144-token native ceiling** for the combined
-input-plus-output window. Gemma E2B/E4B declare **131,072**. Official
+Both Qwen models and Gemma 26B declare a **262,144-token native ceiling** for the
+combined input-plus-output window. Gemma E2B/E4B and Glimmer declare **131,072**. Official
 [Qwen3.8](https://huggingface.co/Qwen/Qwen3.8-27B#best-practices),
 [Qwen3.5](https://huggingface.co/Qwen/Qwen3.5-4B#processing-ultra-long-texts),
 [Gemma E2B](https://huggingface.co/google/gemma-4-E2B-it) and
@@ -137,15 +162,19 @@ input-plus-output window. Gemma E2B/E4B declare **131,072**. Official
 23 September 2026. The Qwen roughly 1M-token extensions need RoPE scaling;
 those are separate configurations.
 
-The Context screen uses the largest applicable reviewed machine finding when
-available. This candidate has no canonical findings yet: setup requests an explicit
-window before continuing and shows its fit as unknown. `--context LAYOUT=TOKENS`
-supplies a window up to the ceiling. The authored windows are 40,960 for Qwen3.8
-and 16,384 for the small models, available to low-level compilation;
-they are not automatic machine recommendations. Short capability tasks at 16k
-do not establish a machine's context capacity. The retained Qwen3.8 102,400-token
-observation reserves 512 output tokens; it does not establish that window with
-this candidate's 4,096-token allowance.
+The [Glimmer](https://huggingface.co/meta-models/Muse-Glimmer-30B) and
+[Gemma 26B](https://huggingface.co/google/gemma-4-26B-A4B-it) ceilings were checked
+on 27 September. A native ceiling does not establish fit or acceptable latency.
+
+Selecting a preset accepts its authored window. `c` in the editor or
+`--context PRESET=TOKENS` changes it explicitly. Review reports unknown fit
+unless an exact machine finding applies. This authoring candidate has no
+canonical findings yet because the retained shadow evidence has no published
+HTTP(S) destination. Its windows are 118,000 for Qwen–Splash, 40,960 for
+Qwen–llama and Gemma 31B, 57,344 for Glimmer, 98,304 for Gemma 26B, and 16,384
+for the smaller models. These are settings, not automatic machine capacity
+recommendations. Historical measurements below keep their producing engines,
+windows and output reserves; shorter tasks do not prove a larger context fits.
 
 The [small-model observations](../../v3/labs/workstreams/model-runtime-optimization/results/catalog-defaults-m5.json)
 and [Qwen3.8 capacity result](../../v3/labs/workstreams/model-runtime-optimization/results/qwen27-capacity-m5.json)
@@ -158,8 +187,32 @@ versions are explicit: the small-model rows have not been rerun on b11157.
 | Gemma E2B | b11149 / v257 | 16,384 | 11,776 | 4,096 | 12.09 / 1.16 s |
 | Gemma E4B | b11149 / v257 | 16,384 | 11,776 | 4,096 | 18.88 / 2.00 s |
 | Qwen3.8 27B | b11157 / v257 | 40,960 | 36,352 | 4,096 | 506.28 / 21.08 s |
+| Muse Glimmer 30B, Q4 XL / medium / F16 / no draft | b11205 / v260 | 57,344 | 49,152 | 4,096 reserved | 582.26 / 7.36 s |
+| Gemma 4 26B-A4B, Unsloth QAT UD-Q4_K_XL / off / F16 / no draft | b11205 / v260 | 98,304 | 90,112 | 4,096 reserved | 554.25 / 4.96 s |
 
-All remained inside the frozen resource bounds with no observed swap growth.
+The [initial writing comparison](../../v3/labs/workstreams/writing-and-orchestration/results/m5-2026-09-27.json)
+retains Glimmer and the Google Gemma findings; the
+[QAT comparison](../../v3/labs/workstreams/writing-and-orchestration/results/qat-m5-2026-09-28.json)
+owns the Unsloth Gemma result. Peak engine RSS was 16.07 GiB for Glimmer and
+16.53 GiB for this Gemma 26B layout. These are the largest completed
+retrieval/continuation points in their respective studies under a ten-minute
+request limit, with a reserved rather than fully generated 4,096-token answer. Glimmer's
+replies were bare JSON; Gemma's correct values were enclosed in a JSON fence.
+Neither result qualifies arbitrary long-document reasoning. Smaller passed
+points retain their exact materials in the linked records; the older Google
+Gemma points are not measurements of the Unsloth target.
+
+To preview both writing choices with Gemma as the explicit default:
+
+```sh
+./build/temper init --catalog catalog/guided-setup.json \
+  --profile muse-glimmer-30b-local --profile gemma-4-26b-a4b-local \
+  --default-profile gemma-4-26b-a4b-local \
+  --context muse-glimmer-30b-q4xl-llama=57344 \
+  --context gemma-4-26b-a4b-qat-ud-q4-k-xl-llama=98304 --dry-run
+```
+
+The listed filled-context points had no observed native swap growth.
 Gemma's strict JSON controls failed on Markdown fences; a separate prospective
 semantic arm established its lookup points. Qwen3.5's follow-up reprocessed the
 whole input, while the others reused a prefix; context fit alone does not
@@ -205,12 +258,15 @@ assessed revisions; upstream metadata confirms the recorded sizes and hashes.
 Frog v22.5 is unchanged. Sharp v22.5.0 is recorded from its canonical
 repository. Exact revisions, sizes and hashes live in the catalog.
 
-The candidate records [llama.cpp b11157](https://github.com/ggml-org/llama.cpp/releases/tag/b11157)
-and [llama-swap v257](https://github.com/mostlygeek/llama-swap/releases/tag/v257).
-Temper's existing resolver verified both release archives. `--software latest`
-still resolves the newest releases explicitly; these recorded versions provide
-reproducible offline compilation. The Qwen3.8 40,960-token result binds these
-exact releases; the linked small-model/task observations retain b11149.
+The writing comparison checked and froze
+[llama.cpp b11205](https://github.com/ggml-org/llama.cpp/releases/tag/b11205) and
+[llama-swap v260](https://github.com/mostlygeek/llama-swap/releases/tag/v260) on
+**27 September 2026**, including exact release archive identities. Glimmer and
+Gemma 26B use b11205; earlier GGUF choices retain their b11157 engine record.
+The shared recorded router advances to v260. The Qwen3.8 40,960-token result
+still binds b11157/v257, and small-model task/context observations retain b11149.
+`--software latest` resolves newer releases explicitly; recorded software keeps
+offline compilation reproducible without broadening old measurements.
 
 `--software tested` selects the following prior observed versions. Evidence is
 scoped to the cited conditions; it is not a claim that every current template,
@@ -222,7 +278,8 @@ context or launch setting was tested together.
 | llama.cpp / Gemma E4B | b10621 | [Exact capability configuration](../../v3/labs/workstreams/small-model-capability-portfolio/results/gemma-4-e4b.json), `cal07-gemma4-e4b-q4km-off-b10621-ctx16k:b81efd11cde9` |
 | llama.cpp / Qwen3.5 | b10621 | [Exact capability configuration](../../v3/labs/workstreams/small-model-capability-portfolio/results/qwen3.5-4b.json), `cal07-qwen35-4b-q4km-off-b10621-ctx16k:465b8c16fdb6` |
 | llama.cpp / Qwen3.8 | b10964 | [22 September native integration check](../docs/PLAN.md#current-state), frozen `qwen-machine-study@2` lock |
-| llama-swap | v255 | Same bounded native integration check: routing, one request and owned shutdown |
+| llama.cpp / Glimmer and Gemma 26B | b11205 | [Writing comparison](../../v3/labs/workstreams/writing-and-orchestration/README.md): exact draft/configuration comparisons, role work and context |
+| llama-swap | v260 | Same writing comparison: chat and native-completion routes, template/tokenizer passthrough, streaming and owned shutdown |
 
 The b10621 observations used the Homebrew build; fallback resolves the official
 archive for that upstream release, not the original Homebrew binary. All listed
@@ -230,7 +287,7 @@ fallback archives remain resolvable. Minimum **required** versions remain unknow
 the observed tested versions are not inferred compatibility floors. The separate
 native allocations check only the configurations identified in their records;
 optional Sharp compositions still need their own applicable checks. Source
-currency checking itself performed no inference or model-weight download.
+currency checks are distinct from the separately authorized native comparisons.
 
 ## Edit a description
 
@@ -240,13 +297,13 @@ have a published destination. Leave that field absent until a real public
 assessment URL exists rather than substituting an upstream model card or a
 nonexistent publication.
 
-Each model's `description` is editable catalog text shared by its main and
-utility profiles. Use Workshop's
-[description editor](../../v3/workshop/README.md#edit-a-model-description), or:
+Each preset owns its manually authored `description`. Recommended entries
+require nonblank copy; All-only entries may omit it. Different engines using
+the same weights can explain different tradeoffs. Edit the preset directly:
 
 ```sh
 ./build/temper catalog describe --catalog catalog/guided-setup.json \
-  --artifact qwen3.5-4b-q4km \
+  --preset qwen3.5-4b-q4km-off \
   --description 'Useful for my extraction tasks; I review its factual claims.' \
   --dry-run
 ```

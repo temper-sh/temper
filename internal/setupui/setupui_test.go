@@ -457,7 +457,7 @@ func TestLongReviewOpensAtTopAndKeepsExplicitPageScroll(t *testing.T) {
 	}
 	m.Update(cmd())
 	first := m.View().Content
-	if m.viewport.YOffset() != 0 || !strings.Contains(first, "Review") || !strings.Contains(first, "> Save configuration") {
+	if m.viewport.YOffset() != 0 || m.cursor != 0 || !strings.Contains(first, "Review") || !strings.Contains(first, "Save configuration") {
 		t.Fatalf("review did not open at top: offset=%d view=%q", m.viewport.YOffset(), first)
 	}
 	if !strings.Contains(first, "↑↓ scroll") {
@@ -484,7 +484,7 @@ func TestLongReviewOpensAtTopAndKeepsExplicitPageScroll(t *testing.T) {
 
 	press(m, tea.KeyRight) // actions stay outside the scrolled content
 	actionView := m.View().Content
-	if !strings.Contains(actionView, "> Prepare installation") {
+	if m.cursor != 1 || !strings.Contains(actionView, "Prepare installation") {
 		t.Fatalf("focused action not visible: %q", actionView)
 	}
 	if m.viewport.YOffset() != pageUpOffset {
@@ -497,7 +497,7 @@ func TestLongReviewOpensAtTopAndKeepsExplicitPageScroll(t *testing.T) {
 		t.Fatalf("manual scroll snapped to action: %d to %d", manualOffset, m.viewport.YOffset())
 	}
 	press(m, tea.KeyRight) // focus Back
-	if actionView = m.View().Content; !strings.Contains(actionView, "> Back") {
+	if actionView = m.View().Content; m.cursor != 2 || !strings.Contains(actionView, "Back") {
 		t.Fatalf("Back action not visible: %q", actionView)
 	}
 }
@@ -509,9 +509,9 @@ func TestSelectionCursorStaysVisibleWhenRowsWrap(t *testing.T) {
 		cursor int
 		want   string
 	}{
-		{name: "profile", stage: stageProfile, cursor: 0, want: "> [x] (*) Compact general"},
-		{name: "template", stage: stageTemplates, cursor: 1, want: "> ( ) Sharp"},
-		{name: "software", stage: stageSoftware, cursor: 2, want: "> ( ) Tested"},
+		{name: "profile", stage: stageProfile, cursor: 0, want: "[x] (*) Compact general"},
+		{name: "template", stage: stageTemplates, cursor: 1, want: "( ) Sharp"},
+		{name: "software", stage: stageSoftware, cursor: 2, want: "( ) Tested"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			m := NewModel(context.Background(), setupInput(), readyPreview)
@@ -523,7 +523,7 @@ func TestSelectionCursorStaysVisibleWhenRowsWrap(t *testing.T) {
 				press(m, tea.KeyDown)
 			}
 
-			if view := ansi.Strip(m.View().Content); !strings.Contains(view, tc.want) {
+			if view := ansi.Strip(m.View().Content); m.cursor != tc.cursor || !strings.Contains(view, tc.want) {
 				t.Fatalf("focused option %q is outside viewport: %q", tc.want, view)
 			}
 		})

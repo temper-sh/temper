@@ -254,6 +254,7 @@ func layoutExecutionDigest(d Document, l Layout) string {
 	x := l
 	x.DisplayName, x.EngineVersions = "", nil
 	x.MemoryTier = ""
+	x.Description, x.AssessmentURL, x.Recommended = "", "", false
 	x.ContextLimitTokens, x.ContextFindings = 0, nil
 	x.Artifact = artifactMaterialDigest(d.Artifacts[l.Artifact])
 	if l.Speculation.DraftArtifact != "" {
@@ -361,6 +362,8 @@ func (l Lock) projections() (Projections, error) {
 		if c.Splash != nil {
 			m.Llama = nil
 			m.Splash = &manifest.SplashTuning{SplashConfig: c.Splash.SplashConfig, SoftwareSHA256: d.Engines[layout.Engine].Supply.Release.Artifact.SHA256}
+		}
+		if layout.Speculation.DraftArtifact != "" {
 			draft := d.Artifacts[layout.Speculation.DraftArtifact]
 			m.Draft = &manifest.Model{Repo: draft.Repo, Format: draft.Format}
 			entry.Draft = &lockfile.Draft{Repo: draft.Repo, Revision: draft.Revision}

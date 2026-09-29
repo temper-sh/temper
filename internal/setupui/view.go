@@ -42,11 +42,21 @@ const (
 	hitReview
 	hitDownloads
 	hitInstall
+	hitShortcut
+	hitFilter
+	hitMember
+	hitStartup
+	hitDefault
+	hitFocus
+	hitPresetAction
+	hitField
+	hitIdle
 )
 
 type hitTarget struct {
 	kind                hitKind
 	index               int
+	key                 string
 	x, y, width, height int
 }
 
@@ -100,20 +110,34 @@ func (m Model) modeName(id string) string {
 
 func (m Model) tabBar(width int) string {
 	tabs, active := m.tabs()
-	items := make([]string, len(tabs))
+	labels := make([]string, len(tabs))
 	for i, tab := range tabs {
-		style := lipgloss.NewStyle().Padding(0, 1).Foreground(nightMuted).
-			Border(lipgloss.NormalBorder(), false, false, true, false).BorderForeground(nightBorder)
-		label := tab.label
+		labels[i] = tab.label
+	}
+	return stepTabs(labels, active, width)
+}
+
+func stepTabs(labels []string, active, width int) string {
+	padding := 3
+	if width < 50 {
+		padding = 1
+	}
+	items := make([]string, len(labels))
+	for i, label := range labels {
+		border := lipgloss.RoundedBorder()
+		border.BottomLeft, border.BottomRight = "┴", "┴"
+		style := lipgloss.NewStyle().Padding(0, padding).Foreground(nightMuted).
+			BorderForeground(nightBorder)
 		switch {
 		case i == active:
-			style = style.Background(nightSurface).Foreground(nightBlue).Bold(true).BorderForeground(nightBlue)
+			border.Bottom, border.BottomLeft, border.BottomRight = " ", "┘", "└"
+			style = style.Foreground(nightBlue).Bold(true).BorderForeground(nightBlue)
 			label = "• " + label
 		case i < active:
 			style = style.Foreground(nightGreen)
 			label = "✓ " + label
 		}
-		items[i] = style.Render(label)
+		items[i] = style.Border(border).Render(label)
 	}
 	// Keep whole tabs, including the active one, on a single row. Chevrons
 	// disclose the steps outside the visible range on narrow terminals.
@@ -121,10 +145,10 @@ func (m Model) tabBar(width int) string {
 	visible := func() string {
 		parts := append([]string(nil), items[start:end]...)
 		if start > 0 {
-			parts = append([]string{"‹\n "}, parts...)
+			parts = append([]string{"\n‹\n─"}, parts...)
 		}
 		if end < len(items) {
-			parts = append(parts, "›\n ")
+			parts = append(parts, "\n›\n─")
 		}
 		return lipgloss.JoinHorizontal(lipgloss.Top, parts...)
 	}
@@ -135,7 +159,9 @@ func (m Model) tabBar(width int) string {
 			end--
 		}
 	}
-	return visible()
+	row := visible()
+	gap := lipgloss.NewStyle().Foreground(nightBorder).Render(strings.Repeat("─", max(0, width-lipgloss.Width(row))))
+	return lipgloss.JoinHorizontal(lipgloss.Bottom, row, gap)
 }
 
 func (m *Model) View() tea.View {
@@ -174,7 +200,7 @@ func (m *Model) View() tea.View {
 		footerHeight++ // Fixed divider and scroll position above the controls.
 	}
 	m.viewport.SetHeight(max(1, m.height-lipgloss.Height(header)-footerHeight))
-	m.viewport.SetContent(strings.Join(body.blocks, "\n\n"))
+	m.viewport.SetContent(strings.Join(body.blocks, "\n"))
 	if m.stage != stageReview && m.focusSelection && body.focusStart >= 0 {
 		m.viewport.EnsureVisible(body.focusEnd, 0, 0)
 		m.viewport.EnsureVisible(body.focusStart, 0, 0)
@@ -230,14 +256,24 @@ func (m *Model) View() tea.View {
 type screenBody struct {
 	blocks               []string
 	height               int
+	lastCard             bool
 	focusStart, focusEnd int
 	downloadsTop         int
 	targets              []hitTarget
 }
 
 func (b *screenBody) add(block string, focused bool) int {
-	if len(b.blocks) > 0 {
-		b.height++ // One blank line between blocks; heights already count lines.
+	return b.addBlock(block, focused, false)
+}
+
+func (b *screenBody) addCard(block string, focused bool) int {
+	return b.addBlock(block, focused, true)
+}
+
+func (b *screenBody) addBlock(block string, focused, card bool) int {
+	if len(b.blocks) > 0 && !(card && b.lastCard) {
+		b.blocks = append(b.blocks, "")
+		b.height++ // Keep a blank line between sections, but stack adjacent cards.
 	}
 	start := b.height
 	if focused {
@@ -248,6 +284,7 @@ func (b *screenBody) add(block string, focused bool) int {
 	}
 	b.blocks = append(b.blocks, block)
 	b.height += lipgloss.Height(block)
+	b.lastCard = card
 	return start
 }
 
@@ -330,7 +367,7 @@ func (m Model) screenContent(width int, compact bool) screenBody {
 				// The checkbox toggles installation; the rest of the card chooses
 				// the default, matching Space and Enter respectively.
 				top := body.height + 1
-				body.targets = append(body.targets, hitTarget{kind: hitInstall, index: i, x: 4, y: top + 1, width: 3, height: 1})
+				body.targets = append(body.targets, hitTarget{kind: hitInstall, index: i, x: 2, y: top + 1, width: 3, height: 1})
 			}
 			addOption(i, mark, profile.Option)
 		}
@@ -414,17 +451,29 @@ func (m Model) screenContent(width int, compact bool) screenBody {
 }
 
 func (m Model) downloadsBlock(section Section, width int) (string, int) {
+	return downloadsBlock(section, width, m.downloadsOpen, false)
+}
+
+func downloadsBlock(section Section, width int, open, focused bool) (string, int) {
 	inner := width - 4
-	label := fmt.Sprintf("▸ Downloads (%d files) · d expand", len(section.Downloads))
-	if m.downloadsOpen {
-		label = fmt.Sprintf("▾ Downloads (%d files) · d collapse", len(section.Downloads))
+	unit := "files"
+	if len(section.Downloads) == 1 {
+		unit = "file"
+	}
+	label := fmt.Sprintf("▸ Downloads (%d %s) · d expand", len(section.Downloads), unit)
+	if open {
+		label = fmt.Sprintf("▾ Downloads (%d %s) · d collapse", len(section.Downloads), unit)
+	}
+	border := nightBorder
+	if focused {
+		border = nightBlue
 	}
 	heading := lipgloss.NewStyle().Foreground(nightCyan).Bold(true).Width(inner).Render(label)
 	content := heading + "\n" + lipgloss.NewStyle().Foreground(nightText).Width(inner).Render(strings.Join(section.Lines, "\n"))
-	if m.downloadsOpen {
+	if open {
 		content += "\n\n" + downloadTable(section.Downloads, inner)
 	}
-	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(nightBorder).
+	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(border).
 		Padding(0, 1).Width(width).Render(content), lipgloss.Height(heading)
 }
 
@@ -469,21 +518,26 @@ func downloadTable(downloads []Download, width int) string {
 }
 
 func (m Model) optionCard(row int, mark string, option Option, width int) string {
+	return optionCard(option, mark, row == m.cursor, width)
+}
+
+func optionCard(option Option, mark string, focused bool, width int) string {
 	name := option.Name
 	if name == "" {
 		name = option.ID
 	}
-	border, background, titleColor := nightBorder, nightBackground, nightText
-	prefix := "  "
-	if row == m.cursor {
+	border, background, titleColor := nightBorder, nightBackground, nightBlue
+	if focused {
 		border, background = nightBlue, nightSurface
-		prefix = "> "
 	}
 	if strings.Contains(mark, "[x]") || strings.Contains(mark, "(*)") {
 		titleColor = nightGreen
 	}
+	if mark != "" {
+		name = mark + " " + name
+	}
 	inner := width - 4
-	lines := []string{lipgloss.NewStyle().Foreground(titleColor).Background(background).Bold(true).Width(inner).Render(prefix + mark + " " + name)}
+	lines := []string{lipgloss.NewStyle().Foreground(titleColor).Background(background).Bold(true).Width(inner).Render(name)}
 	if option.Components != "" {
 		lines = append(lines, lipgloss.NewStyle().Foreground(nightCyan).Background(background).Width(inner).Render(option.Components))
 	}
@@ -495,7 +549,7 @@ func (m Model) optionCard(row int, mark string, option Option, width int) string
 		lines = append(lines, lipgloss.NewStyle().Foreground(nightAmber).Background(background).Bold(true).Width(inner).Render(warning))
 	}
 	if option.Description != "" {
-		lines = append(lines, lipgloss.NewStyle().Foreground(nightText).Background(background).Width(inner).Render(option.Description))
+		lines = append(lines, "", lipgloss.NewStyle().Foreground(nightText).Background(background).Width(inner).Render(option.Description))
 	}
 	if option.AssessmentURL != "" {
 		lines = append(lines, lipgloss.NewStyle().Foreground(nightCyan).Background(background).Width(inner).Render("Assessment: "+option.AssessmentURL))
@@ -603,19 +657,17 @@ func (m Model) reviewActions(width int) (string, []hitTarget) {
 	buttons := make([]string, len(names))
 	for i, name := range names {
 		style := lipgloss.NewStyle().Padding(0, 1).Foreground(nightText).Background(nightSurface)
-		prefix := "  "
 		if !m.reviewActionAvailable(i) {
 			style = style.Foreground(nightMuted)
 			name += " ×"
 		}
 		if i == m.cursor {
-			prefix = "> "
 			style = style.Foreground(nightBackground).Background(nightBlue).Bold(true)
 			if !m.reviewActionAvailable(i) {
 				style = style.Background(nightAmber)
 			}
 		}
-		buttons[i] = style.Render(prefix + name)
+		buttons[i] = style.Render(name)
 	}
 	row := strings.Join(buttons, " ")
 	if lipgloss.Width(row) > width {

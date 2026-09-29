@@ -78,7 +78,7 @@ func TestCurrentPostureManifestRendersLegacySemanticsOrBetter(t *testing.T) {
 				`"id": "qwen3.8-27b-gguf-24k"`,
 				`"contextWindow": 24576`,
 				`"maxTokens": 4096`,
-				`"reasoning": false`,
+				`"reasoning": true`,
 				`"remote"`,
 				`"ownerKey": "preserved"`,
 			},
@@ -89,6 +89,7 @@ func TestCurrentPostureManifestRendersLegacySemanticsOrBetter(t *testing.T) {
 			artifact: "pi/settings.json",
 			contains: []string{
 				`"defaultModel": "qwen3.8-27b-gguf-24k"`,
+				`"local/qwen3.8-27b-gguf-24k": "off"`,
 				`"reserveTokens": 3072`,
 				`"keepRecentTokens": 7168`,
 				`"theme": "dark"`,

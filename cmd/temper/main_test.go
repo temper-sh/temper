@@ -39,7 +39,7 @@ func TestRunInitScriptedPreviewLeavesRootAbsent(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "setup")
 	var stdout, stderr bytes.Buffer
 	exit := runWithDependencies(context.Background(), []string{"init", "--root", root,
-		"--catalog", "../../catalog/guided-setup.json", "--profile", "qwen3.5-4b-local", "--context", "qwen3.5-4b-q4km-off=16384", "--dry-run", "--json"}, &stdout, &stderr, dependencies{
+		"--catalog", "../../catalog/guided-setup.json", "--preset", "qwen3.5-4b-q4km-off", "--context", "qwen3.5-4b-q4km-off=16384", "--dry-run", "--json"}, &stdout, &stderr, dependencies{
 		detectFacts: func(context.Context) (machine.Facts, error) {
 			return machine.Facts{
 				Schema:        machine.FactsSchemaV1,
@@ -51,7 +51,7 @@ func TestRunInitScriptedPreviewLeavesRootAbsent(t *testing.T) {
 			}, nil
 		},
 	})
-	if exit != 0 || !strings.Contains(stdout.String(), `"schema": "temper-setup-plan/v1"`) || !strings.Contains(stdout.String(), `"dry_run": true`) {
+	if exit != 0 || !strings.Contains(stdout.String(), `"schema": "temper-configuration-result/v1"`) || !strings.Contains(stdout.String(), `"dry_run": true`) {
 		t.Fatalf("exit=%d stdout=%q stderr=%q", exit, stdout.String(), stderr.String())
 	}
 	if _, err := os.Stat(root); !errors.Is(err, os.ErrNotExist) {

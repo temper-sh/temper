@@ -87,7 +87,23 @@ func commandFromLaunch(spec launchSpec, runtime Runtime) (Command, error) {
 	if err := validateRuntime(runtime); err != nil {
 		return Command{}, err
 	}
-	return Command{lines: lines, runtime: runtime}, nil
+	return Command{lines: lines, runtime: runtime, spec: spec}, nil
+}
+
+// Arguments exposes actual argv for managed ownership checks, independently of
+// the shell-quoted presentation. Port remains the router's explicit placeholder.
+func (c Command) Arguments() []string {
+	var args []string
+	for _, group := range c.spec.argumentGroups {
+		for _, word := range group {
+			value := word.value
+			if word.kind == portWordKind {
+				value = "${PORT}"
+			}
+			args = append(args, value)
+		}
+	}
+	return args
 }
 
 var environmentNamePattern = regexp.MustCompile(`^[A-Z][A-Z0-9_]*$`)

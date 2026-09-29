@@ -185,7 +185,7 @@ func TestSelectionPageScrollKeepsHeaderAndDoesNotSnapBack(t *testing.T) {
 	}
 	press(m, tea.KeyDown) // Next button
 	press(m, tea.KeyDown) // Back to the only profile
-	if view := ansi.Strip(m.View().Content); !strings.Contains(view, "> [ ] ( ) Compact general assistant") {
+	if view := ansi.Strip(m.View().Content); m.cursor != 0 || !strings.Contains(view, "[ ] ( ) Compact general assistant") {
 		t.Fatalf("moving focus did not reveal the chosen row: %s", view)
 	}
 }
@@ -221,7 +221,7 @@ func TestReviewScrollsWithArrowsAndTrackpadWithoutChangingAction(t *testing.T) {
 		press(m, tea.KeyDown)
 	}
 	last := ansi.Strip(m.View().Content)
-	if !strings.Contains(last, "Last review detail") || !strings.Contains(last, "> Save configuration") || !strings.Contains(last, "• Review") {
+	if m.cursor != 0 || !strings.Contains(last, "Last review detail") || !strings.Contains(last, "Save configuration") || !strings.Contains(last, "• Review") {
 		t.Fatalf("ordinary keys cannot reach the end with controls visible: %s", last)
 	}
 	offset := m.viewport.YOffset()

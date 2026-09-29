@@ -2,7 +2,7 @@
 
 Status: **GUIDED SETUP IMPLEMENTED — UNRELEASED**
 
-Updated: **2026-09-26**
+Updated: **2026-09-29**
 
 [`SPEC.md`](SPEC.md) retains the product specification and live-path contracts.
 [V3 requirements](../../v3/REQUIREMENTS.md) govern the current catalog and
@@ -19,15 +19,15 @@ promotion, resolver and bootstrap proposals are no longer an active backlog.
 |---|---|
 | Native configuration workflow | Manifest/lock validation, resolve, fetch, apply, update, check, rendering and machine facts are implemented. [The explicit workflow](EXPLICIT-WORKFLOW.md) owns use; [the acceptance record](acceptance/current-posture-render.md) owns prior real-runtime evidence. |
 | Maintained catalog | Artifact, Patch, Engine, Layout and Profile compile with an explicit Selection to a self-contained Execution Lock. [The execution-lock contract](contracts/execution-lock.md) owns v2 and issued-v1 compatibility. |
-| Guided setup | `temper init` provides modes-first Bubble Tea screens, explicit per-model templates and contexts, software choice, combined review, atomic save and optional preparation. `~/.temper` is the default; exact saved locks support offline resume. [The setup contract](contracts/init.md) owns the implemented scope. |
+| Guided setup | `init` and `configure` provide Presets (Recommended/All), arbitrary Layouts, then review/save/prepare. Revision-checked configuration is independent of managed activation. [The setup contract](contracts/init.md) owns current behavior; [legacy pairs](contracts/legacy-init.md) import explicitly. |
 | Software selection | Source records are separate from resolved releases. `catalog compile --software recorded\|latest\|tested` supports the current llama.cpp/llama-swap macOS ARM64 sources. Recorded inputs are the offline default; fallback is explicit. |
 | Installation | Exact isolated release/Python installation, receipts, version checks and recovery remain. Receipt reuse now compares installed software facts independently of execution provenance. Context and other runtime changes reuse unchanged software for llama.cpp and Splash. System-managed software is always retained. |
 | Field Kit host | `execution inspect/prepare/render/paths/serve/remove` and supervised probes are implemented. The [runtime contract](contracts/execution-runtime.md) owns process identities, listener checks and final shutdown proof. |
-| Current router compatibility | The working tree recognizes llama-swap v257's narrowly scoped macOS inspection helpers using kernel executable/argv and router ancestry. Engine lifetime remains fixed for measurements; unknown children still refuse ownership. Full tests, race, vet and Linux compilation pass. Native catalog attempts are retained in [Labs](../../v3/labs/workstreams/model-runtime-optimization/method/catalog-refresh-2026-09-24.md). |
+| Current router compatibility | The working tree recognizes llama-swap's narrowly scoped macOS inspection helpers and Rapid 0.15.2's reviewed crash-log child, using kernel identity and ancestry. v260 passed native writing/context work. Engine lifetime remains fixed for measurements; unknown children still refuse ownership. Full Go tests, vet and race checks pass; failures and recovery remain in [Labs](../../v3/labs/workstreams/writing-and-orchestration/README.md). |
 | Source and build | Catalog delivery `a9b4a7f` is pushed and tagged alpha.10. Guided setup, native Metal detection and Splash are committed in `3ba7813`. The software receipt simplification is committed in `98b99ce`; the Qwen study preparation adds exact Python closures and probe identities. These changes await release. |
 | Public binary | Signed/notarized [0.1.0-alpha.10](https://github.com/temper-sh/temper/releases/tag/v0.1.0-alpha.10) adds catalog commands. Its downloaded checksum, signing identity, notarization and live-catalog compilation pass. Field Kit `01dd867` keeps its verified alpha.9 host; alpha.7 remains the dispatched revision 1 host. |
 | Catalog distribution | The [stable channel](https://temper-sh.github.io/temper/catalog/channels/stable/channel.yaml) publishes signed sequence 2 with one Qwen profile. Explicit update, inspection, selection, compilation and offline rollback are delivered. [The catalog guide](CATALOG.md) owns use. |
-| Catalog candidate | [The authoring catalog](../catalog/README.md) offers Qwen3.8, Qwen3.5 and Gemma E2B/E4B as main models, plus Qwen3.5 as an on-demand utility. It records b11157/v257 and authors 40,960 tokens for Qwen3.8 after discovery, fresh confirmation and a full-output resource check on M5/32 GiB. Small-model context and focused task observations retain b11149; they do not qualify all profiles on b11157. Optional Sharp compositions and real 8/16 GiB fit remain unmeasured. It is not published. |
+| Catalog candidate | V3 authoring has five Recommended presets: Qwen/Splash, Glimmer, Gemma 26B, Gemma 31B and Qwen/llama. All retains Gemma E2B/E4B and Qwen3.5. The writing presets use b11205; Qwen/llama and smaller presets retain their exact closures. The router is v260. Historical evidence keeps its producing versions. The catalog is unpublished. |
 
 The receipt simplification passes full Go tests, vet and race checks after
 integration with `3ba7813`. Regressions cover llama.cpp settings and Splash
@@ -73,7 +73,77 @@ recorded Qwen inputs and unknown required/tested boundaries were not changed.
 
 ## Next delivery
 
-**Close catalog evidence gaps and plan the usable stack through Workshop.**
+**Preset selection and user-owned layouts — implemented in source; bounded
+M5 native lifecycle checks completed with fixes.**
+
+The [implementation plan](design/presets-and-layouts-plan.md) now has the five
+Recommended presets and required authored copy, v3 authoring, a shared
+Recommended/All selection, editable starter layouts and arbitrary compositions.
+`temper-configuration/v1` stores exact reusable presets and layout references;
+atomic revision checks protect edits and offline resume. Old formats retain
+their identities and import explicitly.
+
+Preparation deduplicates weights and exact software closures. Managed rendering
+composes Splash and different llama.cpp versions, separates startup/default,
+and applies idle eviction. Explicit activate/status/stop reconciles a separate
+activation journal and one owned launchd job. Durable engine launch identities
+support cleanup after router exit; active requests, accepted connections and
+uncertain ownership refuse transitions. No additional daemon or automatic
+crash restart is installed. Fixed-process Field Kit supervision stays separate.
+
+Gemma 31B was reconstructed from the retained QAT composition using
+`compile-arm.py`. Its current medium-thinking default changes execution identity;
+restoring the former off setting still reconstructs the historical digest.
+Adding it did not run another model study.
+Verification passed: full `go test ./...`, `go vet ./...`, `go test -race ./...`,
+source build and whitespace checks. A real 120×40 terminal dry run covered shared
+selection, renamed layout, separate startup/default, starter removal and review;
+its root remained absent. A private-root CLI run covered save, two layouts sharing
+one preset, offline resume, stale-edit refusal and read-only status. No model
+process or launchd job ran.
+
+The preset/layout editors retain the Tokyo Night palette, bordered cards and
+download table. Larger main tabs have rounded borders and an open active edge.
+Keyboard focus covers filters, each layout checkbox, contextual and navigation
+buttons, form fields and review downloads. Up/Down moves between rows;
+Left/Right moves within a row. Tab/Shift+Tab focuses forward/back actions;
+Enter/Space activates them. Keyboard and mouse share the button definitions.
+Narrow footers reveal the focused button instead of omitting contextual actions.
+UI regressions cover navigation without letter shortcuts, empty filters,
+resize to 28×10, independent switches, invalid input, preparation refusal and
+cancelled previews. Full tests, vet and UI race checks pass. A 100×30 terminal
+dry run completed preset selection, context editing, each layout checkbox,
+idle-timeout editing, Downloads, Back and Save, leaving its root absent.
+
+**Thinking controls, 2026-09-29 (owner).** Current authoring presets default to
+medium; another level requires a test establishing the exception. Historical
+off-only measurements do not establish that off is necessary. Wizard card
+names and descriptions omit thinking settings. Issued catalogs, saved locks and
+historical evidence retain their original settings. Pi exports allow request
+overrides for llama.cpp and Splash, preserve explicit client preferences and
+retain configured exceptions. Managed setup's Pi installation remains separate.
+Full Go tests, vet and focused render/catalog race checks pass, and the source
+binary is rebuilt. Pi 0.87.1 produced the expected 39 offline request payloads
+across all eight current presets; all eight rendered wizard cards omit thinking
+settings. This verifies client configuration and payloads, without new inference
+or changed live services.
+
+The authorized [bounded native smoke](design/managed-layout-smoke.md#observed-result)
+completed mixed Splash/llama.cpp routing, independent startup/default selection,
+idle unload/reload, busy-switch refusal, saved rename/deletion isolation and
+owned shutdown. It exposed and fixed the v260 empty in-flight snapshot parser
+and an `ESRCH` race during process observation. Glimmer supplied startup because
+Splash's 24 GiB cap exceeded the 23 GiB startup allowance. Cold Splash conversion
+exceeded the 60-second request bound; requests using its completed cache passed.
+A closing connection briefly refused stop; explicit retry and an unchanged
+second stop passed. Runtime stayed below seven minutes and output reservations
+below 512 tokens. All private runtime material was removed after verified stop;
+shared caches and the live stack were preserved. Full Go tests, vet and race
+checks pass. Live cutover, publication and release remain separate approvals.
+Older setup implementation notes below retain historical evidence; current
+behavior is defined by the command contract.
+
+### Existing catalog work and implemented setup
 
 The authorized 24 September overnight catalog review, bounded native
 investigation and managed-serving/tool/integration research are complete.
@@ -358,6 +428,65 @@ Transformers loader's generic Mistral heuristic is explicitly disabled for the
 Qwen tokenizer already derived by Splash; the serialized Qwen tokenizer remains
 unchanged. Failed attempts also ended with proved owned shutdown.
 
+### Role-specific S models
+
+The [authorized M5 comparison](../../v3/labs/workstreams/writing-and-orchestration/README.md)
+completed 80 requests across 36 configurations in 171.4 minutes of native runtime.
+The S order is Qwen–Splash, Glimmer 30B, Gemma 26B-A4B, Qwen–llama. Glimmer uses
+Q4 XL / official template / medium reasoning / F16 KV / no draft at 57,344
+tokens. Gemma uses Unsloth QAT UD-Q4_K_XL / embedded template / thinking off /
+F16 KV / no draft at 98,304. Both use b11205 and two context checkpoints.
+Their exact context-execution identities survived editorial catalog naming.
+
+Glimmer completed a conflict-recovery workflow but its technical plans still
+needed material corrections. Gemma 26B delivered useful scenes and revisions
+with much shorter waits than 31B. The
+[initial record](../../v3/labs/workstreams/writing-and-orchestration/results/m5-2026-09-27.json)
+preserves the Glimmer work, Google Gemma observations, larger-context timeouts
+and runtime failures. The [QAT comparison](../../v3/labs/workstreams/writing-and-orchestration/results/qat-m5-2026-09-28.json)
+adds 62 requests across 14 configurations in 62.8 native minutes. Its two extra
+replacement controls remove downloader residency as a timing confound; all
+original samples remain. Unsloth's 26B target is about 190 MB smaller and
+reduced matched plain 512-token request time by about 5%. Writing outcomes were
+mixed, not a demonstrated literary improvement.
+
+The final plain 26B archive scene met its brief, but the laundromat scene
+violated the closing deadline. The MTP variant additionally moved the shirt
+home while negotiating immediate dryer use; it did not clear the frozen writing
+criterion. Plain decoding is the conservative authored choice, not a claim
+that speculation inherently reduces quality. The new 90,112-token input and
+continuation passed in 554.25/4.96 seconds at 16.53 GiB peak engine RSS with no
+new swap. The exact context-execution identity matches the compiled catalog.
+Gemma 31B remains a documented Unsloth/plain/Q8/40k alternative, outside this
+installable S selection.
+The authored contexts reserve 4,096 output tokens rather than proving a full
+output at those filled points. Public assessment/context URLs remain absent
+until Results has a real published destination; setup requires explicit windows.
+
+Exact GGUF draft support covers llama.cpp DFlash/DFlash2 and external MTP
+assistants through ordinary preparation and supervised runtime. Regressions
+cover pinned material, rendering, invalidation and refusals. The Rapid comparison
+exposed its separate crash-log helper: the reviewed script digest, selected
+interpreter and engine parent now bind that child to supervision. A native
+request and shutdown passed. The original failure and verified recovery remain
+in the research record. A separate transient llama.cpp shutdown refusal remains
+unexplained; the error now reports its process row without weakening ownership.
+
+Full Go tests, vet and race checks pass. Twenty repeated harmless native
+supervision checks passed without reproducing that refusal. The rebuilt CLI's
+M5 terminal preview shows all four S choices before XS with separate Model,
+Weights and Engine labels. Scripted dry runs preserve explicit defaults and
+independent contexts; both writing choices fit the current memory/disk preview.
+The four-S-choice preview also compiles different engine versions and correctly
+reports its fresh-install disk shortfall (49.50 GiB needed, 33.74 GiB available).
+All preview roots remained absent. No live service or saved default was changed.
+
+The QAT catalog revision passes the full Go suite and the two-writing-profile
+dry run, with Gemma as the explicit default and independent contexts. Selecting
+the research SSD through `HF_HUB_CACHE` reuses its downloaded target. Neither
+preview creates its root. The final model cards, comparison and prepared Field
+Kit questions retain quality limitations and the unqualified faster candidates.
+
 ### Additional engine closures
 
 The Qwen Field Kit revision 4 is the named consumer for Rapid MLX 0.15.2,
@@ -379,13 +508,11 @@ keep the interface portable without claiming untested targets work.
 
 ### Managed activation
 
-Guided setup must select models, patches, tools and integrations deliberately,
-create the user's configuration once, and propose later changes as diffs.
-
-Production start/stop, service installation, transitions, leases and harness
-integration remain subsequent work. They need concrete interruption/reload
-behavior and an explicit cutover decision. Preserve existing manifest behavior
-while designing that path against V3 Profile/Selection semantics.
+Named-layout activation, status, stop and conservative switching are implemented
+in source. See the current delivery and [operation contract](contracts/init.md).
+Native acceptance, live service cutover, leases, automatic draining, force,
+login startup and harness integration remain separate work. Existing user
+manifests are not mechanically rewritten.
 
 ## Open decisions for those later deliveries
 

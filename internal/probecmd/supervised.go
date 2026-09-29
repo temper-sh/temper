@@ -222,7 +222,7 @@ func members(rows []processRow, group int, invocation Invocation, known map[int]
 		}
 		prior, tracked := known[row.pid]
 		if !descendants[row.pid] || !groups[row.pgid] || (row.pid == group && row.pgid != group) || (tracked && prior.pgid != row.pgid) {
-			return nil, nil, errors.New("unrelated group member or changed owned process group")
+			return nil, nil, fmt.Errorf("unrelated group member or changed owned process group: pid=%d ppid=%d pgid=%d state=%q tracked=%t prior_pgid=%d", row.pid, row.ppid, row.pgid, row.state, tracked, prior.pgid)
 		}
 		if row.exited() {
 			// macOS replaces an exited process's command with <defunct> until
@@ -274,8 +274,16 @@ func members(rows []processRow, group int, invocation Invocation, known map[int]
 				}
 			}
 		case invocation.EnginePath != "" && row.executable == invocation.EnginePath:
+			if pythonCrashLogCommand(row.arguments, invocation.PythonCrashLogSHA256) {
+				wasHelper := tracked && prior.executable == invocation.EnginePath && pythonCrashLogCommand(prior.arguments, invocation.PythonCrashLogSHA256)
+				if !wasHelper && !pythonCrashLogParent(row, rows, invocation) {
+					return nil, nil, errors.New("Python crash-log helper is not owned by the selected engine")
+				}
+				role = "crash-log"
+				break
+			}
 			if invocation.EngineArguments != nil && !exactArguments(row.arguments, invocation.EngineArguments) {
-				return nil, nil, errors.New("Splash native command differs from rendered selection")
+				return nil, nil, errors.New("native engine command differs from rendered selection")
 			}
 			if invocation.FrontendPath != "" && !tracked {
 				parentOK := false
@@ -302,6 +310,12 @@ func members(rows []processRow, group int, invocation Invocation, known map[int]
 			}
 			for _, prior := range known {
 				priorRole := role
+				if invocation.PythonCrashLogSHA256 != "" && prior.executable == invocation.EnginePath {
+					priorRole = "engine"
+					if pythonCrashLogCommand(prior.arguments, invocation.PythonCrashLogSHA256) {
+						priorRole = "crash-log"
+					}
+				}
 				if invocation.PythonMultiprocessing && prior.executable == invocation.EnginePath {
 					priorRole = pythonChildRole(prior.arguments)
 					if exactArguments(prior.arguments, invocation.FrontendArguments) {

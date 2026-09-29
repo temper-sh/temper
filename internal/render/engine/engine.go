@@ -26,6 +26,7 @@ type Request struct {
 	Engine            string
 	LayoutID          string
 	ModelPath         string
+	DraftModelPath    string
 	ArtifactFormat    string
 	KVCache           string
 	Interface         string
@@ -154,6 +155,7 @@ type Runtime struct {
 // Command is an exact, safely serialized command for a process supervisor.
 // Its representation stays private so callers cannot append unchecked shell.
 type Command struct {
+	spec    launchSpec
 	lines   []string
 	runtime Runtime
 }
@@ -205,6 +207,9 @@ func Build(request Request) (Command, error) {
 }
 
 func validateVariant(request Request) error {
+	if request.DraftModelPath != "" && request.Engine != LlamaServer {
+		return errors.New("a GGUF draft path requires llama-server")
+	}
 	selected := 0
 	for _, present := range []bool{
 		request.LlamaServer != nil,

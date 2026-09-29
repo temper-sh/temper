@@ -1,0 +1,111 @@
+{
+  "qwen3.8-27b-q4xl-local": {
+    "gpu_memory_utilization": 0.85,
+    "bindings": [
+      {
+        "layout": "qwen3.8-27b-q4xl-mtp",
+        "route": "default",
+        "residency": "resident",
+        "idle_ttl_seconds": 1800,
+        "preload": false
+      }
+    ]
+  },
+  "qwen3.5-4b-local": {
+    "gpu_memory_utilization": 0.5,
+    "bindings": [
+      {
+        "layout": "qwen3.5-4b-q4km-off",
+        "route": "default",
+        "residency": "resident",
+        "idle_ttl_seconds": 1800,
+        "preload": false
+      }
+    ]
+  },
+  "qwen3.5-4b-utility": {
+    "gpu_memory_utilization": 0.5,
+    "foreground": "external",
+    "bindings": [
+      {
+        "layout": "qwen3.5-4b-q4km-off",
+        "route": "available",
+        "residency": "on-demand",
+        "idle_ttl_seconds": 600,
+        "preload": false
+      }
+    ]
+  },
+  "gemma-4-e2b-local": {
+    "gpu_memory_utilization": 0.5,
+    "bindings": [
+      {
+        "layout": "gemma-4-e2b-q4km-off",
+        "route": "default",
+        "residency": "resident",
+        "idle_ttl_seconds": 1800,
+        "preload": false
+      }
+    ]
+  },
+  "gemma-4-e4b-local": {
+    "gpu_memory_utilization": 0.5,
+    "bindings": [
+      {
+        "layout": "gemma-4-e4b-q4km-off",
+        "route": "default",
+        "residency": "resident",
+        "idle_ttl_seconds": 1800,
+        "preload": false
+      }
+    ]
+  },
+  "qwen3.8-27b-splash-local": {
+    "gpu_memory_utilization": 0.85,
+    "bindings": [
+      {
+        "layout": "qwen3.8-27b-q4xl-splash",
+        "route": "default",
+        "residency": "resident",
+        "idle_ttl_seconds": 1800,
+        "preload": false
+      }
+    ]
+  },
+  "muse-glimmer-30b-local": {
+    "bindings": [
+      {
+        "layout": "muse-glimmer-30b-q4xl-llama",
+        "route": "default",
+        "residency": "resident",
+        "idle_ttl_seconds": 1800,
+        "preload": false
+      }
+    ],
+    "gpu_memory_utilization": 0.85
+  },
+  "gemma-4-26b-a4b-local": {
+    "bindings": [
+      {
+        "layout": "gemma-4-26b-a4b-qat-ud-q4-k-xl-llama",
+        "route": "default",
+        "residency": "resident",
+        "idle_ttl_seconds": 1800,
+        "preload": false
+      }
+    ],
+    "gpu_memory_utilization": 0.85
+  },
+  "gemma-4-31b-local": {
+    "bindings": [
+      {
+        "layout": "gemma-4-31b-qat-ud-q4-k-xl-llama",
+        "route": "default",
+        "residency": "resident",
+        "idle_ttl_seconds": 1800,
+        "preload": false
+      }
+    ],
+    "gpu_memory_utilization": 0.85
+  }
+}

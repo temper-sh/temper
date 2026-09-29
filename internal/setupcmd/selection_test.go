@@ -19,6 +19,12 @@ import (
 
 func TestCatalogOrderGroupsAvailableTiersBeforeEditorialOrder(t *testing.T) {
 	doc := guidedCatalog(t)
+	// Keep this ordering fixture independent of future catalog additions.
+	for id := range doc.Profiles {
+		if !slices.Contains([]string{"qwen3.8-27b-q4xl-local", "qwen3.8-27b-splash-local", "gemma-4-e4b-local", "gemma-4-e2b-local", compactProfile}, id) {
+			delete(doc.Profiles, id)
+		}
+	}
 	const baseline = "qwen3.8-27b-q4xl-mtp"
 	doc.Layouts["preferred"] = doc.Layouts[baseline]
 	doc.Profiles["z-preferred"] = catalog.Profile{GPUMemoryUtilization: .85, Bindings: []catalog.Binding{{Layout: "preferred", Route: "default", Residency: "resident", IdleTTLSeconds: 1800}}}
@@ -151,8 +157,14 @@ func TestSplashLeadsSOnCompatibleMachineAndIsUnavailableBelowPlatformFloor(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	if input.Profiles[0].ID != "qwen3.8-27b-splash-local" || input.Profiles[1].ID != "qwen3.8-27b-q4xl-local" {
-		t.Fatalf("S ranking: %+v", input.Profiles[:2])
+	want := []string{"qwen3.8-27b-splash-local", "muse-glimmer-30b-local", "gemma-4-26b-a4b-local", "gemma-4-31b-local", "qwen3.8-27b-q4xl-local"}
+	if len(input.Profiles) < len(want) {
+		t.Fatalf("missing S choices: %+v", input.Profiles)
+	}
+	for i, id := range want {
+		if input.Profiles[i].ID != id || input.Profiles[i].MemoryTier != "S" || input.Profiles[i].DisabledReason != "" {
+			t.Fatalf("S choice %d: %+v, want %s available", i, input.Profiles[i], id)
+		}
 	}
 	if !strings.Contains(input.Profiles[0].Components, "Splash 1.1.0 / DFlash2") {
 		t.Fatal(input.Profiles[0].Components)

@@ -1,6 +1,7 @@
 package setup
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -12,6 +13,7 @@ import (
 	"github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/datadir"
 	"github.com/temper-sh/temper/internal/hfcache"
+	"github.com/temper-sh/temper/internal/preset"
 )
 
 // Material is the read-only observation of exact artifact sets and reusable
@@ -23,6 +25,28 @@ type Material struct {
 	models   map[string]artifactset.ModelFile // Model SHA-256 to admitted file.
 	hfModels map[hfcache.Entry]cachedModel
 	hfCache  *CachePlan
+	software map[string]bool
+}
+
+func (m *Material) InspectPresetSoftware(ctx context.Context, locks []catalog.Lock) error {
+	m.software = map[string]bool{}
+	for _, lock := range locks {
+		sets, err := preset.Software(lock)
+		if err != nil {
+			return err
+		}
+		for _, set := range sets {
+			if _, seen := m.software[set.ID]; seen {
+				continue
+			}
+			installed, err := preset.Installed(ctx, m.root, set)
+			if err != nil {
+				return err
+			}
+			m.software[set.ID] = installed
+		}
+	}
+	return nil
 }
 
 type cachedModel struct {

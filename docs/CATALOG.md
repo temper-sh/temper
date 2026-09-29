@@ -45,32 +45,24 @@ Selection and compilation support `--dry-run`. Identical reruns leave files
 unchanged. To adopt a different choice or configuration, use a new output path;
 Temper refuses to overwrite a different existing Selection or Execution Lock.
 
-Current unreleased source also supports `catalog select --template
-LAYOUT=PATCH|builtin`. New selections record the accepted defaults explicitly;
-`builtin` chooses the model's embedded template. Compatible patches are offered
-per model, and changing the catalog default does not change saved selections.
-Source also supports `--context LAYOUT=TOKENS` to choose an explicit
-window. The [guided authoring candidate](../catalog/README.md) offers Qwen3.8
-27B, Qwen3.5 4B and Gemma E2B/E4B as local main models, plus Qwen3.5 as an
-on-demand utility. Both Qwen models offer embedded, Frog v22.5 and Sharp
-v22.5.0 templates; template defaults remain unchanged. Sharp adds instructions
-favoring concise output. Gemma uses its embedded template.
+Current source setup uses **presets** for exact weights/engine/settings and
+user-owned **layouts** for their composition. The unpublished
+[authoring catalog](../catalog/README.md) has five Recommended presets: Qwen via
+Splash, Glimmer 30B, Gemma 26B-A4B, Gemma 31B, and Qwen's llama.cpp baseline.
+All also includes the smaller Gemma E2B/E4B and Qwen3.5 choices. Every recommended
+preset has manual copy; membership and ordering never select it for the user.
 
-The candidate records native ceilings of 262,144 tokens for Qwen and 131,072
-for Gemma, with an editable Context tab.
-Guided setup uses the largest matching reviewed context finding automatically;
-without one, it requests an explicit window and reports fit as unknown. The
-candidate has no canonical machine-context findings yet: the reviewed shadow
-observations have no real public HTTP(S) evidence destination. Model descriptions are
-catalog text, editable through Workshop or `temper catalog describe`; see the
-[authoring guide](../catalog/README.md).
-That candidate authors a 40,960-token Qwen3.8 window and 16,384-token small-model
-windows. Its [M5 / 32 GiB assessment](../catalog/README.md#context) distinguishes
-the qualified Qwen b11157 point from small-model observations on b11149.
-It remains unpublished; the signed stable catalog above still supplies 32k,
-and saved selections and issued execution locks retain their exact identities.
-The [guided setup contract](contracts/init.md) describes the terminal and
-scripted paths using the same choices.
+Use `init --catalog catalog/guided-setup.json` for the new editors, or
+`configure --preset ID` with that catalog for explicit scripted choices.
+`--template PRESET=PATCH|builtin` and `--context PRESET=TOKENS` customize exact
+settings. New choices accept their authored window, while review identifies
+unknown machine/context fit. Model ceilings do not establish safe capacity.
+[Set up, edit and activate layouts](contracts/init.md).
+
+The v3 authoring vocabulary does not rename fields inside issued v1/v2 catalogs,
+Selections or Execution Locks. The released workflow above retains its original
+profile and layout identities. New configuration stores independent preset locks
+and composes them at activation, preserving different engine versions.
 
 ## Choose newer software explicitly
 
@@ -89,8 +81,9 @@ activate the new software.
 when the catalog supplies that evidence. It refuses an unknown tested boundary;
 the published first profile does not declare one. The unpublished guided
 candidate records observed fallback versions with their evidence boundaries
-and, as of 24 September 2026, llama.cpp b11157 / llama-swap v257 as its recorded
-releases. Template and software changes still need behavioral checks; prior
+and, as of 28 September 2026, records llama.cpp b11205 for Glimmer/Gemma 26B,
+b11157 for the earlier GGUF choices, Splash 1.1.0 and a shared llama-swap v260
+router. Template and software changes still need behavioral checks; prior
 capability observations retain their original conditions. A minimum required
 version is a separate compatibility floor that every choice must satisfy. See the
 [version-selection contract](contracts/execution-lock.md#owned-records-and-scope).

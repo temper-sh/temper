@@ -56,6 +56,19 @@ metadata and archive bytes.
 
 ## Owned records and scope
 
+Current authoring uses `temper-catalog/v3`: Artifact, Patch, Engine and Preset.
+A Preset has the former single-configuration Layout shape plus authored
+`description`, optional `assessment_url`, and `recommended`. Recommended copy
+must be nonblank; `preset_order` controls presentation. These editorial fields
+are excluded from execution digests. Each preset compiles through the existing
+v2 exact-lock machinery; user compositions live in
+[`temper-configuration/v1`](layouts.md), not synthetic catalog recommendations.
+Its internal compatibility binding is demand-loadable with no default route;
+managed layouts own startup, default and coexistence choices. Historical v1/v2
+wire meanings and digest inputs remain unchanged. The following describes those
+issued records and engine contracts.
+
+
 `temper-catalog/v2` has Artifact, Patch, Engine, Layout and Profile records.
 Optional presentation metadata keeps the chooser's Model / Weights / Engine
 labels distinct: Artifact owns `model_name` and `weights_name`; Engine owns
@@ -76,6 +89,15 @@ draft_artifact: ID}`. The draft Artifact pins its own repository, revision,
 `config.json` and `model.safetensors`. Splash's release-owned architecture mapping
 validates that this is the proper DFlash2 sidecar. It is included automatically
 with the Layout, without another user choice. The engine owns draft block size.
+
+A llama.cpp Layout can select an external single-file GGUF draft with
+`source: artifact` and `draft_artifact: ID`. Methods `dflash` and `dflash2`
+require that draft and 1–15 proposed tokens; both render the native
+`draft-dflash` method. Method `mtp` permits either an external GGUF assistant
+or the existing embedded draft, with 1–16 proposed tokens. The draft uses the
+target's explicit GPU placement and F16 KV caches. These are composition
+contracts, not a claim that arbitrary target/draft pairs are compatible or
+faster; reviewed catalog entries own the tested pairing.
 
 The selected closure includes target, draft, template and software independently.
 Changing draft bytes invalidates the composition and artifact-set identity without
@@ -181,9 +203,10 @@ name, source-discovery instructions and evidence metadata do not. Export also
 identifies the exact lock bytes by SHA-256. Local machine paths never enter the
 portable lock.
 
-The executable slice accepts one complete GGUF per artifact, at most one
+The llama.cpp executable slice accepts one complete GGUF per artifact, at most one
 external template, text chat through `llama-server/v2`, complete release
-archives for llama.cpp and llama-swap, and none or embedded-MTP speculation.
+archives for llama.cpp and llama-swap, and no speculation, embedded MTP, or
+an exact GGUF draft for MTP/DFlash. Splash's distinct closure is described above.
 The [Qwen specimen](../../catalog/qwen38-m5-refresh.json) and
 [selection](../../catalog/qwen38-m5-refresh.selection.json) exercise this path.
 Their retained versions are reproducible inputs, not asserted minimum tested

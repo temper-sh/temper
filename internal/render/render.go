@@ -118,6 +118,7 @@ type resolvedMember struct {
 	Member          manifest.Member
 	Placement       string
 	ModelPath       string
+	DraftPath       string
 	PatchPath       string
 	PythonStatePath string
 	Splash          *engine.SplashTuning
@@ -151,6 +152,9 @@ func resolveMembers(document manifest.Document, lock lockfile.Document, mode man
 				Member:    member,
 				Placement: placement.name,
 				ModelPath: set.ModelPath(),
+			}
+			if layout.Engine == engine.LlamaServer && layout.Draft != nil {
+				item.DraftPath = filepath.Join(set.Path(), "draft", layout.Draft.Files[0])
 			}
 			if layout.Engine == engine.RapidMLX || layout.Engine == engine.VLLMMetal {
 				item.PythonStatePath = filepath.Join(root, "runtime-state", member.Layout)
@@ -306,6 +310,7 @@ func engineRequest(member resolvedMember) engine.Request {
 		Engine:            layout.Engine,
 		LayoutID:          member.ID,
 		ModelPath:         member.ModelPath,
+		DraftModelPath:    member.DraftPath,
 		ArtifactFormat:    layout.ModelFormat(),
 		KVCache:           layout.KVCache(),
 		Interface:         layout.TechnicalInterface(),
@@ -407,18 +412,25 @@ type piCost struct {
 }
 
 type piModel struct {
-	ID            string   `json:"id"`
-	Name          string   `json:"name"`
-	Reasoning     bool     `json:"reasoning"`
-	Input         []string `json:"input"`
-	ContextWindow int      `json:"contextWindow"`
-	MaxTokens     int      `json:"maxTokens"`
-	Cost          piCost   `json:"cost"`
+	ID               string                  `json:"id"`
+	Name             string                  `json:"name"`
+	Reasoning        bool                    `json:"reasoning"`
+	ThinkingLevelMap map[string]any          `json:"thinkingLevelMap,omitempty"`
+	Compat           piThinkingCompatibility `json:"compat"`
+	Input            []string                `json:"input"`
+	ContextWindow    int                     `json:"contextWindow"`
+	MaxTokens        int                     `json:"maxTokens"`
+	Cost             piCost                  `json:"cost"`
 }
 
 type piCompatibility struct {
-	SupportsDeveloperRole   bool `json:"supportsDeveloperRole"`
-	SupportsReasoningEffort bool `json:"supportsReasoningEffort"`
+	SupportsDeveloperRole bool `json:"supportsDeveloperRole"`
+}
+
+type piThinkingCompatibility struct {
+	SupportsReasoningEffort bool           `json:"supportsReasoningEffort"`
+	ThinkingFormat          string         `json:"thinkingFormat,omitempty"`
+	ChatTemplateKwargs      map[string]any `json:"chatTemplateKwargs,omitempty"`
 }
 
 type piProvider struct {
@@ -444,7 +456,7 @@ func renderPiModels(base []byte, members []resolvedMember) ([]byte, error) {
 		if member.Layout.TechnicalInterface() != engine.InterfaceChatCompletions {
 			continue
 		}
-		models = append(models, piModel{
+		model := piModel{
 			ID:            member.ID,
 			Name:          member.Layout.DisplayName,
 			Reasoning:     member.Layout.Thinking == "on",
@@ -452,15 +464,39 @@ func renderPiModels(base []byte, members []resolvedMember) ([]byte, error) {
 			ContextWindow: member.Layout.Window,
 			MaxTokens:     member.Layout.MaxTokens,
 			Cost:          piCost{},
-		})
+		}
+		switch member.Layout.Engine {
+		case engine.LlamaServer:
+			// A server default of off still permits a request to enable thinking.
+			// Send both template controls: effort alone cannot override --reasoning off.
+			model.Reasoning = true
+			model.ThinkingLevelMap = map[string]any{"off": "none"}
+			if t := member.Layout.Llama; t != nil && t.Controls != nil && t.Controls.ReasoningEffort == "xhigh" {
+				// Pi requires explicit opt-in for extended levels. Retain an
+				// authored xhigh exception instead of silently clamping it to high.
+				model.ThinkingLevelMap["xhigh"] = "xhigh"
+			}
+			model.Compat = piThinkingCompatibility{
+				SupportsReasoningEffort: true,
+				ThinkingFormat:          "chat-template",
+				ChatTemplateKwargs: map[string]any{
+					"enable_thinking":  map[string]string{"$var": "thinking.enabled"},
+					"reasoning_effort": map[string]string{"$var": "thinking.effort"},
+				},
+			}
+		case engine.Splash:
+			model.Reasoning = true
+			model.ThinkingLevelMap = map[string]any{"off": "none", "minimal": nil, "high": nil, "xhigh": "xhigh", "max": nil}
+			model.Compat = piThinkingCompatibility{SupportsReasoningEffort: true, ThinkingFormat: "openai"}
+		}
+		models = append(models, model)
 	}
 	providers["local"] = piProvider{
 		BaseURL: "http://localhost:8080/v1",
 		API:     "openai-completions",
 		APIKey:  "local",
 		Compat: piCompatibility{
-			SupportsDeveloperRole:   false,
-			SupportsReasoningEffort: false,
+			SupportsDeveloperRole: false,
 		},
 		Models: models,
 	}
@@ -478,6 +514,33 @@ func renderPiSettings(base []byte, members []resolvedMember, foregroundID string
 		// The harness owns its foreground model and compaction policy.
 		return marshalJSON(root)
 	}
+	_, hasThinkingDefault := root["defaultThinkingLevel"]
+	if !hasThinkingDefault {
+		root["defaultThinkingLevel"] = "medium"
+	}
+	thinkingLevels, err := objectAt(root, "modelThinkingLevels")
+	if err != nil {
+		return nil, err
+	}
+	for _, member := range members {
+		if member.Layout.TechnicalInterface() != engine.InterfaceChatCompletions {
+			continue
+		}
+		key := "local/" + member.ID
+		if _, exists := thinkingLevels[key]; exists || hasThinkingDefault {
+			continue
+		}
+		level := "medium"
+		if member.Layout.Thinking == "off" {
+			level = "off"
+		} else if t := member.Layout.Llama; t != nil && t.Controls != nil {
+			level = t.Controls.ReasoningEffort
+		} else if t := member.Layout.Splash; t != nil {
+			level = t.ReasoningEffort
+		}
+		thinkingLevels[key] = level
+	}
+	root["modelThinkingLevels"] = thinkingLevels
 	for _, member := range members {
 		if member.ID == foregroundID {
 			root["defaultModel"] = member.ID

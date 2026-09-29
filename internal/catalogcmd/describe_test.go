@@ -11,6 +11,7 @@ import (
 
 	"github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/software"
+	"github.com/temper-sh/temper/internal/testfixture"
 	"gopkg.in/yaml.v3"
 )
 
@@ -47,7 +48,7 @@ func TestDescriptionEditIsAtomicSecondRunCleanAndPreservesExecution(t *testing.T
 	for _, format := range []string{"json", "yaml"} {
 		t.Run(format, func(t *testing.T) {
 			path, original := descriptionCatalog(t, format)
-			before, err := catalog.Parse(original)
+			before, err := testfixture.LegacySetupCatalog(original)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -69,7 +70,7 @@ func TestDescriptionEditIsAtomicSecondRunCleanAndPreservesExecution(t *testing.T
 			if err != nil {
 				t.Fatal(err)
 			}
-			after, err := catalog.Parse(raw)
+			after, err := testfixture.LegacySetupCatalog(raw)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -137,6 +138,55 @@ func TestDescriptionEditIsAtomicSecondRunCleanAndPreservesExecution(t *testing.T
 			entries, _ = os.ReadDir(filepath.Dir(path))
 			if len(entries) != 1 {
 				t.Fatal("edit left staging or lock files")
+			}
+		})
+	}
+}
+
+func TestPresetDescriptionPreservesCurrentVocabularyAndRequiredCopy(t *testing.T) {
+	for _, format := range []string{"json", "yaml"} {
+		t.Run(format, func(t *testing.T) {
+			path, _ := descriptionCatalog(t, "json")
+			if format == "yaml" {
+				raw, _ := os.ReadFile(path)
+				d, err := catalog.Parse(raw)
+				if err != nil {
+					t.Fatal(err)
+				}
+				raw, err = yaml.Marshal(catalog.Authoring(d))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err = os.WriteFile(path, raw, 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			args := []string{"--catalog", path, "--preset", "qwen3.8-27b-q4xl-splash", "--description", "My reviewed coding preset."}
+			if code, _, err := describeRun(context.Background(), args...); code != 0 {
+				t.Fatal(err)
+			}
+			raw, _ := os.ReadFile(path)
+			var header struct {
+				Schema string `yaml:"schema"`
+			}
+			if err := yaml.Unmarshal(raw, &header); err != nil || header.Schema != catalog.PresetCatalogSchema {
+				t.Fatal("authoring vocabulary changed", err)
+			}
+			args[len(args)-1] = "  "
+			if code, _, _ := describeRun(context.Background(), args...); code == 0 {
+				t.Fatal("required copy cleared")
+			}
+			after, _ := os.ReadFile(path)
+			if !bytes.Equal(raw, after) {
+				t.Fatal("refusal changed catalog")
+			}
+			args[len(args)-1] = "Automatic suggestion"
+			if code, _, err := describeRun(context.Background(), append(args, "--if-empty")...); code != 0 {
+				t.Fatal(err)
+			}
+			after, _ = os.ReadFile(path)
+			if !bytes.Equal(raw, after) {
+				t.Fatal("suggestion replaced authored copy")
 			}
 		})
 	}

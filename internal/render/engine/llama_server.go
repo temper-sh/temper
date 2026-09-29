@@ -7,6 +7,7 @@ import (
 
 type llamaServerOptions struct {
 	modelPath          string
+	draftModelPath     string
 	chatTemplatePath   string
 	reranking          bool
 	parallel           int
@@ -33,6 +34,7 @@ func buildLlamaServer(request Request) (Command, error) {
 
 	options := llamaServerOptions{
 		modelPath:          request.ModelPath,
+		draftModelPath:     request.DraftModelPath,
 		chatTemplatePath:   request.ChatTemplatePath,
 		reranking:          request.Interface == InterfaceReranking,
 		parallel:           request.LlamaServer.Parallel,
@@ -50,6 +52,8 @@ func buildLlamaServer(request Request) (Command, error) {
 	}
 	if options.specType == "mtp" {
 		options.specType = "draft-mtp"
+	} else if options.specType == "dflash" || options.specType == "dflash2" {
+		options.specType = "draft-dflash"
 	} else if options.specType == "none" {
 		options.specType = ""
 	}
@@ -99,6 +103,9 @@ func validateLlamaServerRequest(request Request) error {
 	if request.NGL != nil && *request.NGL < 0 {
 		return errors.New("llama-server ngl must be zero or greater")
 	}
+	if request.DraftModelPath != "" && request.NGL == nil {
+		return errors.New("llama-server external draft requires explicit target and draft GPU placement")
+	}
 	if c := tuning.Controls; c != nil {
 		if err := c.Validate(); err != nil {
 			return err
@@ -112,7 +119,7 @@ func validateLlamaServerRequest(request Request) error {
 
 	switch request.Speculation {
 	case "none":
-		if request.SpeculativeTokens != 0 {
+		if request.SpeculativeTokens != 0 || request.DraftModelPath != "" {
 			return errors.New("llama-server speculation maximum requires a type")
 		}
 	case "mtp":
@@ -121,6 +128,13 @@ func validateLlamaServerRequest(request Request) error {
 		}
 		if request.SpeculativeTokens <= 0 || request.SpeculativeTokens > 16 {
 			return errors.New("llama-server draft-mtp maximum must be between 1 and 16")
+		}
+	case "dflash", "dflash2":
+		if request.Interface != InterfaceChatCompletions || request.DraftModelPath == "" {
+			return errors.New("llama-server DFlash requires chat completions and an exact GGUF draft")
+		}
+		if request.SpeculativeTokens <= 0 || request.SpeculativeTokens > 15 {
+			return errors.New("llama-server DFlash maximum must be between 1 and 15")
 		}
 	default:
 		return fmt.Errorf("llama-server speculation type %q is unsupported", request.Speculation)

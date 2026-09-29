@@ -1,5 +1,10 @@
 # Direct execution locks and supervised probes
 
+This contract remains the fixed-process measurement path. Persistent user
+availability uses the separate [managed layout contract](layouts.md) and
+[operation guide](init.md#activate-inspect-and-stop). Idle unload/reload is
+normal there; it still ends an observed fixed-lifetime experiment here.
+
 This development surface consumes an exact execution lock. It does not resolve
 updates or select software. The existing manifest commands and `execution export`
 remain available for issued clients.
@@ -78,7 +83,11 @@ receipted executable paths and rendered argument vectors; the native engine
 must originate from that frontend. A changed or restarted frontend ends the
 supervised session, as does a changed or restarted native engine.
 Rapid MLX binds the exact receipted interpreter, console script and rendered
-arguments as its `engine`. vLLM Metal binds the same facts as `frontend` and
+arguments as its `engine`. Its `crash-log` helper must use that interpreter,
+the reviewed 0.15.2 helper script digest and one non-standard file descriptor,
+and originate from the selected engine. The helper's identity remains bound
+through shutdown; changed scripts, extra helpers and replacement processes are
+refused. The script is not vendored. vLLM Metal binds the same facts as `frontend` and
 admits only its CPython spawn worker and resource tracker from that frontend.
 The worker's fixed `VLLM::EngineCore` process title is accepted without changing
 its bound interpreter, PID, start time or group. Its `engine` and

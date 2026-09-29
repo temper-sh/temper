@@ -85,41 +85,47 @@ an exact execution lock before installing anything.
 
 ### Preview guided setup from source
 
-The current source adds a modes-first terminal wizard, available before its next
-release:
+The source wizard lets you select presets, compose named layouts, and review
+what will be saved or downloaded:
 
 ```sh
 go build -o build/temper ./cmd/temper
-./build/temper init --dry-run
+./build/temper init --catalog catalog/guided-setup.json --dry-run
 ```
 
-It defaults to `~/.temper`, shows machine limits, and asks for local models
-and/or a local helper alongside a harness-owned main model. You can install
-several local choices and select one as the default. The catalog groups them by
-memory tier and shows Model, Weights and Engine separately. Model size does not
-determine its role. You choose templates, context windows and software versions, review the
-complete plan, then save or prepare explicitly. The
-[setup contract](docs/contracts/init.md) also documents scripted selection and
-exact resume. The [compact authoring candidate](catalog/README.md) is available
-through an explicit `--catalog catalog/guided-setup.json`; it is not in the
-published catalog. Its guide links the measured task/context combinations and
-their limits; optional templates and real 8/16 GiB fit remain unmeasured.
-The Context tab uses automatic selection where reviewed measurements are
-available: the largest context matching the machine and selected configuration.
-The candidate contains no published machine-context findings, so the Context tab
-asks for an explicit window before continuing, or scripts can supply
-`--context LAYOUT=TOKENS`. Model ceilings bound those choices; they do not
-establish the largest window that fits your machine.
-It labels that choice's fit as unknown. Brief model descriptions appear beneath
-the names, separately from download and memory details. The released catalog
-and existing saved configurations retain their original windows.
-The preview checks the standard Hugging Face cache before listing model
-downloads. Preparation reuses those weights and delegates missing downloads to
-`hf`, using `uv tool run` when hf is absent. Configuration, templates and durable
-installation files stay under the Temper root; shared HF cache files are never
-removed by Temper. [Cache and support-tool behavior](docs/contracts/fetch.md#shared-hugging-face-cache).
-Preparation starts no service; the available foreground command runs a temporary
-supervised session. Persistent activation remains separate work.
+A **preset** combines model weights, an engine and its settings. Recommended
+contains five curated choices; All also includes the smaller catalog choices.
+Nothing starts selected. Model, Weights and Engine remain visible separately,
+alongside each recommendation's description and the machine checks.
+
+A **layout** combines your selected presets. Local and Utility are editable
+starter names. Choose which presets are available, which load on activation,
+and an optional default for clients. These choices are independent; installing
+alternatives does not require loading them together. Context and template edits
+belong to the preset and affect every layout that uses it.
+
+Save writes exact choices to `~/.temper/configuration.json` by default. Prepare
+installs missing material, reuses exact software and weights, and starts no
+service. Later, `temper configure` opens the same editors. Explicit
+`temper layout activate NAME`, `layout status`, and `layout stop` manage one
+active layout per root. Idle models can unload and reload on demand. This
+managed launchd path is source-only. Its
+[bounded M5 smoke](docs/design/managed-layout-smoke.md#observed-result) exercised
+mixed engines, idle reload and owned shutdown. Splash's first cache conversion
+can exceed a short client timeout, and startup remains subject to memory checks.
+It does not change the running legacy service.
+
+[Set up and manage presets and layouts](docs/contracts/init.md) covers scripted
+editing, offline resume, activation and recovery. The
+[authoring catalog guide](catalog/README.md) links measured configurations and
+limitations. Its five recommendations are unpublished; the released signed
+catalog retains its original configuration. Memory figures are predictions
+unless tied to exact applicable evidence; 8/16 GiB machine fit remains
+unmeasured.
+
+Preparation checks the shared Hugging Face cache and verifies reused weights.
+Missing weights use `hf`, through `uv tool run` when needed. Temper never prunes
+that shared cache. [Cache and support-tool behavior](docs/contracts/fetch.md#shared-hugging-face-cache).
 
 ## What to expect
 

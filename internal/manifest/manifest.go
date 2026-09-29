@@ -597,8 +597,8 @@ func (d Document) validateV2() error {
 			}
 		}
 
-		if layout.Engine != "splash" && (layout.Draft != nil || layout.Speculation != nil && layout.Speculation.Method == "dflash2") {
-			problem("layout %q: DFlash2 draft requires Splash", id)
+		if layout.Engine != "splash" && layout.Engine != "llama-server" && (layout.Draft != nil || layout.Speculation != nil && (layout.Speculation.Method == "dflash" || layout.Speculation.Method == "dflash2")) {
+			problem("layout %q: external draft requires llama-server or Splash", id)
 		}
 		validateV2EngineTuning(id, layout, problem)
 	}
@@ -660,6 +660,20 @@ func validateV2EngineTuning(id string, layout Layout, problem func(string, ...an
 			return
 		}
 		tuning := layout.Llama
+		if layout.Draft != nil {
+			draft := layout.Draft
+			if !repoPattern.MatchString(draft.Repo) || draft.Format != "gguf" || draft.File != "" || len(draft.Files) != 1 || !safeRelativePath(draft.Files[0]) || !strings.HasSuffix(draft.Files[0], ".gguf") {
+				problem("layout %q llama-server requires one complete GGUF draft", id)
+			}
+			if layout.Speculation == nil || (layout.Speculation.Method != "mtp" && layout.Speculation.Method != "dflash" && layout.Speculation.Method != "dflash2") {
+				problem("layout %q GGUF draft requires MTP or DFlash speculation", id)
+			}
+		}
+		if layout.Speculation != nil && (layout.Speculation.Method == "dflash" || layout.Speculation.Method == "dflash2") {
+			if layout.Draft == nil || layout.Speculation.MaxTokens < 1 || layout.Speculation.MaxTokens > 15 {
+				problem("layout %q llama-server DFlash requires a draft and 1–15 proposed tokens", id)
+			}
+		}
 		if layout.Model.Format != "gguf" {
 			problem("layout %q llama-server requires model.format gguf", id)
 		}
@@ -797,16 +811,20 @@ func validateV2EngineTuning(id string, layout Layout, problem func(string, ...an
 
 func validateManifestSpeculation(id, field, method string, tokens int, interfaceName string, problem func(string, ...any)) {
 	switch method {
-	case "none", "dflash2":
+	case "none":
 		if tokens != 0 {
-			problem("layout %q %s max_tokens requires mtp", id, field)
+			problem("layout %q %s none method requires zero max_tokens", id, field)
+		}
+	case "dflash", "dflash2":
+		if interfaceName != "chat-completions" || tokens < 0 || tokens > 15 {
+			problem("layout %q %s DFlash tokens must be 0–15 for chat completions; the engine validates zero", id, field)
 		}
 	case "mtp":
 		if interfaceName != "chat-completions" || tokens <= 0 || tokens > 16 {
 			problem("layout %q %s MTP tokens must be between 1 and 16 for chat completions", id, field)
 		}
 	default:
-		problem("layout %q %s method %q must be none or mtp", id, field, method)
+		problem("layout %q %s method %q must be none, mtp, dflash or dflash2", id, field, method)
 	}
 }
 

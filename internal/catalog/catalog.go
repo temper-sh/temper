@@ -130,6 +130,10 @@ type LlamaConfig struct {
 }
 
 type Layout struct {
+	// These fields describe a preset. Layout is the issued v1/v2 wire name.
+	Description         string           `yaml:"description,omitempty" json:"description,omitempty"`
+	AssessmentURL       string           `yaml:"assessment_url,omitempty" json:"assessment_url,omitempty"`
+	Recommended         bool             `yaml:"recommended,omitempty" json:"recommended,omitempty"`
 	DisplayName         string           `yaml:"display_name" json:"display_name"`
 	MemoryTier          string           `yaml:"memory_tier,omitempty" json:"memory_tier,omitempty"`
 	Artifact            string           `yaml:"artifact" json:"artifact"`
@@ -184,6 +188,15 @@ func decode(data []byte, into any) error {
 }
 
 func Parse(data []byte) (Document, error) {
+	var header struct {
+		Schema string `yaml:"schema"`
+	}
+	if err := yaml.Unmarshal(data, &header); err != nil {
+		return Document{}, err
+	}
+	if header.Schema == PresetCatalogSchema {
+		return parsePresets(data)
+	}
 	var d Document
 	if err := decode(data, &d); err != nil {
 		return Document{}, err
@@ -364,14 +377,18 @@ func (d Document) Validate() error {
 		if l.Interface != engine.InterfaceChatCompletions || !slices.Equal(l.Modalities, []string{"text"}) {
 			return fmt.Errorf("layout %q requires text chat completions", id)
 		}
-		if l.Speculation.Method != "dflash2" && l.Speculation.DraftArtifact != "" {
-			return fmt.Errorf("layout %q: draft artifact requires dflash2", id)
-		}
-		if l.Speculation.Method == "dflash2" {
+		if e.Family == engine.Splash {
 			draft, ok := d.Artifacts[l.Speculation.DraftArtifact]
-			if !ok || draft.Format != "safetensors" || e.Family != engine.Splash || l.Speculation.Source != "artifact" || l.Speculation.MaxDraftTokens != 0 {
+			if !ok || draft.Format != "safetensors" || l.Speculation.Method != "dflash2" || l.Speculation.Source != "artifact" || l.Speculation.MaxDraftTokens != 0 {
 				return fmt.Errorf("layout %q requires a complete DFlash2 sidecar and Splash", id)
 			}
+		} else if l.Speculation.Source == "artifact" {
+			draft, ok := d.Artifacts[l.Speculation.DraftArtifact]
+			if !ok || e.Family != engine.LlamaServer || draft.Format != "gguf" || (l.Speculation.Method != "mtp" && l.Speculation.Method != "dflash" && l.Speculation.Method != "dflash2") {
+				return fmt.Errorf("layout %q requires an exact GGUF draft for llama-server MTP or DFlash", id)
+			}
+		} else if l.Speculation.DraftArtifact != "" {
+			return fmt.Errorf("layout %q: draft artifact requires artifact speculation source", id)
 		} else if l.Speculation.Method == "none" {
 			if l.Speculation.Source != "none" || l.Speculation.MaxDraftTokens != 0 {
 				return fmt.Errorf("layout %q none speculation cannot carry a draft source", id)
@@ -511,6 +528,8 @@ func (l Layout) request(id string, a Artifact, modelPath, templatePath string) e
 			r.VLLMMetal.ToolCallParser, r.VLLMMetal.ReasoningParser = t.ToolCallParser, t.ReasoningParser
 			r.VLLMMetal.LanguageModelOnly, r.VLLMMetal.ChunkedPrefill, r.VLLMMetal.BlockSize = t.LanguageModelOnly, t.ChunkedPrefill, t.BlockSize
 		}
+	} else if l.Speculation.DraftArtifact != "" {
+		r.DraftModelPath = "/draft.gguf"
 	}
 	return r
 }

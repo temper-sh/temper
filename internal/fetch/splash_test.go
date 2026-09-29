@@ -14,6 +14,7 @@ import (
 	"github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/fetch"
 	"github.com/temper-sh/temper/internal/lockfile"
+	"github.com/temper-sh/temper/internal/testfixture"
 )
 
 func TestSplashFetchPinsDraftReusesTargetAndRejectsPartialPublication(t *testing.T) {
@@ -21,7 +22,7 @@ func TestSplashFetchPinsDraftReusesTargetAndRejectsPartialPublication(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	doc, err := catalog.Parse(raw)
+	doc, err := testfixture.LegacySetupCatalog(raw)
 	if err != nil {
 		t.Fatal(err)
 	}

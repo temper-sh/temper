@@ -10,6 +10,7 @@ import (
 	"github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/manifest"
 	"github.com/temper-sh/temper/internal/render"
+	"github.com/temper-sh/temper/internal/testfixture"
 	"gopkg.in/yaml.v3"
 )
 
@@ -21,7 +22,7 @@ func splashCatalog(t *testing.T) catalog.Document {
 	if err != nil {
 		t.Fatal(err)
 	}
-	doc, err := catalog.Parse(raw)
+	doc, err := testfixture.LegacySetupCatalog(raw)
 	if err != nil {
 		t.Fatal(err)
 	}

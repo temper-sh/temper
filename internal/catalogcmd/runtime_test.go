@@ -21,6 +21,7 @@ import (
 	"github.com/temper-sh/temper/internal/manifest"
 	"github.com/temper-sh/temper/internal/render"
 	"github.com/temper-sh/temper/internal/software"
+	"github.com/temper-sh/temper/internal/testfixture"
 )
 
 func TestUtilityExecutionKeepsHelperAvailableWithoutLocalForeground(t *testing.T) {
@@ -30,7 +31,7 @@ func TestUtilityExecutionKeepsHelperAvailableWithoutLocalForeground(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	document, err := catalog.Parse(raw)
+	document, err := testfixture.LegacySetupCatalog(raw)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -4,6 +4,8 @@ package setup
 
 import "errors"
 
+func LockRoot(root string) (func(), error) { return lockRoot(root) }
+
 func FreeDisk(string) (int64, error) {
 	return 0, errors.New("setup disk inspection is unavailable on this platform")
 }

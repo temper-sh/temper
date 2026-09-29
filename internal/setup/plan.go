@@ -18,6 +18,7 @@ import (
 	"github.com/temper-sh/temper/internal/datadir"
 	"github.com/temper-sh/temper/internal/hfcache"
 	"github.com/temper-sh/temper/internal/machine"
+	"github.com/temper-sh/temper/internal/preset"
 	"github.com/temper-sh/temper/internal/render/engine"
 )
 
@@ -65,19 +66,21 @@ type ContextAssessment struct {
 }
 
 type Plan struct {
-	Root                   string     `json:"root"`
-	DefaultProfile         string     `json:"default_profile,omitempty"`
-	Modes                  []ModePlan `json:"modes"`
-	Downloads              []Download `json:"downloads"`
-	DownloadBytes          int64      `json:"download_bytes"`
-	FreshDiskBytes         int64      `json:"fresh_disk_bytes"`
-	RemainingDownloads     []Download `json:"remaining_downloads"`
-	RemainingDownloadBytes int64      `json:"remaining_download_bytes"`
-	RemainingDiskBytes     int64      `json:"remaining_disk_bytes"`
-	FreeDiskBytes          int64      `json:"free_disk_bytes"`
-	CanPrepare             bool       `json:"can_prepare"`
-	Refusals               []string   `json:"refusals,omitempty"`
-	HFCache                *CachePlan `json:"hf_cache,omitempty"`
+	Configuration          *Configuration `json:"configuration,omitempty"`
+	Layouts                []LayoutPlan   `json:"layouts,omitempty"`
+	Root                   string         `json:"root"`
+	DefaultProfile         string         `json:"default_profile,omitempty"`
+	Modes                  []ModePlan     `json:"modes"`
+	Downloads              []Download     `json:"downloads"`
+	DownloadBytes          int64          `json:"download_bytes"`
+	FreshDiskBytes         int64          `json:"fresh_disk_bytes"`
+	RemainingDownloads     []Download     `json:"remaining_downloads"`
+	RemainingDownloadBytes int64          `json:"remaining_download_bytes"`
+	RemainingDiskBytes     int64          `json:"remaining_disk_bytes"`
+	FreeDiskBytes          int64          `json:"free_disk_bytes"`
+	CanPrepare             bool           `json:"can_prepare"`
+	Refusals               []string       `json:"refusals,omitempty"`
+	HFCache                *CachePlan     `json:"hf_cache,omitempty"`
 }
 
 type CachePlan struct {
@@ -230,6 +233,10 @@ func Build(root string, facts machine.Facts, freeBytes int64, locks []catalog.Lo
 // BuildWithMaterial keeps fresh totals for review and subtracts only material
 // admitted by InspectModels from the remaining preparation allowance.
 func BuildWithMaterial(root string, facts machine.Facts, freeBytes int64, locks []catalog.Lock, material Material, defaultProfile string) (Plan, error) {
+	return build(root, facts, freeBytes, locks, material, defaultProfile, false)
+}
+
+func build(root string, facts machine.Facts, freeBytes int64, locks []catalog.Lock, material Material, defaultProfile string, presets bool) (Plan, error) {
 	resolved, err := datadir.Resolve(root)
 	if err != nil {
 		return Plan{}, err
@@ -237,12 +244,14 @@ func BuildWithMaterial(root string, facts machine.Facts, freeBytes int64, locks 
 	if material.root != "" && material.root != resolved {
 		return Plan{}, errors.New("inspected model material belongs to another root")
 	}
-	if len(locks) == 0 {
+	if len(locks) == 0 && !presets {
 		return Plan{}, errors.New("choose at least one profile")
 	}
-	defaultProfile, err = selectedDefault(locks, defaultProfile)
-	if err != nil {
-		return Plan{}, err
+	if !presets {
+		defaultProfile, err = selectedDefault(locks, defaultProfile)
+		if err != nil {
+			return Plan{}, err
+		}
 	}
 	if freeBytes < 0 {
 		return Plan{}, errors.New("free disk space is unavailable")
@@ -260,6 +269,7 @@ func BuildWithMaterial(root string, facts machine.Facts, freeBytes int64, locks 
 	}
 	seenSets := map[string]bool{}
 	seenModels := map[string]int64{}
+	seenSoftware := map[string]bool{}
 	for _, locked := range locks {
 		mode, err := Assess(locked, facts)
 		if err != nil {
@@ -341,6 +351,24 @@ func BuildWithMaterial(root string, facts machine.Facts, freeBytes int64, locks 
 			supplies = append(supplies, locked.Records.Engines[id].Supply)
 		}
 		for _, supply := range supplies {
+			remaining := true
+			if presets {
+				sets, err := preset.Software(locked)
+				if err != nil {
+					return Plan{}, err
+				}
+				var identity string
+				for _, set := range sets {
+					if set.Package == supply.Package {
+						identity = set.ID
+					}
+				}
+				if seenSoftware[identity] {
+					continue
+				}
+				seenSoftware[identity] = true
+				remaining = !material.software[identity]
+			}
 			if supply.Release == nil {
 				return Plan{}, fmt.Errorf("software %s has no resolved release", supply.Package)
 			}
@@ -354,7 +382,11 @@ func BuildWithMaterial(root string, facts machine.Facts, freeBytes int64, locks 
 			if err := add(&disk, artifact.UnpackedSize); err != nil {
 				return Plan{}, err
 			}
-			if err := plan.download("software", plan.ConfigurationName(mode)+"/"+supply.Package+" "+supply.Release.Version, artifact.Size, disk, true); err != nil {
+			name := plan.ConfigurationName(mode)
+			if presets {
+				name = mode.Profile
+			}
+			if err := plan.download("software", name+"/"+supply.Package+" "+supply.Release.Version, artifact.Size, disk, remaining); err != nil {
 				return Plan{}, err
 			}
 		}
@@ -519,6 +551,9 @@ type Section struct {
 }
 
 func (p Plan) Sections() []Section {
+	if p.Configuration != nil {
+		return p.configurationSections()
+	}
 	var sections []Section
 	var advice *WiredMemoryAdvice
 	var tightModes []string
@@ -638,6 +673,10 @@ func (p Plan) Lines() []string {
 }
 
 func (p Plan) Files() (map[string][]byte, error) {
+	if p.Configuration != nil {
+		raw, err := p.Configuration.Bytes()
+		return map[string][]byte{ConfigurationFile: raw}, err
+	}
 	files := make(map[string][]byte)
 	var locks []catalog.Lock
 	for _, mode := range p.Modes {

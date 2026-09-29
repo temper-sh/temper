@@ -360,3 +360,56 @@ source loader. A focused assertion now checks that contract; startup diagnostics
 are exposed through the router. After correction, the real 1.1.0 release served
 short chat and tool requests and proved owned shutdown. The integration smoke
 was kept separate from context-capacity and quality evidence.
+
+## Writing companions and external GGUF drafts — 2026-09-27
+
+The existing draft record now carries either an exact GGUF assistant or Splash's
+safetensors pair. Data-modeling guidance kept its revision and file identities
+independent of the target and serving software: changing a draft invalidates the
+composition without changing those components. Rendering owns the native MTP or
+DFlash flags, explicit draft GPU placement and F16 draft KV; callers do not
+assemble alternate shell commands. Regressions check the selected file through
+compilation and rendering, invalid material and independent invalidation.
+
+The authorized Rapid comparison exposed a real child-process boundary missing
+from software-only preparation: a separate crash-log helper. Reliable-effects
+guidance kept recovery separate from a refused ownership observation. The
+reviewed helper is admitted only by its script digest, selected interpreter,
+engine parent and normal PID/start/argv/group identity. Tests cover changed
+commands, wrong parents, reparenting after exit, duplicates and restarts. A native
+request then completed with proved helper shutdown. Another transient llama.cpp
+shutdown refusal remains unexplained; diagnostics now identify its process row,
+without relaxing the guard or claiming the underlying cause was fixed.
+
+Testing guidance kept forced-length acceleration, filled-input retrieval and
+completed writing/tool work as separate evidence. Model mistakes survived some
+speed/precision tuning, so the catalog descriptions retain concrete role limits.
+The exact selected native configurations must survive editorial catalog naming
+unchanged. Existing craft guidance was sufficient; no new skill rule or schema
+registry was needed.
+
+
+## Presets and user-owned layouts — 2026-09-28
+
+Data-modeling guidance separated preset execution facts, catalog editorial copy,
+user composition and observed activation. V3 authoring names the new concepts;
+issued locks keep their historical meaning. Exact software closures are reusable
+independently of a layout name. The [configuration contract](contracts/layouts.md)
+is the single owner of these boundaries.
+
+Reliable-effects guidance exposed an orphan risk in router-only recovery:
+llama-swap starts engines in separate process groups. The managed path now
+records each engine lifetime before exec and verifies kernel identity and exact
+argv before recovery signals. The launcher replaces itself; it is no additional
+daemon. Interrupted desired-state commits and provider responses are tested at
+their durable boundaries, separately from fixed-process Field Kit supervision.
+
+Testing guidance kept catalog selection, mixed rendering, memory predictions,
+disposable-process ownership tests and native serving as different claims.
+The [authorized bounded native smoke](design/managed-layout-smoke.md#observed-result)
+exposed a mismatched fake: v260 omits an empty in-flight request list. The
+regression now uses the producer's actual wire form. Idle unload also exposed
+an `ESRCH` race between two reads; bounded complete-snapshot retries preserve
+ownership refusals while handling that normal lifecycle transition. Cold-cache
+timeout and startup admission remain limits of the observation. Existing craft
+guidance was sufficient; no skill edits or new evidence registry were needed.

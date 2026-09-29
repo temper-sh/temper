@@ -3,6 +3,7 @@ package catalog
 import (
 	"fmt"
 	"slices"
+	"strings"
 )
 
 // MemoryTier describes expected machine capacity, independently of model file
@@ -51,6 +52,12 @@ func (d Document) validatePresentation() error {
 		}
 	}
 	for id, l := range d.Layouts {
+		if !plainText(l.Description) || l.AssessmentURL != "" && !webURL(l.AssessmentURL) {
+			return fmt.Errorf("preset %q description must be plain text and assessment_url an HTTP(S) URL", id)
+		}
+		if l.Recommended && strings.TrimSpace(l.Description) == "" {
+			return fmt.Errorf("recommended preset %q requires a manually authored description", id)
+		}
 		if l.MemoryTier != "" && MemoryTier(l.MemoryTier).Rank() < 0 {
 			return fmt.Errorf("layout %q has an unknown memory_tier %q", id, l.MemoryTier)
 		}

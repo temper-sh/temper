@@ -25,6 +25,7 @@ import (
 	"github.com/temper-sh/temper/internal/manifest"
 	"github.com/temper-sh/temper/internal/runtimeconfig"
 	"github.com/temper-sh/temper/internal/software/installplan"
+	softwarelock "github.com/temper-sh/temper/internal/software/lockfile"
 	"github.com/temper-sh/temper/internal/software/lockstore"
 	"github.com/temper-sh/temper/internal/software/receipt"
 	"github.com/temper-sh/temper/internal/software/receiptstore"
@@ -35,6 +36,7 @@ var generationPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 // Invocation is the complete, validated foreground process boundary.
 type Invocation struct {
 	PythonMultiprocessing bool
+	PythonCrashLogSHA256  string
 	Path                  string
 	Arguments             []string
 	Environment           []string
@@ -386,6 +388,7 @@ func Plan(options Options) (Invocation, error) {
 	frontendPath := ""
 	var engineArguments, frontendArguments []string
 	pythonMultiprocessing := false
+	pythonCrashLogSHA256 := ""
 	var executableDirectories []string
 	for _, requirement := range requirements.Requirements {
 		location, err := selectionLocation(installed.Document, requirement.Package)
@@ -418,6 +421,7 @@ func Plan(options Options) (Invocation, error) {
 			enginePath = python
 			if requirement.Package == "rapid-mlx" {
 				engineArguments = args
+				pythonCrashLogSHA256 = rapidCrashLogSHA256
 			} else {
 				frontendPath, frontendArguments, pythonMultiprocessing = python, args, true
 			}
@@ -443,6 +447,7 @@ func Plan(options Options) (Invocation, error) {
 	}
 	return Invocation{
 		PythonMultiprocessing: pythonMultiprocessing,
+		PythonCrashLogSHA256:  pythonCrashLogSHA256,
 		Path:                  router,
 		EnginePath:            enginePath,
 		EngineArguments:       engineArguments, FrontendPath: frontendPath, FrontendArguments: frontendArguments,
@@ -564,14 +569,22 @@ func InstalledExecutable(root, installation, lockPath, packageID, relative strin
 	if err != nil {
 		return "", err
 	}
+	if !locked.Exists() {
+		return "", errors.New("software lock is required")
+	}
+	return InstalledExecutableFromLock(root, installation, locked.Document, packageID, relative)
+}
+
+// InstalledExecutableFromLock is the typed equivalent used by composed presets.
+func InstalledExecutableFromLock(root, installation string, locked softwarelock.Document, packageID, relative string) (string, error) {
 	installed, err := receiptstore.Read(root, installation)
 	if err != nil {
 		return "", err
 	}
-	if !locked.Exists() || !installed.Exists() {
+	if !installed.Exists() {
 		return "", errors.New("software lock and receipt are required")
 	}
-	if err := installed.Document.ValidateAgainst(locked.Document, installplan.Installation{ID: installation, Root: root}); err != nil {
+	if err := installed.Document.ValidateAgainst(locked, installplan.Installation{ID: installation, Root: root}); err != nil {
 		return "", err
 	}
 	location, err := selectionLocation(installed.Document, packageID)

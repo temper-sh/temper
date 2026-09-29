@@ -47,3 +47,7 @@ func lockRoot(root string) (func(), error) {
 	}
 	return func() { _ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN); _ = f.Close() }, nil
 }
+
+// LockRoot serializes configuration publication and managed activation in one
+// root. The caller validates and creates the root before requesting the lock.
+func LockRoot(root string) (func(), error) { return lockRoot(root) }

@@ -27,6 +27,7 @@ import (
 	"github.com/temper-sh/temper/internal/hfcache"
 	"github.com/temper-sh/temper/internal/huggingface"
 	"github.com/temper-sh/temper/internal/machine"
+	"github.com/temper-sh/temper/internal/managed"
 	"github.com/temper-sh/temper/internal/probecmd"
 	resolveverb "github.com/temper-sh/temper/internal/resolve"
 	"github.com/temper-sh/temper/internal/setupcmd"
@@ -108,18 +109,29 @@ func runWithDependencies(ctx context.Context, arguments []string, stdout, stderr
 		return 2
 	}
 	switch arguments[0] {
+	case "internal-managed-exec":
+		if err := managed.ExecLaunch(ctx, arguments[1:]); err != nil {
+			fmt.Fprintln(stderr, "managed engine launch:", err)
+			return 1
+		}
+		return 0
 	case "version", "--version":
 		fmt.Fprintln(stdout, "temper "+version)
 		return 0
 	case "help", "--help", "-h":
 		usage(stdout)
 		return 0
-	case "init":
+	case "init", "configure":
 		command := setupcmd.New(deps.detectFacts, func(ctx context.Context, args []string, out, diagnostics io.Writer) int {
 			return runWithDependencies(ctx, args, out, diagnostics, deps)
 		})
 		command.CacheRoot = deps.cacheRoot
-		return command.Run(ctx, arguments[1:], os.Stdin, stdout, stderr)
+		for _, arg := range arguments[1:] {
+			if arg == "--profile" || strings.HasPrefix(arg, "--profile=") {
+				return command.Run(ctx, arguments[1:], os.Stdin, stdout, stderr)
+			}
+		}
+		return command.Configure(ctx, arguments[1:], os.Stdin, stdout, stderr)
 	case "catalog", "execution":
 		if arguments[0] == "execution" && len(arguments) > 1 && arguments[1] != "export" {
 			return catalogcmd.Runtime(ctx, arguments[1:], stdout, stderr, func(ctx context.Context, args []string, out, err io.Writer) int {
@@ -127,6 +139,11 @@ func runWithDependencies(ctx context.Context, arguments []string, stdout, stderr
 			})
 		}
 		return catalogcmd.Run(ctx, arguments, stdout, stderr)
+	case "layout":
+		command := setupcmd.New(deps.detectFacts, func(ctx context.Context, args []string, out, diagnostics io.Writer) int {
+			return runWithDependencies(ctx, args, out, diagnostics, deps)
+		})
+		return command.Layout(ctx, arguments[1:], stdout, stderr)
 	case "apply":
 		return runApply(ctx, arguments[1:], stdout, stderr)
 	case "resolve":
@@ -542,8 +559,11 @@ func runApply(ctx context.Context, arguments []string, stdout, stderr io.Writer)
 func usage(writer io.Writer) {
 	fmt.Fprintf(writer, "temper %s — deterministic local-AI configuration\n\n", version)
 	fmt.Fprintln(writer, "usage:")
-	fmt.Fprintln(writer, "  temper init [--root PATH] [--catalog FILE] [--profile ID] [--dry-run]")
+	fmt.Fprintln(writer, "  temper init [--root PATH] [--catalog FILE] [--preset ID] [--dry-run]")
 	fmt.Fprintln(writer, "  temper init [--root PATH] --resume [--prepare] [--dry-run]")
+	fmt.Fprintln(writer, "  temper configure [--root PATH] [--show --json | --file FILE --revision SHA256]")
+	fmt.Fprintln(writer, "  temper layout activate ID [--root PATH] [--listen 127.0.0.1:PORT] [--dry-run]")
+	fmt.Fprintln(writer, "  temper layout status|stop [--root PATH] [--dry-run]")
 	fmt.Fprintln(writer, "  temper apply [options]")
 	fmt.Fprintln(writer, "  temper resolve [options]")
 	fmt.Fprintln(writer, "  temper fetch <layout-id> --root PATH [options]")

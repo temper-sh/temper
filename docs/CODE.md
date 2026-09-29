@@ -70,9 +70,10 @@ check, removal, or catalog policy.
 
 | Operation | Orchestrator | Decisions and schemas | Reads/effects | Contract |
 |---|---|---|---|---|
-| `temper init` | `internal/setupcmd` | `setup`: combined eligibility/download/disk plan; existing catalog Selection and Execution Lock | machine/disk/catalog reads, `setupui` review, exclusive atomic configuration-directory publication, then explicit `execution prepare` dispatch | `docs/contracts/init.md` |
+| `temper init`, `configure` | `internal/setupcmd` | `setup`: selected exact presets, named layouts, memory/download plan | machine/disk/catalog reads, `setupui` editors, revision-checked atomic configuration save, explicit shared `preset.Prepare` | `docs/contracts/init.md` |
+| `temper layout activate/status/stop` | `setupcmd.Layout`, `managed.Reconcile` | frozen desired/current jobs, pure composed rendering | exact preparation checks, activation journal, launchd, owned process observation and recovery | `docs/contracts/layouts.md` |
 | `temper catalog compile` | `internal/catalogcmd` | `catalog`: five records, selection, closure, scoped digests and execution lock | explicit local file reads; atomic lock publication without replacement | `docs/contracts/execution-lock.md` |
-| `temper catalog describe` | `internal/catalogcmd` | `catalog.Describe`: editable artifact description and optional assessment link | explicit authoring-file read, directory writer lock, validated atomic replacement; dry run writes nothing | `docs/contracts/execution-lock.md` |
+| `temper catalog describe` | `internal/catalogcmd` | `catalog.DescribePreset`: authored preset copy (historical artifact editing retained) and optional assessment link | explicit authoring-file read, directory writer lock, validated atomic replacement; dry run writes nothing | `docs/contracts/execution-lock.md` |
 | `temper execution export` | `internal/catalogcmd` | `catalog`: self-contained lock validation and compatibility projections | exact derived input publication; idempotent partial-export recovery | `docs/contracts/execution-lock.md` |
 | `temper resolve` | `internal/resolve` | `manifest`, `lockfile`, `pinning` | `upstream`/`huggingface`; `lockstore` atomic commit | `docs/contracts/resolve.md` |
 | `temper update` | `internal/update` | `manifest`, `lockfile`, `pinning`, update gates | `upstream`/`huggingface`; `lockstore` atomic commit | `docs/contracts/update.md` |
@@ -93,38 +94,43 @@ it is executable in a test.
 
 ## Package neighborhoods
 
-### Guided setup
+### Presets, configuration and managed availability
 
-`internal/setupui` is a Bubble Tea state machine supplied with options and an
-asynchronous preview callback. It performs no catalog or installation effects.
-Its Lip Gloss rendering lives in `view.go`, with Tokyo Night colors, per-screen
-tabs and a viewport that excludes the header and controls. Templates without
-alternatives are skipped in both navigation directions. Plain CLI lines and
-terminal review blocks share the disclosure sections and per-file cache facts
-in `setup.Plan`; the UI renders those rows as a collapsible table.
-`context.go` uses Bubbles text inputs for per-mode/per-layout windows. The
-catalog owns their ceilings and reviewed context findings; `ResolveMachineContexts`
-matches the resolved configuration and observed machine. `ResolveSelection` freezes
-choices and compilation passes exact windows through the existing renderer.
-`internal/setupcmd` reads the catalog and machine, resolves explicit choices,
-binds the accepted review to exact lock bytes, and dispatches optional
-preparation after save. `internal/setup` owns pure memory/disk planning plus
-separate model-receipt inspection and filesystem read/save operations. Exact
-existing model hashes reduce the remaining disk allowance across template and
-layout variants without a weight rehash during review. Fetch hashes staged hard
-links before publishing each new composition. Saving stages the complete set of
-Selection/Execution Lock pairs and commits the configuration directory with an
-exclusive rename under a kernel writer lock. Existing differing files are a
-refusal; resume consumes exact saved locks without upstream resolution. Local
-install choices and the default foreground are independent. The default keeps
-the `local` pair; alternatives have `local.PROFILE` pairs, so preparation and
-resume preserve each complete configuration without a second default registry.
-Catalog presentation labels, memory tiers and editorial order remain outside
-execution identity.
+`catalog/presets.go` normalizes v3 authoring presets into the existing exact-lock
+compiler. Recommendation data and manual copy remain outside execution digests.
+Issued formats retain their wire identities; user layouts are not old compiler
+Profiles with conflicting engine closures.
 
-Primary tests live beside each package. They cover navigation and explicit
-choices, changing upstream resolution between previews, stale machine facts,
-pure dry runs, preserved user edits, concurrent saves and exact resume.
+`setupui/presets.go` owns one revocable draft across Recommended/All, Layouts
+and review. `presets_navigation.go` owns input and cancellable previews;
+`presets_view.go` shares tabs, cards and download tables with the existing UI.
+It receives resolved choices and a preview callback, with no effect or network
+ownership. `setupcmd/configure.go` reads and resolves inputs, reviews
+and saves. `setup/configuration.go` owns references, strict parsing, revision
+checks and atomic configuration publication. `composition.go` budgets startup
+sets separately from alternatives. Existing setup files retain historical pair
+operations and explicit import support; they are not the current editor.
+
+`preset` owns per-preset exact software closure splitting, installed inspection,
+preparation and verification through existing software/artifact primitives.
+Equivalent closures use one digest-based installation across layouts. It does
+not start engines or choose layout membership.
+
+`managed.Render` composes exact commands with independent engine versions,
+startup/default and idle groups. `managed.Reconcile` commits desired state before
+job effects and observes both sides of interrupted transitions. `managed.Launchd`
+is the macOS effect adapter; it has no automatic restart or login-agent side
+effect. `probecmd/managed.go` reuses kernel executable/argv, ancestry and listener
+observations while allowing fresh lifetimes after idle eviction. It does not
+relax the existing fixed-process Field Kit supervisor.
+
+The generated internal launcher records its PID/group/start/argv and execs the
+engine. Its durable identity allows orphan recovery after router exit without
+another background daemon. Launch specs and rendered configs are immutable;
+activation and per-command process records are separate mutable runtime state.
+Tests live beside these boundaries and inject interruptions, stale writers,
+foreign processes and unknown activity. Native launchd/model acceptance is a
+separate [bounded smoke](design/managed-layout-smoke.md).
 
 ### Manifest, model artifacts, and rendering
 
@@ -270,7 +276,11 @@ caller-owned.
 
 | State | Path/identity | Writer and rule |
 |---|---|---|
-| Guided choices and locks | `configuration/<mode>.selection.json` and `<mode>.execution.lock.json` | `init` publishes all selected modes once; unchanged replay is clean, differing user files are preserved |
+| Selected presets and layouts | `configuration.json` | `configure`; atomic revision-checked replacement under the root lock |
+| Historical guided pairs | `configuration/<mode>.selection.json` and `<mode>.execution.lock.json` | Original save-once format; explicit import leaves these bytes untouched |
+| Managed activation | `managed/activation.json` | `managed.Reconcile`; desired/current frozen jobs, separate from configuration editing |
+| Managed render and job | `managed/generations/<digest>/` | Immutable config/plist; suspend/shutdown recovery records remain until settled |
+| Engine launch ownership | `managed/commands/<digest>/launch.json` and `process.json` | Immutable command; launcher atomically records each lifetime before exec |
 | Explicit-workflow choices | caller-owned `manifest.yaml` | User-owned; mechanical code never rewrites it |
 | Resolved model pins | caller-owned `manifest.lock.yaml` | `resolve`/`update` through `internal/lockstore`; one atomic replacement |
 | Model artifact set | `artifacts/layouts/<layout>/<digest>/` | `fetch`; immutable content-addressed publication |

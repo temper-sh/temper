@@ -276,6 +276,9 @@ func TestPlanUsesReceiptedUVEngineFromItsExactEnvironment(t *testing.T) {
 	if invocation.EnginePath != resolvedPython || strings.Join(invocation.EngineArguments, "|") != resolvedEngine+"|--no-telemetry|serve|--port|10001" {
 		t.Fatalf("Python process identity = %q %q", invocation.EnginePath, invocation.EngineArguments)
 	}
+	if invocation.PythonCrashLogSHA256 != "8b69ee2f2cebdf3943155e195d5f31a06dbc5b14818e7b40aee9ba90206e3435" {
+		t.Fatal("Rapid crash-log helper is not bound to its reviewed command")
+	}
 }
 
 func TestServeRefusesDriftAndNonLoopbackBeforeProcessEffect(t *testing.T) {

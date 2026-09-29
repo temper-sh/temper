@@ -1,5 +1,18 @@
 # temper — product spec
 
+**Current preset/layout contract, 2026-09-28:** the
+[accepted decisions](design/presets-and-layouts-plan.md#accepted-decisions)
+are implemented in source. A preset owns weights, engine and settings; a layout
+is the user's named composition with independent membership, startup loading
+and optional default. Five presets are Recommended and require manual copy;
+All remains available. [Setup and operations](contracts/init.md) and
+[schemas and persistence](contracts/layouts.md) own this behavior. Native
+managed lifecycle checks passed on M5 / 32 GiB after the fixes and with the
+startup and cold-cache limits in the [bounded smoke](design/managed-layout-smoke.md#observed-result).
+Older mode/profile terminology below describes retained design history or issued
+formats; it must not override the current contract. Historical wire meanings,
+Field Kit lifetime supervision and live-cutover boundaries remain intact.
+
 Adopted 2026-08-14 as this repository's working product spec. Drafted
 2026-08-07 in `local-ai-setup/docs/TEMPER.md` by the working session that ran
 the field kit's first live probe; extended through the 2026-08-13 owner
@@ -29,16 +42,13 @@ owns this narrow compiler/export surface and the refreshed llama-server controls
 It feeds the existing primitives and retains their manifest workflow. The
 [distribution contract](contracts/catalog-distribution.md) adds signed catalog
 publication, explicit selection and offline rollback. Broader engine closures
-and managed activation remain separate work.
+remain separate work; managed layouts have their own current contract above.
 
-The 2026-09-23 guided setup implementation adds `temper init`, using `~/.temper`
-by default. Its [command contract](contracts/init.md) defines the current
-modes-first screens, grouped model choices, an explicit default among installed
-local alternatives, per-model templates and context, combined preview, atomic
-Selection/Execution Lock save and optional preparation. This is unreleased
-source work; alpha.10 does not include the wizard. The broader screen designs
-below include tools, integrations and activation that this first slice does not
-offer.
+The guided setup implementation uses `~/.temper` by default and is unreleased
+source work. Presets → Layouts → Review and prepare replaces the modes-first
+screen flow. Saving and preparing remain separate from explicit managed
+activation. Tools and harness integrations still require their own implemented
+catalog and rendering paths; the editors do not invent them.
 
 The 2026-09-22 Field Kit simplification adds direct execution-lock consumption
 and supervised foreground probes. The [execution runtime contract](contracts/execution-runtime.md)
@@ -54,13 +64,13 @@ tools, harness integrations and mode bindings, not just models — so
 ## One paragraph
 
 temper installs, tunes, and verifies a local-LLM stack on a Mac — and
-refuses to pretend. Every recommendation traces to a Labs decision packet, a
-measurement on real hardware, and a concise Results record people can audit
-without reading the lab journal; every number carries the conditions it ran
-under, and anything unmeasured is labeled unmeasured. The wizard offers a
+keeps exact inputs and evidence limits visible. Curators combine trusted upstream
+and practitioner evidence with local installation, compatibility, memory and
+speed checks. Full local reproduction of every quality claim is not required;
+every measured number carries its producing conditions and unknowns stay visible. The wizard offers a
 curated portfolio of models, exact runtime options, and individually opt-in
 activity support. Workflow
-modes activate subsets of that universe; they never smuggle in an unselected
+layouts activate subsets of that universe; they never smuggle in an unselected
 model, tool, or harness integration.
 
 ## Users and their jobs

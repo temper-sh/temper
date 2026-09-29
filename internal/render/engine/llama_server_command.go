@@ -41,6 +41,14 @@ func llamaServerCommand(options llamaServerOptions) (Command, error) {
 			[]commandWord{knownWord("--spec-draft-n-max"), knownWord(strconv.Itoa(options.specDraftNMax))},
 		)
 	}
+	if options.draftModelPath != "" {
+		groups = append(groups,
+			[]commandWord{knownWord("--model-draft"), dataWord(options.draftModelPath)},
+			[]commandWord{knownWord("--gpu-layers-draft"), knownWord(strconv.Itoa(*options.ngl))},
+			[]commandWord{knownWord("--cache-type-k-draft"), knownWord("f16")},
+			[]commandWord{knownWord("--cache-type-v-draft"), knownWord("f16")},
+		)
+	}
 	if options.chatTemplatePath != "" {
 		groups = append(groups, []commandWord{knownWord("--chat-template-file"), dataWord(options.chatTemplatePath)})
 	}

@@ -11,6 +11,7 @@ import (
 	"github.com/temper-sh/temper/internal/hfcache"
 	"github.com/temper-sh/temper/internal/machine"
 	"github.com/temper-sh/temper/internal/software"
+	"github.com/temper-sh/temper/internal/testfixture"
 )
 
 func TestHFCacheDiskAccounting(t *testing.T) {
@@ -18,7 +19,7 @@ func TestHFCacheDiskAccounting(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	document, err := catalog.Parse(data)
+	document, err := testfixture.LegacySetupCatalog(data)
 	if err != nil {
 		t.Fatal(err)
 	}

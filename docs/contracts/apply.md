@@ -141,8 +141,22 @@ The optional nonnegative `llama.context_checkpoints` and
 `--cache-ram` respectively. Omission preserves the qualified engine default;
 an explicit `prompt_cache_ram_mib: 0` is retained and disables the RAM prompt
 cache. Coder `thinking: on|off` renders through llama.cpp's supported
-`--reasoning on|off` option; the deprecated `--chat-template-kwargs`
-thinking override is never emitted.
+`--reasoning on|off` option; the deprecated `--chat-template-kwargs` launch
+option is never emitted.
+
+Pi's generated local models allow per-request thinking controls for llama.cpp
+and Splash. llama.cpp receives `chat_template_kwargs.enable_thinking` and
+`reasoning_effort` from Pi's selected level, allowing requests to override even
+an off server default. Splash receives the top-level `reasoning_effort`, with
+Pi's off mapped to `none` and its supported low/medium/xhigh choices exposed.
+Other engine integrations retain their existing effort restriction.
+
+For a local foreground, Pi settings default to medium and record each local
+model's explicit preset default, including exceptions such as off or low.
+Existing global and per-model thinking preferences take precedence; external
+foreground settings remain entirely client-owned. These are configuration
+exports, not writes into Pi's home. The request mappings use the Pi 0.87.1
+`thinkingLevelMap` and `chat-template` compatibility controls.
 
 ## Deliberately outside this slice
 
