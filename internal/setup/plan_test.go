@@ -3,6 +3,7 @@ package setup_test
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,13 +15,12 @@ import (
 	"github.com/temper-sh/temper/internal/machine"
 	"github.com/temper-sh/temper/internal/setup"
 	"github.com/temper-sh/temper/internal/software"
-	"github.com/temper-sh/temper/internal/testfixture"
 )
 
 const (
-	compactLocal   = "qwen3.5-4b-local"
-	compactUtility = "qwen3.5-4b-utility"
-	largeLocal     = "qwen3.8-27b-q4xl-local"
+	compactLocal   = "qwen3.5-4b-q4km-off"
+	compactUtility = "compact-alternative"
+	largeLocal     = "qwen3.8-27b-q4xl-mtp"
 	compactLayout  = "qwen3.5-4b-q4km-off"
 )
 
@@ -30,17 +30,19 @@ func catalogDocument(t *testing.T) catalog.Document {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, err := testfixture.LegacySetupCatalog(raw)
+	d, err := catalog.Parse(raw)
 	if err != nil {
 		t.Fatal(err)
 	}
+	alternative := d.Presets[compactLayout]
+	alternative.ContextWindowTokens = 16384
+	d.Presets[compactUtility] = alternative
 	return d
 }
 
 func selectedLock(t *testing.T, d catalog.Document, profile string) catalog.Lock {
 	t.Helper()
-	selection := catalog.Selection{Schema: catalog.SelectionSchema, Profile: profile}
-	locked, err := catalog.Compile(d, selection, software.Target{OS: "darwin", Arch: "arm64"})
+	locked, err := catalog.CompilePreset(d, profile, "", 0, software.Target{OS: "darwin", Arch: "arm64"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +70,7 @@ func planFor(t *testing.T, root string, gib int64, profiles ...string) setup.Pla
 	for _, profile := range profiles {
 		locks = append(locks, selectedLock(t, d, profile))
 	}
-	plan, err := setup.Build(root, facts(gib), 100<<30, locks, "")
+	plan, err := buildPlan(root, facts(gib), 100<<30, locks, setup.Material{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,17 +83,17 @@ func TestCompactMainIsEligibleAtPredictedSmallMemoryWalls(t *testing.T) {
 	large := selectedLock(t, d, largeLocal)
 	for _, gib := range []int64{8, 16, 24, 32} {
 		t.Run(setup.Size(gib<<30), func(t *testing.T) {
-			plan, err := setup.Build(filepath.Join(t.TempDir(), "root"), facts(gib), 100<<30, []catalog.Lock{compact}, "")
+			plan, err := buildPlan(filepath.Join(t.TempDir(), "root"), facts(gib), 100<<30, []catalog.Lock{compact}, setup.Material{})
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !plan.CanPrepare || len(plan.Refusals) != 0 || plan.Modes[0].Budget.Status != budget.StatusFits {
-				t.Fatalf("compact plan at %d GiB: can_prepare=%v, wall=%s, refusals=%v", gib, plan.CanPrepare, plan.Modes[0].Budget.Status, plan.Refusals)
+			if !plan.CanPrepare || len(plan.Refusals) != 0 || plan.Presets[0].Budget.Status != budget.StatusNotApplicable {
+				t.Fatalf("compact plan at %d GiB: can_prepare=%v, wall=%s, refusals=%v", gib, plan.CanPrepare, plan.Presets[0].Budget.Status, plan.Refusals)
 			}
 		})
 	}
 	for _, gib := range []int64{8, 16, 24} {
-		plan, err := setup.Build(filepath.Join(t.TempDir(), "root"), facts(gib), 100<<30, []catalog.Lock{large}, "")
+		plan, err := buildPlan(filepath.Join(t.TempDir(), "root"), facts(gib), 100<<30, []catalog.Lock{large}, setup.Material{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -101,88 +103,14 @@ func TestCompactMainIsEligibleAtPredictedSmallMemoryWalls(t *testing.T) {
 	}
 }
 
-func TestUtilityGPUWeightsNeedWiredMemoryEvenWithoutLocalForeground(t *testing.T) {
-	d := catalogDocument(t)
-	utility := d.Profiles[compactUtility]
-	utility.Bindings[0].Layout = "qwen3.8-27b-q4xl-mtp"
-	utility.Bindings[0].Residency = "resident"
-	d.Profiles[compactUtility] = utility
-	locked := selectedLock(t, d, compactUtility)
-	plan, err := setup.Build(filepath.Join(t.TempDir(), "root"), facts(24), 100<<30, []catalog.Lock{locked}, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if plan.CanPrepare || !strings.Contains(strings.Join(plan.Refusals, " "), "wired-memory") {
-		t.Fatalf("oversized utility helper was not refused by wired lower bound: %+v", plan)
-	}
-}
-
-func TestMultiLayoutChoiceIsReviewableButCannotBePrepared(t *testing.T) {
-	d := catalogDocument(t)
-	const auxiliary = "qwen3.5-4b-aux-16k"
-	d.Layouts[auxiliary] = d.Layouts[compactLayout]
-	profile := d.Profiles[compactLocal]
-	profile.Bindings = append(profile.Bindings, catalog.Binding{
-		Layout: auxiliary, Route: "available", Residency: "on-demand", IdleTTLSeconds: 600,
-	})
-	d.Profiles[compactLocal] = profile
-	locked := selectedLock(t, d, compactLocal)
-	plan, err := setup.Build(filepath.Join(t.TempDir(), "root"), facts(16), 100<<30, []catalog.Lock{locked}, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if plan.CanPrepare || len(plan.Modes) != 1 || !strings.Contains(strings.Join(plan.Refusals, " "), "exactly one layout") {
-		t.Fatalf("multi-layout choice lacked a serving refusal: %+v", plan)
-	}
-	if len(plan.Downloads) == 0 || len(plan.Modes[0].Lock.Records.Layouts) != 2 {
-		t.Fatalf("multi-layout choice was not retained for review: %+v", plan)
-	}
-	if !strings.Contains(strings.Join(plan.Lines(), "\n"), "partial-offload savings are unknown") {
-		t.Fatal("preview omitted the conservative GPU allowance boundary")
-	}
-}
-
-func TestTwoModesShareOneModelSetButKeepSeparateSoftwareInstalls(t *testing.T) {
-	d := catalogDocument(t)
-	local := selectedLock(t, d, compactLocal)
-	utility := selectedLock(t, d, compactUtility)
-	root := filepath.Join(t.TempDir(), "root")
-	plan, err := setup.Build(root, facts(16), 100<<30, []catalog.Lock{utility, local}, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !plan.CanPrepare || len(plan.Modes) != 2 || plan.Modes[0].Mode != "local" || plan.Modes[1].Mode != "utility" {
-		t.Fatalf("unexpected two-mode plan: %+v", plan)
-	}
-	var models, softwareCount int
-	var listed int64
-	for _, item := range plan.Downloads {
-		listed += item.Bytes
-		if item.Name == "Qwen3.5-4B-Q4_K_M.gguf" {
-			models++
-		} else {
-			softwareCount++
-		}
-	}
-	if models != 1 || softwareCount != 4 || listed != plan.DownloadBytes {
-		t.Fatalf("downloads=%+v, total=%d: expected one shared model and two engine/router installations", plan.Downloads, plan.DownloadBytes)
-	}
-	if plan.DownloadBytes != 2740937888+2*(local.Records.Runtime.Router.Release.Artifact.Size+local.Records.Engines["llama-cpp-darwin-arm64"].Supply.Release.Artifact.Size) {
-		t.Fatalf("unexpected transfer ceiling: %d", plan.DownloadBytes)
-	}
-	if plan.FreshDiskBytes <= plan.DownloadBytes {
-		t.Fatalf("disk allowance %d does not include software expansion", plan.FreshDiskBytes)
-	}
-}
-
 func TestDiskShortfallRefusesPreparationWithoutDiscardingChoices(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "root")
 	ready := planFor(t, root, 16, compactLocal)
-	plan, err := setup.Build(root, facts(16), ready.FreshDiskBytes-1, []catalog.Lock{ready.Modes[0].Lock}, "")
+	plan, err := buildPlan(root, facts(16), ready.FreshDiskBytes-1, []catalog.Lock{ready.Presets[0].Lock}, setup.Material{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if plan.CanPrepare || !strings.Contains(strings.Join(plan.Refusals, " "), "disk") || len(plan.Modes) != 1 {
+	if plan.CanPrepare || !strings.Contains(strings.Join(plan.Refusals, " "), "disk") || len(plan.Presets) != 1 {
 		t.Fatalf("disk shortfall did not retain reviewable choice and refusal: %+v", plan)
 	}
 }
@@ -205,7 +133,7 @@ func writeTinyModelSet(t *testing.T, root string, locked catalog.Lock) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	set, err := artifactset.New(root, compactLayout, projection.Manifest.Layouts[compactLayout], projection.Artifacts.Entries[compactLayout], projection.Manifest.Patches)
+	set, err := artifactset.New(root, locked.Preset, projection.Manifest.Layouts[locked.Preset], projection.Artifacts.Entries[locked.Preset], projection.Manifest.Patches)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,7 +158,7 @@ func writeTinyModelSet(t *testing.T, root string, locked catalog.Lock) string {
 func TestInspectedModelSetReducesRemainingDiskAndDownloadAllowance(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "root")
 	locks := tinyModelLocks(t)
-	fresh, err := setup.Build(root, facts(16), 100<<30, locks, "")
+	fresh, err := buildPlan(root, facts(16), 100<<30, locks, setup.Material{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,7 +172,7 @@ func TestInspectedModelSetReducesRemainingDiskAndDownloadAllowance(t *testing.T)
 	if _, err := os.Lstat(root); !os.IsNotExist(err) {
 		t.Fatalf("inspection created root: %v", err)
 	}
-	without, err := setup.BuildWithMaterial(root, facts(16), fresh.FreshDiskBytes-1, locks, absent, "")
+	without, err := buildPlan(root, facts(16), fresh.FreshDiskBytes-1, locks, absent)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,7 +192,7 @@ func TestInspectedModelSetReducesRemainingDiskAndDownloadAllowance(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	remaining, err := setup.BuildWithMaterial(root, facts(16), fresh.FreshDiskBytes-1, locks, material, "")
+	remaining, err := buildPlan(root, facts(16), fresh.FreshDiskBytes-1, locks, material)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -279,7 +207,7 @@ func TestInspectedModelSetReducesRemainingDiskAndDownloadAllowance(t *testing.T)
 			t.Fatal("verified model remains in download list")
 		}
 	}
-	if !strings.Contains(strings.Join(remaining.Lines(), "\n"), "Remaining-install disk allowance") {
+	if !strings.Contains(strings.Join(remaining.Lines(), "\n"), "Remaining installation allowance") {
 		t.Fatal("preview omitted remaining allowance")
 	}
 	if summary := remaining.WeightSummary(); summary != "Weights: all cached in Temper (4 B). No weight download on Prepare." {
@@ -294,7 +222,7 @@ func TestInspectedModelSetReducesRemainingDiskAndDownloadAllowance(t *testing.T)
 		}
 	}
 	lines := strings.Join(remaining.Lines(), "\n")
-	for _, want := range []string{"Save downloads no weights", "Prepare fetches missing files and verifies cached weights", filepath.Join(root, "artifacts", "layouts"), "Qwen3.5-4B-Q4_K_M.gguf — 4 B — Cached in Temper"} {
+	for _, want := range []string{"Qwen3.5-4B-Q4_K_M.gguf — 4 B — Cached in Temper"} {
 		if !strings.Contains(lines, want) {
 			t.Fatalf("missing transfer disclosure %q: %s", want, lines)
 		}
@@ -304,7 +232,7 @@ func TestInspectedModelSetReducesRemainingDiskAndDownloadAllowance(t *testing.T)
 func TestTemplateVariantsCountWeightsOnceAndCreditOtherInstalledComposition(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "root")
 	locks := tinyModelLocks(t)
-	baseline, err := setup.Build(root, facts(16), 100<<30, locks, "")
+	baseline, err := buildPlan(root, facts(16), 100<<30, locks, setup.Material{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -316,15 +244,12 @@ func TestTemplateVariantsCountWeightsOnceAndCreditOtherInstalledComposition(t *t
 		Files:               []catalog.File{{Path: "chat.jinja", Bytes: int64(len(patchBytes)), SHA256: hex.EncodeToString(sum[:])}},
 		CompatibleArtifacts: []string{"qwen3.5-4b-q4km"},
 	}}
-	variant, err := catalog.Compile(d, catalog.Selection{
-		Schema: catalog.SelectionSchema, Profile: compactUtility,
-		Templates: map[string]string{compactLayout: "compact-template"},
-	}, software.Target{OS: "darwin", Arch: "arm64"})
+	variant, err := catalog.CompilePreset(d, compactUtility, "compact-template", 0, software.Target{OS: "darwin", Arch: "arm64"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	locks[1] = variant
-	fresh, err := setup.Build(root, facts(16), 100<<30, locks, "")
+	fresh, err := buildPlan(root, facts(16), 100<<30, locks, setup.Material{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -338,11 +263,11 @@ func TestTemplateVariantsCountWeightsOnceAndCreditOtherInstalledComposition(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	without, err := setup.Build(root, facts(16), 100<<30, selected, "")
+	without, err := buildPlan(root, facts(16), 100<<30, selected, setup.Material{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	remaining, err := setup.BuildWithMaterial(root, facts(16), without.FreshDiskBytes-1, selected, material, "")
+	remaining, err := buildPlan(root, facts(16), without.FreshDiskBytes-1, selected, material)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -411,4 +336,16 @@ func TestMalformedExistingSetRefusesReuse(t *testing.T) {
 			t.Fatalf("symlinked parent was credited or silently treated as absent: %v", err)
 		}
 	})
+}
+
+func buildPlan(root string, facts machine.Facts, free int64, locks []catalog.Lock, material setup.Material) (setup.Plan, error) {
+	c := setup.EmptyConfiguration()
+	var ids []string
+	for i, locked := range locks {
+		id := fmt.Sprintf("preset-%d", i)
+		c.Presets[id] = setup.Preset{Name: id, Lock: locked}
+		ids = append(ids, id)
+	}
+	c.Layouts["work"] = setup.Layout{Name: "Work", Presets: ids, IdleSeconds: 60}
+	return setup.BuildConfiguration(root, facts, free, c, material)
 }

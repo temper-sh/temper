@@ -11,7 +11,7 @@ import (
 
 	"github.com/temper-sh/temper/internal/software"
 	"github.com/temper-sh/temper/internal/software/adapter"
-	"github.com/temper-sh/temper/internal/software/catalog"
+
 	checkverb "github.com/temper-sh/temper/internal/software/check"
 	"github.com/temper-sh/temper/internal/software/checkplan"
 	installverb "github.com/temper-sh/temper/internal/software/install"
@@ -204,7 +204,7 @@ type checkAdapter struct {
 func newCheckAdapter() *checkAdapter {
 	return &checkAdapter{
 		descriptor: adapter.Descriptor{
-			ID: "uv", Method: "python-environment", Protocol: catalog.AdapterProtocolV1, EffectModel: string(installplan.EffectIsolated),
+			ID: "uv", Method: "python-environment", Protocol: adapter.Protocol, EffectModel: string(installplan.EffectIsolated),
 			Targets: []software.Target{{OS: "darwin", Arch: "arm64"}},
 		},
 		observed: map[string]installplan.ObservedUnit{},

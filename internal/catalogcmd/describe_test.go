@@ -11,7 +11,7 @@ import (
 
 	"github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/software"
-	"github.com/temper-sh/temper/internal/testfixture"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -48,13 +48,13 @@ func TestDescriptionEditIsAtomicSecondRunCleanAndPreservesExecution(t *testing.T
 	for _, format := range []string{"json", "yaml"} {
 		t.Run(format, func(t *testing.T) {
 			path, original := descriptionCatalog(t, format)
-			before, err := testfixture.LegacySetupCatalog(original)
+			before, err := catalog.Parse(original)
 			if err != nil {
 				t.Fatal(err)
 			}
-			const artifact = "qwen3.5-4b-q4km"
+			const artifact = "qwen3.5-4b-q4km-off"
 			const custom = "My everyday assistant — I check its dates and quotations."
-			args := []string{"--catalog", path, "--artifact", artifact, "--description", custom, "--assessment-url", "https://example.test/my-notes"}
+			args := []string{"--catalog", path, "--preset", artifact, "--description", custom, "--assessment-url", "https://example.test/my-notes"}
 			if code, out, diag := describeRun(context.Background(), append(args, "--dry-run")...); code != 0 || !strings.Contains(out, "would-write") || !strings.Contains(out, custom) {
 				t.Fatalf("dry edit: %d %s %s", code, out, diag)
 			}
@@ -70,11 +70,11 @@ func TestDescriptionEditIsAtomicSecondRunCleanAndPreservesExecution(t *testing.T
 			if err != nil {
 				t.Fatal(err)
 			}
-			after, err := testfixture.LegacySetupCatalog(raw)
+			after, err := catalog.Parse(raw)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if after.Artifacts[artifact].Description != custom {
+			if after.Presets[artifact].Description != custom {
 				t.Fatal("custom description not stored")
 			}
 			info, _ := os.Stat(path)
@@ -82,17 +82,16 @@ func TestDescriptionEditIsAtomicSecondRunCleanAndPreservesExecution(t *testing.T
 				t.Fatal("edit changed file permissions")
 			}
 			var originalLock catalog.Lock
-			for _, profile := range []string{"qwen3.5-4b-local", "qwen3.5-4b-utility"} {
-				s := catalog.Selection{Schema: catalog.SelectionSchema, Profile: profile}
-				a, err := catalog.Compile(before, s, software.Target{OS: "darwin", Arch: "arm64"})
+			for _, profile := range []string{artifact} {
+				a, err := catalog.CompilePreset(before, profile, "", 0, software.Target{OS: "darwin", Arch: "arm64"})
 				if err != nil {
 					t.Fatal(err)
 				}
-				b, err := catalog.Compile(after, s, a.Target)
+				b, err := catalog.CompilePreset(after, profile, "", 0, a.Target)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if a.Digests.Profile != b.Digests.Profile || a.SourceSnapshotSHA256 == b.SourceSnapshotSHA256 {
+				if a.ExecutionDigest != b.ExecutionDigest || a.SourceSnapshotSHA256 == b.SourceSnapshotSHA256 {
 					t.Fatal("description changed execution identity or not the source identity")
 				}
 				p, err := a.Projections()
@@ -108,13 +107,13 @@ func TestDescriptionEditIsAtomicSecondRunCleanAndPreservesExecution(t *testing.T
 				}
 				originalLock = a
 			}
-			preserved := after.Artifacts[artifact]
-			preserved.Description = before.Artifacts[artifact].Description
-			preserved.AssessmentURL = before.Artifacts[artifact].AssessmentURL
-			after.Artifacts[artifact] = preserved
+			preserved := after.Presets[artifact]
+			preserved.Description = before.Presets[artifact].Description
+			preserved.AssessmentURL = before.Presets[artifact].AssessmentURL
+			after.Presets[artifact] = preserved
 			// Compare catalog facts, allowing canonical ordering of sets such as
 			// compatible artifacts. Reordering a set is not an editorial effect.
-			restored, err := catalog.Compile(after, originalLock.Selection, originalLock.Target)
+			restored, err := catalog.CompilePreset(after, originalLock.Preset, "", 0, originalLock.Target)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -128,7 +127,7 @@ func TestDescriptionEditIsAtomicSecondRunCleanAndPreservesExecution(t *testing.T
 			if !bytes.Equal(raw, again) {
 				t.Fatal("unchanged edit rewrote bytes")
 			}
-			if code, out, diag := describeRun(context.Background(), "--catalog", path, "--artifact", artifact, "--description", "New automated suggestion", "--assessment-url", "https://example.test/new", "--if-empty"); code != 0 || !strings.Contains(out, "unchanged") {
+			if code, out, diag := describeRun(context.Background(), "--catalog", path, "--preset", artifact, "--description", "New automated suggestion", "--assessment-url", "https://example.test/new", "--if-empty"); code != 0 || !strings.Contains(out, "unchanged") {
 				t.Fatalf("refresh: %d %s %s", code, out, diag)
 			}
 			again, _ = os.ReadFile(path)
@@ -153,7 +152,7 @@ func TestPresetDescriptionPreservesCurrentVocabularyAndRequiredCopy(t *testing.T
 				if err != nil {
 					t.Fatal(err)
 				}
-				raw, err = yaml.Marshal(catalog.Authoring(d))
+				raw, err = yaml.Marshal(d)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -169,7 +168,7 @@ func TestPresetDescriptionPreservesCurrentVocabularyAndRequiredCopy(t *testing.T
 			var header struct {
 				Schema string `yaml:"schema"`
 			}
-			if err := yaml.Unmarshal(raw, &header); err != nil || header.Schema != catalog.PresetCatalogSchema {
+			if err := yaml.Unmarshal(raw, &header); err != nil || header.Schema != catalog.Schema {
 				t.Fatal("authoring vocabulary changed", err)
 			}
 			args[len(args)-1] = "  "
@@ -192,46 +191,12 @@ func TestPresetDescriptionPreservesCurrentVocabularyAndRequiredCopy(t *testing.T
 	}
 }
 
-func TestDescriptionFileInputAndExplicitClear(t *testing.T) {
-	path, _ := descriptionCatalog(t, "json")
-	text := filepath.Join(t.TempDir(), "assessment.txt")
-	if err := os.WriteFile(text, []byte("Useful for my extraction work.\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	args := []string{"--catalog", path, "--artifact", "qwen3.5-4b-q4km"}
-	if code, out, diag := describeRun(context.Background(), append(args, "--description-file", text)...); code != 0 || !strings.Contains(out, "Useful for my extraction work.") {
-		t.Fatalf("file edit: %d %s %s", code, out, diag)
-	}
-	if code, _, diag := describeRun(context.Background(), append(args, "--description", "", "--assessment-url", "")...); code != 0 {
-		t.Fatal(diag)
-	}
-	raw, _ := os.ReadFile(path)
-	d, err := catalog.Parse(raw)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if d.Artifacts["qwen3.5-4b-q4km"].Description != "" {
-		t.Fatal("explicit clear failed")
-	}
-	if code, _, diag := describeRun(context.Background(), append(args, "--description", "First suggestion", "--if-empty")...); code != 0 {
-		t.Fatal(diag)
-	}
-	raw, _ = os.ReadFile(path)
-	d, err = catalog.Parse(raw)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if d.Artifacts["qwen3.5-4b-q4km"].Description != "First suggestion" {
-		t.Fatal("empty description did not accept a suggestion")
-	}
-}
-
 func TestDescriptionRefusalsLeaveCatalogUntouched(t *testing.T) {
 	for _, name := range []string{"unknown artifact", "invalid URL", "control text", "cancelled", "symlink", "busy"} {
 		t.Run(name, func(t *testing.T) {
 			path, original := descriptionCatalog(t, "json")
 			input := path
-			args := []string{"--artifact", "qwen3.5-4b-q4km", "--description", "My assessment"}
+			args := []string{"--preset", "qwen3.5-4b-q4km-off", "--description", "My assessment"}
 			ctx := context.Background()
 			switch name {
 			case "unknown artifact":

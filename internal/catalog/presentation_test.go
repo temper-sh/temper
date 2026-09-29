@@ -11,19 +11,19 @@ func TestPresentationChangesPreserveExecutionIdentity(t *testing.T) {
 	e := d.Engines["llama-b10936"]
 	e.DisplayName = "llama.cpp"
 	d.Engines["llama-b10936"] = e
-	l := d.Layouts["qwen-32k"]
+	l := d.Presets["qwen-32k"]
 	l.MemoryTier = "S"
-	d.Layouts["qwen-32k"] = l
-	d.LayoutOrder = []string{"qwen-32k"}
+	d.Presets["qwen-32k"] = l
+	d.PresetOrder = []string{"qwen-32k"}
 
 	after := compile(t, d)
-	if before.Digests.Profile != after.Digests.Profile {
+	if before.ExecutionDigest != after.ExecutionDigest {
 		t.Fatal("editorial changes altered the selected execution identity")
 	}
 	if before.SourceSnapshotSHA256 == after.SourceSnapshotSHA256 {
 		t.Fatal("catalog source identity did not change")
 	}
-	if len(after.Records.LayoutOrder) != 0 {
+	if len(after.Records.PresetOrder) != 0 {
 		t.Fatal("execution lock retained unrelated catalog navigation")
 	}
 }
@@ -39,10 +39,10 @@ func TestCatalogRefusesBrokenNavigation(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			d := document()
-			d.LayoutOrder = tc.order
-			l := d.Layouts["qwen-32k"]
+			d.PresetOrder = tc.order
+			l := d.Presets["qwen-32k"]
 			l.MemoryTier = tc.tier
-			d.Layouts["qwen-32k"] = l
+			d.Presets["qwen-32k"] = l
 			if err := d.Validate(); err == nil {
 				t.Fatal("invalid catalog navigation was accepted")
 			}

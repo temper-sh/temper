@@ -33,7 +33,7 @@ func (m *PresetModel) reviewLayouts(body *screenBody, width int) {
 		title := lipgloss.NewStyle().Foreground(nightCyan).Bold(true).Width(width).Render(layout.Name)
 		content := lipgloss.NewStyle().Foreground(nightMuted).Render("No presets included.")
 		if len(layout.Presets) > 0 {
-			content = reviewPresetTable(*c, layout.Presets, &layout, m.plan.Modes, width)
+			content = reviewPresetTable(*c, layout.Presets, &layout, m.plan.Presets, width)
 		}
 		details := []string{"Idle unload: " + idleDuration(layout.IdleSeconds)}
 		for _, assessment := range m.plan.Layouts {
@@ -55,14 +55,14 @@ func (m *PresetModel) reviewLayouts(body *screenBody, width int) {
 	if len(unassigned) > 0 {
 		slices.Sort(unassigned)
 		title := lipgloss.NewStyle().Foreground(nightCyan).Bold(true).Width(width).Render("Presets outside layouts")
-		body.add(title+"\n"+reviewPresetTable(*c, unassigned, nil, m.plan.Modes, width), false)
+		body.add(title+"\n"+reviewPresetTable(*c, unassigned, nil, m.plan.Presets, width), false)
 	}
 	var notes []string
 	if len(c.Presets) > 0 {
 		notes = append(notes, "Context / output: token limits; context includes input and output. Fit is unknown unless marked tested.",
 			"Memory estimates use weights and declared caps; KV and runtime overhead remain unmeasured.")
 	}
-	for _, mode := range m.plan.Modes {
+	for _, mode := range m.plan.Presets {
 		if mode.RuntimeDiskEstimateBytes > 0 {
 			_, preset := presetRecord(mode.Lock)
 			name := mode.Lock.Records.Artifacts[preset.Artifact].ModelName
@@ -80,7 +80,7 @@ func (m *PresetModel) reviewLayouts(body *screenBody, width int) {
 	}
 }
 
-func reviewPresetTable(c setup.Configuration, ids []string, layout *setup.Layout, modes []setup.ModePlan, width int) string {
+func reviewPresetTable(c setup.Configuration, ids []string, layout *setup.Layout, modes []setup.PresetPlan, width int) string {
 	headers := []string{"Model", "Weights", "Engine", "Context / out", "Load", "Default"}
 	columns := []int{width - 85, 22, 17, 15, 15, 9}
 	colors := []color.Color{nightBlue, nightCyan, nightPurple, nightCyan, nightGreen, nightPurple}
@@ -115,7 +115,7 @@ func reviewPresetTable(c setup.Configuration, ids []string, layout *setup.Layout
 		}
 		context := fmt.Sprintf("%d / %d", preset.ContextWindowTokens, preset.RequestDefaults.MaxOutputTokens)
 		for _, mode := range modes {
-			if mode.Lock.Digests.Profile == selected.Lock.Digests.Profile && mode.Contexts[presetID].Finding != nil {
+			if mode.Lock.ExecutionDigest == selected.Lock.ExecutionDigest && mode.Contexts[presetID].Finding != nil {
 				context += "\ntested"
 				break
 			}

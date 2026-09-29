@@ -24,7 +24,7 @@ func TestReceiptReuseDependsOnSoftwareRatherThanExperimentDefinition(t *testing.
 	if err := installed.ValidateAgainst(desired, plan.Installation); err != nil {
 		t.Fatalf("unchanged software rejected after an experiment change: %v", err)
 	}
-	desired.Provenance = softwarelock.Provenance{Execution: &softwarelock.ExecutionIdentity{Schema: "temper-execution-lock/v2", Profile: "another-profile", SHA256: strings.Repeat("e", 64)}}
+	desired.Provenance = softwarelock.Provenance{Execution: &softwarelock.ExecutionIdentity{Schema: "temper-execution-lock/v3", Preset: "another-profile", SHA256: strings.Repeat("e", 64)}}
 	selection := desired.Selections["tool"]
 	selection.Provenance = softwarelock.ProvenanceExecution
 	desired.Selections["tool"] = selection

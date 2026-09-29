@@ -112,7 +112,7 @@ func Render(root, listen string, c setup.Configuration, l setup.LayoutPlan, reso
 		if err != nil {
 			return Rendered{}, err
 		}
-		commands, err := render.Commands(render.Inputs{Root: root, Mode: lock.Selection.Profile, Manifest: p.Manifest, Lock: p.Artifacts})
+		commands, err := render.Commands(render.Inputs{Root: root, Mode: lock.Preset, Manifest: p.Manifest, Lock: p.Artifacts})
 		if err != nil {
 			return Rendered{}, err
 		}

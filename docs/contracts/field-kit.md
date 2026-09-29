@@ -9,7 +9,7 @@ protocol, evidence, reporting, export, and cleanup behavior lands in
 
 ## Direct execution-lock host
 
-The wave 2 development client uses the
+Current clients compile execution-lock v3 presets and use the
 [direct execution runtime](execution-runtime.md): `execution inspect`,
 `prepare`, `render`, `serve` and `remove`. Temper derives installer inputs
 internally. Field Kit retains its consent plan, experiment protocol, measurements
@@ -20,16 +20,18 @@ terminates engine processes itself.
 Temper supplies process identities, verifies loopback listener ownership and
 confirms bounded shutdown. The caller chooses when to send SIGTERM to its
 foreground Temper child. A missing or unsafe final status forbids cleanup.
-This surface is not included in the pinned `0.1.0-alpha.7` bootstrap release.
+Retired lock formats require the historical experiment’s pinned older host.
+Current Field Kit packages regenerate their locks with `catalog compile --preset`
+and use `execution configure` for per-run limits.
 
-## Issued-client host primitives
+## Exact host primitives
 
-Issued clients, including `qwen-machine-study@1`, can still compose these public
-commands. Their compatibility exports and identities remain unchanged:
+The current binary also provides these independently useful low-level commands.
+Manifests must use v2; software locks require execution-v3 or direct experiment
+provenance:
 
 ```text
 temper machine facts
-temper execution export --lock PATH --out PATH --json
 temper software install --root PATH --installation ID --lock PATH
 temper software check --root PATH --installation ID --lock PATH
 temper software remove --root PATH --installation ID --lock PATH
@@ -48,11 +50,6 @@ Their existing contracts remain authoritative. In summary:
 
 - `machine facts` is a read-only canonical `temper-machine-facts/v1`
   document.
-- `execution export` is the additive development preparation surface described
-  in [the execution-lock contract](execution-lock.md). It validates a shipped
-  self-contained lock and returns exact derived inputs for the existing
-  primitives. Field Kit does not compile catalog facts in Python. Released
-  question revisions keep their existing inputs and minimum Temper versions.
 - software install/check/remove accepts a complete exact lock, operates only
   below the explicit Temper root, and uses receipts and ownership claims.
 - fetch/apply/check operate on exact manifests and locks below the explicit

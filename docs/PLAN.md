@@ -18,15 +18,15 @@ promotion, resolver and bootstrap proposals are no longer an active backlog.
 | Surface | State and owner |
 |---|---|
 | Native configuration workflow | Manifest/lock validation, resolve, fetch, apply, update, check, rendering and machine facts are implemented. [The explicit workflow](EXPLICIT-WORKFLOW.md) owns use; [the acceptance record](acceptance/current-posture-render.md) owns prior real-runtime evidence. |
-| Maintained catalog | Artifact, Patch, Engine, Layout and Profile compile with an explicit Selection to a self-contained Execution Lock. [The execution-lock contract](contracts/execution-lock.md) owns v2 and issued-v1 compatibility. |
-| Guided setup | `init` and `configure` provide Presets (Recommended/All), arbitrary Layouts, then review/save/prepare. Revision-checked configuration is independent of managed activation. [The setup contract](contracts/init.md) owns current behavior; [legacy pairs](contracts/legacy-init.md) import explicitly. |
+| Maintained catalog | Artifact, Patch, Engine and Preset compile directly to execution-lock v3. [The execution-lock contract](contracts/execution-lock.md) owns current schema boundaries. |
+| Guided setup | `init` and `configure` provide Presets (Recommended/All), arbitrary Layouts, then review/save/prepare. Revision-checked configuration is independent of managed activation. [The setup contract](contracts/init.md) owns current behavior; pre-preset configurations must be recreated. |
 | Software selection | Source records are separate from resolved releases. `catalog compile --software recorded\|latest\|tested` supports the current llama.cpp/llama-swap macOS ARM64 sources. Recorded inputs are the offline default; fallback is explicit. |
 | Installation | Exact isolated release/Python installation, receipts, version checks and recovery remain. Receipt reuse now compares installed software facts independently of execution provenance. Context and other runtime changes reuse unchanged software for llama.cpp and Splash. System-managed software is always retained. |
-| Field Kit host | `execution inspect/prepare/render/paths/serve/remove` and supervised probes are implemented. The [runtime contract](contracts/execution-runtime.md) owns process identities, listener checks and final shutdown proof. |
+| Field Kit host | `catalog compile --preset` and `execution configure/inspect/prepare/render/paths/serve/remove` and supervised probes are implemented. The [runtime contract](contracts/execution-runtime.md) owns process identities, listener checks and final shutdown proof. |
 | Current router compatibility | The working tree recognizes llama-swap's narrowly scoped macOS inspection helpers and Rapid 0.15.2's reviewed crash-log child, using kernel identity and ancestry. v260 passed native writing/context work. Engine lifetime remains fixed for measurements; unknown children still refuse ownership. Full Go tests, vet and race checks pass; failures and recovery remain in [Labs](../../v3/labs/workstreams/writing-and-orchestration/README.md). |
 | Source and build | Catalog delivery `a9b4a7f` is pushed and tagged alpha.10. Guided setup, native Metal detection and Splash are committed in `3ba7813`. The software receipt simplification is committed in `98b99ce`; the Qwen study preparation adds exact Python closures and probe identities. These changes await release. |
 | Public binary | Signed/notarized [0.1.0-alpha.10](https://github.com/temper-sh/temper/releases/tag/v0.1.0-alpha.10) adds catalog commands. Its downloaded checksum, signing identity, notarization and live-catalog compilation pass. Field Kit `01dd867` keeps its verified alpha.9 host; alpha.7 remains the dispatched revision 1 host. |
-| Catalog distribution | The [stable channel](https://temper-sh.github.io/temper/catalog/channels/stable/channel.yaml) publishes signed sequence 2 with one Qwen profile. Explicit update, inspection, selection, compilation and offline rollback are delivered. [The catalog guide](CATALOG.md) owns use. |
+| Catalog distribution | The [stable channel](https://temper-sh.github.io/temper/catalog/channels/stable/channel.yaml) publishes signed sequence 2 with one Qwen profile. Current code requires v3; the signed v3 publication remains a separate release step. [The catalog guide](CATALOG.md) owns use. |
 | Catalog candidate | V3 authoring has five Recommended presets: Qwen/Splash, Glimmer, Gemma 26B, Gemma 31B and Qwen/llama. All retains Gemma E2B/E4B and Qwen3.5. The writing presets use b11205; Qwen/llama and smaller presets retain their exact closures. The router is v260. Historical evidence keeps its producing versions. The catalog is unpublished. |
 
 The receipt simplification passes full Go tests, vet and race checks after
@@ -71,7 +71,34 @@ signature failures, stale/equivocating publications, explicit rollback with a
 retained highest sequence, writer contention and preserved user files. The
 recorded Qwen inputs and unknown required/tested boundaries were not changed.
 
+## Alpha schema cleanup
+
+Current source accepts catalog v3, execution-lock v3 and manifest v2 only.
+Removed Selection/Profile normalization, old setup pairs and wizard/import,
+execution exports, the separate software catalog/updater and dead generic
+resolvers/policy. Preset compilation is native. The proposed study patch is
+integrated, including per-run configuration and v3 study authoring.
+
+Historical context-evidence hashes retain their original definition. Signed
+published snapshot bytes and historical measurements are unchanged. Before a
+release, publish a reviewed v3 signed catalog and regenerate the current Field
+Kit package with this host; issued experiments retain their pinned older host.
+These are explicit release boundaries, not compatibility work to reintroduce.
+
+Verification passed: the full Go suite, vet and race checks; all eight study
+presets compiled in a temporary Field Kit copy, whose verifier and 96 hermetic
+tests passed. Its public inspect/configure integration accepted the new locks;
+dry runs left no runtime root, and repeated configuration left output untouched.
+The adjacent Field Kit tree and live service were not changed.
+
 ## Next delivery
+
+The Qwen study now authors from `temper-catalog/v3` and derives per-run limits
+through `execution configure`, keeping the serialized lock opaque to Field Kit.
+The legacy cleanup preserves these public preset operations. Configuration
+returns the existing context-evidence identity consumed by wizard findings;
+reviewed study results supply exact-machine context, per-role memory and latency
+evidence. No result is automatically recommended or imported into the catalog.
 
 **Preset selection and user-owned layouts — implemented in source; bounded
 M5 native lifecycle checks completed with fixes.**
@@ -80,8 +107,8 @@ The [implementation plan](design/presets-and-layouts-plan.md) now has the five
 Recommended presets and required authored copy, v3 authoring, a shared
 Recommended/All selection, editable starter layouts and arbitrary compositions.
 `temper-configuration/v1` stores exact reusable presets and layout references;
-atomic revision checks protect edits and offline resume. Old formats retain
-their identities and import explicitly.
+atomic revision checks protect edits and offline resume. The current binary
+rejects retired formats; no importer is retained.
 
 Preparation deduplicates weights and exact software closures. Managed rendering
 composes Splash and different llama.cpp versions, separates startup/default,
@@ -561,7 +588,7 @@ schema inventory to the product.
 
 | Kind | Temper examples |
 |---|---|
-| Pure computation | Catalog/Selection compilation, native rendering, diffs, budgets and installation plans. |
+| Pure computation | Preset compilation, native rendering, diffs, budgets and installation plans. |
 | Read | Machine facts, upstream resolution, receipt checks, process/listener observations and status. |
 | Side effect | Verified downloads, installation, atomic lock/config/state publication and owned process lifecycle. |
 

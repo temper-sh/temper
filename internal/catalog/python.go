@@ -27,8 +27,8 @@ type PythonPackage struct {
 
 func (s Supply) pythonInputs() (softwarelock.Selection, map[string]softwarelock.Unit, error) {
 	p := s.Python
-	if p == nil || s.Source != nil || s.Release != nil || s.Selection != nil || s.Units != nil || s.Versions != nil || !idPattern.MatchString(s.Package) {
-		return softwarelock.Selection{}, nil, errors.New("Python supply requires one exact runtime/wheel closure and no release or legacy fields")
+	if p == nil || s.Source != nil || s.Release != nil || s.Versions != nil || !idPattern.MatchString(s.Package) {
+		return softwarelock.Selection{}, nil, errors.New("Python supply requires one exact runtime/wheel closure and no release fields")
 	}
 	unitID := func(name string) string { return "uv:" + s.Package + ":" + name }
 	units := map[string]softwarelock.Unit{}

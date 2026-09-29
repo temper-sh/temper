@@ -1,519 +1,89 @@
-# `manifest.yaml` schemas (`temper-manifest/v1` and `temper-manifest/v2`)
+# `manifest.yaml` (`temper-manifest/v2`)
 
-Parked as a direction on 2026-08-17, reworked on 2026-08-19 to settle the
-layout/mode split, and promoted to the executable v1 contract later that day
-by owner decision: native `apply` consumes this schema directly. The legacy
-`models.yaml` shape is not a Temper compatibility surface and the Bash
-renderer remains only a legacy comparison reference.
+The low-level manifest declares a renderable composition. The current product
+workflow stores [presets and user layouts](../contracts/layouts.md); execution
+commands derive manifests internally. Explicit manifest users retain ownership
+of their file and resolve model/template pins into `manifest.lock.yaml`.
 
-The first renderer slice supports llama-server layouts in a local-foreground
-mode and the empty `off` mode. A selected engine or harness the renderer does
-not implement is a refusal, never a partially generated world. The schema can
-grow only through a reviewed revision; unsupported future shapes are not
-silently accepted by v1.
+Manifest v1 is rejected. Its role, model.file, top-level KV, preferred-member and
+llama speculation aliases are removed. Historical design and examples remain
+in Git at `f59c281:docs/design/manifest-schema.md`.
 
-## Pre-wizard successor amendment (2026-08-29)
+## Layouts and modes
 
-The executable `temper-manifest/v1` below remains the exact input contract for
-the native renderer and frozen Field Kit compatibility material. Its `coder`
-role and preferred-resident derivation are retained as compatibility facts,
-not as the product model the wizard may freeze.
-
-Before wizard implementation, the successor manifest surface must apply these
-owner decisions:
-
-- `coding` is an evidenced capability and portfolio use, never a layout role;
-- a local mode names its foreground member directly; `main` is that relational
-  selection, not an intrinsic model property;
-- layout kinds describe technical interfaces such as chat completion or
-  reranking, while role bindings remain only for tool-consumed services such
-  as `rerank`, `embed`, or `extract`;
-- activity support contains only tools and harness extensions the user
-  explicitly selected, and may narrow them for coding or another use without
-  reclassifying the foreground model; and
-- independently versioned template patches remain separate patch definitions
-  over shared model weights. The selected patch is part of exact layout and
-  lock identity, while the wizard groups eligible patch variants beneath one
-  model choice.
-
-The successor removes `role: coder`, the rule that local foreground requires a
-resident coder, and the use of `preferred` to discover which resident is the
-foreground. It replaces those with a technical layout interface and one
-explicit mode foreground binding. Compaction derives from that binding. The
-qualification-catalog amendment is the upstream owner of portfolio grouping,
-patch eligibility, and use evidence; the manifest remains only the user's
-selected composition.
-
-No compatibility parser alias should leak into the successor schema. Existing
-v1 bytes continue to parse as v1; the wizard writes only the reviewed successor
-once it is implemented and accepted.
-
-## The two nouns
-
-- **Layout** = `(model, engine, tuning)`. A servable configuration. It knows
-  nothing about residency, tools or harnesses — only "this model, run this
-  way". Layouts are what the wizard's model step offers and what the
-  download bill is computed from.
-- **Mode** = the world. Which layouts are served and resident, which tools are
-  exposed, which harnesses are wired, what the harness settings derive to.
-  A mode switch **rebuilds the world**.
-
-Everything below follows from keeping those two apart.
-
-## Settled directions
-
-- **Layouts say what a thing is; modes say what is live.** Identity and
-  mode-invariant tuning on the layout; residency and placement in the mode's
-  member list. Composition is visible at the composer (same inversion as the
-  lock's profiles-as-catalogue).
-
-- **The layout/member line is "what it produces" vs "where it lives"**
-  (owner, 2026-08-19). Anything that changes the model's *output* is a
-  layout property: weights, engine, patches, window, KV precision, MTP,
-  thinking mode. Anything that changes *where it runs and for how long* is a
-  member property: placement group, ttl, startup preload, `ngl`, and harness
-  preference. Preference and preload are separate choices.
-
-  The test case that fixes the line: the 0.6B reranker runs CPU-only beside a
-  resident coder and may use the GPU when none is, as recorded by the retained
-  legacy reranker co-residency witness. That
-  is one layout placed two ways — `ngl` is offload, not identity — so it needs
-  no second layout and no per-mode `tuning:` block. Conversely `thinking: off`
-  *is* identity: it changes the rendered prompt, and flipping it mid-session
-  re-renders history so nothing is a token prefix of what came before, costing
-  a full re-prefill, matching the retained legacy prefix-stability witness.
-  This retires the "per-mode `tuning:` shape" question that was parked here.
-
-- **A mode switch is a full world rebuild with a total plan — there is no
-  differ** (owner, 2026-08-19). The plan is a pure function of
-  `(manifest, mode, machine)`: it never reads the running world to decide what
-  to do, so it cannot be wrong about state it did not observe. Same inputs,
-  same plan — second-run-clean applied to mode switching. Reconciliation is
-  llama-swap's existing job: writing a config in which a model no longer
-  appears *is* the unload instruction. A delta engine here would be a second
-  source of truth for residency.
-
-- **Placement groups are named for behaviour, not for the router.**
-  `resident:` / `on_demand:` rather than llama-swap's `pinned`/`heavy`, which
-  are router trivia in a user's file and would not survive a router change.
-
-- **Residents are a list, always.** One resident coder is a 32 GiB fact, not a
-  schema law; on a large machine a mode lists several and they coexist.
-  Whether a member set fits is arithmetic against the machine bucket, checked
-  at plan time. The schema has no opinion.
-
-- **Resolution lives in the lock.** `model`/sources here are intent;
-  revisions and file hashes are `manifest.lock.yaml` rows.
-
-- **One home per primitive.** `window`/`max_tokens` live once on the layout;
-  engine KV settings and harness derivations are computed from them, never
-  stored beside them. Legacy stores the window twice
-  (`launch.max_kv_size`, `pi.contextWindow`) and warns on drift; this removes
-  the drift class.
-
-- **Harness settings are derived from the foreground layouts, never stored.**
-  Pi's auto-compaction is the witnessed case: frontier-sized defaults zero the
-  threshold against a small local window and strand sessions (legacy FINDINGS
-  #25). See "Compaction resolution" below for how one global client slot is
-  reconciled with several resident layouts.
-
-- **Roles are the join surface.** Tools and harnesses name roles (`rerank`,
-  `coder`); each mode binds them or is visibly invalid — never a silent
-  substitution. A role-model arrives because a selected tool needs it; the
-  user consents to the tool, not to its `ngl` flag.
-
-  This is a retained v1 rule. The pre-wizard successor narrows roles to
-  tool-consumed services and names the foreground directly, as specified in
-  the amendment above.
-
-- **`off` is a mode** — start/stop are mode transitions, not special cases.
-
-- **Tools carry sources** (owner, 2026-08-17): tool entries reference real
-  repositories — GitHub or elsewhere, not exclusively ours. Their pins become
-  lock rows when the software/tool qualification surface grows its tool
-  section.
-
-- **Patches carry sources** (owner, same day): HF or GitHub, replacing the
-  legacy `patches/*/FETCH` indirection.
-
-- **Applicability is catalog knowledge, not manifest structure** (owner,
-  2026-08-19): whether a dependency is worth having can depend on the
-  machine's resource constraints — the live case is Pi extensions
-  (`compaction-guard`, `context-trim`) that matter beside a 16k window and are
-  noise beside a frontier one. The condition lives on the qualification
-  catalog profile and the wizard clips offers by it; the manifest never encodes
-  conditions, it records what was chosen for *this* machine.
-
-- **The catalog is this shape plus metadata** (owner, 2026-08-19). A knowledge
-  base of machine profiles stores the same layout structure annotated with
-  evidence, measurements, caveats and status; the manifest is the subset a
-  user selected, with the prose stripped. This narrows the open "how does a
-  reviewed packet map into the catalog" question: the unit is the layout, and
-  projection is annotation-removal rather than translation. It also means a
-  machine profile is diffable against a manifest — "what this box was measured
-  with" versus "what this box is running".
-
-- **Recommendation metadata never enters the manifest** (owner, 2026-08-20).
-  The catalog may annotate several qualified layouts as recommended for the
-  same applicability envelope and attach their evidence-backed performance
-  profiles. Projecting any of them into `manifest.yaml` strips recommendation
-  prose and measurements; only the layouts the user explicitly selected
-  remain, and `preferred` still comes solely from the user's mode choice.
-
-## Compaction resolution — one client slot, several layouts
-
-Each local foreground layout derives its own pair from its own window
-(`reserve = window/8`, `keep = (window − reserve)/3` — legacy's current
-formulas; the older `reserve = max_tokens + window/8` and `keep = …/2` are
-superseded, the `max_tokens` term by the KV budget clamp and the half by a
-witnessed post-compaction floor sitting *above* the trigger).
-
-How those reach the client depends on what the client can express:
-
-- **If Pi ships per-model compaction** — upstream
-  `earendil-works/pi#8133`, opened 2026-08-14, auto-closed by their
-  new-contributor bot and **reopened**, which in that repo is the maintainer
-  signal that it passed the quality bar. No label, assignee, milestone or
-  reply as of 2026-08-19, so this is worth planning *toward*, not *on*. The
-  renderer emits one profile per resident layout keyed by model id, with the
-  global pair as the fallback for anything unlisted. No election.
-- **Otherwise, the renderer elects** the narrowest resident window, because
-  one global setting has to be survivable by the smallest window in the mode.
-  Legacy implements exactly this today.
-- **A local Pi patch is outside Temper's ownership boundary** (owner,
-  2026-08-20). Pi is a user-managed harness, and Temper does not choose its
-  Node runtime, package manager, or installation layout. Until upstream offers
-  per-model compaction, the renderer uses the global-slot election above;
-  Temper does not patch or replace the user's Pi executable.
-
-**The manifest is byte-identical in either supported case.** The compromise is a
-rendering concern, a property of the target client's capability, not a fact
-about the model — which is why it must not appear in the schema.
-
-## Engine launcher evolution
-
-The renderer's launch surface is a closed engine family. A layout supplies
-semantic serving intent plus exactly one typed engine-tuning variant. The
-selected engine adapter validates that it can reproduce those semantics and
-maps them into private engine options; a separate engine-specific command
-builder produces the process launch specification. The shared llama-swap
-command serializer is the final step. It owns shell quoting and the deliberate
-`${PORT}` placeholder, not engine flags.
-
-This boundary has the following invariants:
-
-- Engine identities describe the actual process/API contract, not a package's
-  module name or one of its dependencies. `rapid-mlx`, raw `mlx-vlm`, and
-  Apple-Silicon `vllm-metal` are distinct even where their MLX dependencies
-  overlap. Generic `vllm` is not a sufficient identity for Temper's
-  `darwin/arm64` qualification surface.
-- Common layout fields state semantic facts such as the effective window,
-  output limit, thinking default, selected template, modality, and speculation
-  contract. Engine mechanics such as llama.cpp batch/ubatch/checkpoints,
-  MLX KV schemes, or vLLM scheduler and memory controls live only in their
-  typed engine block. No raw argument list or free-form tuning map is accepted.
-- An adapter refuses a requested semantic it cannot reproduce. Similar names
-  are not equivalence: Rapid-MLX's reasoning profile is not llama.cpp's
-  `--reasoning`; MLX-VLM's `--max-kv-size` is not assumed to be an architectural
-  context limit; and a default that requests may override is not claimed as an
-  enforced policy.
-- A process launch specification carries its executable and typed argument
-  words. Before an engine with environment-driven offline or telemetry
-  controls is admitted, the specification also gains explicit typed
-  environment assignments. Ambient environment and unchecked shell fragments
-  are never part of the contract.
-- Readiness, shutdown, and "what artifact did you actually load?" are reads,
-  separate from the pure launcher. Engine-specific status parsers may interpret
-  llama.cpp `/props`, MLX-VLM `/health`, or vLLM `/v1/models`, but the status
-  orchestrator compares their normalized observation with the lock and refuses
-  a mismatch.
-
-The executable `temper-manifest/v2` slice implements the tagged tuning union,
-complete selected snapshot files, explicit local-only launch environment,
-runtime executable handoff, and hermetic command/refusal coverage for
-`llama-server`, `rapid-mlx`, raw `mlx-vlm`, and Apple-Silicon `vllm-metal`.
-Existing v1 documents remain valid and v1 stays llama-server-only. V2 makes
-these engines syntactically selectable for experiments; every new engine
-remains `EXPERIMENTAL`, not recommended or quality-qualified.
-
-V2 applies the pre-wizard successor decisions as follows:
-
-- `model.file` becomes a sorted, duplicate-free `model.files` snapshot plus
-  `format: gguf|mlx-safetensors|safetensors`. GGUF selects exactly one file;
-  directory-backed engines receive the immutable `model/` directory. Resolve
-  pins all files at one repository revision, fetch commits all of them as one
-  set, and the wall model sums their recorded sizes.
-- `role: coder` is removed. `interface: chat-completions|reranking` describes
-  the technical API and `modalities: [text]` or `[text, image]` describes
-  admitted input. A mode names its exact resident foreground layout. V2 does
-  not derive foreground from `preferred`.
-- Utility modes set `external_foreground: true`, leave `foreground` empty,
-  and retain at least one local helper member. The renderer preserves the
-  harness's default model and compaction settings and omits a generic local
-  router group. The flag is v2-only and cannot accompany a local foreground
-  binding; a layout literally named `external` remains a valid local binding.
-- A mode's `services` map binds tool-consumed roles such as `rerank` to an
-  exact member implementing the required technical interface. Coding remains
-  an evidenced use rather than a role.
-- Exactly one of `llama:`, `rapid_mlx:`, `mlx_vlm:`, or `vllm_metal:` is
-  present and it must match `engine`. Common chat fields remain `window`,
-  `max_tokens`, `thinking`, `speculation: {method: none|mtp, max_tokens: N}`,
-  optional selected `chat_template`, and `modalities`; engine mechanics cannot
-  leak into another variant. MLX-VLM currently refuses MTP because its drafter
-  surface needs an additional explicitly locked artifact.
-
-The first v2 tuning surface is deliberately closed:
-
-- `llama:` owns `kv`, parallelism, flash attention, batch/ubatch, context
-  checkpoints, and RAM prompt cache. The common MTP contract maps to
-  llama.cpp's `draft-mtp` spelling. Only llama-server accepts Temper template
-  patches or member `ngl`.
-- `rapid_mlx:` owns sequence/admission and prefill/completion batch bounds,
-  engine GPU-memory utilization, prefix-cache state, optional cache MiB,
-  `bf16|int8|int4` KV, `pflash: off|auto|always`, an explicit reasoning parser
-  when thinking is on. Text-only selection emits
-  `--no-mllm`; multimodal selection emits `--mllm` and requires PFlash off.
-- `mlx_vlm:` owns sequence count, prefill step, vision-cache size, optional
-  `3.5|4|8`-bit KV scheme/group, and optional `max_kv_size`. The last field is
-  a KV token-capacity control and is never derived from or represented as the
-  architectural context window. Thinking-on uses the server's explicit
-  default control; thinking-off preserves its explicit false default.
-- `vllm_metal:` owns sequence and batched-token bounds, engine GPU-memory
-  utilization, `auto|bfloat16|float16` KV, and prefix-cache state. The first
-  admitted surface is text-only and sets paged attention explicitly. MTP
-  requires one sequence and cannot be combined with prefix caching until the
-  upstream hybrid-model corruption report is cleared by qualification. Its
-  vLLM chat-template kwargs are an upstream vLLM control and are not confused
-  with llama.cpp's removed workaround.
-
-Every Python-engine member receives `HF_HUB_OFFLINE=1`, telemetry/implicit
-token suppression, and no-tracking environment. Rapid-MLX additionally uses
-its own telemetry opt-out. vLLM-Metal additionally pins paged attention,
-automatic Metal memory-fraction delegation, and vLLM usage-stat opt-outs.
-Rapid uses `/health/ready`; raw MLX-VLM uses `useModelName` to rewrite the
-forwarded API model to the one exact local snapshot, preventing its dynamic
-loader from treating the layout alias as a remote model ID.
-
-Remaining work before any of these engines can be called `SUPPORTED`:
-
-1. publish reviewed exact uv application recipes. The compiled uv installation
-   member can materialize a caller-supplied locked CPython and wheel closure,
-   while the probe requires its matching receipt and refuses ambient or
-   manually discovered Python executables. vLLM-Metal additionally needs a
-   typed supply path for its paired upstream vLLM/vLLM-Metal GitHub release
-   wheels and exact pinned MLX-LM source dependency. That path must either
-   admit a reviewed prebuilt wheel for the source pin or model a bounded source
-   build; it must not loosen the generic uv member to arbitrary URLs or VCS;
-2. revise qualification runtime layouts to the same engine-neutral semantic
-   surface, then produce model-family × engine-version × machine-bucket
-   evidence for streaming, tools, sampling, memory, context, and shutdown; and
-3. add engine-specific served-artifact observation (`/props`, `/health`, or
-   `/v1/models`) and compare it with the manifest lock before a status path
-   claims that the intended artifact is loaded.
-
-The 2026-09-02 research inputs are
-[Rapid-MLX 0.13.3](https://github.com/raullenchai/Rapid-MLX/releases/tag/v0.13.3),
-[MLX-VLM 0.6.17](https://github.com/Blaizzy/mlx-vlm/releases/tag/v0.6.17),
-[vLLM-Metal 0.28.0](https://github.com/vllm-project/vllm-metal/releases/tag/v0.28.0).
-These versions harden the boundary; they are not pins, recommendations, or
-consent to install or select those engines.
-
-The same-day launch-surface check loaded the Rapid-MLX parser directly from
-the exact 0.13.3 source tag and accepted the adapter's text-only, thinking-off,
-cache-disabled command plus its multimodal, thinking-on, MTP alternative. It
-also loaded MLX-VLM's exact 0.6.17 CLI and observed the adapter's complete
-argument-to-server-environment mapping with socket startup replaced by a test
-capture. Neither check downloaded weights or started an engine, and both used
-already-present Python dependencies; they are parser-compatibility evidence,
-not installed-closure or model-runtime qualification. vLLM-Metal was not
-installed, so its launch surface remains documentation-reviewed only.
-
-Qualification must also disposition upstream watch items rather than treating
-CLI compatibility as runtime quality. At the researched revisions these
-include MLX-VLM reports about
-[streaming tool results](https://github.com/Blaizzy/mlx-vlm/issues/1850),
-[sampling/seed behavior](https://github.com/Blaizzy/mlx-vlm/issues/1818),
-[strict loading of a text checkpoint](https://github.com/Blaizzy/mlx-vlm/issues/1958),
-and [multimodal cross-thread execution](https://github.com/Blaizzy/mlx-vlm/issues/1591),
-plus a vLLM-Metal report of a
-[nonzero-temperature token corruption symptom](https://github.com/vllm-project/vllm-metal/issues/622).
-vLLM 0.28.0 also has an open report of
-[silent output corruption when MTP and prefix caching are combined on hybrid
-models](https://github.com/vllm-project/vllm/issues/53912). Because the manifest
-does not claim enough architecture knowledge to distinguish affected models,
-the vLLM-Metal adapter refuses that combination; experiments may select either
-MTP or prefix caching until a qualified closure clears the interaction.
-These are investigation inputs, not Temper conclusions. The qualification
-packet must reproduce or clear them on the exact candidate closure and target
-model before promotion. Rapid-MLX PFlash is explicitly output-altering, so
-`auto` and `always` require retrieval/tool/context-quality evidence separate
-from an `off` profile even when throughput improves.
-
-## Deferred beyond v1
-
-- Utility modes whose foreground model belongs to a harness. Their renderer
-  must preserve provider-owned client settings rather than deriving local
-  compaction into a global slot.
-- Additional engines and tuning controls. Each needs a typed adapter, exact
-  software/runtime identity, artifact compatibility, and qualification; raw
-  flags and placeholder variants remain refusals.
-- Tool resolution. Tool `source` remains intent until the lock grows its
-  qualification-backed tool section. Patch resolution is implemented in the
-  native manifest workflow.
-
-## Complete v1 example
-
-Drawn from the live legacy entries so it can be compared line-by-line with
-today's `models.yaml`.
+A manifest **layout** declares model material, engine, technical interface,
+modalities and inference settings. A **mode** explicitly selects members,
+placement, tool services and harnesses. These are low-level renderer terms;
+they do not define catalog recommendations or user-layout storage.
 
 ```yaml
-schema: temper-manifest/v1
-
-defaults:
-  ttl: 1800
-  gpu_memory_utilization: 0.85
-
-# ---- layouts: (model, engine, tuning) ------------------------------------
-# What a servable thing IS. Resolution (revision, file hashes) lives in
-# manifest.lock.yaml — sources here are intent, not pins.
-
-patches:
-  qwen38-sharp-template:
-    source: hf://peculiar-ragdoll/Qwen-Sharp-Chat-Templates@3dc34df52c63dd22ada21f96435e069deaa8d7da/chat_template.jinja?transform=qwen38-prefix-stability-v1
-    file: chat_template.jinja
-
+schema: temper-manifest/v2
+defaults: {ttl: 1800, gpu_memory_utilization: 0.85}
+patches: {}
 layouts:
-  qwen38-llamacpp-24k:
-    display_name: "Qwen3.8 27B GGUF 24k"
-    model:
-      repo: unsloth/Qwen3.8-27B-GGUF
-      file: Qwen3.8-27B-Q4_K_M.gguf
+  assistant:
+    display_name: Assistant
+    model: {repo: example/model, format: gguf, files: [model.gguf]}
     engine: llama-server
-    role: coder
-    window: 24576
+    interface: chat-completions
+    modalities: [text]
+    window: 32768
     max_tokens: 4096
-    kv: q8
     thinking: off
-    chat_template: qwen38-sharp-template
-    llama:
-      parallel: 1
-      flash_attention: on
-      batch: 512
-      ubatch: 512
-      spec_type: draft-mtp
-      spec_draft_n_max: 3
-      context_checkpoints: 16
-      prompt_cache_ram_mib: 0
-
-  rerank-0.6b:
-    display_name: "Qwen3 reranker 0.6B"
-    model:
-      repo: Voodisss/Qwen3-Reranker-0.6B-GGUF-llama_cpp
-      file: Qwen3-Reranker-0.6B-Q8_0.gguf
-    engine: llama-server
-    role: rerank
-    window: 4096
-    llama:
-      parallel: 1
-      flash_attention: auto
-      batch: 256
-      ubatch: 256
-
-tools:
-  project-search:
-    source: github://temper-sh/project-search
-    needs: [rerank]
-
-# ---- modes: the world ----------------------------------------------------
-# Readable in one place: members by placement, tools, harnesses. Everything
-# else is derived — compaction from the resident windows and groups from the
-# placement; reranker presence comes from the tools that need its role.
-
+    speculation: {method: none}
+    llama: {kv: q8, parallel: 1, flash_attention: on, batch: 512, ubatch: 512}
+tools: {}
 modes:
-  local:
-    foreground: local
-    tools: [project-search]
-    harnesses: [pi]
+  work:
+    foreground: assistant
+    tools: []
+    harnesses: []
     members:
-      resident:
-        - {layout: qwen38-llamacpp-24k, ttl: 7200, preferred: true}
-      on_demand:
-        - {layout: rerank-0.6b, ttl: 120, ngl: 0}   # a coder is resident
-
-  off:
-    foreground: none
+      resident: [{layout: assistant, ngl: 99}]
+      on_demand: []
+  off: {foreground: none}
 ```
 
-## Required fields and invariants
+Each model supplies `repo`, explicit `format` and sorted, distinct relative
+`files`. GGUF selects one complete file. MLX/safetensors snapshots declare the
+files required by their typed engine contract. Template patches have independent
+immutable sources; a layout references a selected patch with `chat_template`.
+External speculation drafts have their own model record and lock identity.
 
-- IDs are lowercase stable names whose components may be separated by `-` or
-  `.`, and share their kind's namespace. Layout, patch, tool and mode maps sort
-  by ID when order is not semantically owned by a member list.
-- `model.repo` is the source intent and `model.file` is the selected artifact;
-  the lock snapshots both resolution and hashes. Paths are relative and may
-  not contain `..`.
-- A v1 patch source is
-  `hf://owner/repo@<40-character-commit>/<path>[?transform=<id>]`. The commit
-  pins the input bytes; `resolve` hashes the final transformed output. v1's
-  built-in transform is `qwen38-prefix-stability-v1`, and unknown transforms
-  refuse.
-- `window`, `max_tokens`, `kv`, `thinking` and the `llama:` block are layout
-  identity because they change output or the serving contract.
-  `llama.flash_attention` is the explicit enum `on`, `off` or `auto`; `auto`
-  preserves llama.cpp's hardware-dependent default without pretending it is
-  disabled. `ttl`, `ngl`, `preferred` and `preload` are member facts because
-  they change placement or use.
-- `llama.context_checkpoints` and `llama.prompt_cache_ram_mib` are optional
-  nonnegative integers. Omission preserves the qualified engine default;
-  explicit `prompt_cache_ram_mib: 0` disables the RAM prompt cache and must not
-  collapse into omission. Temper deliberately does not expose llama.cpp's `-1`
-  unlimited-cache sentinel. Coder `thinking` renders as the supported
-  `--reasoning on|off` option rather than template-parser implementation detail.
-- `defaults.gpu_memory_utilization` is greater than zero and at most one. It is
-  the user's conservative allocation policy for the preferred GPU-resident
-  coder in the bootstrap wall-model prediction; it is not rendered as a llama-server
-  flag or claimed as a measured runtime footprint. See
-  [`wall-model.md`](wall-model.md). `defaults.ttl` is zero or greater.
-- Embedded MTP is an explicit paired coder setting: `spec_type: draft-mtp`
-  requires `spec_draft_n_max` from 1 through 16 and renders the corresponding
-  llama.cpp flags. Omitting both fields disables speculative decoding. Other
-  speculative modes remain unsupported in manifest v1.
-- Every mode member references one selected layout and appears in exactly one
-  placement list. `preferred: true` is allowed at most once and only on a
-  resident coder in a local-foreground mode; it selects Pi's starting model.
-  `preload: true` is separate and allowed only on a resident member; it asks
-  llama-swap to start that model eagerly. Preference never implies preload.
-- Every selected tool exists in `tools`; each role in its `needs` list is
-  furnished by a member of that mode. A missing role is a refusal.
-- Every selected harness must be implemented by the renderer. v1 implements
-  Pi only; it never ignores an unknown harness.
-- `foreground: local` requires a resident coder. `foreground: none` permits no
-  members, tools or harnesses. Harness-owned foreground is reserved for the
-  utility-mode schema revision that can preserve provider-owned settings
-  correctly.
-- Compaction is derived for the local foreground from the narrowest resident
-  coder window: `reserve = window/8`, `keep = (window-reserve)/3`. Neither
-  derived value appears in the manifest.
+Interfaces are `chat-completions` and `reranking`; modalities are explicit.
+A chat layout needs a positive output allowance below its context window and
+explicit thinking behavior. A reranker cannot carry chat-only settings.
+Speculation explicitly selects `none`, `mtp`, `dflash` or `dflash2`, subject to
+the engine and draft constraints in the [execution contract](../contracts/execution-lock.md).
 
-## What `apply` renders
+Exactly one engine tuning block must match `engine`: `llama`, `splash`,
+`rapid_mlx`, `mlx_vlm` or `vllm_metal`. Unknown fields, unsupported combinations,
+invalid budgets and unsafe paths refuse before effects. Engine support in a
+parser is not a capability or machine-fit claim.
 
-```
-temper apply --manifest manifest.yaml --mode local --root <temper-root>
+## Composition
 
-  PLAN — derived from (manifest, mode, machine); nothing read from the running world
-    resident        qwen38-llamacpp-24k (preferred)
-    on demand       rerank-0.6b, CPU
-    pi compaction   reserve 3,072; keep 7,168
-    tools           project-search → pi
-    artifacts       llama-swap/config.yaml, pi/models.json,
-                    pi/settings.json
+A local `foreground` names a resident chat-completions member directly.
+`external_foreground: true` leaves the default with the client while exposing
+explicit helper members; it cannot name a local foreground. `foreground: none`
+is an empty mode. Optional `services` maps a tool-facing service, currently
+`rerank`, to an included member implementing that interface.
 
-  → stage an immutable generation
-  → atomically move the `rendered/current` pointer (one commit)
-```
+Members choose `ttl`, llama-only `ngl`, and optional resident `preload`.
+Availability, foreground/default selection and startup loading are distinct.
+Repeated membership and on-demand preload refuse. Tools and harnesses are
+explicit choices; a tool's required services must be bound. Memory checks are
+separate from structural schema validation.
 
-`apply` stops there: it does not install into consumer homes, download
-artifacts, or kick a service. `temper fetch <layout>` materializes one atomic
-set under `<temper-root>/artifacts/layouts/<layout>/<entry-digest>/`; later
-start/mode verbs may invoke that same effect before activation without
-changing this manifest or growing a second downloader.
+## Rendering
+
+`apply` validates locked, materialized artifacts before producing an immutable
+render generation. Its pure renderer owns llama-swap, engine argv and selected
+harness configuration. Pi compaction derives from the foreground's window and
+output allowance. With external foreground, provider-owned Pi defaults remain
+unchanged. Existing unrelated harness settings are preserved.
+
+Unknown engine/harness support is a refusal, not a partial render. The
+[apply contract](../contracts/apply.md), [check contract](../contracts/check.md)
+and [renderer tests](../../internal/render/) own publication, admission and
+observable output behavior.

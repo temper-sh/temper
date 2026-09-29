@@ -16,7 +16,7 @@ import (
 	"github.com/temper-sh/temper/internal/probecmd"
 	"github.com/temper-sh/temper/internal/software"
 	"github.com/temper-sh/temper/internal/software/adapter"
-	"github.com/temper-sh/temper/internal/software/catalogupdate"
+
 	"github.com/temper-sh/temper/internal/softwarecmd"
 	"github.com/temper-sh/temper/internal/testfixture"
 	"github.com/temper-sh/temper/internal/upstream"
@@ -154,8 +154,6 @@ func TestRunDispatchesTheSoftwareCommand(t *testing.T) {
 		return software.Target{}, errors.New("software help must not detect the host")
 	}, func() (string, error) {
 		return "software-help", nil
-	}, func(context.Context, catalogupdate.Options) (catalogupdate.Result, error) {
-		return catalogupdate.Result{}, errors.New("software help must not update the catalog")
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -456,24 +454,25 @@ func runWithTestMachine(ctx context.Context, arguments []string, stdout, stderr 
 	})
 }
 
-const cliManifest = `schema: temper-manifest/v1
+const cliManifest = `schema: temper-manifest/v2
 defaults: {ttl: 1800, gpu_memory_utilization: 0.85}
 layouts:
   coder:
     display_name: Coder
-    model: {repo: org/Coder, file: coder.gguf}
+    model: {repo: org/Coder, format: gguf, files: [coder.gguf]}
     engine: llama-server
-    role: coder
+    interface: chat-completions
+    modalities: [text]
+    speculation: {method: none}
     window: 8192
     max_tokens: 2048
-    kv: q8
     thinking: off
-    llama: {parallel: 1, flash_attention: on, batch: 512, ubatch: 512}
+    llama: {kv: q8, parallel: 1, flash_attention: on, batch: 512, ubatch: 512}
 modes:
   local:
-    foreground: local
+    foreground: coder
     members:
-      resident: [{layout: coder, preferred: true}]
+      resident: [{layout: coder}]
 `
 
 const cliLock = `schema: temper-lock/v1

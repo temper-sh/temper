@@ -12,32 +12,19 @@ import (
 
 func TestContextOverridePreservesWeightsAndUsesItsOwnExecutionIdentity(t *testing.T) {
 	d := document()
-	const profile, id, ceiling = "local-qwen", "qwen-32k", 131072
-	layout := d.Layouts[id]
+	const id, ceiling = "qwen-32k", 131072
+	layout := d.Presets[id]
 	layout.ContextLimitTokens = ceiling
-	d.Layouts[id] = layout
-	original := catalog.Selection{Schema: catalog.SelectionSchema, Profile: profile}
-	selected, err := catalog.ResolveSelection(d, original)
+	d.Presets[id] = layout
+	maximum, err := catalog.CompilePreset(d, id, "", ceiling, software.Target{OS: "darwin", Arch: "arm64"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if selected.ContextWindows[id] != layout.ContextWindowTokens || original.ContextWindows != nil {
-		t.Fatalf("authored window, native ceiling or input mutated: %+v", selected)
-	}
-	selected.ContextWindows[id] = ceiling
-	maximum, err := catalog.Compile(d, selected, software.Target{OS: "darwin", Arch: "arm64"})
+	lower, err := catalog.CompilePreset(d, id, "", 65536, maximum.Target)
 	if err != nil {
 		t.Fatal(err)
 	}
-	selected.ContextWindows[id] = 65536
-	if maximum.Selection.ContextWindows[id] != ceiling {
-		t.Fatal("editing a selection mutated an already compiled lock")
-	}
-	lower, err := catalog.Compile(d, selected, maximum.Target)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if lower.Digests.Profile == maximum.Digests.Profile || d.Layouts[id].ContextLimit() != ceiling {
+	if lower.ExecutionDigest == maximum.ExecutionDigest || d.Presets[id].ContextLimit() != ceiling {
 		t.Fatal("context change did not get its own identity or mutated the catalog")
 	}
 	if !reflect.DeepEqual(lower.Records.Artifacts, maximum.Records.Artifacts) {
@@ -51,14 +38,14 @@ func TestContextOverridePreservesWeightsAndUsesItsOwnExecutionIdentity(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if locked.Selection.ContextWindows[id] != 65536 || locked.Records.Layouts[id].ContextWindowTokens != 65536 {
+	if locked.Records.Presets[id].ContextWindowTokens != 65536 {
 		t.Fatal("override lost in exact lock")
 	}
 	p, err := locked.Projections()
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := render.Build(render.Inputs{Manifest: p.Manifest, Lock: p.Artifacts, Mode: profile, Root: "/context-test"})
+	result, err := render.Build(render.Inputs{Manifest: p.Manifest, Lock: p.Artifacts, Mode: locked.Preset, Root: "/context-test"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,27 +61,24 @@ func TestContextOverridePreservesWeightsAndUsesItsOwnExecutionIdentity(t *testin
 	}
 }
 
-func TestContextChoicesRefuseUnknownUnselectedAndOutOfRangeWindows(t *testing.T) {
+func TestContextChoicesRefuseUnknownAndOutOfRangeWindows(t *testing.T) {
 	d := document()
 	const id, other = "qwen-32k", "unselected"
-	layout := d.Layouts[id]
+	layout := d.Presets[id]
 	layout.ContextLimitTokens = 131072
-	d.Layouts[id], d.Layouts[other] = layout, layout
+	d.Presets[id], d.Presets[other] = layout, layout
 	for _, tc := range []struct {
 		name, layout string
 		tokens       int
 		want         string
 	}{
-		{"unknown", "unknown", 65536, "unselected"},
-		{"unselected", other, 65536, "unselected"},
-		{"zero", id, 0, "context"},
+		{"unknown", "unknown", 65536, "unknown preset"},
 		{"negative", id, -1, "context"},
 		{"no input capacity", id, 4096, "context"},
 		{"above native maximum", id, layout.ContextLimitTokens + 1, "context"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			s := catalog.Selection{Schema: catalog.SelectionSchema, Profile: "local-qwen", ContextWindows: map[string]int{tc.layout: tc.tokens}}
-			if _, err := catalog.Compile(d, s, software.Target{OS: "darwin", Arch: "arm64"}); err == nil || !strings.Contains(err.Error(), tc.want) {
+			if _, err := catalog.CompilePreset(d, tc.layout, "", tc.tokens, software.Target{OS: "darwin", Arch: "arm64"}); err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("invalid context accepted: %v", err)
 			}
 		})

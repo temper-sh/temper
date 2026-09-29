@@ -16,56 +16,11 @@ import (
 
 	"github.com/temper-sh/temper/internal/software"
 	"github.com/temper-sh/temper/internal/software/adapter"
-	"github.com/temper-sh/temper/internal/software/catalog"
+
 	"github.com/temper-sh/temper/internal/software/installplan"
 	softwarelock "github.com/temper-sh/temper/internal/software/lockfile"
 	"github.com/temper-sh/temper/internal/software/removeplan"
 )
-
-func TestResolverCopiesOneReviewedTargetArchiveIntoExactCandidate(t *testing.T) {
-	archive := makeArchive(t, []tarEntry{
-		{name: "bundle/bin/server", body: "binary", mode: 0o755, kind: tar.TypeReg},
-	})
-	request := resolveRequest(archive)
-
-	candidates, err := NewResolver().Candidates(context.Background(), request)
-	if err != nil {
-		t.Fatalf("Candidates() error = %v", err)
-	}
-	if len(candidates) != 1 || candidates[0].RootUnit != "upstream-release:llama-cpp" {
-		t.Fatalf("Candidates() = %#v, want one deterministic root", candidates)
-	}
-	unit := candidates[0].Units[candidates[0].RootUnit]
-	if unit.Scope != "llama-cpp" || unit.NativeName != "llama-cpp" || unit.Version != "b10566" || unit.Revision != "bb4caa7540188872173c44d161602d9271386413" {
-		t.Fatalf("resolved unit = %#v, want reviewed source identity", unit)
-	}
-	if len(unit.Artifacts) != 1 || unit.Artifacts[0].SHA256 != archive.sha256 || unit.Artifacts[0].UnpackedSize != 6 || unit.Artifacts[0].InstalledEntries != archive.installedEntries || candidates[0].Current {
-		t.Fatalf("resolved artifacts = %#v, want exact catalog artifact without moving-current claim", unit.Artifacts)
-	}
-}
-
-func TestResolverRejectsMovingOrMissingTargetPolicy(t *testing.T) {
-	archive := makeArchive(t, []tarEntry{{name: "bundle/server", body: "ok", mode: 0o755, kind: tar.TypeReg}})
-	tests := []struct {
-		name string
-		edit func(*adapter.ResolveRequest)
-		want string
-	}{
-		{name: "moving selection", edit: func(request *adapter.ResolveRequest) { request.Recipe.Selection = catalog.Selection{Policy: "latest"} }, want: "requires one exact"},
-		{name: "other target", edit: func(request *adapter.ResolveRequest) { request.Target.Arch = "amd64" }, want: "does not support"},
-		{name: "missing target asset", edit: func(request *adapter.ResolveRequest) { request.Recipe.Source.Artifacts[0].Target.Arch = "amd64" }, want: "no release artifact matches"},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			request := resolveRequest(archive)
-			test.edit(&request)
-			_, err := NewResolver().Candidates(context.Background(), request)
-			if err == nil || !strings.Contains(err.Error(), test.want) {
-				t.Fatalf("Candidates() error = %v, want %q", err, test.want)
-			}
-		})
-	}
-}
 
 func TestInstallationRoundTripDetectsDriftRepairsAtomicallyAndRemovesOnlyGroup(t *testing.T) {
 	archive := makeArchive(t, []tarEntry{
@@ -394,16 +349,6 @@ func softwareHash(data []byte) string {
 func sha256Bytes(data []byte) string {
 	hash := sha256.Sum256(data)
 	return hex.EncodeToString(hash[:])
-}
-
-func resolveRequest(archive archiveFixture) adapter.ResolveRequest {
-	return adapter.ResolveRequest{
-		Package: "llama-cpp", Target: software.Target{OS: "darwin", Arch: "arm64", Distribution: "macos", DistributionVersion: "26.0"},
-		Recipe: catalog.Recipe{
-			Method: method, RecipeRevision: "llama-cpp-release/v1", VersionScheme: "opaque", Selection: catalog.Selection{Policy: "exact", Exact: "b10566"},
-			Source: catalog.Source{Kind: "release-archive", Name: "llama-cpp", Repository: "ggml-org/llama.cpp", Revision: "bb4caa7540188872173c44d161602d9271386413", Artifacts: []catalog.ReleaseArtifact{{Target: software.Target{OS: "darwin", Arch: "arm64"}, Locator: archive.locator, SHA256: archive.sha256, Size: archive.size, UnpackedSize: archive.unpackedSize, InstalledEntries: archive.installedEntries, Format: "tar.gz", ArchiveRoot: "bundle"}}},
-		},
-	}
 }
 
 func lockedUnit(archive archiveFixture) softwarelock.Unit {

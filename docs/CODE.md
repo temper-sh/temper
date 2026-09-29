@@ -72,15 +72,14 @@ check, removal, or catalog policy.
 |---|---|---|---|---|
 | `temper init`, `configure` | `internal/setupcmd` | `setup`: selected exact presets, named layouts, memory/download plan | machine/disk/catalog reads, `setupui` editors, revision-checked atomic configuration save, explicit shared `preset.Prepare` | `docs/contracts/init.md` |
 | `temper layout activate/status/stop` | `setupcmd.Layout`, `managed.Reconcile` | frozen desired/current jobs, pure composed rendering | exact preparation checks, activation journal, launchd, owned process observation and recovery | `docs/contracts/layouts.md` |
-| `temper catalog compile` | `internal/catalogcmd` | `catalog`: five records, selection, closure, scoped digests and execution lock | explicit local file reads; atomic lock publication without replacement | `docs/contracts/execution-lock.md` |
-| `temper catalog describe` | `internal/catalogcmd` | `catalog.DescribePreset`: authored preset copy (historical artifact editing retained) and optional assessment link | explicit authoring-file read, directory writer lock, validated atomic replacement; dry run writes nothing | `docs/contracts/execution-lock.md` |
-| `temper execution export` | `internal/catalogcmd` | `catalog`: self-contained lock validation and compatibility projections | exact derived input publication; idempotent partial-export recovery | `docs/contracts/execution-lock.md` |
+| `temper catalog compile` | `internal/catalogcmd` | `catalog`: four native records, selected preset closure and execution identity | explicit local file reads; atomic lock publication without replacement | `docs/contracts/execution-lock.md` |
+| `temper execution configure` | `internal/catalogcmd` | `catalog.ConfigureExecution`: explicit context/output/Splash memory limits | immutable derived lock publication | `docs/contracts/execution-runtime.md` |
+| `temper catalog describe` | `internal/catalogcmd` | `catalog.DescribePreset`: authored preset copy and optional assessment link | explicit authoring-file read, directory writer lock, validated atomic replacement; dry run writes nothing | `docs/contracts/execution-lock.md` |
 | `temper resolve` | `internal/resolve` | `manifest`, `lockfile`, `pinning` | `upstream`/`huggingface`; `lockstore` atomic commit | `docs/contracts/resolve.md` |
 | `temper update` | `internal/update` | `manifest`, `lockfile`, `pinning`, update gates | `upstream`/`huggingface`; `lockstore` atomic commit | `docs/contracts/update.md` |
 | `temper fetch` | `internal/fetch` | `manifest`, `lockfile`, `artifactset`, `patch` | HF cache lookup/official client; template byte reads; immutable artifact-set publication | `docs/contracts/fetch.md` |
 | `temper apply` | `internal/apply` | `manifest`, `lockfile`, `artifactset`, `render` | artifact verification; staged generation and atomic `rendered/current` switch | `docs/contracts/apply.md` |
 | `temper check` | `internal/check` | `manifest`, `lockfile`, `artifactset`, `budget` | machine and artifact reads only | `docs/contracts/check.md` |
-| `temper software catalog update` | `software/catalogupdate` through `softwarecmd` | `software/catalog`, `catalogpublication`, adapter capability registry | signed HTTPS source; immutable catalog store and active-pointer commit | `docs/contracts/software-catalog-update.md` |
 | `temper software install` | `software/install` through `softwarecmd` | `software/lockfile`, `installplan`, `receipt`, `rootstate` | receipt/state stores; compiled installation adapter effects | `docs/contracts/software-install.md` |
 | `temper software check` | `software/check` through `softwarecmd` | `software/lockfile`, `checkplan`, `receipt`, `rootstate` | stores and provider inspection; no writes | `docs/contracts/software-install.md` |
 | `temper software remove` | `software/remove` through `softwarecmd` | `software/lockfile`, `removeplan`, `receipt`, `rootstate` | prepared authority, compiled adapter removal, receipt/state commits | `docs/contracts/software-install.md` |
@@ -180,33 +179,29 @@ workflow-only decisions stay with the use case.
 
 | Package | Owns |
 |---|---|
-| `internal/software` | Provider-neutral shared values such as targets, candidates, and artifacts |
+| `internal/software` | Provider-neutral shared values such as targets and artifacts |
 | `software/archive` | Shared bounded tar.gz inspection, safe extraction, and canonical installed-tree inventory for isolated adapters |
 | `internal/catalog` | Maintained source records, latest/tested resolution, exact execution-lock compilation and derived installer inputs |
 | `internal/catalog/distribution` | Current signed publication verification, bounded updates, verified local reads and deliberate rollback; one atomic active/highest-accepted state commit |
-| `software/catalog` | Earlier signed software-publication format; not the V3 authoring path |
 | `software/version` | Closed SemVer/PEP 440/opaque/git version semantics |
-| `software/policy` | Pure catalog recipe and constraint policy |
 | `software/lockfile` | Exact desired software closure and provenance |
 | `software/lockstore` | Concurrency-safe software-lock snapshots used by exact installers |
 
 Catalog policy never proves what is installed. The lock is desired state, a
 receipt is observed history, and root state is operation/share authority.
 
-`internal/catalogcmd` exposes catalog update, inspection, explicit selection,
+`internal/catalogcmd` exposes catalog update, inspection, explicit presets,
 compilation from a verified store and rollback. Distribution reuses the existing
-catalog trust root, signature envelope and HTTPS transport. The older software
-catalog parser/store remain for issued compatibility; current state lives under
-`ROOT/catalog` and never changes the legacy `ROOT/software/catalog` store.
+catalog trust root, signature envelope and HTTPS transport. Current state lives under `ROOT/catalog`. The separate software-catalog parser,
+store, updater and generic candidate policy have been removed.
 
 ### Software adapter family
 
-`internal/software/adapter` owns the common resolver/installation contracts,
+`internal/software/adapter` owns the exact installation contracts,
 descriptor validation, and keyed family dispatch. Concrete provider knowledge
 stays in member packages:
 
-- `adapter/uv` translates version-matched uv/PEP 751 data into an exact managed
-  Python closure and installs that locked closure into an inspected immutable
+- `adapter/uv` installs an exact locked Python closure into an inspected immutable
   environment using its exact managed runtime and local hashed wheelhouse.
 - `adapter/upstreamrelease` discovers latest or exact numbered/semantic GitHub releases,
   verifies archive identities/inventory, and installs, inspects and removes
@@ -217,8 +212,7 @@ extraction, and tree-inventory semantics to `software/archive`. They do not
 share an installed interpreter or publication lifecycle.
 
 The production `temper` installation-effect family wires the isolated
-`upstreamrelease` and `uv` members. Existing resolver code or tests do not
-authorize a CLI fallback to Homebrew, an unknown adapter, ambient Python, or
+`upstreamrelease` and `uv` members. There is no automatic fallback to Homebrew, an unknown adapter, ambient Python, or
 an ambient package index.
 
 Model-download support is a separate, explicit boundary: `hfcache` uses the
@@ -250,19 +244,15 @@ The order in the last three rows is part of the reliability contract. Do not
 move provider effects ahead of prepared authority or turn check findings into
 writes.
 
-### Earlier software-catalog publication
+### Current catalog publication
 
-These signing/update tools remain independent of the maintained V3 catalog.
-The unused generic resolver/status pipeline, embedded bootstrap catalog and
-Homebrew dependency graph reader were retired during the first cleanup wave.
+One catalog distribution owner uses these signature and transport primitives.
 
 | Package | Owns |
 |---|---|
 | `software/catalogpublication` | Pure detached-signature envelope parsing and verification |
 | `software/catalogtrust` | Public verification keys compiled into the binary |
 | `software/catalogsource` | Bounded read-only catalog transport |
-| `software/catalogstore` | Immutable snapshots and conditional active digest pointer |
-| `software/catalogupdate` | Verify → capability/rollback checks → one active-pointer commit |
 | `software/catalogsigning` | Release-side signing, verification, and conditional output commit |
 
 Publication, activation, resolution, and installation are separate operations.
@@ -277,7 +267,6 @@ caller-owned.
 | State | Path/identity | Writer and rule |
 |---|---|---|
 | Selected presets and layouts | `configuration.json` | `configure`; atomic revision-checked replacement under the root lock |
-| Historical guided pairs | `configuration/<mode>.selection.json` and `<mode>.execution.lock.json` | Original save-once format; explicit import leaves these bytes untouched |
 | Managed activation | `managed/activation.json` | `managed.Reconcile`; desired/current frozen jobs, separate from configuration editing |
 | Managed render and job | `managed/generations/<digest>/` | Immutable config/plist; suspend/shutdown recovery records remain until settled |
 | Engine launch ownership | `managed/commands/<digest>/launch.json` and `process.json` | Immutable command; launcher atomically records each lifetime before exec |
@@ -287,10 +276,8 @@ caller-owned.
 | Shared HF model cache | Outside the Temper root; HF environment overrides or `~/.cache/huggingface/hub` | Official HF client; Temper only inspects and links/copies verified material, never prunes it |
 | Render generation | `rendered/generations/<digest>/` | `apply`; immutable generation |
 | Current render | `rendered/current` | `apply`; atomic relative symlink switch after validation |
-| Software lock | caller-owned `software.lock.yaml` | `catalogcmd` exports resolved inputs; installation only consumes them |
+| Software lock | caller-owned `software.lock.yaml` | `catalogcmd` derives resolved inputs internally; installation only consumes them |
 | Current maintained catalog | `catalog/snapshots/<digest>/` and `catalog/state.json` | `catalog/distribution`; immutable snapshots and one atomic active/highest-sequence state commit |
-| Catalog snapshots | `software/catalog/snapshots/<digest>/` | `catalogstore`; immutable verified publication |
-| Active catalog | `software/catalog/active` | `catalogupdate`; exact digest plus newline in a regular file |
 | Installation receipt | `software/installations/<id>/installation-receipt.yaml` | `receiptstore`; canonical conditional commit/removal |
 | Root software authority | `software/state.yaml` | `statestore`; each prepared/finalized operation or claim transition commits here atomically |
 | Current Field Kit state | owned by the adjacent Field Kit runtime outside this repository | Field Kit invokes Temper stores only through public root-explicit verbs |

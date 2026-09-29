@@ -231,7 +231,7 @@ func Render(root string, lock catalog.Lock) (render.Bundle, error) {
 	if err != nil {
 		return render.Bundle{}, err
 	}
-	return render.Build(render.Inputs{Root: root, Mode: lock.Selection.Profile, Manifest: p.Manifest, Lock: p.Artifacts})
+	return render.Build(render.Inputs{Root: root, Mode: lock.Preset, Manifest: p.Manifest, Lock: p.Artifacts})
 }
 
 func PrepareState(root string, lock catalog.Lock) error {

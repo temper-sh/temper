@@ -4,9 +4,10 @@ GitHub Pages serves this directory from `master:/docs` at
 `https://temper-sh.github.io/temper/catalog/`. The current entry is
 [`channels/stable/channel.yaml`](channels/stable/channel.yaml).
 
-The first maintained publication contains the Qwen3.8 27B profile authored in
-[`catalog/qwen38-m5-refresh.json`](../../catalog/qwen38-m5-refresh.json).
-The snapshot is an exact published copy of that source. Its retained software
+The checked-in stable publication is historical catalog v2 for older alpha
+clients. Current source accepts catalog v3 only and deliberately rejects this
+pointer. Publish a reviewed v3 snapshot before releasing the new binary.
+Historical source remains at `f59c281:catalog/qwen38-m5-refresh.json`. Its retained software
 versions reproduce the reviewed configuration; they do not assert minimum
 required or minimum tested boundaries.
 
@@ -17,8 +18,8 @@ snapshots/<catalog-sha256>/catalog.json
 snapshots/<catalog-sha256>/catalog.signature.yaml
 ```
 
-Snapshots are immutable. Keep previously published bytes available for existing
-clients and deliberate rollback. The older `catalog.yaml` software snapshot is
+Snapshots are immutable. Keep previously published bytes available for their
+pinned older clients. The older `catalog.yaml` software snapshot is
 retained alongside current-format snapshots; it is not maintained in parallel.
 
 ## Publish a catalog update

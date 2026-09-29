@@ -124,7 +124,7 @@ func InspectModels(root string, locks []catalog.Lock) (Material, error) {
 		if err != nil {
 			return Material{}, err
 		}
-		for _, id := range keys(locked.Records.Layouts) {
+		for _, id := range keys(locked.Records.Presets) {
 			set, err := artifactset.New(resolved, id, projection.Manifest.Layouts[id], projection.Artifacts.Entries[id], projection.Manifest.Patches)
 			if err != nil {
 				return Material{}, err

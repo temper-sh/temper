@@ -17,13 +17,11 @@ import (
 	"unicode"
 
 	current "github.com/temper-sh/temper/internal/catalog"
-	"github.com/temper-sh/temper/internal/software/catalog"
 	"gopkg.in/yaml.v3"
 )
 
 const (
 	SignatureSchemaV1    = "temper-signature/v1"
-	ChannelSchemaV1      = "temper-software-channel/v1"
 	CurrentChannelSchema = "temper-catalog-channel/v1"
 	AlgorithmEd25519     = "ed25519"
 )
@@ -63,11 +61,6 @@ type Channel struct {
 
 type VerifiedChannel struct {
 	Document Channel
-	KeyID    string
-}
-
-type VerifiedCatalog struct {
-	Snapshot catalog.Snapshot
 	KeyID    string
 }
 
@@ -125,7 +118,7 @@ func ValidateChannelName(name string) error {
 }
 
 func (r CatalogReference) Validate() error {
-	if r.Schema != catalog.SchemaV1 && r.Schema != current.Schema {
+	if r.Schema != current.Schema {
 		return fmt.Errorf("unsupported catalog reference schema %q", r.Schema)
 	}
 	if r.Sequence == 0 {
@@ -142,21 +135,16 @@ func (r CatalogReference) Validate() error {
 			return errors.New("catalog reference locator must not contain control characters")
 		}
 	}
-	if r.Schema == current.Schema {
-		u, err := url.Parse(r.Locator)
-		if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.RawPath != "" || !strings.HasSuffix(u.Path, "/"+r.SHA256+"/") {
-			return errors.New("catalog locator must be an HTTPS directory named by its exact digest, without credentials, query, fragment or encoding")
-		}
+	u, err := url.Parse(r.Locator)
+	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.RawPath != "" || !strings.HasSuffix(u.Path, "/"+r.SHA256+"/") {
+		return errors.New("catalog locator must be an HTTPS directory named by its exact digest, without credentials, query, fragment or encoding")
 	}
 	return nil
 }
 
 func (c Channel) Validate() error {
-	if c.Schema != ChannelSchemaV1 && c.Schema != CurrentChannelSchema {
+	if c.Schema != CurrentChannelSchema {
 		return fmt.Errorf("unsupported catalog channel schema %q", c.Schema)
-	}
-	if (c.Schema == CurrentChannelSchema) != (c.Catalog.Schema == current.Schema) {
-		return errors.New("catalog channel and referenced catalog schemas do not match")
 	}
 	if err := ValidateChannelName(c.Channel); err != nil {
 		return err
@@ -199,30 +187,6 @@ func VerifyChannel(expected string, data, signature []byte, trust TrustRoot) (Ve
 		return VerifiedChannel{}, fmt.Errorf("catalog channel is %q, requested %q", document.Channel, expected)
 	}
 	return VerifiedChannel{Document: document, KeyID: keyID}, nil
-}
-
-func VerifyCatalog(reference CatalogReference, data, signature []byte, trust TrustRoot) (VerifiedCatalog, error) {
-	if err := reference.Validate(); err != nil {
-		return VerifiedCatalog{}, err
-	}
-	keyID, err := trust.Verify(data, signature)
-	if err != nil {
-		return VerifiedCatalog{}, fmt.Errorf("verify software catalog signature: %w", err)
-	}
-	snapshot, err := catalog.ParseSnapshot(data)
-	if err != nil {
-		return VerifiedCatalog{}, err
-	}
-	if snapshot.SHA256 != reference.SHA256 {
-		return VerifiedCatalog{}, fmt.Errorf("software catalog digest is %q, channel names %q", snapshot.SHA256, reference.SHA256)
-	}
-	if snapshot.Document.Schema != reference.Schema {
-		return VerifiedCatalog{}, fmt.Errorf("software catalog schema is %q, channel names %q", snapshot.Document.Schema, reference.Schema)
-	}
-	if snapshot.Document.Sequence != reference.Sequence {
-		return VerifiedCatalog{}, fmt.Errorf("software catalog sequence is %d, channel names %d", snapshot.Document.Sequence, reference.Sequence)
-	}
-	return VerifiedCatalog{Snapshot: snapshot, KeyID: keyID}, nil
 }
 
 func parseSignature(data []byte) (Signature, []byte, error) {

@@ -15,7 +15,6 @@ import (
 	"testing"
 
 	"github.com/temper-sh/temper/internal/catalog"
-	"github.com/temper-sh/temper/internal/setupui"
 )
 
 type previewReleases map[string][]byte
@@ -35,35 +34,11 @@ func TestLatestWizardPreviewResolvesActualReleaseShapesWithoutWriting(t *testing
 	reader := previewReleaseFixture(t)
 	root := filepath.Join(t.TempDir(), "absent")
 	c := fixtureCommand(t)
-	c.Resolve = func(ctx context.Context, d catalog.Document, s catalog.Selection, choice string) (catalog.Document, error) {
+	c.Resolve = func(ctx context.Context, d catalog.Document, s string, choice string) (catalog.Document, error) {
 		return catalog.ResolveSoftware(ctx, d, s, choice, reader)
 	}
-	var shown bool
-	c.UI = func(ctx context.Context, _ io.Reader, _ io.Writer, _ setupui.Input, preview func(context.Context, setupui.Choices) (setupui.Review, error)) (setupui.Decision, error) {
-		choices := setupui.Choices{Profiles: []setupui.Choice{{Mode: "local", Profile: compactProfile, ContextWindows: map[string]int{compactLayout: 16384}}}, Software: "latest"}
-		review, err := preview(ctx, choices)
-		if err != nil {
-			t.Fatalf("latest preview: %v", err)
-		}
-		var parts []string
-		for _, section := range review.Sections {
-			parts = append(parts, section.Lines...)
-			for _, item := range section.Downloads {
-				parts = append(parts, item.File+" "+item.Status)
-			}
-		}
-		lines := strings.Join(parts, "\n")
-		if !review.CanPrepare || review.Token == "" || !strings.Contains(lines, "llama-cpp b11132") || !strings.Contains(lines, "llama-swap v257") {
-			t.Fatalf("review lost resolved binary versions: %s", lines)
-		}
-		shown = true
-		return setupui.Decision{Action: "save", Choices: choices, ReviewToken: review.Token}, nil
-	}
-	if code, _, diagnostics := runSetup(c, "--root", root, "--dry-run"); code != 0 {
-		t.Fatalf("latest wizard dry run: %s", diagnostics)
-	}
-	if !shown {
-		t.Fatal("latest preview was not shown")
+	if code, output, diagnostics := configureRun(c, "--root", root, "--preset", compactLayout, "--software", "latest", "--dry-run", "--json"); code != 0 || !strings.Contains(output, "b11132") || !strings.Contains(output, "v257") {
+		t.Fatalf("latest preview: code=%d %s %s", code, output, diagnostics)
 	}
 	if _, err := os.Lstat(root); !os.IsNotExist(err) {
 		t.Fatalf("dry preview wrote root: %v", err)
@@ -75,10 +50,10 @@ func TestLatestWizardRefusesChangedArchiveInsteadOfRecordedFallback(t *testing.T
 	reader["https://github.com/ggml-org/llama.cpp/releases/download/b11132/llama-b11132-bin-macos-arm64.tar.gz"] = []byte("corrupt archive")
 	root := filepath.Join(t.TempDir(), "absent")
 	c := fixtureCommand(t)
-	c.Resolve = func(ctx context.Context, d catalog.Document, s catalog.Selection, choice string) (catalog.Document, error) {
+	c.Resolve = func(ctx context.Context, d catalog.Document, s string, choice string) (catalog.Document, error) {
 		return catalog.ResolveSoftware(ctx, d, s, choice, reader)
 	}
-	if code, _, diagnostics := runSetup(c, "--root", root, "--profile", compactProfile, "--software", "latest", "--dry-run"); code == 0 || !strings.Contains(diagnostics, "resolve llama-cpp") {
+	if code, _, diagnostics := configureRun(c, "--root", root, "--preset", compactLayout, "--software", "latest", "--dry-run"); code == 0 || !strings.Contains(diagnostics, "resolve llama-cpp") {
 		t.Fatalf("changed latest silently fell back: code=%d diagnostic=%s", code, diagnostics)
 	}
 	if _, err := os.Lstat(root); !os.IsNotExist(err) {

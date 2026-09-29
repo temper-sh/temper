@@ -10,7 +10,7 @@ import (
 	"github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/manifest"
 	"github.com/temper-sh/temper/internal/render"
-	"github.com/temper-sh/temper/internal/testfixture"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -22,7 +22,7 @@ func splashCatalog(t *testing.T) catalog.Document {
 	if err != nil {
 		t.Fatal(err)
 	}
-	doc, err := testfixture.LegacySetupCatalog(raw)
+	doc, err := catalog.Parse(raw)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,7 +31,7 @@ func splashCatalog(t *testing.T) catalog.Document {
 
 func compileSplash(t *testing.T, doc catalog.Document) catalog.Lock {
 	t.Helper()
-	lock, err := catalog.Compile(doc, catalog.Selection{Schema: catalog.SelectionSchema, Profile: "qwen3.8-27b-splash-local", ContextWindows: map[string]int{splashLayout: 32768}}, doc.Runtime.Router.Target)
+	lock, err := catalog.CompilePreset(doc, splashLayout, "", 32768, doc.Runtime.Router.Target)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +41,7 @@ func compileSplash(t *testing.T, doc catalog.Document) catalog.Lock {
 func TestSplashSelectionCarriesExactSidecarAndOfflineRuntime(t *testing.T) {
 	doc := splashCatalog(t)
 	locked := compileSplash(t, doc)
-	if len(locked.Records.Artifacts) != 2 || len(locked.Records.Engines) != 1 || doc.LayoutOrder[0] != splashLayout {
+	if len(locked.Records.Artifacts) != 2 || len(locked.Records.Engines) != 1 || doc.PresetOrder[0] != splashLayout {
 		t.Fatal("incomplete or misordered Splash composition")
 	}
 	raw, err := json.Marshal(locked)
@@ -72,7 +72,7 @@ func TestSplashSelectionCarriesExactSidecarAndOfflineRuntime(t *testing.T) {
 	if _, err := manifest.Parse(encoded); err != nil {
 		t.Fatal(err)
 	}
-	bundle, err := render.Build(render.Inputs{Manifest: projection.Manifest, Lock: projection.Artifacts, Mode: locked.Selection.Profile, Root: "/temper path"})
+	bundle, err := render.Build(render.Inputs{Manifest: projection.Manifest, Lock: projection.Artifacts, Mode: locked.Preset, Root: "/temper path"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func TestSplashDraftChangesInvalidateCompositionButLeaveTargetIdentity(t *testin
 	draft.Files[1].SHA256 = strings.Repeat("a", 64)
 	doc.Artifacts["qwen3.8-27b-dflash2"] = draft
 	after := compileSplash(t, doc)
-	if before.Digests.Profile == after.Digests.Profile {
+	if before.ExecutionDigest == after.ExecutionDigest {
 		t.Fatal("draft update did not invalidate execution")
 	}
 	p1, _ := before.Projections()
@@ -131,13 +131,11 @@ func TestSplashContextChangesReuseInstalledSoftware(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, window := range []int{16384, 65536} {
-		selection := baseline.Selection
-		selection.ContextWindows = map[string]int{splashLayout: window}
-		candidate, err := catalog.Compile(doc, selection, doc.Runtime.Router.Target)
+		candidate, err := catalog.CompilePreset(doc, splashLayout, "", window, doc.Runtime.Router.Target)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if candidate.Digests.Profile == baseline.Digests.Profile {
+		if candidate.ExecutionDigest == baseline.ExecutionDigest {
 			t.Fatal("context change did not change execution identity")
 		}
 		material, err := candidate.Projections()
@@ -157,24 +155,24 @@ func TestSplashContextChangesReuseInstalledSoftware(t *testing.T) {
 func TestSplashRejectsMixedEngineFieldsAndMissingDraft(t *testing.T) {
 	for _, mutate := range []func(*catalog.Document){
 		func(d *catalog.Document) {
-			l := d.Layouts[splashLayout]
+			l := d.Presets[splashLayout]
 			l.EngineConfig.Parallel = 1
-			d.Layouts[splashLayout] = l
+			d.Presets[splashLayout] = l
 		},
 		func(d *catalog.Document) {
-			l := d.Layouts[splashLayout]
+			l := d.Presets[splashLayout]
 			l.Speculation.DraftArtifact = ""
-			d.Layouts[splashLayout] = l
+			d.Presets[splashLayout] = l
 		},
 		func(d *catalog.Document) {
-			l := d.Layouts[splashLayout]
+			l := d.Presets[splashLayout]
 			l.RequestDefaults.Sampling.TopK = 33
-			d.Layouts[splashLayout] = l
+			d.Presets[splashLayout] = l
 		},
 		func(d *catalog.Document) {
-			l := d.Layouts[splashLayout]
+			l := d.Presets[splashLayout]
 			l.Speculation.MaxDraftTokens = 8
-			d.Layouts[splashLayout] = l
+			d.Presets[splashLayout] = l
 		},
 	} {
 		doc := splashCatalog(t)

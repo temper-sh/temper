@@ -213,13 +213,13 @@ func writeManifest(t *testing.T, directory string, withPatch bool) string {
 		chatTemplate = "    chat_template: stable-template\n"
 		patches = "patches:\n  stable-template:\n    source: " + patchSource + "\n    file: chat.jinja\n"
 	}
-	data := "schema: temper-manifest/v1\n" +
+	data := "schema: temper-manifest/v2\n" +
 		"defaults:\n  ttl: 300\n  gpu_memory_utilization: 0.9\n" +
 		patches +
-		"layouts:\n  coder:\n    display_name: Coder\n    model:\n      repo: owner/model\n      file: model.gguf\n    engine: llama-server\n    role: coder\n    window: 32768\n    max_tokens: 4096\n    kv: q8\n    thinking: off\n" + chatTemplate +
-		"    llama:\n      parallel: 1\n      flash_attention: on\n      batch: 1024\n      ubatch: 256\n" +
+		"layouts:\n  coder:\n    display_name: Coder\n    model:\n      repo: owner/model\n      format: gguf\n      files: [model.gguf]\n    engine: llama-server\n    interface: chat-completions\n    modalities: [text]\n    speculation: {method: none}\n    window: 32768\n    max_tokens: 4096\n    thinking: off\n" + chatTemplate +
+		"    llama:\n      kv: q8\n      parallel: 1\n      flash_attention: on\n      batch: 1024\n      ubatch: 256\n" +
 		"tools: {}\n" +
-		"modes:\n  local:\n    foreground: local\n    tools: []\n    harnesses: []\n    members:\n      resident:\n        - layout: coder\n          preferred: true\n      on_demand: []\n"
+		"modes:\n  local:\n    foreground: coder\n    tools: []\n    harnesses: []\n    members:\n      resident:\n        - layout: coder\n      on_demand: []\n"
 	path := filepath.Join(directory, "manifest.yaml")
 	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
 		t.Fatal(err)
@@ -229,39 +229,41 @@ func writeManifest(t *testing.T, directory string, withPatch bool) string {
 
 func writeTwoLayoutManifest(t *testing.T, directory string) string {
 	t.Helper()
-	data := `schema: temper-manifest/v1
+	data := `schema: temper-manifest/v2
 defaults: {ttl: 300, gpu_memory_utilization: 0.9}
 patches: {}
 layouts:
   coder:
     display_name: Coder
-    model: {repo: owner/model, file: model.gguf}
+    model: {repo: owner/model, format: gguf, files: [model.gguf]}
     engine: llama-server
-    role: coder
+    interface: chat-completions
+    modalities: [text]
+    speculation: {method: none}
     window: 32768
     max_tokens: 4096
-    kv: q8
     thinking: off
-    llama: {parallel: 1, flash_attention: on, batch: 1024, ubatch: 256}
+    llama: {kv: q8, parallel: 1, flash_attention: on, batch: 1024, ubatch: 256}
   alternate:
     display_name: Alternate
-    model: {repo: owner/alternate, file: alternate.gguf}
+    model: {repo: owner/alternate, format: gguf, files: [alternate.gguf]}
     engine: llama-server
-    role: coder
+    interface: chat-completions
+    modalities: [text]
+    speculation: {method: none}
     window: 16384
     max_tokens: 2048
-    kv: q8
     thinking: off
-    llama: {parallel: 1, flash_attention: on, batch: 1024, ubatch: 256}
+    llama: {kv: q8, parallel: 1, flash_attention: on, batch: 1024, ubatch: 256}
 tools: {}
 modes:
   local:
-    foreground: local
+    foreground: coder
     tools: []
     harnesses: []
     members:
       resident:
-        - {layout: coder, preferred: true}
+        - {layout: coder}
         - {layout: alternate}
       on_demand: []
 `

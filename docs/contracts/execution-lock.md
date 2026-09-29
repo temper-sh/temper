@@ -1,267 +1,134 @@
-# Catalog and execution-lock preparation
+# Catalog and execution locks
 
-Temper compiles a verified active catalog or explicit local catalog and selection into a
-self-contained execution lock. The [direct execution runtime](execution-runtime.md)
-consumes that lock for installation, rendering and serving. Compatibility exports
-remain available for issued clients. Version selection is a preparation
-step; installation consumes exact inputs and never silently updates them.
+Temper compiles one explicitly selected `temper-catalog/v3` preset into a
+self-contained `temper-execution-lock/v3`. Installation, rendering and serving
+consume that exact lock through the [execution runtime](execution-runtime.md).
+User compositions live in [`temper-configuration/v1`](layouts.md).
 
 ```sh
-temper catalog compile --catalog catalog.json --selection selection.json \
-  --target darwin/arm64 --software recorded|latest|tested \
-  --out execution.lock.json [--dry-run] [--json]
+temper catalog compile --catalog catalog/guided-setup.json \
+  --preset qwen3.8-27b-q4xl-mtp --target darwin/arm64 \
+  --software recorded --out execution.lock.json [--dry-run] [--json]
 temper execution inspect --lock execution.lock.json
-temper execution prepare --lock execution.lock.json \
+temper execution configure --lock execution.lock.json \
+  --preset qwen3.8-27b-q4xl-mtp --context 32768 --max-output 4096 \
+  --out execution.32k.lock.json [--dry-run]
+temper execution prepare --lock execution.32k.lock.json \
   --root /explicit/temper-root --installation candidate [--dry-run]
 ```
 
-Use `--root ROOT` instead of `--catalog FILE` to compile from the verified active
-publication. Exactly one source is required. The [catalog guide](../CATALOG.md)
-describes download, inspection and explicit selection. Published compilation
-binds the lock's source identity to the exact signed snapshot bytes, including
-when latest/tested resolution changes the software inputs. The existing local
-authoring path retains its canonical document identity and issued-lock behavior.
+Exactly one catalog source is required: `--catalog FILE` for local authoring or
+`--root ROOT` for a verified active publication. Published compilation retains
+the exact signed snapshot digest even when software resolution changes the
+selected material. Local authoring uses the canonical source document digest.
 
-Choose one software value. `recorded` is the default and uses retained exact
-inputs without network access. `latest` discovers the newest downloadable
-llama.cpp numbered build (published upstream as a nightly), and the upstream
-stable releases for llama-swap and Splash. `tested` explicitly selects the recorded minimum
-tested version; it refuses unknown or conflicting tested boundaries.
-All choices must satisfy required versions. A failed lookup never triggers an
-automatic fallback. A newer resolved lock needs a new output path.
+The output parent must exist. Compilation and configuration publish atomically,
+leave identical files untouched, and refuse different content or symlinks.
+Changing settings requires a new output path. Dry runs create no files.
 
-Latest/tested discovery supports the current GitHub release archives for
-llama.cpp, llama-swap and Splash on macOS ARM64. It resolves the release tag to a commit,
-selects the target archive, verifies its upstream SHA-256 and size, and computes
-the bounded archive inventory without writing files. llama.cpp discovery scans
-at most 100 recent releases, skipping drafts and builds missing the target
-archive. Once selected, an archive's integrity failure refuses rather than
-trying an older build. Only official llama.cpp `b<number>` builds may carry
-GitHub's prerelease flag; other sources require stable releases.
+## Owned records and identity
 
-Numbered `b...` and `v...` tags are compared numerically within their own family.
-Semantic `MAJOR.MINOR.PATCH` and `vMAJOR.MINOR.PATCH` tags use semantic version ordering. Ordering between
-families is never inferred. Unknown tag formats or missing integrity metadata
-refuse. See upstream's [versioning explanation](https://github.com/ggml-org/ggml/discussions/1579)
-and [release API](https://docs.github.com/en/rest/releases/releases).
+The catalog owns Artifact, Patch, Engine and Preset records:
 
-The output parent must already exist. Compilation preserves the selection and
-refuses to replace a different lock. Export verifies existing derived files,
-writes only absent ones, and refuses changed files, symlinks and unrelated
-directory contents. Repeating the same resolution writes nothing. Each file
-publishes atomically without replacement; a partial export can be rerun to fill
-missing files. Consumers proceed only after success. Dry runs write nothing,
-install nothing and launch no processes; moving resolution still reads network
-metadata and archive bytes.
+- Artifacts pin model or draft repository, revision, format and exact files.
+  `model_name` and `weights_name` provide separate display labels.
+- Patches pin template files and name compatible artifacts.
+- Engines declare the typed runtime adapter, supported interfaces/modalities,
+  software supply and display label.
+- Presets select those records and own request defaults, engine settings,
+  speculation, context limits/findings, memory tier and editorial copy.
+  Recommended presets require an authored description. `preset_order` controls
+  presentation; it never selects a preset for the user.
 
-## Owned records and scope
+A lock contains `schema`, `source_snapshot_sha256`, `preset`, portable `target`,
+selected `records`, and one `execution_digest`. It retains only that preset,
+its target/draft/template, engine, router and auxiliary Python environments.
+No Selection, profile, catalog layout or intermediate digest map is serialized.
+Validation recompiles the retained records and refuses altered identity,
+unselected records and noncanonical content. Runtime consumption is offline
+and needs no source catalog, clock or machine-specific path.
 
-Current authoring uses `temper-catalog/v3`: Artifact, Patch, Engine and Preset.
-A Preset has the former single-configuration Layout shape plus authored
-`description`, optional `assessment_url`, and `recommended`. Recommended copy
-must be nonblank; `preset_order` controls presentation. These editorial fields
-are excluded from execution digests. Each preset compiles through the existing
-v2 exact-lock machinery; user compositions live in
-[`temper-configuration/v1`](layouts.md), not synthetic catalog recommendations.
-Its internal compatibility binding is demand-loadable with no default route;
-managed layouts own startup, default and coexistence choices. Historical v1/v2
-wire meanings and digest inputs remain unchanged. The following describes those
-issued records and engine contracts.
+Execution identity includes consumed material, exact software, request defaults
+and launch settings. Editorial copy, discovery instructions, license and
+required/tested evidence metadata do not change it. Model and software material
+can therefore be reused across settings changes. Context evidence keeps its
+independently versioned hash definition; retiring a storage format does not
+rewrite existing measurements.
 
+## Software resolution
 
-`temper-catalog/v2` has Artifact, Patch, Engine, Layout and Profile records.
-Optional presentation metadata keeps the chooser's Model / Weights / Engine
-labels distinct: Artifact owns `model_name` and `weights_name`; Engine owns
-`display_name`. A Layout's `memory_tier` is an estimated machine-capacity group
-(`XS`, `S`, `M`, `L`, `XL`, or `XXL`), not model file size or an admission rule.
-Missing labels fall back to existing record names; missing tiers stay
-unspecified. The optional catalog-level `layout_order` lists layout IDs in
-editorial order. IDs must exist and appear at most once; unlisted choices follow
-in stable profile-ID order within their tier. Setup groups available tiers from
-largest to smallest before applying that order. These fields change catalog
-source identity, but neither execution identity nor context evidence identity.
+`--software recorded` uses retained exact inputs offline. `latest` resolves the
+newest downloadable official llama.cpp numbered build and stable GitHub releases
+for llama-swap and Splash. `tested` selects a recorded minimum tested version
+when evidence exists. Every choice must satisfy required versions. A failed
+lookup or integrity check never falls back silently.
 
-The `splash/v1` engine variant uses `kv_cache` (`int8` or `bf16`),
-`max_memory_bytes`, `reasoning_effort` and `request_timeout_seconds`; llama.cpp
-fields cannot appear in that variant. A Splash Layout selects one target GGUF
-and `speculation: {method: dflash2, source: artifact, max_draft_tokens: 0,
-draft_artifact: ID}`. The draft Artifact pins its own repository, revision,
-`config.json` and `model.safetensors`. Splash's release-owned architecture mapping
-validates that this is the proper DFlash2 sidecar. It is included automatically
-with the Layout, without another user choice. The engine owns draft block size.
+GitHub discovery resolves a tag to a commit, verifies the archive's upstream
+SHA-256 and size, and computes a bounded inventory without writing files.
+llama.cpp discovery scans at most 100 recent releases; drafts and builds without
+the target archive are skipped. Integrity failure after selecting an archive
+refuses the operation. Numbered and semantic tags are ordered only within their
+own families. Recorded Python environments carry exact interpreter, wheel and
+source dependency closures; they do not resolve from the installed environment.
 
-A llama.cpp Layout can select an external single-file GGUF draft with
-`source: artifact` and `draft_artifact: ID`. Methods `dflash` and `dflash2`
-require that draft and 1–15 proposed tokens; both render the native
-`draft-dflash` method. Method `mtp` permits either an external GGUF assistant
-or the existing embedded draft, with 1–16 proposed tokens. The draft uses the
-target's explicit GPU placement and F16 KV caches. These are composition
-contracts, not a claim that arbitrary target/draft pairs are compatible or
-faster; reviewed catalog entries own the tested pairing.
+Supplies own source/release facts or an exact Python environment. Installer
+selections and unit maps are derived internally. Software locks record execution
+provenance and compatible `darwin/arm64` targeting; they do not invent an
+experiment or use the catalog date as an installation observation.
 
-The selected closure includes target, draft, template and software independently.
-Changing draft bytes invalidates the composition and artifact-set identity without
-changing target identity. Draftless issued locks retain their original digests.
-Compatibility exports represent the sidecar as `layout.draft` and `entry.draft`;
-Splash preparation is performed by `execution prepare`.
+## Settings and evidence
 
-Software supplies contain `package`, `target`, a GitHub `source` and optionally
-a retained exact `release`. The source names its repository, asset template and
-archive root. `{version}` expands to the tag and `{number}` to its numeric part.
-The resolved release records version, commit and archive identity. Omit it to
-require latest/tested resolution before compilation. Installer selections,
-adapter IDs and unit maps are generated at export, never authored in supplies.
+The authored `context_window_tokens` counts input plus output. An explicit window
+must exceed `request_defaults.max_output_tokens` and remain within
+`context_limit_tokens`, or the authored window if no separate ceiling is known.
+Setup accepts the authored default and reports whether exact applicable evidence
+exists. It never infers fit from a larger machine or a neighboring tested point.
 
-A Layout may declare `engine_versions.minimum_required` with `required_source`
-and `minimum_tested` with `tested_evidence`. These apply to that Layout and its
-engine target. Router facts use `runtime.router.versions`. Required is a hard
-support floor; tested is optional evidence under the cited conditions. Testing
-a later version does not make it the required floor. Unknown boundaries remain
-absent, and a tested release below a newly required floor cannot be selected as
-a fallback. Version metadata does not change execution identity.
+`execution configure` changes only context, output allowance, and optional
+Splash `max_memory_bytes`. It preserves software, weights, templates, sampling,
+speculation and source snapshot identity. A nonzero memory override is refused
+for other engines. Setup's `--context PRESET=TOKENS` and
+`--template PRESET=PATCH|builtin` produce customized exact presets.
 
-`temper-selection/v2` contains `schema`, `profile`, and optional `templates`
-and `context_windows` maps.
-The `templates` map keys selected layout IDs to a compatible patch ID; an empty
-value explicitly selects the model's embedded template. An omitted map or key
-inherits that layout's catalog default (`patches[0]`, or embedded when there is
-no patch). `temper catalog select` freezes every selected layout's current
-choice into the new user-owned selection; repeat `--template layout=patch` or
-`--template layout=builtin` to override individual choices. The compiler accepts
-older selections with omitted choices without rewriting them. Unknown or
-unselected layout keys and missing or incompatible patches are refused before
-publication or runtime effects. Each profile binding uses its layout as
-identity. The compiler rejects empty tools/integrations placeholders and
-separate binding IDs in v2 rather than maintaining unused extension slots.
+A `context_finding` binds window, output allowance and `execution_sha256` to an
+exact target, chip, RAM amount, optional hardware model and minimum wired-memory
+budget. It records engine-memory/swap bounds, evidence URL and optional latency
+note. `catalog compile --json` reports `context_execution_digests` for candidate
+inputs; this identifies a configuration and does not claim a test occurred.
+Changed software, material or execution settings invalidate the match.
 
-`context_windows` maps selected layout IDs to total input-plus-output token
-windows. Low-level selection with an omitted value uses the layout's authored
-`context_window_tokens`. Optional `context_limit_tokens` separately records the
-model/configuration ceiling; without it, the authored window remains the limit
-for compatibility. An explicit choice must exceed
-`request_defaults.max_output_tokens` and cannot exceed that limit.
-`catalog select --context LAYOUT=TOKENS` and guided setup freeze each chosen number.
-Compilation records it in the selected
-layout and renders that exact window. Context changes alter execution identity
-while reusing the same model bytes. Old selections and frozen execution locks
-retain their original windows. A context limit states capacity, not measured
-memory fit or task quality; extended RoPE scaling requires its own configuration.
+Preset `description` and optional `assessment_url` are edited with
+`catalog describe --preset ID`. `--if-empty` preserves existing authored copy.
 
-Layouts may carry reviewed `context_findings`. Each gives `window_tokens`,
-`max_output_tokens`, a tested `execution_sha256`, a `machine` selector
-(`target`, `chip`, exact `physical_memory_bytes`, optional `hardware_model`,
-and `minimum_wired_limit_mib`), `engine_memory_limit_bytes`,
-`swap_growth_limit_bytes`, an `evidence` URL and optional `latency_note`.
-The execution digest binds the actual window, output allowance, model bytes,
-template, engine, router and all launch/request controls. `catalog compile
---json` reports `context_execution_digests` per layout for these exact inputs;
-this identifies a candidate and does not certify that a test ran. Changed inputs leave a finding
-inapplicable rather than silently updating its evidence identity. Findings and
-the ceiling are catalog metadata, excluded from execution identity.
+## Engine contracts
 
-Guided setup resolves software before selecting the largest matching tested
-window. Its automatic choice requires applicable evidence; otherwise it reports
-unknown and requests an explicit window. Explicit values remain possible up to
-the model ceiling and disclose whether that exact point has matching evidence.
-There is no interpolation from a larger machine or between tested points.
-Latency notes do not reduce the capacity default. This first automatic path
-covers single-layout profiles; multi-layout composition needs its own fit
-evidence and explicit windows. Preview performs no model run or weight download.
+llama.cpp accepts complete GGUF material, text chat and at most one external
+template. Speculation may be disabled, embedded MTP, or an exact GGUF draft for
+MTP/DFlash. External DFlash uses 1–15 draft tokens; MTP uses 1–16. Target and draft
+material remain independent identities. These controls do not establish that an
+arbitrary pairing is correct or faster.
 
-Artifacts may carry `description` and an optional `assessment_url`. Workshop
-edits these through `temper catalog describe`; one artifact's description is
-shared by its local-main and utility choices. Descriptions may contain the
-owner's personal assessment and need no Results record. They are display
-metadata, excluded from execution identity, and software/evidence refreshes
-preserve them. `catalog describe --if-empty` supplies a suggestion only when no
-description exists; replacement is an explicit edit.
+`llama-server/v2` exposes explicit cache, reasoning, context shift, fitting,
+thread, load-mode and sampling controls. `checkpoint_min_step` maps to
+`--checkpoint-min-step`: omitted uses the engine default, zero removes the
+minimum, and negative values refuse. KV `q4`, `q8`, and `f16` map to `q4_0`,
+`q8_0`, and `f16` for both K and V. Output allowance supplies `--predict` with
+these controls; explicit API request values can override server defaults.
 
-A profile with omitted `foreground` has one local default route. A profile with
-`foreground: external` has no default route and at least one available helper
-binding. The derived v2 manifest uses `external_foreground: true` with no
-`foreground` layout to tell a selected harness that its provider-owned model
-does the foreground work. A v2 `foreground: external` remains an ordinary local
-layout reference when a layout has that ID. Temper still
-renders the explicitly selected local helpers by layout ID, without a generic
-local router group. Pi's existing default model and compaction settings remain
-provider-owned in this mode. The empty `none` mode
-remains a separate manifest state. A compact chat model can be a local default
-when that profile selects it; artifact size is not a role classifier.
-With no resident local model, the resident wall-model check reports
-`not-applicable`; it does not establish that loading an on-demand helper will
-fit alongside a harness-owned foreground. Current catalog locks also do not
-select or install a Pi integration; Pi settings preservation applies when an
-explicit integration supplies Pi's base configuration to the renderer.
+Splash's distinct typed configuration owns KV precision, memory cap, reasoning
+and request timeout. It selects a target GGUF and an exact DFlash2 sidecar
+(`config.json` plus `model.safetensors`). The release-owned architecture mapping
+checks their compatibility. Preparation includes the sidecar automatically.
 
-The lock retains only selected layouts and their material/engine records. It
-keeps the source snapshot hash and one profile execution digest; intermediate
-record/material/engine/layout hash maps are not serialized. Consumed model,
-selected template, engine or settings changes alter execution identity. Template
-overrides retain the original catalog snapshot identity and do not duplicate
-model weights. License, display
-name, source-discovery instructions and evidence metadata do not. Export also
-identifies the exact lock bytes by SHA-256. Local machine paths never enter the
-portable lock.
+The [guided catalog](../../catalog/guided-setup.json) and
+[experimental Qwen catalog](../../catalog/experiments/qwen-study.json) exercise
+these contracts. Results and the cited studies own capability claims.
 
-The llama.cpp executable slice accepts one complete GGUF per artifact, at most one
-external template, text chat through `llama-server/v2`, complete release
-archives for llama.cpp and llama-swap, and no speculation, embedded MTP, or
-an exact GGUF draft for MTP/DFlash. Splash's distinct closure is described above.
-The [Qwen specimen](../../catalog/qwen38-m5-refresh.json) and
-[selection](../../catalog/qwen38-m5-refresh.selection.json) exercise this path.
-Their retained versions are reproducible inputs, not asserted minimum tested
-boundaries. Availability and measured capability remain Results assessments.
+## Retired formats
 
-## Issued Field Kit inputs
-
-Already-issued v1 catalogs, selections and execution locks remain readable and
-compilable with their original identities and four export files. V1 does not
-accept moving software resolution. Its legacy fields exist only for this real
-consumer; new authoring uses v2. Frozen Field Kit packages and their producing
-runtime are unchanged. Direct execution-lock consumption and removal of the
-compatibility bridge belong to the separately recorded Field Kit second wave.
-
-## Export contract
-
-`--json` emits `temper-execution-inputs/v1` with:
-
-- `profile`, `execution_digest`, and exact input `lock_sha256`;
-- selected `layouts`, for the caller's existing per-layout fetch sequence;
-- `changed` and `dry_run` booleans;
-- `inputs`, mapping the four filenames below to `path` and byte `sha256`.
-
-`manifest.yaml`, `manifest.lock.yaml`, `software.lock.yaml` and
-`request-defaults.json` are derived compatibility inputs, not new authoring
-surfaces. Field Kit supplies the shipped execution lock and receives these
-inputs from Temper; it does not implement the compiler in Python. Field Kit
-continues to own consent, orchestration, protocol execution and cleanup.
-
-The v2 software projection records execution-lock provenance, without claiming
-to be an experiment. It omits the older software lock's resolution date rather
-than copying the catalog's authoring date into an observation. Installation
-receipts retain their actual observation time. The software projection declares
-`target_mode: compatible` and portable
-`darwin/arm64`. Existing software locks that omit `target_mode` retain their
-exact-host matching behavior. Compatible locks do not insert the consuming
-Mac's observed OS version into lock identity. The current compatibility mode
-is limited to macOS on ARM64; actual hardware fit and observed OS/build remain
-machine evidence. Older Temper binaries reject the new field before effects.
-
-`llama-server/v2` emits the refreshed `--load-mode` API and explicit cache,
-reasoning-preservation, context-shift, fitting, thread and sampling controls.
-Existing manifest layouts without those optional controls retain their argv.
-Sampling values are server defaults that explicit API requests may override.
-For layouts using these refreshed controls, the declared output budget also
-becomes the `--predict` server default. Explicit API output budgets take
-precedence. `request-defaults.json` retains the same intended budget for callers.
-
-The optional `engine_config.controls.checkpoint_min_step` maps to
-`--checkpoint-min-step`. Omission retains the exact engine's default; zero
-explicitly removes the minimum spacing. Negative values are rejected before
-runtime effects. Changing this control changes layout and profile execution
-identity without changing model or template material identity.
-
-The typed `engine_config.kv_cache` accepts `q4`, `q8` and `f16`, rendered
-for both K and V as `q4_0`, `q8_0` and `f16` respectively. Q4 is available
-for explicitly selected experiments; parser/rendering support does not
-establish model correctness or machine fit.
+Catalog v1/v2, execution-lock v1/v2, Selection files, software-supply catalogs,
+and manifest v1 are rejected. There is no importer or compatibility export.
+Recompile current presets and recreate saved configurations. Frozen historical
+experiments require their pinned older Temper host; their evidence is unchanged.
+The current low-level manifest is v2, and internal projections continue to feed
+Temper's exact installation and rendering primitives.

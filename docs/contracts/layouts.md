@@ -9,8 +9,8 @@ The authoring catalog's `temper-catalog/v3` names single engine configurations
 `presets`. Each has optional `description`, `assessment_url` and `recommended`;
 recommended entries require nonblank authored copy. `preset_order` controls
 presentation within descending memory buckets. Editorial fields are excluded
-from execution identity. The v1/v2 catalog and execution formats retain their
-original field meanings and identities for issued experiment inputs.
+from execution identity. Each preset is stored as an execution-lock v3. Retired catalog and lock formats
+are rejected; historical experiments retain their pinned older Temper host.
 
 `temper-configuration/v1` owns a selected `presets` map and `layouts` map.
 Each selected preset has a display `name` and its exact execution `lock`.
@@ -33,8 +33,7 @@ complete replacement. Existing roots require the revision returned by
 The same editor is used by `init` and interactive `configure`. Saves serialize
 cooperating writers, check the revision, fsync a staged file and atomically
 rename it. Incomplete temporary files are not current state. A canceled or dry
-save never writes. Existing legacy `configuration/*.selection.json` pairs can
-be imported explicitly with `configure --import-legacy`; originals stay intact.
+save never writes. Pre-preset configurations must be recreated from explicit current choices.
 Saved exact locks support offline resume. Editing and saving never activates.
 
 Preparation deduplicates verified weights by material identity and software by

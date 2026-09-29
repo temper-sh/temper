@@ -1,5 +1,9 @@
 # V3 catalog reset plan
 
+Historical design source. Current schema and command authority is the
+[execution-lock contract](../contracts/execution-lock.md); the old catalog,
+Selection and profile formats below are no longer supported.
+
 Status: **decision draft; no implementation, cutover, reset, or removal is
 authorized by this document**
 

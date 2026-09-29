@@ -312,7 +312,7 @@ func writeLock(t *testing.T, path string, locked lockfile.Document) {
 	}
 }
 
-const updateManifest = `schema: temper-manifest/v1
+const updateManifest = `schema: temper-manifest/v2
 defaults: {ttl: 300, gpu_memory_utilization: 0.9}
 patches:
   stable-template:
@@ -321,31 +321,35 @@ patches:
 layouts:
   coder:
     display_name: Coder
-    model: {repo: org/Coder, file: coder.gguf}
+    model: {repo: org/Coder, format: gguf, files: [coder.gguf]}
     engine: llama-server
-    role: coder
+    interface: chat-completions
+    modalities: [text]
+    speculation: {method: none}
     window: 32768
     max_tokens: 4096
-    kv: q8
     thinking: off
     chat_template: stable-template
-    llama: {parallel: 1, flash_attention: on, batch: 1024, ubatch: 256}
+    llama: {kv: q8, parallel: 1, flash_attention: on, batch: 1024, ubatch: 256}
   reranker:
     display_name: Reranker
-    model: {repo: org/Reranker, file: reranker.gguf}
+    model: {repo: org/Reranker, format: gguf, files: [reranker.gguf]}
     engine: llama-server
-    role: rerank
+    interface: reranking
+    modalities: [text]
+    speculation: {method: none}
     window: 4096
     llama: {parallel: 1, flash_attention: off, batch: 512, ubatch: 512}
 tools:
   project-search: {source: builtin/project-search, needs: [rerank]}
 modes:
   local:
-    foreground: local
+    foreground: coder
+    services: {rerank: reranker}
     tools: [project-search]
     harnesses: []
     members:
-      resident: [{layout: coder, preferred: true}]
+      resident: [{layout: coder}]
       on_demand: [{layout: reranker, ngl: 0}]
 `
 

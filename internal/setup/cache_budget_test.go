@@ -11,7 +11,6 @@ import (
 	"github.com/temper-sh/temper/internal/hfcache"
 	"github.com/temper-sh/temper/internal/machine"
 	"github.com/temper-sh/temper/internal/software"
-	"github.com/temper-sh/temper/internal/testfixture"
 )
 
 func TestHFCacheDiskAccounting(t *testing.T) {
@@ -19,13 +18,13 @@ func TestHFCacheDiskAccounting(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	document, err := testfixture.LegacySetupCatalog(data)
+	document, err := catalog.Parse(data)
 	if err != nil {
 		t.Fatal(err)
 	}
 	locks := []catalog.Lock{}
-	for _, profile := range []string{"qwen3.5-4b-utility", "qwen3.5-4b-local"} {
-		locked, err := catalog.Compile(document, catalog.Selection{Schema: catalog.SelectionSchema, Profile: profile}, software.Target{OS: "darwin", Arch: "arm64"})
+	for _, profile := range []string{"qwen3.5-4b-q4km-off"} {
+		locked, err := catalog.CompilePreset(document, profile, "", 0, software.Target{OS: "darwin", Arch: "arm64"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -41,7 +40,7 @@ func TestHFCacheDiskAccounting(t *testing.T) {
 		MetalDeviceMemorySource: machine.MetalDeviceSourcePredicted, WiredLimitSource: budget.WiredSourcePredicted,
 	}
 	root := filepath.Join(t.TempDir(), "temper")
-	fresh, err := Build(root, facts, 100<<30, locks, "")
+	fresh, err := build(root, facts, 100<<30, locks, Material{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +63,7 @@ func TestHFCacheDiskAccounting(t *testing.T) {
 			if tc.cached {
 				material.hfModels = map[hfcache.Entry]cachedModel{entry: {copy: !tc.shared}}
 			}
-			plan, err := BuildWithMaterial(root, facts, 100<<30, locks, material, "")
+			plan, err := build(root, facts, 100<<30, locks, material)
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -25,7 +25,7 @@ func presetEditor(t *testing.T) *PresetModel {
 	c.Layouts = setup.StarterLayouts()
 	input := PresetInput{Configuration: c}
 	for _, id := range []string{"qwen3.8-27b-q4xl-splash", "qwen3.5-4b-q4km-off"} {
-		p := d.Layouts[id]
+		p := d.Presets[id]
 		lock, err := catalog.CompilePreset(d, id, "", 0, d.Runtime.Router.Target)
 		if err != nil {
 			t.Fatal(err)

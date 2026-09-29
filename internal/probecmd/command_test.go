@@ -322,7 +322,7 @@ func materializeTokenizerInputs(t *testing.T, fixture fixture) tokenizerFixture 
 	}
 	workspace := filepath.Dir(fixture.lockPath)
 	manifestPath := filepath.Join(workspace, "manifest.yaml")
-	manifestData := []byte(`schema: temper-manifest/v1
+	manifestData := []byte(`schema: temper-manifest/v2
 defaults:
   ttl: 1800
   gpu_memory_utilization: 0.85
@@ -331,27 +331,29 @@ layouts:
     display_name: Exact Qwen fixture
     model:
       repo: example/Qwen
-      file: model.gguf
+      format: gguf
+      files: [model.gguf]
     engine: llama-server
-    role: coder
+    interface: chat-completions
+    modalities: [text]
+    speculation: {method: none}
     window: 4096
     max_tokens: 512
-    kv: q8
     thinking: off
     llama:
+      kv: q8
       parallel: 1
       flash_attention: on
       batch: 512
       ubatch: 512
 modes:
   field-kit:
-    foreground: local
+    foreground: qwen-exact
     tools: []
     harnesses: []
     members:
       resident:
         - layout: qwen-exact
-          preferred: true
       on_demand: []
 `)
 	if err := os.WriteFile(manifestPath, manifestData, 0o644); err != nil {

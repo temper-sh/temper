@@ -14,6 +14,11 @@ cache, and the supported reasoning-off control. A separate isolated runtime
 witness on the same date exercised those flags without using or changing the
 live service.
 
+The hermetic fixture now uses manifest v2 with the same runtime settings and
+material identities. The historical v1 fixture remains in Git at
+`f59c281:internal/render/testdata/current-posture/manifest.yaml`; this schema
+update is not another native runtime measurement.
+
 ## Inputs and witness
 
 The manually maintained fixture is

@@ -24,11 +24,11 @@ type PresetOption struct {
 	Document                                                                                 catalog.Document
 }
 
-func presetRecord(lock catalog.Lock) (string, catalog.Layout) {
-	for id, record := range lock.Records.Layouts {
+func presetRecord(lock catalog.Lock) (string, catalog.Preset) {
+	for id, record := range lock.Records.Presets {
 		return id, record
 	}
-	return "", catalog.Layout{}
+	return "", catalog.Preset{}
 }
 
 type PresetInput struct {

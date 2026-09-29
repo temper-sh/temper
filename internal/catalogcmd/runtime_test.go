@@ -21,7 +21,6 @@ import (
 	"github.com/temper-sh/temper/internal/manifest"
 	"github.com/temper-sh/temper/internal/render"
 	"github.com/temper-sh/temper/internal/software"
-	"github.com/temper-sh/temper/internal/testfixture"
 )
 
 func TestUtilityExecutionKeepsHelperAvailableWithoutLocalForeground(t *testing.T) {
@@ -31,17 +30,13 @@ func TestUtilityExecutionKeepsHelperAvailableWithoutLocalForeground(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	document, err := testfixture.LegacySetupCatalog(raw)
+	document, err := catalog.Parse(raw)
 	if err != nil {
 		t.Fatal(err)
 	}
-	const profile = "qwen3.5-4b-utility"
+	const profile = "qwen3.5-4b-q4km-off"
 	const helper = "qwen3.5-4b-q4km-off"
-	selection, err := catalog.ResolveSelection(document, catalog.Selection{Schema: catalog.SelectionSchema, Profile: profile})
-	if err != nil {
-		t.Fatal(err)
-	}
-	locked, err := catalog.Compile(document, selection, software.Target{OS: "darwin", Arch: "arm64"})
+	locked, err := catalog.CompilePreset(document, profile, "", 0, software.Target{OS: "darwin", Arch: "arm64"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -217,7 +212,7 @@ func TestExecutionServeRejectsWrongGenerationAndChangedBytesBeforeEffects(t *tes
 		t.Fatal(err)
 	}
 	root := filepath.Join(parent, "root")
-	bundle, err := render.Build(render.Inputs{Manifest: projections.Manifest, Lock: projections.Artifacts, Mode: locked.Selection.Profile, Root: root})
+	bundle, err := render.Build(render.Inputs{Manifest: projections.Manifest, Lock: projections.Artifacts, Mode: locked.Preset, Root: root})
 	if err != nil {
 		t.Fatal(err)
 	}

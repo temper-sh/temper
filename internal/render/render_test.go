@@ -453,7 +453,7 @@ func parseLock(t *testing.T) lockfile.Document {
 	return document
 }
 
-const manifestFixture = `schema: temper-manifest/v1
+const manifestFixture = `schema: temper-manifest/v2
 defaults:
   ttl: 1800
   gpu_memory_utilization: 0.85
@@ -464,20 +464,23 @@ patches:
 layouts:
   coder:
     display_name: Coder
-    model: {repo: org/Coder, file: coder.gguf}
+    model: {repo: org/Coder, format: gguf, files: [coder.gguf]}
     engine: llama-server
-    role: coder
+    interface: chat-completions
+    modalities: [text]
+    speculation: {method: mtp, max_tokens: 3}
     window: 24576
     max_tokens: 4096
-    kv: q8
     thinking: off
     chat_template: sharp
-    llama: {parallel: 1, flash_attention: on, batch: 512, ubatch: 512, spec_type: draft-mtp, spec_draft_n_max: 3, context_checkpoints: 16, prompt_cache_ram_mib: 0}
+    llama: {kv: q8, parallel: 1, flash_attention: on, batch: 512, ubatch: 512, context_checkpoints: 16, prompt_cache_ram_mib: 0}
   rerank-0.6b:
     display_name: Reranker
-    model: {repo: org/Reranker, file: reranker.gguf}
+    model: {repo: org/Reranker, format: gguf, files: [reranker.gguf]}
     engine: llama-server
-    role: rerank
+    interface: reranking
+    modalities: [text]
+    speculation: {method: none}
     window: 4096
     llama: {parallel: 1, flash_attention: auto, batch: 256, ubatch: 256}
 tools:
@@ -486,12 +489,13 @@ tools:
     needs: [rerank]
 modes:
   local:
-    foreground: local
+    foreground: coder
+    services: {rerank: rerank-0.6b}
     tools: [search]
     harnesses: [pi]
     members:
       resident:
-        - {layout: coder, ttl: 7200, preferred: true, preload: true}
+        - {layout: coder, ttl: 7200, preload: true}
       on_demand:
         - {layout: rerank-0.6b, ttl: 120, ngl: 0}
   off:

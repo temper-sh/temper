@@ -6,11 +6,8 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"strconv"
-	"strings"
 	"time"
 
-	"github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/catalog/distribution"
 	publication "github.com/temper-sh/temper/internal/software/catalogpublication"
 )
@@ -22,19 +19,12 @@ func runDistribution(ctx context.Context, args []string, stdout, stderr io.Write
 	root := f.String("root", "", "explicit Temper data root")
 	jsonOutput := f.Bool("json", false, "print the result as JSON")
 	var dry bool
-	var profile, out, sha string
-	templates := templateChoices{}
-	contexts := contextChoices{}
+	var preset, sha string
 	if verb != "inspect" {
 		f.BoolVar(&dry, "dry-run", false, "validate and report without writes")
 	}
-	if verb == "inspect" || verb == "select" {
-		f.StringVar(&profile, "profile", "", "explicit profile ID")
-	}
-	if verb == "select" {
-		f.StringVar(&out, "out", "", "new user-owned selection path")
-		f.Var(&templates, "template", "template choice layout=patch or layout=builtin (repeatable)")
-		f.Var(&contexts, "context", "context window layout=tokens; default is the authored configuration (repeatable)")
+	if verb == "inspect" {
+		f.StringVar(&preset, "preset", "", "explicit preset ID")
 	}
 	if verb == "rollback" {
 		f.StringVar(&sha, "snapshot", "", "exact retained catalog SHA-256")
@@ -42,7 +32,7 @@ func runDistribution(ctx context.Context, args []string, stdout, stderr io.Write
 	if err := f.Parse(args[1:]); err != nil {
 		return 2
 	}
-	if f.NArg() != 0 || *root == "" || verb == "select" && (profile == "" || out == "") || verb == "rollback" && sha == "" {
+	if f.NArg() != 0 || *root == "" || verb == "rollback" && sha == "" {
 		usage(stderr)
 		return 2
 	}
@@ -75,112 +65,45 @@ func runDistribution(ctx context.Context, args []string, stdout, stderr io.Write
 			return failed(stderr, err)
 		}
 		d := view.Active.Document
-		if profile != "" {
-			if _, ok := d.Profiles[profile]; !ok {
-				return failed(stderr, fmt.Errorf("unknown profile %q", profile))
+		if preset != "" {
+			if _, ok := d.Presets[preset]; !ok {
+				return failed(stderr, fmt.Errorf("unknown preset %q", preset))
 			}
 		}
 		if *jsonOutput {
 			result := map[string]any{"active": view.Active.Identity, "latest": view.Latest, "snapshots": view.Snapshots, "catalog": d}
-			if profile != "" {
-				result["profile"] = profile
-				result["selection"] = d.Profiles[profile]
+			if preset != "" {
+				result["preset"] = d.Presets[preset]
 			}
 			return encode(stdout, stderr, result)
 		}
 		fmt.Fprintf(stdout, "RESULT catalog-inspect verified sequence=%d sha256=%s\n", view.Active.Sequence, view.Active.SHA256)
-		for _, id := range sortedKeys(d.Profiles) {
-			if profile != "" && profile != id {
+		for _, id := range sortedKeys(d.Presets) {
+			if preset != "" && preset != id {
 				continue
 			}
-			p := d.Profiles[id]
-			fmt.Fprintf(stdout, "PROFILE %s gpu_memory_utilization=%g\n", id, p.GPUMemoryUtilization)
-			for _, b := range p.Bindings {
-				l := d.Layouts[b.Layout]
-				fmt.Fprintf(stdout, "  LAYOUT %s name=%q engine=%s context=%d route=%s residency=%s\n", b.Layout, l.DisplayName, l.Engine, l.ContextWindowTokens, b.Route, b.Residency)
-				a := d.Artifacts[l.Artifact]
-				if a.Description != "" {
-					fmt.Fprintf(stdout, "    %s\n", a.Description)
+			p := d.Presets[id]
+			fmt.Fprintf(stdout, "PRESET %s name=%q engine=%s context=%d recommended=%t\n", id, p.DisplayName, p.Engine, p.ContextWindowTokens, p.Recommended)
+			if p.Description != "" {
+				fmt.Fprintln(stdout, "  "+p.Description)
+			}
+			if p.AssessmentURL != "" {
+				fmt.Fprintln(stdout, "  Assessment: "+p.AssessmentURL)
+			}
+			if preset != "" {
+				data, err := json.MarshalIndent(p, "  ", "  ")
+				if err != nil {
+					return failed(stderr, err)
 				}
-				if a.AssessmentURL != "" {
-					fmt.Fprintf(stdout, "    Assessment: %s\n", a.AssessmentURL)
-				}
-				if profile != "" {
-					data, err := json.MarshalIndent(l, "  ", "  ")
-					if err != nil {
-						return failed(stderr, err)
-					}
-					fmt.Fprintln(stdout, string(data))
-				}
+				fmt.Fprintln(stdout, string(data))
 			}
 		}
 		for _, snapshot := range view.Snapshots {
 			fmt.Fprintf(stdout, "SNAPSHOT sequence=%d sha256=%s active=%t latest=%t\n", snapshot.Sequence, snapshot.SHA256, snapshot.SHA256 == view.Active.SHA256, snapshot.SHA256 == view.Latest.SHA256)
 		}
 		return 0
-	case "select":
-		snapshot, err := distribution.Read(*root, trust)
-		if err != nil {
-			return failed(stderr, err)
-		}
-		if _, ok := snapshot.Document.Profiles[profile]; !ok {
-			return failed(stderr, fmt.Errorf("unknown profile %q", profile))
-		}
-		selection, err := catalog.ResolveSelection(snapshot.Document, catalog.Selection{Schema: catalog.SelectionSchema, Profile: profile, Templates: templates, ContextWindows: contexts})
-		if err != nil {
-			return failed(stderr, err)
-		}
-		data, err := json.MarshalIndent(selection, "", "  ")
-		if err != nil {
-			return failed(stderr, err)
-		}
-		changed, err := publishFile(ctx, out, append(data, '\n'), dry)
-		if err != nil {
-			return failed(stderr, err)
-		}
-		if *jsonOutput {
-			return encode(stdout, stderr, map[string]any{"profile": profile, "path": out, "catalog_sha256": snapshot.SHA256, "changed": changed, "dry_run": dry})
-		}
-		fmt.Fprintf(stdout, "RESULT catalog-select %s profile=%s path=%q catalog_sha256=%s\n", status(changed, dry), profile, out, snapshot.SHA256)
-		return 0
 	default:
 		usage(stderr)
 		return 2
 	}
-}
-
-type templateChoices map[string]string
-
-func (t templateChoices) String() string { return "" }
-
-func (t templateChoices) Set(raw string) error {
-	layout, patch, ok := strings.Cut(raw, "=")
-	if !ok || layout == "" || patch == "" {
-		return fmt.Errorf("template choice must be layout=patch or layout=builtin")
-	}
-	if _, exists := t[layout]; exists {
-		return fmt.Errorf("template choice repeats layout %q", layout)
-	}
-	if patch == "builtin" {
-		patch = ""
-	}
-	t[layout] = patch
-	return nil
-}
-
-type contextChoices map[string]int
-
-func (c contextChoices) String() string { return "" }
-
-func (c contextChoices) Set(raw string) error {
-	layout, value, ok := strings.Cut(raw, "=")
-	tokens, err := strconv.Atoi(value)
-	if !ok || layout == "" || err != nil || tokens <= 0 {
-		return fmt.Errorf("context choice must be layout=tokens with a positive integer")
-	}
-	if _, exists := c[layout]; exists {
-		return fmt.Errorf("context choice repeats layout %q", layout)
-	}
-	c[layout] = tokens
-	return nil
 }

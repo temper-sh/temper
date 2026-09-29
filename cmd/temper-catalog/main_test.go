@@ -10,22 +10,17 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/temper-sh/temper/internal/software/catalog"
 	publication "github.com/temper-sh/temper/internal/software/catalogpublication"
 	"github.com/temper-sh/temper/internal/software/catalogsigning"
 	"github.com/temper-sh/temper/internal/software/catalogtrust"
 )
-
-type testCapabilities struct{}
-
-func (testCapabilities) ValidateCatalog(catalog.Document) error { return nil }
 
 func TestSignDryRunCommitSecondRunReplaceAndVerify(t *testing.T) {
 	tool, seedInput := testTool(t)
 	directory := t.TempDir()
 	artifactPath := filepath.Join(directory, "channel.yaml")
 	outputPath := filepath.Join(directory, "channel.signature.yaml")
-	first := []byte("schema: temper-software-channel/v1\nchannel: stable\ncatalog:\n  schema: temper-software-supply/v1\n  sequence: 1\n  sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n  locator: https://example.test/catalog/a/\n")
+	first := []byte("schema: temper-catalog-channel/v1\nchannel: stable\ncatalog:\n  schema: temper-catalog/v3\n  sequence: 1\n  sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n  locator: https://example.test/snapshots/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/\n")
 	if err := os.WriteFile(artifactPath, first, 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +82,7 @@ func TestSignDoesNotEchoSeedAndRefusesArtifactAsOutput(t *testing.T) {
 	tool, _ := testTool(t)
 	directory := t.TempDir()
 	artifactPath := filepath.Join(directory, "channel.yaml")
-	artifact := []byte("schema: temper-software-channel/v1\nchannel: stable\ncatalog:\n  schema: temper-software-supply/v1\n  sequence: 1\n  sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n  locator: https://example.test/catalog/a/\n")
+	artifact := []byte("schema: temper-catalog-channel/v1\nchannel: stable\ncatalog:\n  schema: temper-catalog/v3\n  sequence: 1\n  sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n  locator: https://example.test/snapshots/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/\n")
 	if err := os.WriteFile(artifactPath, artifact, 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +109,7 @@ func testTool(t *testing.T) (catalogsigning.Tool, []byte) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tool, err := catalogsigning.New(catalogtrust.ProductionKeyID, trust, testCapabilities{})
+	tool, err := catalogsigning.New(catalogtrust.ProductionKeyID, trust)
 	if err != nil {
 		t.Fatal(err)
 	}

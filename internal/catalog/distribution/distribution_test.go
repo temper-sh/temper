@@ -28,7 +28,7 @@ func fixture(t *testing.T, sequence uint64) (Publication, publication.TrustRoot)
 	if err != nil {
 		t.Fatal(err)
 	}
-	data, err := os.ReadFile("../../../catalog/qwen38-m5-refresh.json")
+	data, err := os.ReadFile("../../../catalog/guided-setup.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +44,7 @@ func fixture(t *testing.T, sequence uint64) (Publication, publication.TrustRoot)
 		t.Fatal(err)
 	}
 	sha := digest(data)
-	channel := []byte(fmt.Sprintf("schema: temper-catalog-channel/v1\nchannel: stable\ncatalog:\n  schema: temper-catalog/v2\n  sequence: %d\n  sha256: %s\n  locator: https://catalog.example/snapshots/%s/\n", sequence, sha, sha))
+	channel := []byte(fmt.Sprintf("schema: temper-catalog-channel/v1\nchannel: stable\ncatalog:\n  schema: temper-catalog/v3\n  sequence: %d\n  sha256: %s\n  locator: https://catalog.example/snapshots/%s/\n", sequence, sha, sha))
 	return Publication{Channel: signed(channel, key), Catalog: signed(data, key)}, trust
 }
 
@@ -201,7 +201,7 @@ func TestFailuresDoNotCreateOrReplaceActiveState(t *testing.T) {
 		{"bad catalog signature", func(s *fixtureSource) { s.publication.Catalog.Data = append(s.publication.Catalog.Data, ' ') }},
 		{"signed digest mismatch", func(s *fixtureSource) { s.publication.Catalog = signed(append(s.publication.Catalog.Data, ' '), key) }},
 		{"unsupported schema", func(s *fixtureSource) {
-			s.publication.Channel = signed(bytes.Replace(s.publication.Channel.Data, []byte("temper-catalog/v2"), []byte("temper-catalog/v99"), 1), key)
+			s.publication.Channel = signed(bytes.Replace(s.publication.Channel.Data, []byte("temper-catalog/v3"), []byte("temper-catalog/v99"), 1), key)
 		}},
 		{"wrong channel", func(s *fixtureSource) {
 			s.publication.Channel = signed(bytes.Replace(s.publication.Channel.Data, []byte("channel: stable"), []byte("channel: other"), 1), key)

@@ -2,11 +2,9 @@ package catalog
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
-	"sort"
 	"strings"
 
 	"github.com/temper-sh/temper/internal/software"
@@ -14,7 +12,7 @@ import (
 	softwarelock "github.com/temper-sh/temper/internal/software/lockfile"
 )
 
-// Versions belongs to a layout (model/features on its engine target), or to
+// Versions belongs to a preset (model/features on its engine target), or to
 // the runtime router. Tested is evidence, never an inferred compatibility floor.
 type Versions struct {
 	MinimumRequired string `yaml:"minimum_required,omitempty" json:"minimum_required,omitempty"`
@@ -60,8 +58,8 @@ func (s Supply) validateSource() error {
 		_, _, err := s.pythonInputs()
 		return err
 	}
-	if !idPattern.MatchString(s.Package) || s.Source == nil || s.Selection != nil || s.Units != nil {
-		return errors.New("v2 supply requires package, target and source; installer selection and units are derived")
+	if !idPattern.MatchString(s.Package) || s.Source == nil {
+		return errors.New("supply requires package, target and source; installer selection and units are derived")
 	}
 	if err := s.Source.Validate(); err != nil {
 		return err
@@ -91,9 +89,6 @@ func (s Supply) installerInputs() (softwarelock.Selection, map[string]softwarelo
 	if s.Python != nil {
 		return s.pythonInputs()
 	}
-	if s.Selection != nil {
-		return *s.Selection, s.Units, nil
-	}
 	if s.Release == nil {
 		return softwarelock.Selection{}, nil, fmt.Errorf("software %q is unresolved; compile with --software latest or tested", s.Package)
 	}
@@ -106,101 +101,59 @@ func (s Supply) installerInputs() (softwarelock.Selection, map[string]softwarelo
 	return selection, units, nil
 }
 
-// ValidateTestedSoftware checks whether the selected v2 profile records one
-// tested fallback for each required software source, and whether those versions
-// satisfy its current required floors. It does not read upstream metadata or
-// prove that a release archive remains available.
-func ValidateTestedSoftware(d Document, s Selection) error {
+// ValidateTestedSoftware checks the selected preset's explicit tested fallback
+// and required floor. It does not read upstream metadata or prove availability.
+func ValidateTestedSoftware(d Document, id string) error {
 	if err := d.Validate(); err != nil {
 		return err
 	}
-	if err := s.Validate(); err != nil {
-		return err
-	}
-	profile, ok := d.Profiles[s.Profile]
+	p, ok := d.Presets[id]
 	if !ok {
-		return fmt.Errorf("unknown selected profile %q", s.Profile)
+		return fmt.Errorf("unknown preset %q", id)
 	}
-	if d.Schema != Schema || s.Schema != SelectionSchema {
-		return errors.New("moving software resolution requires a v2 catalog and selection")
-	}
-	if _, err := testedVersion(d.Runtime.Router, []*Versions{d.Runtime.Router.Versions}); err != nil {
+	if _, err := testedVersion(d.Runtime.Router, d.Runtime.Router.Versions); err != nil {
 		return err
 	}
-	engineRules := selectedEngineRules(d, profile)
-	ids := make([]string, 0, len(engineRules))
-	for id := range engineRules {
-		ids = append(ids, id)
-	}
-	sort.Strings(ids)
-	for _, id := range ids {
-		if _, err := testedVersion(d.Engines[id].Supply, engineRules[id]); err != nil {
-			return err
-		}
-	}
-	return nil
+	_, err := testedVersion(d.Engines[p.Engine].Supply, p.EngineVersions)
+	return err
 }
 
-func testedVersion(supply Supply, rules []*Versions) (string, error) {
-	requested := ""
-	for _, rule := range rules {
-		if rule == nil || rule.MinimumTested == "" {
-			return "", fmt.Errorf("software %q has no tested version for this selection", supply.Package)
-		}
-		if requested != "" && requested != rule.MinimumTested {
-			return "", errors.New("selected layouts record different tested versions; choose a profile with a common tested release")
-		}
-		requested = rule.MinimumTested
+func testedVersion(supply Supply, rule *Versions) (string, error) {
+	if rule == nil || rule.MinimumTested == "" {
+		return "", fmt.Errorf("software %q has no tested version for this preset", supply.Package)
 	}
-	for _, rule := range rules {
-		if err := rule.require(requested); err != nil {
-			return "", err
-		}
+	if err := rule.require(rule.MinimumTested); err != nil {
+		return "", err
 	}
-	return requested, nil
+	return rule.MinimumTested, nil
 }
 
-func selectedEngineRules(d Document, profile Profile) map[string][]*Versions {
-	rules := map[string][]*Versions{}
-	for _, binding := range profile.Bindings {
-		layout := d.Layouts[binding.Layout]
-		rules[layout.Engine] = append(rules[layout.Engine], layout.EngineVersions)
-	}
-	return rules
-}
-
-// ResolveSoftware reads only the selected profile's sources. The caller chooses
+// ResolveSoftware reads only the selected preset's sources. The caller chooses
 // recorded inputs, latest available releases, or an explicit tested fallback; a
 // failed latest lookup never silently changes that choice.
-func ResolveSoftware(ctx context.Context, d Document, s Selection, choice string, reader upstreamrelease.ArtifactReader) (Document, error) {
+func ResolveSoftware(ctx context.Context, d Document, id string, choice string, reader upstreamrelease.ArtifactReader) (Document, error) {
 	if err := d.Validate(); err != nil {
-		return Document{}, err
-	}
-	if err := s.Validate(); err != nil {
 		return Document{}, err
 	}
 	if choice != "recorded" && choice != "latest" && choice != "tested" {
 		return Document{}, errors.New("software choice must be recorded, latest or tested")
 	}
-	profile, ok := d.Profiles[s.Profile]
+	p, ok := d.Presets[id]
 	if !ok {
-		return Document{}, fmt.Errorf("unknown selected profile %q", s.Profile)
+		return Document{}, fmt.Errorf("unknown preset %q", id)
 	}
 	if choice == "recorded" {
 		return d, nil
 	}
-	if d.Schema != Schema || s.Schema != SelectionSchema {
-		return Document{}, errors.New("moving software resolution requires a v2 catalog and selection")
-	}
 	d = canonicalDocument(d)
-	resolve := func(supply Supply, rules []*Versions) (Supply, error) {
+	resolve := func(supply Supply, rule *Versions) (Supply, error) {
 		if supply.Python != nil {
 			return Supply{}, fmt.Errorf("software %q is an exact Python closure; use recorded software and resolve a new closure explicitly", supply.Package)
 		}
 		requested := "latest"
 		if choice == "tested" {
 			var err error
-			requested, err = testedVersion(supply, rules)
+			requested, err = testedVersion(supply, rule)
 			if err != nil {
 				return Supply{}, err
 			}
@@ -212,46 +165,21 @@ func ResolveSoftware(ctx context.Context, d Document, s Selection, choice string
 			}
 			supply.Release = &release
 		}
-		for _, rule := range rules {
-			if err := rule.require(supply.Release.Version); err != nil {
-				return Supply{}, err
-			}
+		if err := rule.require(supply.Release.Version); err != nil {
+			return Supply{}, err
 		}
 		return supply, nil
 	}
 	var err error
-	d.Runtime.Router, err = resolve(d.Runtime.Router, []*Versions{d.Runtime.Router.Versions})
+	d.Runtime.Router, err = resolve(d.Runtime.Router, d.Runtime.Router.Versions)
 	if err != nil {
 		return Document{}, err
 	}
-	engineRules := selectedEngineRules(d, profile)
-	ids := make([]string, 0, len(engineRules))
-	for id := range engineRules {
-		ids = append(ids, id)
+	e := d.Engines[p.Engine]
+	e.Supply, err = resolve(e.Supply, p.EngineVersions)
+	if err != nil {
+		return Document{}, err
 	}
-	sort.Strings(ids)
-	for _, id := range ids {
-		engine := d.Engines[id]
-		engine.Supply, err = resolve(engine.Supply, engineRules[id])
-		if err != nil {
-			return Document{}, err
-		}
-		d.Engines[id] = engine
-	}
+	d.Engines[p.Engine] = e
 	return d, nil
-}
-
-// Preserve the issued V1 shape for Field Kit's configure/compile comparison.
-// New selections have no placeholders for unsupported optional components.
-func (s Selection) MarshalJSON() ([]byte, error) {
-	if s.Schema == legacySelectionSchema {
-		return json.Marshal(struct {
-			Schema       string   `json:"schema"`
-			Profile      string   `json:"profile"`
-			Tools        []string `json:"tools"`
-			Integrations []string `json:"integrations"`
-		}{s.Schema, s.Profile, s.Tools, s.Integrations})
-	}
-	type plain Selection
-	return json.Marshal(plain(s))
 }

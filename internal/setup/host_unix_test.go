@@ -40,10 +40,10 @@ func TestExistingSpecialSetupLockRefusesWithoutPublishing(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			plan := planFor(t, root, 16, compactLocal)
+			c := composition(t)
 			result := make(chan error, 1)
 			go func() {
-				changed, err := setup.Save(context.Background(), plan, false)
+				_, changed, err := setup.SaveConfiguration(context.Background(), root, c, "", false)
 				if changed && err == nil {
 					result <- nil
 					return
@@ -58,7 +58,7 @@ func TestExistingSpecialSetupLockRefusesWithoutPublishing(t *testing.T) {
 			case <-time.After(2 * time.Second):
 				t.Fatal("save blocked on a special setup lock")
 			}
-			if _, err := os.Lstat(filepath.Join(root, setup.ConfigurationDir)); !os.IsNotExist(err) {
+			if _, err := os.Lstat(filepath.Join(root, setup.ConfigurationFile)); !os.IsNotExist(err) {
 				t.Fatalf("special lock left configuration: %v", err)
 			}
 			if kind == "symlink" {

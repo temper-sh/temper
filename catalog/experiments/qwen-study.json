@@ -1,5 +1,5 @@
 {
-  "schema": "temper-catalog/v2",
+  "schema": "temper-catalog/v3",
   "date": "2026-09-27",
   "runtime": {
     "router": {
@@ -181,9 +181,8 @@
         }
       ],
       "license": "Apache-2.0",
-      "description": "Useful for source-based document work and verified tool workflows. Strict output formats and Swedish prose need review.",
       "model_name": "Qwen3.8 27B",
-      "weights_name": "Unsloth UD-Q4_K_XL \u00b7 GGUF"
+      "weights_name": "Unsloth UD-Q4_K_XL · GGUF"
     },
     "qwen3.8-27b-dflash2": {
       "repo": "incoai/Qwen3.8-27B-DFlash2",
@@ -203,8 +202,7 @@
       ],
       "license": "Apache-2.0",
       "model_name": "Qwen3.8 27B DFlash2",
-      "weights_name": "BF16 draft",
-      "description": "Architecture-matched DFlash2 sidecar selected by Splash 1.1.0. Included with the Qwen\u2013Splash layout."
+      "weights_name": "BF16 draft"
     },
     "qwen-q5": {
       "repo": "unsloth/Qwen3.8-27B-GGUF",
@@ -2631,7 +2629,7 @@
       }
     }
   },
-  "layouts": {
+  "presets": {
     "splash-q4": {
       "display_name": "splash-q4",
       "artifact": "qwen3.8-27b-q4xl",
@@ -3013,104 +3011,6 @@
       },
       "context_limit_tokens": 262144,
       "memory_tier": "S"
-    }
-  },
-  "profiles": {
-    "splash-q4": {
-      "gpu_memory_utilization": 0.75,
-      "bindings": [
-        {
-          "layout": "splash-q4",
-          "route": "default",
-          "residency": "resident",
-          "idle_ttl_seconds": 0,
-          "preload": false
-        }
-      ]
-    },
-    "splash-q5": {
-      "gpu_memory_utilization": 0.75,
-      "bindings": [
-        {
-          "layout": "splash-q5",
-          "route": "default",
-          "residency": "resident",
-          "idle_ttl_seconds": 0,
-          "preload": false
-        }
-      ]
-    },
-    "splash-q6": {
-      "gpu_memory_utilization": 0.75,
-      "bindings": [
-        {
-          "layout": "splash-q6",
-          "route": "default",
-          "residency": "resident",
-          "idle_ttl_seconds": 0,
-          "preload": false
-        }
-      ]
-    },
-    "llama-q5": {
-      "gpu_memory_utilization": 0.75,
-      "bindings": [
-        {
-          "layout": "llama-q5",
-          "route": "default",
-          "residency": "resident",
-          "idle_ttl_seconds": 0,
-          "preload": false
-        }
-      ]
-    },
-    "llama-q6": {
-      "gpu_memory_utilization": 0.75,
-      "bindings": [
-        {
-          "layout": "llama-q6",
-          "route": "default",
-          "residency": "resident",
-          "idle_ttl_seconds": 0,
-          "preload": false
-        }
-      ]
-    },
-    "llama-q8": {
-      "gpu_memory_utilization": 0.75,
-      "bindings": [
-        {
-          "layout": "llama-q8",
-          "route": "default",
-          "residency": "resident",
-          "idle_ttl_seconds": 0,
-          "preload": false
-        }
-      ]
-    },
-    "rapid-mlx": {
-      "gpu_memory_utilization": 0.75,
-      "bindings": [
-        {
-          "layout": "rapid-mlx",
-          "route": "default",
-          "residency": "resident",
-          "idle_ttl_seconds": 0,
-          "preload": false
-        }
-      ]
-    },
-    "vllm-metal": {
-      "gpu_memory_utilization": 0.75,
-      "bindings": [
-        {
-          "layout": "vllm-metal",
-          "route": "default",
-          "residency": "resident",
-          "idle_ttl_seconds": 0,
-          "preload": false
-        }
-      ]
     }
   }
 }

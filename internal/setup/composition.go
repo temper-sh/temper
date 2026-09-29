@@ -24,12 +24,10 @@ func (p Plan) MarshalJSON() ([]byte, error) {
 	if err = json.Unmarshal(raw, &result); err != nil {
 		return nil, err
 	}
-	delete(result, "modes")
-	delete(result, "default_profile")
 	assessments := map[string]any{}
 	for id, selected := range p.Configuration.Presets {
-		for _, m := range p.Modes {
-			if m.Lock.Digests.Profile == selected.Lock.Digests.Profile {
+		for _, m := range p.Presets {
+			if m.Lock.ExecutionDigest == selected.Lock.ExecutionDigest {
 				assessments[id] = struct {
 					Name                     string                       `json:"name"`
 					ModelBytes               int64                        `json:"model_bytes"`
@@ -67,7 +65,7 @@ func BuildConfiguration(root string, facts machine.Facts, free int64, c Configur
 	for _, id := range keys(c.Presets) {
 		locks = append(locks, c.Presets[id].Lock)
 	}
-	p, err := build(root, facts, free, locks, material, "", true)
+	p, err := build(root, facts, free, locks, material)
 	if err != nil {
 		return p, err
 	}
@@ -86,7 +84,7 @@ func BuildConfiguration(root string, facts machine.Facts, free int64, c Configur
 			if one.Budget.Status == budget.StatusFits || one.Budget.Status == budget.StatusExceeded {
 				estimate = max(estimate, (one.Budget.RequiredMiB-budget.OSFloorMiB)*MiB)
 			}
-			for _, x := range lock.Records.Layouts {
+			for _, x := range lock.Records.Presets {
 				if x.EngineConfig.Splash != nil {
 					estimate = max(estimate, x.EngineConfig.Splash.MaxMemoryBytes)
 				}
@@ -101,7 +99,7 @@ func BuildConfiguration(root string, facts machine.Facts, free int64, c Configur
 			}
 			assessment.LargestPresetBytes = max(assessment.LargestPresetBytes, estimate)
 			gpu := false
-			for _, x := range lock.Records.Layouts {
+			for _, x := range lock.Records.Presets {
 				gpu = x.EngineConfig.Splash != nil || x.EngineConfig.GPULayers > 0
 			}
 			if gpu {
@@ -141,7 +139,7 @@ func (p Plan) configurationSections() []Section {
 	for _, id := range keys(p.Configuration.Presets) {
 		selected := p.Configuration.Presets[id]
 		lines := []string{id + " · " + selected.Name}
-		for _, x := range selected.Lock.Records.Layouts {
+		for _, x := range selected.Lock.Records.Presets {
 			lines = append(lines, fmt.Sprintf("Context %d tokens (input + output); output allowance %d.", x.ContextWindowTokens, x.RequestDefaults.MaxOutputTokens))
 			if x.Description != "" {
 				lines = append(lines, x.Description)
@@ -151,8 +149,8 @@ func (p Plan) configurationSections() []Section {
 		if refs := p.Configuration.References(id); len(refs) > 0 {
 			lines = append(lines, "Used by: "+strings.Join(refs, ", "))
 		}
-		for _, m := range p.Modes {
-			if m.Lock.Digests.Profile == selected.Lock.Digests.Profile && m.RuntimeDiskEstimateBytes > 0 {
+		for _, m := range p.Presets {
+			if m.Lock.ExecutionDigest == selected.Lock.ExecutionDigest && m.RuntimeDiskEstimateBytes > 0 {
 				lines = append(lines, "Splash first-start weight cache: roughly another "+Size(m.RuntimeDiskEstimateBytes)+", plus 2 GiB free; additional to installation totals. Splash checks exact space before conversion.")
 			}
 		}
@@ -169,12 +167,17 @@ func (p Plan) configurationSections() []Section {
 		}
 		sections = append(sections, Section{Title: "Layout · " + l.Layout.Name, Lines: lines})
 	}
-	for _, m := range p.Modes {
+	for _, m := range p.Presets {
 		if m.WiredMemory != nil {
 			sections = append(sections, m.WiredMemory.Section())
 		}
 	}
-	sections = append(sections, Section{Title: "Downloads", Lines: []string{p.WeightSummary(), "Remaining installation allowance: " + DownloadSize(p.RemainingDiskBytes) + "; free: " + Size(p.FreeDiskBytes), "Software closures and weights count once across selected presets."}, Downloads: p.Downloads})
+	downloads := []string{p.WeightSummary(), "Save downloads no weights. Prepare fetches missing files and verifies cached weights.", "Remaining installation allowance: " + DownloadSize(p.RemainingDiskBytes) + "; free: " + Size(p.FreeDiskBytes), "Software closures and weights count once across selected presets."}
+	if p.HFCache != nil {
+		downloads = append(downloads, "Hugging Face cache checked: "+p.HFCache.Root)
+	}
+	sections = append(sections, Section{Title: "Downloads", Lines: downloads, Downloads: p.Downloads})
+
 	if len(p.Refusals) > 0 {
 		sections = append(sections, Section{Title: "Preparation unavailable", Lines: p.Refusals, Warning: true})
 	}

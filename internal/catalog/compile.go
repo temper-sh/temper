@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"maps"
 	"reflect"
 	"slices"
 	"sort"
@@ -19,34 +18,21 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type Digests struct {
-	Records   map[string]string `yaml:"records,omitempty" json:"records,omitempty"`
-	Materials map[string]string `yaml:"materials,omitempty" json:"materials,omitempty"`
-	Engines   map[string]string `yaml:"engines,omitempty" json:"engines,omitempty"`
-	Layouts   map[string]string `yaml:"layouts,omitempty" json:"layouts,omitempty"`
-	Profile   string            `yaml:"profile" json:"profile"`
-}
-
 type Lock struct {
 	Schema               string          `yaml:"schema" json:"schema"`
 	SourceSnapshotSHA256 string          `yaml:"source_snapshot_sha256" json:"source_snapshot_sha256"`
-	Selection            Selection       `yaml:"selection" json:"selection"`
+	Preset               string          `yaml:"preset" json:"preset"`
 	Target               software.Target `yaml:"target" json:"target"`
 	Records              Document        `yaml:"records" json:"records"`
-	Digests              Digests         `yaml:"digests" json:"digests"`
+	ExecutionDigest      string          `yaml:"execution_digest" json:"execution_digest"`
 }
 
-// Compile accepts an explicitly supplied local snapshot. It makes no signature,
-// publication, qualification or machine-fit claim and never rewrites selection.
-func Compile(d Document, s Selection, target software.Target) (Lock, error) {
+// CompilePreset freezes one explicitly selected preset. Empty template and zero
+// window use catalog defaults; "builtin" explicitly selects the embedded template.
+// Compilation is pure and makes no publication or machine-fit claim.
+func CompilePreset(d Document, id, template string, window int, target software.Target) (Lock, error) {
 	if err := d.Validate(); err != nil {
 		return Lock{}, err
-	}
-	if err := s.Validate(); err != nil {
-		return Lock{}, err
-	}
-	if (d.Schema == Schema) != (s.Schema == SelectionSchema) {
-		return Lock{}, errors.New("catalog and selection schema versions must match")
 	}
 	if err := target.Validate(); err != nil {
 		return Lock{}, err
@@ -54,66 +40,56 @@ func Compile(d Document, s Selection, target software.Target) (Lock, error) {
 	if target.OS != "darwin" || target.Arch != "arm64" || target.Distribution != "" || target.DistributionVersion != "" {
 		return Lock{}, errors.New("execution target is portable darwin/arm64 compatibility, not an observed OS version")
 	}
-	profile, ok := d.Profiles[s.Profile]
-	if !ok {
-		return Lock{}, fmt.Errorf("unknown selected profile %q", s.Profile)
-	}
-	if _, err := ResolveSelection(d, s); err != nil {
-		return Lock{}, err
+	if _, ok := d.Presets[id]; !ok {
+		return Lock{}, fmt.Errorf("unknown preset %q", id)
 	}
 	d = canonicalDocument(d)
-	s.Templates = maps.Clone(s.Templates)
-	s.ContextWindows = maps.Clone(s.ContextWindows)
 	snapshot := digest(d)
-	if d.Schema == legacySchema {
-		s.Tools, s.Integrations = []string{}, []string{}
+	p := d.Presets[id]
+	if window != 0 {
+		if window <= p.RequestDefaults.MaxOutputTokens || window > p.ContextLimit() {
+			return Lock{}, fmt.Errorf("preset %q context must be between %d and %d tokens (total input and output)", id, p.RequestDefaults.MaxOutputTokens+1, p.ContextLimit())
+		}
+		p.ContextWindowTokens = window
 	}
-	selected := Document{Schema: d.Schema, Date: d.Date, Runtime: d.Runtime, Artifacts: map[string]Artifact{}, Patches: map[string]Patch{}, Engines: map[string]Engine{}, Layouts: map[string]Layout{}, Profiles: map[string]Profile{s.Profile: profile}}
-	for _, b := range profile.Bindings {
-		l := d.Layouts[b.Layout]
-		if window, chosen := s.ContextWindows[b.Layout]; chosen {
-			l.ContextWindowTokens = window
-		}
-		if choice, chosen := s.Templates[b.Layout]; chosen {
-			l.Patches = []string{}
-			if choice != "" {
-				l.Patches = []string{choice}
+	if template != "" {
+		p.Patches = []string{}
+		if template != "builtin" {
+			patch, ok := d.Patches[template]
+			if !ok || !slices.Contains(patch.CompatibleArtifacts, p.Artifact) {
+				return Lock{}, fmt.Errorf("preset %q template patch %q is absent or incompatible", id, template)
 			}
-		}
-		selected.Layouts[b.Layout] = l
-		selected.Artifacts[l.Artifact] = d.Artifacts[l.Artifact]
-		if l.Speculation.DraftArtifact != "" {
-			selected.Artifacts[l.Speculation.DraftArtifact] = d.Artifacts[l.Speculation.DraftArtifact]
-		}
-		selected.Engines[l.Engine] = d.Engines[l.Engine]
-		if release := d.Engines[l.Engine].Supply.Release; release != nil {
-			if err := l.EngineVersions.require(release.Version); err != nil {
-				return Lock{}, fmt.Errorf("layout %q: %w", b.Layout, err)
-			}
-		}
-		if !d.Engines[l.Engine].Supply.Target.Matches(target) {
-			return Lock{}, fmt.Errorf("layout %q engine is incompatible with target", b.Layout)
-		}
-		for _, id := range l.Patches {
-			selected.Patches[id] = d.Patches[id]
+			p.Patches = []string{template}
 		}
 	}
-	if !d.Runtime.Router.Target.Matches(target) {
-		return Lock{}, errors.New("router is incompatible with target")
+	e := d.Engines[p.Engine]
+	if release := e.Supply.Release; release != nil {
+		if err := p.EngineVersions.require(release.Version); err != nil {
+			return Lock{}, fmt.Errorf("preset %q: %w", id, err)
+		}
+	}
+	if !e.Supply.Target.Matches(target) || !d.Runtime.Router.Target.Matches(target) {
+		return Lock{}, errors.New("preset engine or router is incompatible with target")
+	}
+	selected := Document{Schema: Schema, Date: d.Date, Runtime: d.Runtime,
+		Artifacts: map[string]Artifact{p.Artifact: d.Artifacts[p.Artifact]},
+		Patches:   map[string]Patch{}, Engines: map[string]Engine{p.Engine: e},
+		Presets: map[string]Preset{id: p}}
+	if p.Speculation.DraftArtifact != "" {
+		selected.Artifacts[p.Speculation.DraftArtifact] = d.Artifacts[p.Speculation.DraftArtifact]
+	}
+	for _, patch := range p.Patches {
+		selected.Patches[patch] = d.Patches[patch]
 	}
 	selected = canonicalDocument(selected)
-	locked := Lock{Schema: LockSchema, SourceSnapshotSHA256: snapshot, Selection: s, Target: target, Records: selected}
-	if d.Schema == legacySchema {
-		locked.Schema = legacyLockSchema
-	}
-	locked.Digests = deriveDigests(selected, s, target)
-	// Prove the exact selected graph reaches the current typed renderer before
-	// returning an executable lock. No caller-supplied shell or local path enters it.
-	projections, err := locked.projections()
+	locked := Lock{Schema: LockSchema, SourceSnapshotSHA256: snapshot, Preset: id,
+		Target: target, Records: selected, ExecutionDigest: executionDigest(selected, id, target)}
+	// Validate through the same typed renderer used by preparation.
+	inputs, err := locked.projections()
 	if err != nil {
 		return Lock{}, err
 	}
-	if _, err = render.Build(render.Inputs{Manifest: projections.Manifest, Lock: projections.Artifacts, Mode: s.Profile, Root: "/temper-compile-validation"}); err != nil {
+	if _, err = render.Build(render.Inputs{Manifest: inputs.Manifest, Lock: inputs.Artifacts, Mode: id, Root: "/temper-compile-validation"}); err != nil {
 		return Lock{}, fmt.Errorf("compile runtime inputs: %w", err)
 	}
 	return locked, nil
@@ -131,10 +107,10 @@ func ParseLock(data []byte) (Lock, error) {
 }
 
 func (l Lock) Validate() error {
-	if (l.Schema != LockSchema && l.Schema != legacyLockSchema) || !hashPattern.MatchString(l.SourceSnapshotSHA256) {
+	if l.Schema != LockSchema || !hashPattern.MatchString(l.SourceSnapshotSHA256) {
 		return errors.New("execution lock requires its schema and exact source snapshot digest")
 	}
-	expected, err := Compile(l.Records, l.Selection, l.Target)
+	expected, err := CompilePreset(l.Records, l.Preset, "", 0, l.Target)
 	if err != nil {
 		return err
 	}
@@ -158,7 +134,7 @@ func MarshalLock(l Lock) ([]byte, error) {
 
 func canonicalDocument(d Document) Document {
 	// Clone at the boundary: canonicalization must not mutate caller-owned maps,
-	// slices, selection, or configuration pointers.
+	// slices or configuration pointers.
 	raw, _ := json.Marshal(d)
 	var result Document
 	_ = json.Unmarshal(raw, &result)
@@ -171,60 +147,25 @@ func canonicalDocument(d Document) Document {
 		slices.Sort(p.CompatibleArtifacts)
 		result.Patches[id] = p
 	}
-	for id, l := range result.Layouts {
+	for id, l := range result.Presets {
 		if l.Patches == nil {
 			l.Patches = []string{}
 		}
-		result.Layouts[id] = l
+		result.Presets[id] = l
 	}
 	return result
 }
 
-func deriveDigests(d Document, s Selection, target software.Target) Digests {
-	digests := Digests{Records: map[string]string{}, Materials: map[string]string{}, Engines: map[string]string{}, Layouts: map[string]string{}}
-	for id, a := range d.Artifacts {
-		digests.Records["artifact/"+id] = digest(a)
-		digests.Materials["artifact/"+id] = artifactMaterialDigest(a)
-	}
-	for id, p := range d.Patches {
-		digests.Records["patch/"+id] = digest(p)
-		digests.Materials["patch/"+id] = patchMaterialDigest(p)
-	}
-	for id, e := range d.Engines {
-		digests.Records["engine/"+id] = digest(e)
-		digests.Engines[id] = engineExecutionDigest(d.Schema, e)
-	}
-	for id, l := range d.Layouts {
-		digests.Records["layout/"+id] = digest(l)
-		digests.Layouts[id] = layoutExecutionDigest(d, l)
-	}
-	p := d.Profiles[s.Profile]
-	digests.Records["profile/"+s.Profile] = digest(p)
-	p.Bindings = append([]Binding{}, p.Bindings...)
-	for i, b := range p.Bindings {
-		p.Bindings[i].Layout = digests.Layouts[b.Layout]
-	}
+func executionDigest(d Document, id string, target software.Target) string {
 	router := d.Runtime.Router
-	if d.Schema == Schema {
-		router.Source = nil
-		router.Versions = nil
-	}
-	digests.Profile = digest(struct {
-		Kind    string
-		Target  software.Target
-		Router  Supply
-		Profile Profile
-	}{"profile-execution/v1", target, router, p})
-	if len(d.Runtime.PythonEnvironments) > 0 {
-		digests.Profile = digest(struct {
-			Execution string
-			Python    []Supply
-		}{digests.Profile, d.Runtime.PythonEnvironments})
-	}
-	if d.Schema == Schema {
-		return Digests{Profile: digests.Profile}
-	}
-	return digests
+	router.Source, router.Versions = nil, nil
+	return digest(struct {
+		Kind   string
+		Target software.Target
+		Router Supply
+		Preset string
+		Python []Supply `json:",omitempty"`
+	}{"preset-execution/v1", target, router, presetExecutionDigest(d, d.Presets[id]), d.Runtime.PythonEnvironments})
 }
 
 func artifactMaterialDigest(a Artifact) string {
@@ -242,15 +183,13 @@ func patchMaterialDigest(p Patch) string {
 	}{"patch-material/v1", p.Files})
 }
 
-func engineExecutionDigest(schema string, e Engine) string {
+func engineExecutionDigest(e Engine) string {
 	e.DisplayName = ""
-	if schema == Schema {
-		e.Supply.Source, e.Supply.Versions = nil, nil
-	}
+	e.Supply.Source, e.Supply.Versions = nil, nil
 	return digest(e)
 }
 
-func layoutExecutionDigest(d Document, l Layout) string {
+func presetExecutionDigest(d Document, l Preset) string {
 	x := l
 	x.DisplayName, x.EngineVersions = "", nil
 	x.MemoryTier = ""
@@ -260,14 +199,17 @@ func layoutExecutionDigest(d Document, l Layout) string {
 	if l.Speculation.DraftArtifact != "" {
 		x.Speculation.DraftArtifact = artifactMaterialDigest(d.Artifacts[l.Speculation.DraftArtifact])
 	}
-	x.Engine = engineExecutionDigest(d.Schema, d.Engines[l.Engine])
+	x.Engine = engineExecutionDigest(d.Engines[l.Engine])
 	x.Patches = append([]string{}, l.Patches...)
 	for i, patch := range l.Patches {
 		x.Patches[i] = patchMaterialDigest(d.Patches[patch])
 	}
+	// This evidence hash has its own versioned definition. Preserve its field
+	// names and kind when changing storage schemas, so measured contexts remain
+	// attributable to the same execution inputs.
 	return digest(struct {
 		Kind   string
-		Layout Layout
+		Layout Preset
 	}{"layout-execution/v1", x})
 }
 
@@ -280,7 +222,7 @@ func digest(v any) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// Projections are derived compatibility inputs for existing Temper primitives.
+// Projections are derived inputs for Temper installation and rendering primitives.
 // They are not independent authoring surfaces or part of portable identity.
 type Projections struct {
 	Manifest        manifest.Document
@@ -298,18 +240,11 @@ func (l Lock) Projections() (Projections, error) {
 
 func (l Lock) projections() (Projections, error) {
 	d := l.Records
-	profile := d.Profiles[l.Selection.Profile]
-	p := Projections{Manifest: manifest.Document{Schema: manifest.SchemaV2, Defaults: manifest.Defaults{TTL: 1800, GPUMemoryUtilization: profile.GPUMemoryUtilization}, Patches: map[string]manifest.Patch{}, Layouts: map[string]manifest.Layout{}, Modes: map[string]manifest.Mode{}, Tools: map[string]manifest.Tool{}},
+	p := Projections{Manifest: manifest.Document{Schema: manifest.SchemaV2, Defaults: manifest.Defaults{TTL: 1800, GPUMemoryUtilization: .85}, Patches: map[string]manifest.Patch{}, Layouts: map[string]manifest.Layout{}, Modes: map[string]manifest.Mode{}, Tools: map[string]manifest.Tool{}},
 		Artifacts: lockfile.Document{Schema: lockfile.SchemaV1, Entries: map[string]lockfile.Entry{}},
-		Software: softwarelock.Document{Schema: softwarelock.SchemaV1, Target: l.Target, TargetMode: "compatible", Resolved: d.Date, Requires: []softwarelock.InstallationRequirement{},
-			Provenance: softwarelock.Provenance{Experiment: &softwarelock.ExperimentIdentity{Schema: legacyLockSchema, ID: l.Selection.Profile, DefinitionSHA256: l.Digests.Profile}}, Selections: map[string]softwarelock.Selection{}, Units: map[string]softwarelock.Unit{}},
+		Software: softwarelock.Document{Schema: softwarelock.SchemaV1, Target: l.Target, TargetMode: "compatible", Requires: []softwarelock.InstallationRequirement{},
+			Provenance: softwarelock.Provenance{Execution: &softwarelock.ExecutionIdentity{Schema: LockSchema, Preset: l.Preset, SHA256: l.ExecutionDigest}}, Selections: map[string]softwarelock.Selection{}, Units: map[string]softwarelock.Unit{}},
 		RequestDefaults: map[string]RequestDefaults{}}
-	if l.Schema == LockSchema {
-		p.Software.Provenance = softwarelock.Provenance{Execution: &softwarelock.ExecutionIdentity{Schema: LockSchema, Profile: l.Selection.Profile, SHA256: l.Digests.Profile}}
-		// The catalog's date is not an observation of when moving software was
-		// resolved. Execution provenance suffices; receipts date installations.
-		p.Software.Resolved = ""
-	}
 	addSupply := func(s Supply) error {
 		selection, units, err := s.installerInputs()
 		if err != nil {
@@ -343,7 +278,7 @@ func (l Lock) projections() (Projections, error) {
 	for id, patch := range d.Patches {
 		p.Manifest.Patches[id] = manifest.Patch{Source: "hf://" + patch.Repo + "@" + patch.Revision + "/" + patch.Files[0].Path, File: patch.Files[0].Path}
 	}
-	for id, layout := range d.Layouts {
+	for id, layout := range d.Presets {
 		a := d.Artifacts[layout.Artifact]
 		c := layout.EngineConfig
 		m := manifest.Layout{DisplayName: layout.DisplayName, Model: manifest.Model{Repo: a.Repo, Files: []string{a.Files[0].Path}, Format: a.Format}, Engine: d.Engines[layout.Engine].Family, Interface: layout.Interface, Modalities: append([]string{}, layout.Modalities...), Window: layout.ContextWindowTokens, MaxTokens: layout.RequestDefaults.MaxOutputTokens, Thinking: layout.RequestDefaults.Reasoning,
@@ -381,26 +316,15 @@ func (l Lock) projections() (Projections, error) {
 		p.Artifacts.Entries[id] = entry
 		p.RequestDefaults[id] = layout.RequestDefaults
 	}
-	mode := manifest.Mode{Tools: []string{}, Harnesses: []string{}}
-	if profile.Foreground == "external" {
-		mode.ExternalForeground = true
+	ttl := 1800
+	c := d.Presets[l.Preset].EngineConfig
+	member := manifest.Member{Layout: l.Preset, TTL: &ttl}
+	if c.Kind == "llama-server/v2" {
+		member.NGL = &c.GPULayers
 	}
-	for _, b := range profile.Bindings {
-		c := d.Layouts[b.Layout].EngineConfig
-		member := manifest.Member{Layout: b.Layout, TTL: &b.IdleTTLSeconds, Preload: b.Preload}
-		if c.Kind == "llama-server/v2" {
-			member.NGL = &c.GPULayers
-		}
-		if b.Route == "default" {
-			mode.Foreground = b.Layout
-		}
-		if b.Residency == "resident" {
-			mode.Members.Resident = append(mode.Members.Resident, member)
-		} else {
-			mode.Members.OnDemand = append(mode.Members.OnDemand, member)
-		}
-	}
-	p.Manifest.Modes[l.Selection.Profile] = mode
+	p.Manifest.Modes[l.Preset] = manifest.Mode{ExternalForeground: true,
+		Tools: []string{}, Harnesses: []string{}, Members: manifest.Members{OnDemand: []manifest.Member{member}}}
+
 	if err := p.Manifest.Validate(); err != nil {
 		return Projections{}, err
 	}

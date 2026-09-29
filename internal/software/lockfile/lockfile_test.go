@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/temper-sh/temper/internal/software"
-	"github.com/temper-sh/temper/internal/software/catalog"
+
 	softwarelock "github.com/temper-sh/temper/internal/software/lockfile"
 )
 
@@ -44,23 +44,6 @@ func TestPortableTargetIsExplicitAndChangesLockIdentity(t *testing.T) {
 	document.Target = host
 	if err := document.Validate(); err == nil {
 		t.Fatal("portable lock accepted observed host distribution fields")
-	}
-}
-
-func TestParseAndValidateAgainstExactCatalogSnapshot(t *testing.T) {
-	catalogBytes := validCatalog()
-	supply, err := catalog.Parse(catalogBytes)
-	if err != nil {
-		t.Fatal(err)
-	}
-	digest := catalog.SnapshotDigest(catalogBytes)
-	document, err := softwarelock.Parse(validLock(digest))
-	if err != nil {
-		t.Fatalf("Parse() error = %v", err)
-	}
-
-	if err := document.ValidateAgainst(supply, digest); err != nil {
-		t.Fatalf("ValidateAgainst() error = %v", err)
 	}
 }
 
@@ -137,75 +120,6 @@ func TestMarshalRoundTripPreservesSemanticDigest(t *testing.T) {
 	}
 }
 
-func TestParseAcceptsADirectExperimentLockWithoutCatalogProvenance(t *testing.T) {
-	input := strings.Replace(string(validLock(strings.Repeat("d", 64))), `  catalog:
-    schema: temper-software-supply/v1
-    sequence: 42
-    sha256: `+strings.Repeat("d", 64), `  experiment:
-    schema: field-kit-experiment/v1
-    id: llama-cpp-pr-smoke
-    definition_sha256: `+strings.Repeat("9", 64), 1)
-	input = strings.ReplaceAll(input, "    provenance: catalog", "    provenance: experiment")
-
-	document, err := softwarelock.Parse([]byte(input))
-	if err != nil {
-		t.Fatalf("Parse() error = %v", err)
-	}
-	if document.Provenance.Catalog != nil || document.Provenance.Experiment == nil || document.Provenance.Experiment.ID != "llama-cpp-pr-smoke" {
-		t.Fatalf("experiment provenance = %#v", document.Provenance)
-	}
-}
-
-func TestParseAcceptsCatalogBackedExperimentProvenance(t *testing.T) {
-	catalogBytes := validCatalog()
-	input := strings.Replace(string(validLock(catalog.SnapshotDigest(catalogBytes))), "requires: []", `  experiment:
-    schema: labs-experiment/v1
-    id: rapid-mlx-candidate
-    definition_sha256: `+strings.Repeat("8", 64)+`
-requires: []`, 1)
-	input = strings.Replace(input, "  rapid-mlx:\n    provenance: catalog", "  rapid-mlx:\n    provenance: experiment", 1)
-	input = strings.Replace(input, "    recipe_revision: rapid-mlx-uv/v1", "    recipe_revision: rapid-mlx-pr-481/v1", 1)
-
-	document, err := softwarelock.Parse([]byte(input))
-	if err != nil {
-		t.Fatalf("Parse() error = %v", err)
-	}
-	if document.Provenance.Catalog == nil || document.Provenance.Experiment == nil {
-		t.Fatalf("combined provenance = %#v, want catalog and experiment", document.Provenance)
-	}
-	supply, err := catalog.Parse(catalogBytes)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := document.ValidateAgainst(supply, catalog.SnapshotDigest(catalogBytes)); err != nil {
-		t.Fatalf("ValidateAgainst() error = %v", err)
-	}
-}
-
-func TestValidateAgainstRefusesADirectExperimentLockWithoutCatalogProvenance(t *testing.T) {
-	input := strings.Replace(string(validLock(strings.Repeat("d", 64))), `  catalog:
-    schema: temper-software-supply/v1
-    sequence: 42
-    sha256: `+strings.Repeat("d", 64), `  experiment:
-    schema: field-kit-experiment/v1
-    id: llama-cpp-pr-smoke
-    definition_sha256: `+strings.Repeat("9", 64), 1)
-	input = strings.ReplaceAll(input, "    provenance: catalog", "    provenance: experiment")
-	document, err := softwarelock.Parse([]byte(input))
-	if err != nil {
-		t.Fatal(err)
-	}
-	supply, err := catalog.Parse(validCatalog())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = document.ValidateAgainst(supply, catalog.SnapshotDigest(validCatalog()))
-	if err == nil || !strings.Contains(err.Error(), "no catalog provenance") {
-		t.Fatalf("ValidateAgainst() error = %v, want direct-experiment refusal", err)
-	}
-}
-
 func TestValidateRefusesMissingOrMalformedProvenance(t *testing.T) {
 	base, err := softwarelock.Parse(validLock(strings.Repeat("d", 64)))
 	if err != nil {
@@ -241,18 +155,18 @@ func TestValidateRefusesMissingOrMalformedProvenance(t *testing.T) {
 				document.Selections["llama-swap"] = selection
 				return document
 			},
-			want: "must be catalog, experiment or execution",
+			want: "must be experiment or execution",
 		},
 		{
 			name: "selection provenance has no matching identity",
 			mutate: func(document softwarelock.Document) softwarelock.Document {
 				document.Selections["llama-swap"] = softwarelock.Selection{
-					Provenance: softwarelock.ProvenanceExperiment,
+					Provenance: softwarelock.ProvenanceExecution,
 					Method:     "system-package", Adapter: "homebrew", RecipeRevision: "llama-swap-homebrew/v1", RootUnit: "homebrew:system:llama-swap",
 				}
 				return document
 			},
-			want: "lock has no experiment identity",
+			want: "no execution identity",
 		},
 		{
 			name: "duplicate base requirement",
@@ -433,71 +347,6 @@ func TestValidateRejectsInvalidClosureShapes(t *testing.T) {
 	}
 }
 
-func TestValidateAgainstRefusesCatalogIdentityAndAdapterDrift(t *testing.T) {
-	catalogBytes := validCatalog()
-	supply, err := catalog.Parse(catalogBytes)
-	if err != nil {
-		t.Fatal(err)
-	}
-	document, err := softwarelock.Parse(validLock(strings.Repeat("d", 64)))
-	if err != nil {
-		t.Fatal(err)
-	}
-	document.Selections["llama-swap"] = softwarelock.Selection{
-		Provenance: softwarelock.ProvenanceCatalog,
-		Method:     "system-package", Adapter: "uv", RecipeRevision: "llama-swap-homebrew/v1", RootUnit: "homebrew:system:llama-swap",
-	}
-	root := document.Units["homebrew:system:llama-swap"]
-	root.Adapter = "uv"
-	document.Units["homebrew:system:llama-swap"] = root
-
-	err = document.ValidateAgainst(supply, catalog.SnapshotDigest(catalogBytes))
-	if err == nil {
-		t.Fatal("ValidateAgainst() succeeded, want catalog drift")
-	}
-	for _, wanted := range []string{"catalog digest mismatch", "catalog selects \"homebrew\"", "no catalog recipe for adapter \"uv\""} {
-		if !strings.Contains(err.Error(), wanted) {
-			t.Errorf("ValidateAgainst() error does not contain %q: %v", wanted, err)
-		}
-	}
-}
-
-func TestValidateAgainstRefusesLockOutsideCatalogPolicy(t *testing.T) {
-	catalogBytes := validCatalog()
-	supply, err := catalog.Parse(catalogBytes)
-	if err != nil {
-		t.Fatal(err)
-	}
-	base, err := softwarelock.Parse(validLock(catalog.SnapshotDigest(catalogBytes)))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	for _, tt := range []struct {
-		version  string
-		excluded bool
-	}{{version: "0.9.0"}, {version: "1.4.0", excluded: true}} {
-		t.Run(tt.version, func(t *testing.T) {
-			document := cloneDocument(base)
-			root := document.Units["homebrew:system:llama-swap"]
-			root.Version = tt.version
-			document.Units["homebrew:system:llama-swap"] = root
-			if tt.excluded {
-				pkg := supply.Packages["llama-swap"]
-				recipe := pkg.Recipes["homebrew"]
-				recipe.Exclude = []string{tt.version}
-				pkg.Recipes["homebrew"] = recipe
-				supply.Packages["llama-swap"] = pkg
-			}
-
-			err := document.ValidateAgainst(supply, catalog.SnapshotDigest(catalogBytes))
-			if err == nil || !strings.Contains(err.Error(), "closure does not satisfy catalog policy") {
-				t.Fatalf("ValidateAgainst() error = %v, want policy refusal", err)
-			}
-		})
-	}
-}
-
 func cloneDocument(document softwarelock.Document) softwarelock.Document {
 	clone := document
 	clone.Selections = make(map[string]softwarelock.Selection, len(document.Selections))
@@ -516,22 +365,22 @@ func cloneDocument(document softwarelock.Document) softwarelock.Document {
 func validLock(catalogDigest string) []byte {
 	return []byte(fmt.Sprintf(`schema: temper-software-lock/v1
 provenance:
-  catalog:
-    schema: temper-software-supply/v1
-    sequence: 42
-    sha256: %s
+  experiment:
+    schema: test-input/v1
+    id: fixture
+    definition_sha256: %s
 requires: []
 target: {os: darwin, arch: arm64, distribution: macos, distribution_version: "15.6"}
 resolved: 2026-08-20
 selections:
   llama-swap:
-    provenance: catalog
+    provenance: experiment
     method: system-package
     adapter: homebrew
     recipe_revision: llama-swap-homebrew/v1
     root_unit: homebrew:system:llama-swap
   rapid-mlx:
-    provenance: catalog
+    provenance: experiment
     method: python-environment
     adapter: uv
     recipe_revision: rapid-mlx-uv/v1
@@ -582,79 +431,4 @@ units:
     artifacts:
       - {locator: "https://example.invalid/typing-extensions.whl", sha256: ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff}
 `, catalogDigest))
-}
-
-func validCatalog() []byte {
-	return []byte(`schema: temper-software-supply/v1
-sequence: 42
-published_at: 2026-08-20T18:30:00Z
-methods:
-  system-package: {description: Shared target package manager}
-  python-environment: {description: Temper-owned Python environment}
-adapters:
-  homebrew: {method: system-package, protocol: temper-installer-adapter/v1, effect_model: shared}
-  uv: {method: python-environment, protocol: temper-installer-adapter/v1, effect_model: isolated}
-target_bindings:
-  - {method: system-package, target: {os: darwin, arch: arm64}, adapter: homebrew}
-  - {method: python-environment, target: {os: darwin, arch: arm64}, adapter: uv}
-packages:
-  llama-swap:
-    description: Local model router
-    recipes:
-      homebrew:
-        method: system-package
-        recipe_revision: llama-swap-homebrew/v1
-        source: {kind: homebrew-formula, tap: temper-sh/tap, formula: llama-swap}
-        version_scheme: semver
-        selection: {policy: latest, minimum_compatible: 1.0.0}
-        dependencies: []
-        exclude: []
-        gates: [router-smoke.v1]
-        tested:
-          - {root_version: 1.3.0, closure_digest: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, target: {os: darwin, arch: arm64}, evidence: results/llama-swap}
-  cpython:
-    description: uv-managed CPython runtime
-    recipes:
-      uv:
-        method: python-environment
-        recipe_revision: cpython-uv/v1
-        source: {kind: python-runtime, implementation: cpython}
-        version_scheme: pep440
-        selection: {policy: range, constraint: ">=3.12,<3.13"}
-        dependencies: []
-        exclude: []
-        gates: [python-smoke.v1]
-        tested:
-          - {root_version: 3.12.11, closure_digest: dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd, target: {os: darwin, arch: arm64}, evidence: results/cpython}
-  mlx:
-    description: MLX framework
-    recipes:
-      uv:
-        method: python-environment
-        recipe_revision: mlx-uv/v1
-        source: {kind: python-index, index: pypi, distribution: mlx}
-        version_scheme: pep440
-        selection: {policy: range, constraint: ">=1,<2"}
-        dependencies: [{package: cpython, constraint: ">=3.12,<3.13"}]
-        exclude: []
-        gates: [import-smoke.v1]
-        tested:
-          - {root_version: 1.2.0, closure_digest: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb, target: {os: darwin, arch: arm64}, evidence: results/mlx}
-  rapid-mlx:
-    description: MLX model runtime
-    recipes:
-      uv:
-        method: python-environment
-        recipe_revision: rapid-mlx-uv/v1
-        source: {kind: python-index, index: pypi, distribution: rapid-mlx}
-        version_scheme: pep440
-        selection: {policy: range, constraint: ">=0.1,<0.2"}
-        dependencies:
-          - {package: cpython, constraint: ">=3.12,<3.13"}
-          - {package: mlx, constraint: ">=1.2,<1.3"}
-        exclude: []
-        gates: [runtime-smoke.v1]
-        tested:
-          - {root_version: 0.1.5, closure_digest: cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc, target: {os: darwin, arch: arm64}, evidence: results/rapid-mlx}
-`)
 }

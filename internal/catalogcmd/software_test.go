@@ -78,16 +78,16 @@ func TestLatestCompileUsesResolvedSoftwareAndDryRunWritesNothing(t *testing.T) {
 	reader := latestReleaseReader(t)
 	root := t.TempDir()
 	out := filepath.Join(root, "execution.lock.json")
-	args := []string{"--catalog", "../../catalog/qwen38-m5-refresh.json", "--selection", "../../catalog/qwen38-m5-refresh.selection.json", "--target", "darwin/arm64", "--software", "latest", "--out", out}
+	args := []string{"--catalog", "../../catalog/guided-setup.json", "--preset", "qwen3.8-27b-q4xl-mtp", "--target", "darwin/arm64", "--software", "latest", "--out", out}
 	var stdout, stderr bytes.Buffer
-	if code := compile(context.Background(), append(append([]string{}, args...), "--dry-run"), &stdout, &stderr, reader); code != 0 {
+	if code := compile(context.Background(), append(append([]string{}, args...), "--dry-run"), &stdout, &stderr, reader, publishedTrust(t)); code != 0 {
 		t.Fatalf("dry compile: %s", stderr.String())
 	}
 	entries, err := os.ReadDir(root)
 	if err != nil || len(entries) != 0 {
 		t.Fatalf("dry latest wrote files: %v, %v", entries, err)
 	}
-	if code := compile(context.Background(), args, &stdout, &stderr, reader); code != 0 {
+	if code := compile(context.Background(), args, &stdout, &stderr, reader, publishedTrust(t)); code != 0 {
 		t.Fatalf("compile: %s", stderr.String())
 	}
 	raw, err := os.ReadFile(out)
@@ -136,7 +136,7 @@ func TestLatestCompileUsesResolvedSoftwareAndDryRunWritesNothing(t *testing.T) {
 	// A failed read must not quietly use the recorded releases or publish a lock.
 	failedPath := filepath.Join(root, "failed.json")
 	args[len(args)-1] = failedPath
-	if code := compile(context.Background(), args, &stdout, &stderr, releaseReader{}); code == 0 {
+	if code := compile(context.Background(), args, &stdout, &stderr, releaseReader{}, publishedTrust(t)); code == 0 {
 		t.Fatal("missing latest silently fell back")
 	}
 	if _, err := os.Stat(failedPath); !os.IsNotExist(err) {
@@ -148,8 +148,8 @@ func TestPublishedLatestCompilationRetainsAuthenticatedSource(t *testing.T) {
 	root, published := publishedRoot(t)
 	out := filepath.Join(filepath.Dir(root), "latest.lock.json")
 	var stdout, stderr bytes.Buffer
-	args := []string{"--root", root, "--selection", "../../catalog/qwen38-m5-refresh.selection.json", "--target", "darwin/arm64", "--software", "latest", "--out", out}
-	if code := compile(context.Background(), args, &stdout, &stderr, latestReleaseReader(t)); code != 0 {
+	args := []string{"--root", root, "--preset", "qwen3.8-27b-q4xl-mtp", "--target", "darwin/arm64", "--software", "latest", "--out", out}
+	if code := compile(context.Background(), args, &stdout, &stderr, latestReleaseReader(t), publishedTrust(t)); code != 0 {
 		t.Fatal(stderr.String())
 	}
 	data, err := os.ReadFile(out)

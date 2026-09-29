@@ -104,5 +104,5 @@ endpoint.
 The commands are printed and never executed, including during a non-dry run.
 Exit `2` is usage refusal, `1` is input/upstream/filesystem failure, and `0`
 means the result line is valid. Tested-catalog membership warnings join this
-surface once the signed software catalog exists; v1 does not invent a local
+surface; current catalog resolution owns software versions and does not invent a local
 verified/unverified state.

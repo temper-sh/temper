@@ -20,8 +20,7 @@ import (
 	"github.com/temper-sh/temper/internal/software"
 )
 
-// Configure serves both initial setup and later edits. The legacy Run entry
-// remains only for explicitly requested issued profile/pair operations.
+// Configure serves both initial setup and later edits.
 func (c Command) Configure(ctx context.Context, args []string, in io.Reader, out, diagnostics io.Writer) int {
 	f := flag.NewFlagSet("temper configure", flag.ContinueOnError)
 	f.SetOutput(diagnostics)
@@ -31,7 +30,6 @@ func (c Command) Configure(ctx context.Context, args []string, in io.Reader, out
 	revision := f.String("revision", "", "expected saved configuration revision")
 	show := f.Bool("show", false, "show current configuration and revision")
 	resume := f.Bool("resume", false, "review saved exact inputs offline")
-	importLegacy := f.Bool("import-legacy", false, "import saved historical pairs without changing them")
 	prepare := f.Bool("prepare", false, "prepare selected exact material after saving")
 	dry := f.Bool("dry-run", false, "review without saving or preparing")
 	jsonOutput := f.Bool("json", false, "emit JSON")
@@ -69,12 +67,12 @@ func (c Command) Configure(ctx context.Context, args []string, in io.Reader, out
 		return fail(diagnostics, err)
 	}
 	if *show {
-		if len(selected)+len(removed)+len(contexts)+len(templates) > 0 || *file != "" || *prepare || *importLegacy || *resume || *customID != "" || *name != "" {
+		if len(selected)+len(removed)+len(contexts)+len(templates) > 0 || *file != "" || *prepare || *resume || *customID != "" || *name != "" {
 			return fail(diagnostics, errors.New("--show cannot be combined with edits"))
 		}
 		return configurationOutput(out, diagnostics, map[string]any{"revision": rev, "configuration": current})
 	}
-	scripted := len(selected)+len(removed) > 0 || *file != "" || *importLegacy
+	scripted := len(selected)+len(removed) > 0 || *file != ""
 	if *resume && scripted {
 		return fail(diagnostics, errors.New("--resume uses saved exact inputs; omit edits"))
 	}
@@ -99,19 +97,10 @@ func (c Command) Configure(ctx context.Context, args []string, in io.Reader, out
 	if len(contexts)+len(templates) > 0 && len(selected) == 0 {
 		return fail(diagnostics, errors.New("settings edits require an explicit --preset"))
 	}
-	if *file != "" && (len(selected)+len(removed) > 0 || *importLegacy) {
+	if *file != "" && (len(selected)+len(removed) > 0) {
 		return fail(diagnostics, errors.New("--file is a complete replacement; omit other edits"))
 	}
 	candidate := current
-	if *importLegacy {
-		if rev != "" {
-			return fail(diagnostics, errors.New("legacy import requires no current configuration"))
-		}
-		candidate, err = setup.ImportLegacy(root)
-		if err != nil {
-			return fail(diagnostics, err)
-		}
-	}
 	if *file != "" {
 		info, err := os.Lstat(*file)
 		if err != nil {
@@ -189,15 +178,11 @@ func (c Command) Configure(ctx context.Context, args []string, in io.Reader, out
 			return fail(diagnostics, err)
 		}
 		compile := func(id, template string, window int) (catalog.Lock, error) {
-			d, s, err := catalog.PresetSelection(d, id, template, window)
+			d, err := c.Resolve(ctx, d, id, *softwareChoice)
 			if err != nil {
 				return catalog.Lock{}, err
 			}
-			d, err = c.Resolve(ctx, d, s, *softwareChoice)
-			if err != nil {
-				return catalog.Lock{}, err
-			}
-			return catalog.Compile(d, s, software.Target{OS: "darwin", Arch: "arm64"})
+			return catalog.CompilePreset(d, id, template, window, software.Target{OS: "darwin", Arch: "arm64"})
 		}
 		if interactive {
 			if *jsonOutput {
@@ -209,7 +194,7 @@ func (c Command) Configure(ctx context.Context, args []string, in io.Reader, out
 			// Discovery happens once outside the terminal state machine. Customizing
 			// settings uses the same resolved software, without further network reads.
 			input := setupui.PresetInput{Machine: fmt.Sprintf("%s · %s RAM · %s free", facts.Chip, setup.Size(facts.PhysicalMemoryBytes), setup.Size(free)), Configuration: candidate}
-			for id, p := range d.Layouts {
+			for id, p := range d.Presets {
 				lock, err := compile(id, "", 0)
 				if err != nil {
 					return fail(diagnostics, err)
@@ -241,7 +226,7 @@ func (c Command) Configure(ctx context.Context, args []string, in io.Reader, out
 			// local rename. Their lock owns their settings, not today's catalog.
 			for id, saved := range candidate.Presets {
 				index := slices.IndexFunc(input.Presets, func(p setupui.PresetOption) bool { return p.ID == id })
-				for _, p := range saved.Lock.Records.Layouts {
+				for _, p := range saved.Lock.Records.Presets {
 					a := saved.Lock.Records.Artifacts[p.Artifact]
 					e := saved.Lock.Records.Engines[p.Engine]
 					one, err := setup.Assess(saved.Lock, facts)
@@ -262,9 +247,9 @@ func (c Command) Configure(ctx context.Context, args []string, in io.Reader, out
 				}
 			}
 			rank := func(id string) int {
-				v := slices.Index(d.LayoutOrder, id)
+				v := slices.Index(d.PresetOrder, id)
 				if v < 0 {
-					return len(d.LayoutOrder)
+					return len(d.PresetOrder)
 				}
 				return v
 			}
@@ -334,7 +319,7 @@ func (c Command) Configure(ctx context.Context, args []string, in io.Reader, out
 					return fail(diagnostics, err)
 				}
 				key := id
-				display := d.Layouts[id].DisplayName
+				display := d.Presets[id].DisplayName
 				if windows[id] != "" || patches[id] != "" || *softwareChoice != "recorded" || *customID != "" {
 					display += " (customized)"
 				}

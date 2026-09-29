@@ -1,5 +1,5 @@
 // Package catalogsource provides read-only transports for signed software
-// catalog publications. Verification and activation remain catalogupdate's
+// catalog publications. Verification and activation remain catalog/distribution’s
 // responsibility.
 package catalogsource
 
@@ -13,7 +13,6 @@ import (
 	"strings"
 
 	publication "github.com/temper-sh/temper/internal/software/catalogpublication"
-	"github.com/temper-sh/temper/internal/software/catalogupdate"
 )
 
 const (
@@ -65,25 +64,15 @@ func NewHTTPS(client *http.Client, channelRoot string) (*HTTPS, error) {
 	return &HTTPS{client: &owned, channelRoot: root}, nil
 }
 
-func (s *HTTPS) Channel(ctx context.Context, channel string) (catalogupdate.SignedArtifact, error) {
+func (s *HTTPS) Channel(ctx context.Context, channel string) (publication.SignedArtifact, error) {
 	if err := publication.ValidateChannelName(channel); err != nil {
-		return catalogupdate.SignedArtifact{}, err
+		return publication.SignedArtifact{}, err
 	}
 	root := *s.channelRoot
 	root.Path += channel + "/"
 	return s.readPublication(ctx, &root, "channel", "channel.yaml", "channel.signature.yaml", MaxChannelBytes)
 }
 
-func (s *HTTPS) Catalog(ctx context.Context, locator string) (catalogupdate.SignedArtifact, error) {
-	root, err := parseDirectoryURL(locator, "catalog locator")
-	if err != nil {
-		return catalogupdate.SignedArtifact{}, err
-	}
-	return s.readPublication(ctx, root, "software catalog", "catalog.yaml", "catalog.signature.yaml", MaxCatalogBytes)
-}
-
-// CatalogJSON reads the maintained catalog through the same bounded transport.
-// The caller verifies its exact bytes against the signed current-format channel.
 func (s *HTTPS) CatalogJSON(ctx context.Context, locator string) (publication.SignedArtifact, error) {
 	root, err := parseDirectoryURL(locator, "catalog locator")
 	if err != nil {
@@ -92,20 +81,20 @@ func (s *HTTPS) CatalogJSON(ctx context.Context, locator string) (publication.Si
 	return s.readPublication(ctx, root, "catalog", "catalog.json", "catalog.signature.yaml", MaxCatalogBytes)
 }
 
-func (s *HTTPS) readPublication(ctx context.Context, root *url.URL, label, dataName, signatureName string, dataLimit int64) (catalogupdate.SignedArtifact, error) {
+func (s *HTTPS) readPublication(ctx context.Context, root *url.URL, label, dataName, signatureName string, dataLimit int64) (publication.SignedArtifact, error) {
 	dataURL := *root
 	dataURL.Path += dataName
 	data, err := s.read(ctx, label, dataURL.String(), dataLimit)
 	if err != nil {
-		return catalogupdate.SignedArtifact{}, err
+		return publication.SignedArtifact{}, err
 	}
 	signatureURL := *root
 	signatureURL.Path += signatureName
 	signature, err := s.read(ctx, label+" signature", signatureURL.String(), MaxSignatureBytes)
 	if err != nil {
-		return catalogupdate.SignedArtifact{}, err
+		return publication.SignedArtifact{}, err
 	}
-	return catalogupdate.SignedArtifact{Data: data, Signature: signature}, nil
+	return publication.SignedArtifact{Data: data, Signature: signature}, nil
 }
 
 func (s *HTTPS) read(ctx context.Context, label, locator string, limit int64) ([]byte, error) {
@@ -148,5 +137,3 @@ func validateHTTPSURL(parsed *url.URL) error {
 	}
 	return nil
 }
-
-var _ catalogupdate.Source = (*HTTPS)(nil)

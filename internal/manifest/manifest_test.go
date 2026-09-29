@@ -8,80 +8,52 @@ import (
 )
 
 func TestParseRejectsUnknownFields(t *testing.T) {
-	_, err := manifest.Parse([]byte(`schema: temper-manifest/v1
+	_, err := manifest.Parse([]byte(`schema: temper-manifest/v2
 defaults: {ttl: 1800, gpu_memory_utilization: 0.85}
 layouts:
   coder:
     display_name: Coder
-    model: {repo: org/Coder, file: coder.gguf}
+    model: {repo: org/Coder, format: gguf, files: [coder.gguf]}
     engine: llama-server
-    role: coder
+    interface: chat-completions
+    modalities: [text]
+    speculation: {method: none}
     window: 8192
     max_tokens: 2048
-    kv: q8
     thinking: off
     mystery: silently-ignore-me
-    llama: {parallel: 1, flash_attention: on, batch: 512, ubatch: 512}
+    llama: {kv: q8, parallel: 1, flash_attention: on, batch: 512, ubatch: 512}
 modes:
   local:
-    foreground: local
+    foreground: coder
     members:
-      resident: [{layout: coder, preferred: true}]
+      resident: [{layout: coder}]
 `))
 	if err == nil || !strings.Contains(err.Error(), "field mystery not found") {
 		t.Fatalf("Parse error = %v, want strict unknown-field refusal", err)
 	}
 }
 
-func TestParseReportsRelatedModeProblemsTogether(t *testing.T) {
-	_, err := manifest.Parse([]byte(`schema: temper-manifest/v1
-defaults: {ttl: 1800, gpu_memory_utilization: 0.85}
-layouts:
-  coder:
-    display_name: Coder
-    model: {repo: org/Coder, file: coder.gguf}
-    engine: llama-server
-    role: coder
-    window: 8192
-    max_tokens: 2048
-    kv: q8
-    thinking: off
-    llama: {parallel: 1, flash_attention: on, batch: 512, ubatch: 512}
-modes:
-  local:
-    foreground: local
-    members:
-      on_demand: [{layout: coder, preferred: true}]
-`))
-	if err == nil {
-		t.Fatal("Parse succeeded, want invalid mode")
-	}
-	for _, wanted := range []string{"preferred is allowed only on a resident coder", "needs a resident coder", "exactly one preferred resident coder"} {
-		if !strings.Contains(err.Error(), wanted) {
-			t.Errorf("error does not contain %q: %v", wanted, err)
-		}
-	}
-}
-
 func TestParseRejectsInvalidFlashAttentionAndOnDemandPreload(t *testing.T) {
-	_, err := manifest.Parse([]byte(`schema: temper-manifest/v1
+	_, err := manifest.Parse([]byte(`schema: temper-manifest/v2
 defaults: {ttl: 1800, gpu_memory_utilization: 0.85}
 layouts:
   coder:
     display_name: Coder
-    model: {repo: org/Coder, file: coder.gguf}
+    model: {repo: org/Coder, format: gguf, files: [coder.gguf]}
     engine: llama-server
-    role: coder
+    interface: chat-completions
+    modalities: [text]
+    speculation: {method: none}
     window: 8192
     max_tokens: 2048
-    kv: q8
     thinking: off
-    llama: {parallel: 1, flash_attention: sometimes, batch: 512, ubatch: 512}
+    llama: {kv: q8, parallel: 1, flash_attention: sometimes, batch: 512, ubatch: 512}
 modes:
   local:
-    foreground: local
+    foreground: coder
     members:
-      resident: [{layout: coder, preferred: true}]
+      resident: [{layout: coder}]
       on_demand: [{layout: coder, preload: true}]
 `))
 	if err == nil {
@@ -95,91 +67,50 @@ modes:
 }
 
 func TestParseRejectsUnpinnedPatchSource(t *testing.T) {
-	_, err := manifest.Parse([]byte(`schema: temper-manifest/v1
+	_, err := manifest.Parse([]byte(`schema: temper-manifest/v2
 defaults: {ttl: 1800, gpu_memory_utilization: 0.85}
 patches:
   template: {source: hf://org/template, file: template.jinja}
 layouts:
   coder:
     display_name: Coder
-    model: {repo: org/Coder, file: coder.gguf}
+    model: {repo: org/Coder, format: gguf, files: [coder.gguf]}
     engine: llama-server
-    role: coder
+    interface: chat-completions
+    modalities: [text]
+    speculation: {method: none}
     window: 8192
     max_tokens: 2048
-    kv: q8
     thinking: off
     chat_template: template
-    llama: {parallel: 1, flash_attention: on, batch: 512, ubatch: 512}
+    llama: {kv: q8, parallel: 1, flash_attention: on, batch: 512, ubatch: 512}
 modes:
   local:
-    foreground: local
+    foreground: coder
     members:
-      resident: [{layout: coder, preferred: true}]
+      resident: [{layout: coder}]
 `))
 	if err == nil || !strings.Contains(err.Error(), "must include repository and file path") {
 		t.Fatalf("Parse error = %v, want pinned patch-source refusal", err)
 	}
 }
 
-func TestParseValidatesEmbeddedMTPAsAPairedCoderSetting(t *testing.T) {
-	tests := []struct {
-		name string
-		role string
-		spec string
-		want string
-	}{
-		{name: "maximum without type", role: "coder", spec: "spec_draft_n_max: 3", want: "requires spec_type"},
-		{name: "unknown type", role: "coder", spec: "spec_type: magic\n      spec_draft_n_max: 3", want: "is unsupported"},
-		{name: "zero maximum", role: "coder", spec: "spec_type: draft-mtp", want: "must be between 1 and 16"},
-		{name: "reranker", role: "rerank", spec: "spec_type: draft-mtp\n      spec_draft_n_max: 3", want: "supported only for coder"},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			coderOnly := "    max_tokens: 2048\n    kv: q8\n    thinking: off\n"
-			if test.role == "rerank" {
-				coderOnly = ""
-			}
-			input := `schema: temper-manifest/v1
-defaults: {ttl: 1800, gpu_memory_utilization: 0.85}
-layouts:
-  layout:
-    display_name: Model
-    model: {repo: org/Model, file: model.gguf}
-    engine: llama-server
-    role: ` + test.role + `
-    window: 8192
-` + coderOnly + `    llama:
-      parallel: 1
-      flash_attention: on
-      batch: 512
-      ubatch: 512
-      ` + test.spec + `
-modes:
-  off: {foreground: none}
-`
-			_, err := manifest.Parse([]byte(input))
-			if err == nil || !strings.Contains(err.Error(), test.want) {
-				t.Fatalf("Parse error = %v, want %q", err, test.want)
-			}
-		})
-	}
-}
-
 func TestParsePreservesExplicitZeroPromptCacheRAM(t *testing.T) {
-	document, err := manifest.Parse([]byte(`schema: temper-manifest/v1
+	document, err := manifest.Parse([]byte(`schema: temper-manifest/v2
 defaults: {ttl: 1800, gpu_memory_utilization: 0.85}
 layouts:
   coder:
     display_name: Coder
-    model: {repo: org/Coder, file: coder.gguf}
+    model: {repo: org/Coder, format: gguf, files: [coder.gguf]}
     engine: llama-server
-    role: coder
+    interface: chat-completions
+    modalities: [text]
+    speculation: {method: none}
     window: 8192
     max_tokens: 2048
-    kv: q8
     thinking: off
     llama:
+      kv: q8
       parallel: 1
       flash_attention: on
       batch: 512
@@ -202,19 +133,21 @@ modes:
 }
 
 func TestParseRejectsNegativeLlamaCacheTuning(t *testing.T) {
-	_, err := manifest.Parse([]byte(`schema: temper-manifest/v1
+	_, err := manifest.Parse([]byte(`schema: temper-manifest/v2
 defaults: {ttl: 1800, gpu_memory_utilization: 0.85}
 layouts:
   coder:
     display_name: Coder
-    model: {repo: org/Coder, file: coder.gguf}
+    model: {repo: org/Coder, format: gguf, files: [coder.gguf]}
     engine: llama-server
-    role: coder
+    interface: chat-completions
+    modalities: [text]
+    speculation: {method: none}
     window: 8192
     max_tokens: 2048
-    kv: q8
     thinking: off
     llama:
+      kv: q8
       parallel: 1
       flash_attention: on
       batch: 512
@@ -279,33 +212,6 @@ func TestManifestV2ExternalForegroundRequiresAnUnambiguousHelperMode(t *testing.
 	}
 }
 
-func TestManifestV1RejectsExternalForegroundFlag(t *testing.T) {
-	data := `schema: temper-manifest/v1
-defaults: {ttl: 1800, gpu_memory_utilization: 0.85}
-layouts:
-  coder:
-    display_name: Coder
-    model: {repo: org/Coder, file: coder.gguf}
-    engine: llama-server
-    role: coder
-    window: 8192
-    max_tokens: 2048
-    kv: q8
-    thinking: off
-    llama: {parallel: 1, flash_attention: on, batch: 512, ubatch: 512}
-modes:
-  local:
-    foreground: local
-    external_foreground: true
-    members:
-      resident: [{layout: coder, preferred: true}]
-`
-	_, err := manifest.Parse([]byte(data))
-	if err == nil || !strings.Contains(err.Error(), "only supported in manifest v2") {
-		t.Fatalf("manifest v1 external flag error = %v", err)
-	}
-}
-
 func TestManifestV2RefusesAmbiguousOrLegacyEngineState(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -313,11 +219,11 @@ func TestManifestV2RefusesAmbiguousOrLegacyEngineState(t *testing.T) {
 		new    string
 		wanted string
 	}{
-		{name: "legacy file", old: "      files: [config.json, model.safetensors, tokenizer.json]", new: "      file: model.safetensors", wanted: "uses model.files"},
+		{name: "legacy file", old: "      files: [config.json, model.safetensors, tokenizer.json]", new: "      file: model.safetensors", wanted: "field file not found"},
 		{name: "unsorted snapshot", old: "      files: [config.json, model.safetensors, tokenizer.json]", new: "      files: [tokenizer.json, model.safetensors, config.json]", wanted: "model.files must be sorted"},
-		{name: "legacy role", old: "    engine: rapid-mlx", new: "    engine: rapid-mlx\n    role: coder", wanted: "legacy role"},
+		{name: "legacy role", old: "    engine: rapid-mlx", new: "    engine: rapid-mlx\n    role: coder", wanted: "field role not found"},
 		{name: "mismatched tuning", old: "    engine: rapid-mlx", new: "    engine: mlx-vlm", wanted: "does not match its tuning block"},
-		{name: "preferred foreground alias", old: "        - {layout: rapid}", new: "        - {layout: rapid, preferred: true}", wanted: "preferred is removed"},
+		{name: "preferred foreground alias", old: "        - {layout: rapid}", new: "        - {layout: rapid, preferred: true}", wanted: "field preferred not found"},
 		{name: "on-demand foreground", old: "      resident:\n        - {layout: rapid}\n      on_demand:", new: "      resident: []\n      on_demand:\n        - {layout: rapid}", wanted: "must be resident"},
 	}
 	for _, test := range tests {
@@ -425,3 +331,10 @@ modes:
       resident: []
       on_demand: []
 `
+
+func TestManifestRejectsRetiredSchema(t *testing.T) {
+	raw := strings.Replace(validV2Manifest, "temper-manifest/v2", "temper-manifest/v1", 1)
+	if _, err := manifest.Parse([]byte(raw)); err == nil {
+		t.Fatal("retired manifest accepted")
+	}
+}

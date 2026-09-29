@@ -102,9 +102,9 @@ func (c Command) Layout(ctx context.Context, args []string, out, diagnostics io.
 		if err != nil {
 			return fail(diagnostics, err)
 		}
-		for _, p := range plan.Modes {
+		for _, p := range plan.Presets {
 			if len(p.Refusals) > 0 {
-				return fail(diagnostics, fmt.Errorf("preset %s cannot activate: %v", p.Profile, p.Refusals))
+				return fail(diagnostics, fmt.Errorf("preset %s cannot activate: %v", p.Preset, p.Refusals))
 			}
 		}
 		if len(plan.Layouts[0].Refusals) > 0 {

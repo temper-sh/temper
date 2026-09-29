@@ -3,6 +3,11 @@ package catalogcmd
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
+	"crypto/sha256"
+	"encoding/base64"
+
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,7 +16,6 @@ import (
 	"github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/catalog/distribution"
 	publication "github.com/temper-sh/temper/internal/software/catalogpublication"
-	"github.com/temper-sh/temper/internal/software/catalogtrust"
 )
 
 type publishedSource struct{ channel, data publication.SignedArtifact }
@@ -27,151 +31,95 @@ func (s publishedSource) CatalogJSON(context.Context, string) (publication.Signe
 // the real compiler. The transport is local fixture data; the test is offline.
 func publishedRoot(t *testing.T) (string, distribution.Snapshot) {
 	t.Helper()
-	trust, err := catalogtrust.Production()
+	key := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{7}, ed25519.SeedSize))
+	trust, err := publication.NewTrustRoot(map[string]ed25519.PublicKey{"fixture": key.Public().(ed25519.PublicKey)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	tree := "../../docs/catalog"
-	published, err := distribution.VerifyTree(tree, trust)
+	data, err := os.ReadFile("../../catalog/guided-setup.json")
 	if err != nil {
 		t.Fatal(err)
 	}
-	read := func(path string) []byte {
-		t.Helper()
-		data, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return data
+	digest := fmt.Sprintf("%x", sha256.Sum256(data))
+	sign := func(data []byte) publication.SignedArtifact {
+		envelope := fmt.Sprintf("schema: %s\nkey_id: fixture\nalgorithm: ed25519\nsignature: %s\n", publication.SignatureSchemaV1, base64.StdEncoding.EncodeToString(ed25519.Sign(key, data)))
+		return publication.SignedArtifact{Data: data, Signature: []byte(envelope)}
 	}
-	snapshot := filepath.Join(tree, "snapshots", published.SHA256)
-	source := publishedSource{
-		channel: publication.SignedArtifact{Data: read(filepath.Join(tree, "channels/stable/channel.yaml")), Signature: read(filepath.Join(tree, "channels/stable/channel.signature.yaml"))},
-		data:    publication.SignedArtifact{Data: read(filepath.Join(snapshot, "catalog.json")), Signature: read(filepath.Join(snapshot, "catalog.signature.yaml"))},
-	}
+	channel := []byte(fmt.Sprintf("schema: temper-catalog-channel/v1\nchannel: stable\ncatalog:\n  schema: temper-catalog/v3\n  sequence: 1\n  sha256: %s\n  locator: https://example.test/snapshots/%s/\n", digest, digest))
+	source := publishedSource{channel: sign(channel), data: sign(data)}
 	root := filepath.Join(t.TempDir(), "catalog root")
 	var out, stderr bytes.Buffer
 	if code := runDistribution(context.Background(), []string{"update", "--root", root}, &out, &stderr, trust, source); code != 0 {
 		t.Fatalf("update: %s", &stderr)
 	}
+	published, err := distribution.Read(root, trust)
+	if err != nil {
+		t.Fatal(err)
+	}
 	return root, published
 }
 
-func TestPublishedSelectionCompilesOfflineAndBindsExactPublication(t *testing.T) {
+func TestPublishedPresetCompilesOfflineAndBindsExactPublication(t *testing.T) {
 	root, published := publishedRoot(t)
-	profile := sortedKeys(published.Document.Profiles)[0]
-	parent := filepath.Dir(root)
-	selectionPath := filepath.Join(parent, "selection.json")
-	lockPath := filepath.Join(parent, "execution.lock.json")
+	id := sortedKeys(published.Document.Presets)[0]
+	lockPath := filepath.Join(filepath.Dir(root), "execution.lock.json")
 	run := func(args ...string) string {
 		t.Helper()
-		var out, stderr bytes.Buffer
-		if code := Run(context.Background(), args, &out, &stderr); code != 0 {
-			t.Fatalf("%v: %s", args, &stderr)
+		var out, diagnostic bytes.Buffer
+		if code := compile(context.Background(), args, &out, &diagnostic, nil, publishedTrust(t)); code != 0 {
+			t.Fatalf("%v: %s", args, &diagnostic)
 		}
 		return out.String()
 	}
-	if out := run("catalog", "inspect", "--root", root, "--profile", profile, "--json"); !strings.Contains(out, published.SHA256) || !strings.Contains(out, profile) {
-		t.Fatalf("inspection omitted selection/identity: %s", out)
-	}
-	selectArgs := []string{"catalog", "select", "--root", root, "--profile", profile, "--out", selectionPath}
-	run(append(append([]string{}, selectArgs...), "--dry-run")...)
-	if _, err := os.Stat(selectionPath); !os.IsNotExist(err) {
-		t.Fatal("dry select wrote a selection")
-	}
-	run(selectArgs...)
-	before, err := os.ReadFile(selectionPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	selected, err := catalog.ParseSelection(before)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, binding := range published.Document.Profiles[profile].Bindings {
-		if got := selected.Templates[binding.Layout]; got != published.Document.Layouts[binding.Layout].Patches[0] {
-			t.Fatalf("catalog select did not freeze template default for %s: %q", binding.Layout, got)
-		}
-		if selected.ContextWindows[binding.Layout] != published.Document.Layouts[binding.Layout].ContextWindowTokens {
-			t.Fatal("catalog select did not freeze current context default")
-		}
-	}
-	builtinPath := filepath.Join(parent, "builtin-selection.json")
-	binding := published.Document.Profiles[profile].Bindings[0]
-	run("catalog", "select", "--root", root, "--profile", profile, "--out", builtinPath, "--template", binding.Layout+"=builtin", "--context", binding.Layout+"=16384")
-	builtinBytes, err := os.ReadFile(builtinPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	builtin, err := catalog.ParseSelection(builtinBytes)
-	if err != nil || builtin.Templates[binding.Layout] != "" {
-		t.Fatalf("builtin choice lost: %+v %v", builtin, err)
-	}
-	if builtin.ContextWindows[binding.Layout] != 16384 {
-		t.Fatal("explicit context choice lost")
-	}
-	customLock := filepath.Join(parent, "custom.execution.lock.json")
-	run("catalog", "compile", "--root", root, "--selection", builtinPath, "--target", "darwin/arm64", "--out", customLock)
-	customBytes, err := os.ReadFile(customLock)
-	if err != nil {
-		t.Fatal(err)
-	}
-	custom, err := catalog.ParseLock(customBytes)
-	if err != nil || custom.Records.Layouts[binding.Layout].ContextWindowTokens != 16384 {
-		t.Fatalf("compiled context override lost: %v", err)
-	}
-	if out := run(selectArgs...); !strings.Contains(out, "unchanged") {
-		t.Fatalf("selection replay: %s", out)
-	}
-	args := []string{"catalog", "compile", "--root", root, "--selection", selectionPath, "--target", "darwin/arm64", "--out", lockPath}
+	args := []string{"--root", root, "--preset", id, "--target", "darwin/arm64", "--out", lockPath}
 	run(append(append([]string{}, args...), "--dry-run")...)
 	if _, err := os.Stat(lockPath); !os.IsNotExist(err) {
 		t.Fatal("dry compile wrote a lock")
 	}
 	run(args...)
-	data, err := os.ReadFile(lockPath)
+	raw, err := os.ReadFile(lockPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	lock, err := catalog.ParseLock(data)
+	locked, err := catalog.ParseLock(raw)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if lock.SourceSnapshotSHA256 != published.SHA256 || lock.Selection.Profile != profile {
-		t.Fatal("compiled lock lost the authenticated source or explicit profile")
+	if locked.Preset != id || locked.SourceSnapshotSHA256 != published.SHA256 {
+		t.Fatal("preset lost")
 	}
 	if out := run(args...); !strings.Contains(out, "unchanged") {
-		t.Fatalf("compile replay: %s", out)
+		t.Fatal(out)
 	}
-	after, err := os.ReadFile(selectionPath)
-	if err != nil || !bytes.Equal(before, after) {
-		t.Fatal("compilation rewrote the user's selection")
-	}
-	// Different existing user content requires a new destination, even when it
-	// is valid catalog data. No implicit adoption or replacement is permitted.
-	if err := os.WriteFile(selectionPath, []byte("user-owned content"), 0o600); err != nil {
+	if err := os.WriteFile(lockPath, []byte("user-owned content"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	var out, stderr bytes.Buffer
-	if code := Run(context.Background(), selectArgs, &out, &stderr); code == 0 {
-		t.Fatal("selection replaced user content")
+	var out, diag bytes.Buffer
+	if code := compile(context.Background(), args, &out, &diag, nil, publishedTrust(t)); code == 0 {
+		t.Fatal("replaced user content")
 	}
-	after, _ = os.ReadFile(selectionPath)
+	after, _ := os.ReadFile(lockPath)
 	if string(after) != "user-owned content" {
-		t.Fatal("selection refusal changed user content")
-	}
-	unchanged, _ := os.ReadFile(lockPath)
-	if !bytes.Equal(data, unchanged) {
-		t.Fatal("selection changed an existing lock")
+		t.Fatal("failed compile changed output")
 	}
 }
 
 func TestCompileRequiresExactlyOneCatalogSource(t *testing.T) {
 	for _, sources := range [][]string{nil, {"--root", "missing", "--catalog", "missing"}} {
-		args := append([]string{"catalog", "compile", "--selection", "missing", "--target", "darwin/arm64", "--out", "missing"}, sources...)
+		args := append([]string{"catalog", "compile", "--preset", "missing", "--target", "darwin/arm64", "--out", "missing"}, sources...)
 		var out, stderr bytes.Buffer
 		if code := Run(context.Background(), args, &out, &stderr); code != 2 {
 			t.Fatalf("ambiguous source: exit=%d %s", code, &stderr)
 		}
 	}
+}
+
+func publishedTrust(t *testing.T) publication.TrustRoot {
+	t.Helper()
+	key := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{7}, ed25519.SeedSize))
+	trust, err := publication.NewTrustRoot(map[string]ed25519.PublicKey{"fixture": key.Public().(ed25519.PublicKey)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return trust
 }

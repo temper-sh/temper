@@ -74,7 +74,7 @@ func Predict(input Input) (Prediction, error) {
 	}
 	prediction := Prediction{
 		Status:        StatusNotApplicable,
-		Reason:        "mode has no preferred GPU-resident coder",
+		Reason:        "mode has no resident GPU foreground",
 		PhysicalMiB:   input.Machine.PhysicalMiB,
 		DeviceMiB:     input.Machine.DeviceMiB,
 		Utilization:   input.Utilization,

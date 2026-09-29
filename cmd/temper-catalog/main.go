@@ -1,5 +1,5 @@
 // Command temper-catalog is the retained release-side signer and verifier for
-// Temper's software catalog publications. It is deliberately separate from
+// Temper's catalog publications. It is deliberately separate from
 // the end-user temper binary and never discovers private key material.
 package main
 
@@ -15,8 +15,6 @@ import (
 	"strings"
 
 	"github.com/temper-sh/temper/internal/catalog/distribution"
-	"github.com/temper-sh/temper/internal/software/adapter"
-	"github.com/temper-sh/temper/internal/software/adapter/upstreamrelease"
 	"github.com/temper-sh/temper/internal/software/catalogsigning"
 	"github.com/temper-sh/temper/internal/software/catalogsource"
 	"github.com/temper-sh/temper/internal/software/catalogtrust"
@@ -59,7 +57,7 @@ func runVerifyPublication(arguments []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "temper-catalog verify-publication: %v\n", err)
 		return 1
 	}
-	fmt.Fprintf(stdout, "RESULT catalog-publication verified channel=%s sequence=%d sha256=%s profiles=%d\n", distribution.Channel, snapshot.Sequence, snapshot.SHA256, len(snapshot.Document.Profiles))
+	fmt.Fprintf(stdout, "RESULT catalog-publication verified channel=%s sequence=%d sha256=%s presets=%d\n", distribution.Channel, snapshot.Sequence, snapshot.SHA256, len(snapshot.Document.Presets))
 	return 0
 }
 
@@ -68,11 +66,7 @@ func newProductionTool() (catalogsigning.Tool, error) {
 	if err != nil {
 		return catalogsigning.Tool{}, err
 	}
-	capabilities, err := adapter.NewRegistry(upstreamrelease.Descriptor())
-	if err != nil {
-		return catalogsigning.Tool{}, err
-	}
-	return catalogsigning.New(catalogtrust.ProductionKeyID, trust, capabilities)
+	return catalogsigning.New(catalogtrust.ProductionKeyID, trust)
 }
 
 func runWithTool(ctx context.Context, arguments []string, stdin io.Reader, stdout, stderr io.Writer, tool catalogsigning.Tool) int {

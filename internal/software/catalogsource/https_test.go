@@ -17,7 +17,7 @@ func TestHTTPSReadsExactChannelAndCatalogArtifacts(t *testing.T) {
 	responses := map[string]string{
 		"https://catalog.example/temper/channels/stable/channel.yaml":           "channel\n",
 		"https://catalog.example/temper/channels/stable/channel.signature.yaml": "channel signature\n",
-		"https://assets.example/catalogs/sha256-abc/catalog.yaml":               "catalog\n",
+		"https://assets.example/catalogs/sha256-abc/catalog.json":               "catalog\n",
 		"https://assets.example/catalogs/sha256-abc/catalog.signature.yaml":     "catalog signature\n",
 	}
 	var requests []string
@@ -41,7 +41,7 @@ func TestHTTPSReadsExactChannelAndCatalogArtifacts(t *testing.T) {
 	if string(channel.Data) != "channel\n" || string(channel.Signature) != "channel signature\n" {
 		t.Fatalf("Channel() = data %q signature %q", channel.Data, channel.Signature)
 	}
-	catalog, err := source.Catalog(context.Background(), "https://assets.example/catalogs/sha256-abc/")
+	catalog, err := source.CatalogJSON(context.Background(), "https://assets.example/catalogs/sha256-abc/")
 	if err != nil {
 		t.Fatalf("Catalog() error = %v", err)
 	}
@@ -51,7 +51,7 @@ func TestHTTPSReadsExactChannelAndCatalogArtifacts(t *testing.T) {
 	wantRequests := []string{
 		"GET https://catalog.example/temper/channels/stable/channel.yaml",
 		"GET https://catalog.example/temper/channels/stable/channel.signature.yaml",
-		"GET https://assets.example/catalogs/sha256-abc/catalog.yaml",
+		"GET https://assets.example/catalogs/sha256-abc/catalog.json",
 		"GET https://assets.example/catalogs/sha256-abc/catalog.signature.yaml",
 	}
 	if strings.Join(requests, "\n") != strings.Join(wantRequests, "\n") {
@@ -121,7 +121,7 @@ func TestHTTPSRefusesInvalidRootsChannelsAndCatalogLocatorsBeforeReads(t *testin
 		"https://catalog.example/catalog",
 	}
 	for _, locator := range invalidCatalogs {
-		if _, err := source.Catalog(context.Background(), locator); err == nil {
+		if _, err := source.CatalogJSON(context.Background(), locator); err == nil {
 			t.Errorf("Catalog(%q) succeeded", locator)
 		}
 	}

@@ -1,7 +1,6 @@
 package setup_test
 
 import (
-	"bytes"
 	"context"
 	"os"
 	"path/filepath"
@@ -22,33 +21,6 @@ func composition(t *testing.T) setup.Configuration {
 	c.Layouts["writing"] = setup.Layout{Name: "Writing", Presets: []string{compactLayout}, Startup: []string{}, IdleSeconds: 60}
 	c.Layouts["review"] = setup.Layout{Name: "Review", Presets: []string{compactLayout}, Startup: []string{compactLayout}, Default: compactLayout, IdleSeconds: 60}
 	return c
-}
-
-func TestLegacyImportRetainsIssuedLocksAndDoesNotRewritePairs(t *testing.T) {
-	root := t.TempDir()
-	p := planFor(t, root, 32, compactLocal, compactUtility)
-	if _, err := setup.Save(context.Background(), p, false); err != nil {
-		t.Fatal(err)
-	}
-	path := filepath.Join(root, setup.ConfigurationDir, "local.execution.lock.json")
-	before, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	c, err := setup.ImportLegacy(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(c.Layouts) != 2 || c.Layouts["local"].Default == "" || c.Layouts["utility"].Default != "" {
-		t.Fatal("legacy meanings lost", c.Layouts)
-	}
-	if _, _, err = setup.SaveConfiguration(context.Background(), root, c, "", false); err != nil {
-		t.Fatal(err)
-	}
-	after, err := os.ReadFile(path)
-	if err != nil || !bytes.Equal(before, after) {
-		t.Fatal("import rewrote issued inputs", err)
-	}
 }
 
 func TestComposedAlternativesShareDiskWithoutImplyingConcurrentMemory(t *testing.T) {

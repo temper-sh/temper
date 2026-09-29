@@ -1,13 +1,9 @@
-// Package catalogcmd owns the additive local catalog and execution-lock CLI.
-// Runtime composes the existing effect primitives from a direct execution lock;
-// export remains a compatibility surface for issued clients.
+// Package catalogcmd owns the catalog and direct execution-lock CLI.
 package catalogcmd
 
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -25,6 +21,7 @@ import (
 	"github.com/temper-sh/temper/internal/catalog/distribution"
 	"github.com/temper-sh/temper/internal/software"
 	"github.com/temper-sh/temper/internal/software/adapter/upstreamrelease"
+	publication "github.com/temper-sh/temper/internal/software/catalogpublication"
 	"github.com/temper-sh/temper/internal/software/catalogsource"
 	"github.com/temper-sh/temper/internal/software/catalogtrust"
 )
@@ -37,7 +34,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	switch args[0] + " " + args[1] {
 	case "catalog describe":
 		return describe(ctx, args[2:], stdout, stderr)
-	case "catalog update", "catalog inspect", "catalog select", "catalog rollback":
+	case "catalog update", "catalog inspect", "catalog rollback":
 		trust, err := catalogtrust.Production()
 		if err != nil {
 			return failed(stderr, err)
@@ -52,21 +49,23 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		if err != nil {
 			return failed(stderr, err)
 		}
-		return compile(ctx, args[2:], stdout, stderr, reader)
-	case "execution export":
-		return export(ctx, args[2:], stdout, stderr)
+		trust, err := catalogtrust.Production()
+		if err != nil {
+			return failed(stderr, err)
+		}
+		return compile(ctx, args[2:], stdout, stderr, reader, trust)
 	default:
 		usage(stderr)
 		return 2
 	}
 }
 
-func compile(ctx context.Context, args []string, stdout, stderr io.Writer, reader upstreamrelease.ArtifactReader) int {
+func compile(ctx context.Context, args []string, stdout, stderr io.Writer, reader upstreamrelease.ArtifactReader, trust publication.TrustRoot) int {
 	f := flag.NewFlagSet("temper catalog compile", flag.ContinueOnError)
 	f.SetOutput(stderr)
 	catalogPath := f.String("catalog", "", "explicit local catalog snapshot")
 	root := f.String("root", "", "Temper root containing a verified active catalog")
-	selectionPath := f.String("selection", "", "user-owned selection")
+	preset := f.String("preset", "", "explicit catalog preset")
 	target := f.String("target", "", "portable target, currently darwin/arm64")
 	out := f.String("out", "", "new execution lock path")
 	dry := f.Bool("dry-run", false, "validate and report without writes")
@@ -75,27 +74,19 @@ func compile(ctx context.Context, args []string, stdout, stderr io.Writer, reade
 	if err := f.Parse(args); err != nil {
 		return 2
 	}
-	if f.NArg() != 0 || (*catalogPath == "") == (*root == "") || *selectionPath == "" || *out == "" || *target != "darwin/arm64" {
+	if f.NArg() != 0 || (*catalogPath == "") == (*root == "") || *preset == "" || *out == "" || *target != "darwin/arm64" {
 		usage(stderr)
 		return 2
 	}
-	d, publishedDigest, err := readCompileCatalog(*catalogPath, *root)
+	d, publishedDigest, err := readCompileCatalog(*catalogPath, *root, trust)
 	if err != nil {
 		return failed(stderr, err)
 	}
-	raw, err := os.ReadFile(*selectionPath)
+	d, err = catalog.ResolveSoftware(ctx, d, *preset, *softwareChoice, reader)
 	if err != nil {
 		return failed(stderr, err)
 	}
-	s, err := catalog.ParseSelection(raw)
-	if err != nil {
-		return failed(stderr, err)
-	}
-	d, err = catalog.ResolveSoftware(ctx, d, s, *softwareChoice, reader)
-	if err != nil {
-		return failed(stderr, err)
-	}
-	l, err := catalog.Compile(d, s, software.Target{OS: "darwin", Arch: "arm64"})
+	l, err := catalog.CompilePreset(d, *preset, "", 0, software.Target{OS: "darwin", Arch: "arm64"})
 	if err != nil {
 		return failed(stderr, err)
 	}
@@ -104,13 +95,13 @@ func compile(ctx context.Context, args []string, stdout, stderr io.Writer, reade
 		// resolution changes the software material inside the new lock.
 		l.SourceSnapshotSHA256 = publishedDigest
 	}
-	raw, err = catalog.MarshalLock(l)
+	raw, err := catalog.MarshalLock(l)
 	if err != nil {
 		return failed(stderr, err)
 	}
 	layouts := map[string]string{}
 	if *jsonOutput {
-		for id, layout := range l.Records.Layouts {
+		for id, layout := range l.Records.Presets {
 			template := ""
 			if len(layout.Patches) > 0 {
 				template = layout.Patches[0]
@@ -127,18 +118,14 @@ func compile(ctx context.Context, args []string, stdout, stderr io.Writer, reade
 		return failed(stderr, err)
 	}
 	if *jsonOutput {
-		return encode(stdout, stderr, map[string]any{"schema": "temper-catalog-compilation/v1", "profile": s.Profile, "execution_digest": l.Digests.Profile, "context_execution_digests": layouts, "path": *out, "changed": changed, "dry_run": *dry})
+		return encode(stdout, stderr, map[string]any{"schema": "temper-catalog-compilation/v1", "preset": *preset, "execution_digest": l.ExecutionDigest, "context_execution_digests": layouts, "path": *out, "changed": changed, "dry_run": *dry})
 	}
-	fmt.Fprintf(stdout, "RESULT catalog-compile %s profile=%s execution_digest=%s path=%q\n", status(changed, *dry), s.Profile, l.Digests.Profile, *out)
+	fmt.Fprintf(stdout, "RESULT catalog-compile %s preset=%s execution_digest=%s path=%q\n", status(changed, *dry), *preset, l.ExecutionDigest, *out)
 	return 0
 }
 
-func readCompileCatalog(path, root string) (catalog.Document, string, error) {
+func readCompileCatalog(path, root string, trust publication.TrustRoot) (catalog.Document, string, error) {
 	if root != "" {
-		trust, err := catalogtrust.Production()
-		if err != nil {
-			return catalog.Document{}, "", err
-		}
 		snapshot, err := distribution.Read(root, trust)
 		if err != nil {
 			return catalog.Document{}, "", err
@@ -151,56 +138,6 @@ func readCompileCatalog(path, root string) (catalog.Document, string, error) {
 	}
 	d, err := catalog.Parse(raw)
 	return d, "", err
-}
-
-func export(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	f := flag.NewFlagSet("temper execution export", flag.ContinueOnError)
-	f.SetOutput(stderr)
-	lockPath := f.String("lock", "", "self-contained execution lock")
-	out := f.String("out", "", "directory for derived primitive inputs")
-	dry := f.Bool("dry-run", false, "validate and report without writes")
-	jsonOutput := f.Bool("json", false, "print the execution-input contract as JSON")
-	if err := f.Parse(args); err != nil {
-		return 2
-	}
-	if f.NArg() != 0 || *lockPath == "" || *out == "" {
-		usage(stderr)
-		return 2
-	}
-	raw, err := os.ReadFile(*lockPath)
-	if err != nil {
-		return failed(stderr, err)
-	}
-	l, err := catalog.ParseLock(raw)
-	if err != nil {
-		return failed(stderr, err)
-	}
-	p, err := l.Projections()
-	if err != nil {
-		return failed(stderr, err)
-	}
-	files, err := p.Files()
-	if err != nil {
-		return failed(stderr, err)
-	}
-	changed, err := publishDirectory(ctx, *out, files, *dry)
-	if err != nil {
-		return failed(stderr, err)
-	}
-	if *jsonOutput {
-		inputs := map[string]map[string]string{}
-		for name, data := range files {
-			sum := sha256.Sum256(data)
-			inputs[name] = map[string]string{"path": filepath.Join(*out, name), "sha256": hex.EncodeToString(sum[:])}
-		}
-		lockSum := sha256.Sum256(raw)
-		return encode(stdout, stderr, map[string]any{"schema": "temper-execution-inputs/v1", "profile": l.Selection.Profile, "execution_digest": l.Digests.Profile, "lock_sha256": hex.EncodeToString(lockSum[:]), "layouts": sortedKeys(l.Records.Layouts), "inputs": inputs, "changed": changed, "dry_run": *dry})
-	}
-	fmt.Fprintf(stdout, "RESULT execution-export %s profile=%s execution_digest=%s path=%q\n", status(changed, *dry), l.Selection.Profile, l.Digests.Profile, *out)
-	for _, name := range sortedKeys(files) {
-		fmt.Fprintf(stdout, "INPUT %s\n", filepath.Join(*out, name))
-	}
-	return 0
 }
 
 func inspectFile(path string, data []byte) (bool, error) {
@@ -279,62 +216,6 @@ func publishFile(ctx context.Context, path string, data []byte, dry bool) (bool,
 	return true, nil
 }
 
-func publishDirectory(ctx context.Context, path string, files map[string][]byte, dry bool) (bool, error) {
-	info, err := os.Lstat(path)
-	absent := errors.Is(err, fs.ErrNotExist)
-	if err != nil && !absent {
-		return false, err
-	}
-	if !absent {
-		if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-			return false, errors.New("export destination must be a real directory")
-		}
-		entries, err := os.ReadDir(path)
-		if err != nil {
-			return false, err
-		}
-		for _, entry := range entries {
-			data, ok := files[entry.Name()]
-			if !ok {
-				return false, fmt.Errorf("export directory contains unrelated path %q", entry.Name())
-			}
-			if _, err := inspectFile(filepath.Join(path, entry.Name()), data); err != nil {
-				return false, err
-			}
-		}
-	}
-	changed := absent
-	if err := ctx.Err(); err != nil {
-		return false, err
-	}
-	if absent {
-		parent := filepath.Dir(path)
-		info, err := os.Lstat(parent)
-		if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-			return false, fmt.Errorf("output parent %q must already be a real directory", parent)
-		}
-		if dry {
-			return true, nil
-		}
-	}
-	if absent && !dry {
-		if err := os.Mkdir(path, 0o755); err != nil {
-			return false, err
-		}
-		if err := syncDirectory(filepath.Dir(path)); err != nil {
-			return true, err
-		}
-	}
-	for _, name := range sortedKeys(files) {
-		wrote, err := publishFile(ctx, filepath.Join(path, name), files[name], dry)
-		changed = changed || wrote
-		if err != nil {
-			return changed, err
-		}
-	}
-	return changed, nil
-}
-
 func syncDirectory(path string) error {
 	d, err := os.Open(path)
 	if err != nil {
@@ -376,12 +257,10 @@ func failed(w io.Writer, err error) int {
 func usage(w io.Writer) {
 	fmt.Fprintln(w, strings.TrimSpace(`Usage:
   temper catalog update --root ROOT [--dry-run] [--json]
-  temper catalog inspect --root ROOT [--profile ID] [--json]
-  temper catalog select --root ROOT --profile ID --out SELECTION [--template LAYOUT=PATCH|builtin] [--context LAYOUT=TOKENS] [--dry-run] [--json]
+  temper catalog inspect --root ROOT [--preset ID] [--json]
   temper catalog rollback --root ROOT --snapshot SHA256 [--dry-run] [--json]
-  temper catalog compile (--catalog FILE | --root ROOT) --selection FILE --target darwin/arm64 --out FILE [--software recorded|latest|tested] [--dry-run] [--json]
-  temper catalog describe --catalog FILE --artifact ID (--description TEXT | --description-file FILE) [--assessment-url URL] [--if-empty] [--dry-run]
-  temper execution export --lock FILE --out DIRECTORY [--dry-run] [--json]
+  temper catalog compile (--catalog FILE | --root ROOT) --preset ID --target darwin/arm64 --out FILE [--software recorded|latest|tested] [--dry-run] [--json]
+  temper catalog describe --catalog FILE --preset ID (--description TEXT | --description-file FILE) [--assessment-url URL] [--if-empty] [--dry-run]
 Only catalog update retrieves a publication. Compilation with latest/tested
 software resolves upstream releases explicitly. These commands do not install
 or start anything.`))

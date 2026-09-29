@@ -24,7 +24,6 @@ func describe(ctx context.Context, args []string, out, diagnostics io.Writer) in
 	f := flag.NewFlagSet("temper catalog describe", flag.ContinueOnError)
 	f.SetOutput(diagnostics)
 	path := f.String("catalog", "", "local authoring catalog to edit")
-	artifact := f.String("artifact", "", "model artifact ID")
 	preset := f.String("preset", "", "preset ID whose authored description is edited")
 	description := f.String("description", "", "your brief model assessment (empty clears it)")
 	descriptionFile := f.String("description-file", "", "UTF-8 file containing your assessment")
@@ -39,8 +38,8 @@ func describe(ctx context.Context, args []string, out, diagnostics io.Writer) in
 	}
 	explicit := map[string]bool{}
 	f.Visit(func(v *flag.Flag) { explicit[v.Name] = true })
-	if f.NArg() != 0 || *path == "" || (*artifact == "") == (*preset == "") || explicit["description"] == explicit["description-file"] {
-		return failed(diagnostics, errors.New("provide --catalog, --preset (or a historical --artifact) and exactly one of --description or --description-file"))
+	if f.NArg() != 0 || *path == "" || *preset == "" || explicit["description"] == explicit["description-file"] {
+		return failed(diagnostics, errors.New("provide --catalog, --preset and exactly one of --description or --description-file"))
 	}
 	if err := ctx.Err(); err != nil {
 		return failed(diagnostics, err)
@@ -71,36 +70,20 @@ func describe(ctx context.Context, args []string, out, diagnostics io.Writer) in
 	if explicit["assessment-url"] {
 		assessmentURL = link
 	}
-	edit := catalog.Describe
-	id := *artifact
-	if *preset != "" {
-		edit, id = catalog.DescribePreset, *preset
-	}
-	edited, err := edit(d, id, *description, assessmentURL, *ifEmpty)
+	id := *preset
+	edited, err := catalog.DescribePreset(d, id, *description, assessmentURL, *ifEmpty)
 	if err != nil {
 		return failed(diagnostics, err)
 	}
-	before, after := d.Artifacts[*artifact], edited.Artifacts[*artifact]
-	if *preset != "" {
-		before.Description, before.AssessmentURL = d.Layouts[id].Description, d.Layouts[id].AssessmentURL
-		after.Description, after.AssessmentURL = edited.Layouts[id].Description, edited.Layouts[id].AssessmentURL
-	}
+	before, after := d.Presets[id], edited.Presets[id]
 	changed := before.Description != after.Description || before.AssessmentURL != after.AssessmentURL
 	if changed && !*dry {
 		var candidate []byte
-		var header struct {
-			Schema string `yaml:"schema"`
-		}
-		_ = yaml.Unmarshal(raw, &header)
-		var source any = edited
-		if header.Schema == catalog.PresetCatalogSchema {
-			source = catalog.Authoring(edited)
-		}
 		if json.Valid(raw) {
-			candidate, err = json.MarshalIndent(source, "", "  ")
+			candidate, err = json.MarshalIndent(edited, "", "  ")
 			candidate = append(candidate, '\n')
 		} else {
-			candidate, err = yaml.Marshal(source)
+			candidate, err = yaml.Marshal(edited)
 		}
 		if err != nil {
 			return failed(diagnostics, err)
@@ -112,11 +95,7 @@ func describe(ctx context.Context, args []string, out, diagnostics io.Writer) in
 			return failed(diagnostics, err)
 		}
 	}
-	kind := "preset"
-	if *preset == "" {
-		kind = "artifact"
-	}
-	fmt.Fprintf(out, "RESULT catalog-describe %s %s=%s path=%q\n", status(changed, *dry), kind, id, *path)
+	fmt.Fprintf(out, "RESULT catalog-describe %s preset=%s path=%q\n", status(changed, *dry), id, *path)
 	fmt.Fprintln(out, after.Description)
 	if after.AssessmentURL != "" {
 		fmt.Fprintln(out, "Assessment: "+after.AssessmentURL)

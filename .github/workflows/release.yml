@@ -198,8 +198,8 @@ jobs:
 
           inputs_root="$(mktemp -d "$RUNNER_TEMP/temper-execution-smoke.XXXXXX")"
           "$binary" catalog compile \
-            --catalog catalog/qwen38-m5-refresh.json \
-            --selection catalog/qwen38-m5-refresh.selection.json \
+            --catalog catalog/guided-setup.json \
+            --preset qwen3.8-27b-q4xl-mtp \
             --target darwin/arm64 --out "$inputs_root/execution.lock.json"
           "$binary" execution inspect --lock "$inputs_root/execution.lock.json" \
             > "$inputs_root/inspection.json"
@@ -214,13 +214,16 @@ jobs:
               "$inputs_root/$operation.json"
             test ! -e "$inputs_root/installation"
           done
-          "$binary" execution export --lock "$inputs_root/execution.lock.json" \
-            --out "$inputs_root/inputs" --dry-run --json
-          test ! -e "$inputs_root/inputs"
-          "$binary" execution export --lock "$inputs_root/execution.lock.json" \
-            --out "$inputs_root/inputs" --json
-          "$binary" execution export --lock "$inputs_root/execution.lock.json" \
-            --out "$inputs_root/inputs" --json > "$inputs_root/replay.json"
+          "$binary" execution configure --lock "$inputs_root/execution.lock.json" \
+            --preset qwen3.8-27b-q4xl-mtp --context 32768 --max-output 4096 \
+            --out "$inputs_root/configured.lock.json" --dry-run
+          test ! -e "$inputs_root/configured.lock.json"
+          "$binary" execution configure --lock "$inputs_root/execution.lock.json" \
+            --preset qwen3.8-27b-q4xl-mtp --context 32768 --max-output 4096 \
+            --out "$inputs_root/configured.lock.json"
+          "$binary" execution configure --lock "$inputs_root/execution.lock.json" \
+            --preset qwen3.8-27b-q4xl-mtp --context 32768 --max-output 4096 \
+            --out "$inputs_root/configured.lock.json" > "$inputs_root/replay.json"
           test "$(jq -r '.changed' "$inputs_root/replay.json")" = "false"
 
       - name: Preserve verified archive

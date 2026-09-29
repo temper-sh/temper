@@ -30,11 +30,10 @@ declared network/provider boundary permits that read. Generation and
 installation remain separate verbs: once written, the exact lock is immutable
 input to `software install`.
 
-Each lock selection identifies catalog, experiment or execution-lock provenance.
-V2 catalog exports use their actual execution identity, not a fabricated experiment. A mixed lock can therefore reuse catalog-pinned base tools and
-carry a fresh experimental runtime without exempting the catalog selections
-from catalog validation. If an experiment changes a catalog package's closure,
-that complete selection is marked experimental.
+Each lock selection identifies experiment or execution-lock provenance.
+Preset compilation derives installer inputs with the current execution-lock
+identity. Experiments may supply exact software inputs directly. The retired
+software catalog and its provenance form are unsupported.
 
 Provenance records where the request came from. It is excluded from the software
 semantic digest, including each selection's provenance label. Runtime settings

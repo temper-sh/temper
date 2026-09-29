@@ -8,9 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/temper-sh/temper/internal/budget"
 	"github.com/temper-sh/temper/internal/catalog"
-	"github.com/temper-sh/temper/internal/check"
+
 	"github.com/temper-sh/temper/internal/manifest"
 	"github.com/temper-sh/temper/internal/render"
 	"github.com/temper-sh/temper/internal/render/engine"
@@ -30,17 +29,17 @@ func document() catalog.Document {
 		Artifacts: map[string]catalog.Artifact{"qwen-q4": {Repo: "example/Qwen", Revision: strings.Repeat("a", 40), Format: "gguf", License: "Apache-2.0", Files: []catalog.File{{Path: "model.gguf", Bytes: 17, SHA256: strings.Repeat("d", 64)}}}},
 		Patches:   map[string]catalog.Patch{"template": {Repo: "example/template", Revision: strings.Repeat("a", 40), License: "Apache-2.0", Files: []catalog.File{{Path: "chat.jinja", Bytes: 12, SHA256: strings.Repeat("e", 64)}}, CompatibleArtifacts: []string{"qwen-q4"}}},
 		Engines:   map[string]catalog.Engine{"llama-b10936": {Family: "llama-server", Adapter: "llama-server/v2", Supply: supply("llama-cpp"), Interfaces: []string{"chat-completions"}, Modalities: []string{"text"}}},
-		Layouts: map[string]catalog.Layout{"qwen-32k": {DisplayName: "Qwen source work", Artifact: "qwen-q4", Patches: []string{"template"}, Engine: "llama-b10936", Interface: "chat-completions", Modalities: []string{"text"}, ContextWindowTokens: 32768,
+		Presets: map[string]catalog.Preset{"qwen-32k": {DisplayName: "Qwen source work", Artifact: "qwen-q4", Patches: []string{"template"}, Engine: "llama-b10936", Interface: "chat-completions", Modalities: []string{"text"}, ContextWindowTokens: 32768,
 			RequestDefaults: catalog.RequestDefaults{MaxOutputTokens: 4096, Reasoning: "off", Sampling: engine.SamplingDefaults{Temperature: 0, TopK: 1, TopP: 1, MinP: 0, RepeatPenalty: 1, PresencePenalty: 0, Seed: 17}},
 			Speculation:     catalog.Speculation{Method: "mtp", Source: "embedded", MaxDraftTokens: 3},
 			EngineConfig: catalog.EngineConfig{LlamaConfig: catalog.LlamaConfig{Kind: "llama-server/v2", Parallel: 1, KVCache: "q8", FlashAttention: "on", BatchTokens: 512, MicrobatchTokens: 512, ContextCheckpoints: 16, PromptCacheRAMMiB: 0, GPULayers: 99,
 				Controls: engine.LlamaServerControls{CacheReuse: 16, ReasoningEffort: "medium", PreserveReasoning: true, ContextShift: false, CachePrompt: true, Fit: "off", Threads: 4, ThreadsBatch: 4, LoadMode: "mmap"}}}}},
-		Profiles: map[string]catalog.Profile{"local-qwen": {GPUMemoryUtilization: .85, Bindings: []catalog.Binding{{Layout: "qwen-32k", Route: "default", Residency: "resident", IdleTTLSeconds: 1800}}}}}
+	}
 }
 
 func compile(t *testing.T, d catalog.Document) catalog.Lock {
 	t.Helper()
-	l, err := catalog.Compile(d, catalog.Selection{Schema: catalog.SelectionSchema, Profile: "local-qwen"}, software.Target{OS: "darwin", Arch: "arm64"})
+	l, err := catalog.CompilePreset(d, "qwen-32k", "", 0, software.Target{OS: "darwin", Arch: "arm64"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,20 +58,20 @@ func TestRuntimeSettingsReuseInstalledSoftware(t *testing.T) {
 	}
 	for _, change := range []struct {
 		name  string
-		apply func(*catalog.Layout)
+		apply func(*catalog.Preset)
 	}{
-		{"batch size", func(l *catalog.Layout) { l.EngineConfig.BatchTokens = 1024 }},
-		{"context window", func(l *catalog.Layout) { l.ContextWindowTokens = 65536 }},
-		{"cache precision", func(l *catalog.Layout) { l.EngineConfig.KVCache = "q4" }},
-		{"speculation", func(l *catalog.Layout) { l.Speculation = catalog.Speculation{Method: "none", Source: "none"} }},
+		{"batch size", func(l *catalog.Preset) { l.EngineConfig.BatchTokens = 1024 }},
+		{"context window", func(l *catalog.Preset) { l.ContextWindowTokens = 65536 }},
+		{"cache precision", func(l *catalog.Preset) { l.EngineConfig.KVCache = "q4" }},
+		{"speculation", func(l *catalog.Preset) { l.Speculation = catalog.Speculation{Method: "none", Source: "none"} }},
 	} {
 		t.Run(change.name, func(t *testing.T) {
 			d := document()
-			layout := d.Layouts["qwen-32k"]
+			layout := d.Presets["qwen-32k"]
 			change.apply(&layout)
-			d.Layouts["qwen-32k"] = layout
+			d.Presets["qwen-32k"] = layout
 			candidate := compile(t, d)
-			if candidate.Digests.Profile == baseline.Digests.Profile {
+			if candidate.ExecutionDigest == baseline.ExecutionDigest {
 				t.Fatal("execution configuration did not change")
 			}
 			p, err := candidate.Projections()
@@ -105,18 +104,21 @@ func TestTemplateChoiceChangesOnlySelectedExecutionClosure(t *testing.T) {
 		{"embedded", ""},
 	} {
 		t.Run(choice.name, func(t *testing.T) {
-			selection := catalog.Selection{Schema: catalog.SelectionSchema, Profile: "local-qwen", Templates: map[string]string{"qwen-32k": choice.patch}}
-			selected, err := catalog.Compile(d, selection, target)
+			template := choice.patch
+			if template == "" {
+				template = "builtin"
+			}
+			selected, err := catalog.CompilePreset(d, "qwen-32k", template, 0, target)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if selected.SourceSnapshotSHA256 != baseline.SourceSnapshotSHA256 || selected.Digests.Profile == baseline.Digests.Profile {
-				t.Fatalf("source or execution identity wrong: source=%s execution=%s", selected.SourceSnapshotSHA256, selected.Digests.Profile)
+			if selected.SourceSnapshotSHA256 != baseline.SourceSnapshotSHA256 || selected.ExecutionDigest == baseline.ExecutionDigest {
+				t.Fatalf("source or execution identity wrong: source=%s execution=%s", selected.SourceSnapshotSHA256, selected.ExecutionDigest)
 			}
 			if !reflect.DeepEqual(selected.Records.Artifacts, baseline.Records.Artifacts) {
 				t.Fatal("template choice copied or changed model weights")
 			}
-			if len(selected.Records.Patches) != len(selected.Records.Layouts["qwen-32k"].Patches) {
+			if len(selected.Records.Patches) != len(selected.Records.Presets["qwen-32k"].Patches) {
 				t.Fatal("lock retained an unselected patch")
 			}
 			projection, err := selected.Projections()
@@ -130,122 +132,6 @@ func TestTemplateChoiceChangesOnlySelectedExecutionClosure(t *testing.T) {
 				t.Fatalf("artifact patch count = %d", got)
 			}
 		})
-	}
-}
-
-func TestResolvedTemplateChoiceSurvivesChangedCatalogDefault(t *testing.T) {
-	d := document()
-	alt := d.Patches["template"]
-	alt.Files = []catalog.File{{Path: "alternative.jinja", Bytes: 14, SHA256: strings.Repeat("f", 64)}}
-	d.Patches["alternative"] = alt
-	original := catalog.Selection{Schema: catalog.SelectionSchema, Profile: "local-qwen"}
-	resolved, err := catalog.ResolveSelection(d, original)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if original.Templates != nil || resolved.Templates["qwen-32k"] != "template" {
-		t.Fatalf("resolution mutated or failed to freeze default: %+v %+v", original, resolved)
-	}
-	before, err := catalog.Compile(d, resolved, software.Target{OS: "darwin", Arch: "arm64"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	layout := d.Layouts["qwen-32k"]
-	layout.Patches = []string{"alternative"}
-	d.Layouts["qwen-32k"] = layout
-	after, err := catalog.Compile(d, resolved, software.Target{OS: "darwin", Arch: "arm64"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if before.Digests.Profile != after.Digests.Profile || before.SourceSnapshotSHA256 == after.SourceSnapshotSHA256 {
-		t.Fatal("changed catalog default changed frozen execution or failed to change source identity")
-	}
-	for _, templates := range []map[string]string{{"unknown": "template"}, {"qwen-32k": "unknown"}} {
-		_, err := catalog.ResolveSelection(d, catalog.Selection{Schema: catalog.SelectionSchema, Profile: "local-qwen", Templates: templates})
-		if err == nil {
-			t.Fatalf("accepted invalid template choice: %+v", templates)
-		}
-	}
-	incompatible := d.Patches["alternative"]
-	incompatible.CompatibleArtifacts = []string{"other-artifact"}
-	d.Patches["alternative"] = incompatible
-	if _, err := catalog.ResolveSelection(d, catalog.Selection{Schema: catalog.SelectionSchema, Profile: "local-qwen", Templates: map[string]string{"qwen-32k": "alternative"}}); err == nil {
-		t.Fatal("accepted template incompatible with the selected model artifact")
-	}
-}
-
-func TestExternalForegroundKeepsOnlyHelperRoutes(t *testing.T) {
-	d := document()
-	a := d.Artifacts["qwen-q4"]
-	a.Files[0].Bytes = 42 // size cannot classify a chat model's foreground role
-	d.Artifacts["qwen-q4"] = a
-	_ = compile(t, d) // a compact chat model remains a valid local primary
-	p := d.Profiles["local-qwen"]
-	p.Foreground = "external"
-	p.Bindings[0].Route = "available"
-	d.Profiles["local-qwen"] = p
-	lock := compile(t, d)
-	projection, err := lock.Projections()
-	if err != nil {
-		t.Fatal(err)
-	}
-	mode := projection.Manifest.Modes["local-qwen"]
-	if !mode.ExternalForeground || mode.Foreground != "" {
-		t.Fatalf("external foreground projection = %+v", mode)
-	}
-	p.Bindings[0].Route = "default"
-	d.Profiles["local-qwen"] = p
-	if err := d.Validate(); err == nil {
-		t.Fatal("external profile accepted a local default")
-	}
-}
-
-func TestLayoutNamedExternalKeepsLocalDefaultRoute(t *testing.T) {
-	d := document()
-	layout := d.Layouts["qwen-32k"]
-	delete(d.Layouts, "qwen-32k")
-	d.Layouts["external"] = layout
-	profile := d.Profiles["local-qwen"]
-	profile.Bindings[0].Layout = "external"
-	d.Profiles["local-qwen"] = profile
-	lock := compile(t, d)
-	projection, err := lock.Projections()
-	if err != nil {
-		t.Fatal(err)
-	}
-	mode := projection.Manifest.Modes["local-qwen"]
-	if mode.Foreground != "external" || mode.ExternalForeground || projection.Manifest.ForegroundLayout(mode) != "external" {
-		t.Fatalf("layout named external lost local foreground: %+v", mode)
-	}
-	prediction, err := check.PredictBudget(projection.Manifest, mode,
-		budget.Machine{PhysicalMiB: 32768, DeviceMiB: 24576, WiredLimitMiB: 24576, WiredSource: budget.WiredSourcePredicted},
-		map[string]int64{"external": 17 * 1024 * 1024})
-	if err != nil || prediction.Holder != "external" {
-		t.Fatalf("local layout named external lost resident budget holder: %+v %v", prediction, err)
-	}
-	mode.Harnesses = []string{"pi"}
-	projection.Manifest.Modes["local-qwen"] = mode
-	bundle, err := render.Build(render.Inputs{Manifest: projection.Manifest, Lock: projection.Artifacts, Mode: "local-qwen", Root: "/isolated", PiSettingsBase: []byte(`{"defaultModel":"provider/main","compaction":{"enabled":true}}`)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var routerFound, piFound bool
-	for _, artifact := range bundle.Artifacts {
-		switch artifact.Path {
-		case "llama-swap/config.yaml":
-			routerFound = true
-			if !strings.Contains(string(artifact.Data), "routing:\n  router:") {
-				t.Fatalf("local layout named external lost default router:\n%s", artifact.Data)
-			}
-		case "pi/settings.json":
-			piFound = true
-			if !strings.Contains(string(artifact.Data), `"defaultModel": "external"`) || !strings.Contains(string(artifact.Data), `"reserveTokens": 4096`) {
-				t.Fatalf("local layout named external lost Pi defaults:\n%s", artifact.Data)
-			}
-		}
-	}
-	if !routerFound || !piFound {
-		t.Fatalf("local layout named external missing render artifacts: %+v", bundle.Artifacts)
 	}
 }
 
@@ -283,7 +169,7 @@ func TestCompiledLockRunsWithoutSourceCatalog(t *testing.T) {
 	if len(software.Selections) != 2 || software.TargetMode != "compatible" {
 		t.Fatalf("incomplete portable software projection: %+v", software)
 	}
-	bundle, err := render.Build(render.Inputs{Manifest: p.Manifest, Lock: p.Artifacts, Mode: l.Selection.Profile, Root: "/isolated root"})
+	bundle, err := render.Build(render.Inputs{Manifest: p.Manifest, Lock: p.Artifacts, Mode: l.Preset, Root: "/isolated root"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -325,9 +211,9 @@ func TestDerivedManifestRejectsInvalidControlsBeforeRuntimeEffects(t *testing.T)
 
 func TestQ4KVCacheSurvivesLockAndManifestRoundTrip(t *testing.T) {
 	d := document()
-	layout := d.Layouts["qwen-32k"]
+	layout := d.Presets["qwen-32k"]
 	layout.EngineConfig.KVCache = "q4"
-	d.Layouts["qwen-32k"] = layout
+	d.Presets["qwen-32k"] = layout
 	locked := compile(t, d)
 	raw, err := catalog.MarshalLock(locked)
 	if err != nil {
@@ -349,7 +235,7 @@ func TestQ4KVCacheSurvivesLockAndManifestRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bundle, err := render.Build(render.Inputs{Manifest: parsed, Lock: projection.Artifacts, Mode: locked.Selection.Profile, Root: "/isolated root"})
+	bundle, err := render.Build(render.Inputs{Manifest: parsed, Lock: projection.Artifacts, Mode: locked.Preset, Root: "/isolated root"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -376,9 +262,9 @@ func TestCheckpointSpacingSurvivesLockExportAndRendering(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			d := document()
-			layout := d.Layouts["qwen-32k"]
+			layout := d.Presets["qwen-32k"]
 			layout.EngineConfig.Controls.CheckpointMinStep = test.spacing
-			d.Layouts["qwen-32k"] = layout
+			d.Presets["qwen-32k"] = layout
 			raw, err := catalog.MarshalLock(compile(t, d))
 			if err != nil {
 				t.Fatal(err)
@@ -403,7 +289,7 @@ func TestCheckpointSpacingSurvivesLockExportAndRendering(t *testing.T) {
 			if !reflect.DeepEqual(got, test.spacing) {
 				t.Fatalf("checkpoint spacing lost or changed during export: %v", got)
 			}
-			bundle, err := render.Build(render.Inputs{Manifest: parsed, Lock: projection.Artifacts, Mode: locked.Selection.Profile, Root: "/isolated root"})
+			bundle, err := render.Build(render.Inputs{Manifest: parsed, Lock: projection.Artifacts, Mode: locked.Preset, Root: "/isolated root"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -427,10 +313,10 @@ func TestCheckpointSpacingSurvivesLockExportAndRendering(t *testing.T) {
 func TestNegativeCheckpointSpacingIsRejectedBeforeEffects(t *testing.T) {
 	negative := -1
 	d := document()
-	layout := d.Layouts["qwen-32k"]
+	layout := d.Presets["qwen-32k"]
 	layout.EngineConfig.Controls.CheckpointMinStep = &negative
-	d.Layouts["qwen-32k"] = layout
-	_, err := catalog.Compile(d, catalog.Selection{Schema: catalog.SelectionSchema, Profile: "local-qwen"}, software.Target{OS: "darwin", Arch: "arm64"})
+	d.Presets["qwen-32k"] = layout
+	_, err := catalog.CompilePreset(d, "qwen-32k", "", 0, software.Target{OS: "darwin", Arch: "arm64"})
 	if err == nil || !strings.Contains(err.Error(), "checkpoint spacing") {
 		t.Fatalf("catalog accepted negative checkpoint spacing: %v", err)
 	}
@@ -467,25 +353,20 @@ func TestDigestChangesFollowOwnedFacts(t *testing.T) {
 			d.Patches["template"] = p
 		}, true, true, true},
 		{"sampling", func(d *catalog.Document) {
-			l := d.Layouts["qwen-32k"]
+			l := d.Presets["qwen-32k"]
 			l.RequestDefaults.Sampling.Temperature = .7
-			d.Layouts["qwen-32k"] = l
+			d.Presets["qwen-32k"] = l
 		}, false, true, true},
 		{"checkpoint spacing", func(d *catalog.Document) {
 			spacing := 1024
-			l := d.Layouts["qwen-32k"]
+			l := d.Presets["qwen-32k"]
 			l.EngineConfig.Controls.CheckpointMinStep = &spacing
-			d.Layouts["qwen-32k"] = l
+			d.Presets["qwen-32k"] = l
 		}, false, true, true},
-		{"profile TTL", func(d *catalog.Document) {
-			p := d.Profiles["local-qwen"]
-			p.Bindings[0].IdleTTLSeconds = 60
-			d.Profiles["local-qwen"] = p
-		}, false, false, true},
 		{"display name", func(d *catalog.Document) {
-			l := d.Layouts["qwen-32k"]
+			l := d.Presets["qwen-32k"]
 			l.DisplayName = "Updated description"
-			d.Layouts["qwen-32k"] = l
+			d.Presets["qwen-32k"] = l
 		}, false, false, false},
 	}
 	for _, tt := range tests {
@@ -496,7 +377,7 @@ func TestDigestChangesFollowOwnedFacts(t *testing.T) {
 			if got.SourceSnapshotSHA256 == base.SourceSnapshotSHA256 {
 				t.Error("record identity did not change")
 			}
-			if changed := got.Digests.Profile != base.Digests.Profile; changed != tt.profile {
+			if changed := got.ExecutionDigest != base.ExecutionDigest; changed != tt.profile {
 				t.Errorf("profile changed=%v", changed)
 			}
 		})
@@ -509,9 +390,9 @@ func TestRejectsUnexecutableGraphs(t *testing.T) {
 		change func(*catalog.Document)
 	}{
 		{"unknown artifact", func(d *catalog.Document) {
-			l := d.Layouts["qwen-32k"]
+			l := d.Presets["qwen-32k"]
 			l.Artifact = "absent"
-			d.Layouts["qwen-32k"] = l
+			d.Presets["qwen-32k"] = l
 		}},
 		{"incompatible patch", func(d *catalog.Document) {
 			p := d.Patches["template"]
@@ -545,16 +426,16 @@ func TestRejectsUnexecutableGraphs(t *testing.T) {
 			d.Artifacts["qwen-q4"] = a
 		}},
 		{"invalid sampling", func(d *catalog.Document) {
-			l := d.Layouts["qwen-32k"]
+			l := d.Presets["qwen-32k"]
 			l.RequestDefaults.Sampling.TopP = 2
-			d.Layouts["qwen-32k"] = l
+			d.Presets["qwen-32k"] = l
 		}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			d := document()
 			tt.change(&d)
-			if _, err := catalog.Compile(d, catalog.Selection{Schema: catalog.SelectionSchema, Profile: "local-qwen"}, software.Target{OS: "darwin", Arch: "arm64"}); err == nil {
+			if _, err := catalog.CompilePreset(d, "qwen-32k", "", 0, software.Target{OS: "darwin", Arch: "arm64"}); err == nil {
 				t.Fatal("accepted unexecutable graph")
 			}
 		})
@@ -568,26 +449,20 @@ func TestStrictDecodingAndLockTamper(t *testing.T) {
 		t.Fatal("accepted raw flags")
 	}
 	l := compile(t, document())
-	l.Digests.Profile = strings.Repeat("f", 64)
+	l.ExecutionDigest = strings.Repeat("f", 64)
 	raw, _ = json.Marshal(l)
 	if _, err := catalog.ParseLock(raw); err == nil {
 		t.Fatal("accepted altered execution digest")
-	}
-	if _, err := catalog.ParseSelection([]byte("schema: temper-selection/v1\nprofile: local-qwen\nprofile: overwritten\n")); err == nil {
-		t.Fatal("accepted duplicate selection key")
-	}
-	if _, err := catalog.ParseSelection([]byte("schema: temper-selection/v1\nprofile: local-qwen\ntools: [unrequested]\n")); err == nil {
-		t.Fatal("accepted unsupported optional tool")
 	}
 }
 
 func TestUnselectedLayoutDoesNotEnterLock(t *testing.T) {
 	d := document()
-	l := d.Layouts["qwen-32k"]
+	l := d.Presets["qwen-32k"]
 	l.DisplayName = "Unselected alternative"
-	d.Layouts["alternative"] = l
+	d.Presets["alternative"] = l
 	got := compile(t, d)
-	if len(got.Records.Layouts) != 1 {
+	if len(got.Records.Presets) != 1 {
 		t.Fatal("lock retained unselected layout")
 	}
 	if err := got.Validate(); err != nil {

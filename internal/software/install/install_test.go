@@ -12,7 +12,7 @@ import (
 
 	"github.com/temper-sh/temper/internal/software"
 	"github.com/temper-sh/temper/internal/software/adapter"
-	"github.com/temper-sh/temper/internal/software/catalog"
+
 	installverb "github.com/temper-sh/temper/internal/software/install"
 	"github.com/temper-sh/temper/internal/software/installplan"
 	softwarelock "github.com/temper-sh/temper/internal/software/lockfile"
@@ -307,7 +307,7 @@ type fakeAdapter struct {
 func newFakeAdapter(id, method string, model installplan.EffectModel) *fakeAdapter {
 	return &fakeAdapter{
 		descriptor: adapter.Descriptor{
-			ID: id, Method: method, Protocol: catalog.AdapterProtocolV1, EffectModel: string(model),
+			ID: id, Method: method, Protocol: adapter.Protocol, EffectModel: string(model),
 			Targets: []software.Target{{OS: "darwin", Arch: "arm64"}},
 		},
 		observed: map[string]installplan.ObservedUnit{},

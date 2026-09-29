@@ -21,7 +21,7 @@ func TestRecommendedPresetsHaveManualCopyWithoutChangingExecution(t *testing.T) 
 		t.Fatal(err)
 	}
 	count := 0
-	for id, p := range d.Layouts {
+	for id, p := range d.Presets {
 		if !p.Recommended {
 			continue
 		}
@@ -41,7 +41,7 @@ func TestRecommendedPresetsHaveManualCopyWithoutChangingExecution(t *testing.T) 
 		if err != nil {
 			t.Fatal(err)
 		}
-		if before.Digests.Profile != after.Digests.Profile {
+		if before.ExecutionDigest != after.ExecutionDigest {
 			t.Fatal("editorial change changed execution")
 		}
 		if _, err := catalog.DescribePreset(d, id, " \n ", nil, false); err == nil {
@@ -52,15 +52,15 @@ func TestRecommendedPresetsHaveManualCopyWithoutChangingExecution(t *testing.T) 
 		t.Fatalf("recommendations = %d", count)
 	}
 	var roster []string
-	for _, id := range d.LayoutOrder {
-		if d.Layouts[id].Recommended {
+	for _, id := range d.PresetOrder {
+		if d.Presets[id].Recommended {
 			roster = append(roster, id)
 		}
 	}
 	if !slices.Equal(roster, []string{"qwen3.8-27b-q4xl-splash", "muse-glimmer-30b-q4xl-llama", "gemma-4-26b-a4b-qat-ud-q4-k-xl-llama", "gemma-4-31b-qat-ud-q4-k-xl-llama", "qwen3.8-27b-q4xl-mtp"}) {
 		t.Fatal("owner's recommendation roster/order changed", roster)
 	}
-	current, err := json.Marshal(catalog.Authoring(d))
+	current, err := json.Marshal(d)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func TestRecommendedPresetsHaveManualCopyWithoutChangingExecution(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(reloaded.Layouts) != len(d.Layouts) {
+	if len(reloaded.Presets) != len(d.Presets) {
 		t.Fatal("All lost nonrecommended presets")
 	}
 }
@@ -82,7 +82,7 @@ func TestGuidedPresetsDefaultToMediumThinking(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for id, p := range d.Layouts {
+	for id, p := range d.Presets {
 		t.Run(id, func(t *testing.T) {
 			lock, err := catalog.CompilePreset(d, id, "", 0, software.Target{OS: "darwin", Arch: "arm64"})
 			if err != nil {
@@ -111,9 +111,9 @@ func TestGuidedPresetsDefaultToMediumThinking(t *testing.T) {
 	if err != nil || current == historical {
 		t.Fatal("changed thinking default inherited historical evidence", current, err)
 	}
-	old := d.Layouts[id]
+	old := d.Presets[id]
 	old.RequestDefaults.Reasoning = "off"
-	d.Layouts[id] = old
+	d.Presets[id] = old
 	restored, err := catalog.ContextExecutionSHA256(d, id, "", 40960)
 	if err != nil || restored != historical {
 		t.Fatal("change went beyond the new thinking default", restored, err)

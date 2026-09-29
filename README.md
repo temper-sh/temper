@@ -5,7 +5,7 @@ so an experiment runs the model files, serving software, and settings it claims
 to run.
 
 **Alpha (September 2026):** Temper is usable today by collaborators with a
-reviewed configuration file, catalog profile or Field Kit experiment. The
+reviewed configuration file, catalog preset or Field Kit experiment. The
 guided setup wizard is still in development and independent Field Kit
 observations are pending.
 
@@ -78,10 +78,10 @@ steps.
 
 ### Choose a catalog configuration
 
-Temper alpha.10 adds a signed catalog with one Qwen3.8 27B profile for macOS
-ARM64. You can inspect its files and settings, select it explicitly, and compile
-an exact execution lock before installing anything.
-[Browse and use the catalog](docs/CATALOG.md).
+The current source compiles catalog presets to exact execution-lock v3 inputs.
+[Browse and use the catalog](docs/CATALOG.md). Use the local authoring catalog
+until its v3 signed publication is released; the existing alpha publication
+still serves older clients.
 
 ### Preview guided setup from source
 
@@ -119,7 +119,7 @@ It does not change the running legacy service.
 editing, offline resume, activation and recovery. The
 [authoring catalog guide](catalog/README.md) links measured configurations and
 limitations. Its five recommendations are unpublished; the released signed
-catalog retains its original configuration. Memory figures are predictions
+catalog retains its original configuration for older clients. Memory figures are predictions
 unless tied to exact applicable evidence; 8/16 GiB machine fit remains
 unmeasured.
 
@@ -132,7 +132,7 @@ that shared cache. [Cache and support-tool behavior](docs/contracts/fetch.md#sha
 Temper treats a local-AI setup as a reproducible system rather than a loose
 collection of model names and command-line flags:
 
-1. A user-owned manifest or catalog Selection records the chosen configuration.
+1. A user-owned configuration stores selected preset locks and named layouts.
 2. Lock files identify the exact model, template, engine, Python runtime, and
    dependency artifacts needed for that configuration.
 3. Temper verifies those artifacts, predicts whether the models kept in memory
@@ -150,15 +150,15 @@ The current release target and safety boundary are deliberately narrow:
 | Downloads | Model fetches and runtime installation are explicit and may use many gigabytes. Dry runs do not mutate. |
 | Privacy | No telemetry or background updater. Model serving listens only on the Mac itself; retained evidence stays local unless a person chooses to export it. |
 | System changes | No `sudo`. Temper owns files beneath an explicit root; source preparation also uses the shared HF/uv caches for model downloads and their support tool. It does not silently take over an existing service. |
-| Configuration | User choices are never mechanically overwritten. Guided setup saves Selection/Execution Lock pairs; the explicit manifest workflow remains available. |
+| Configuration | User choices are never mechanically overwritten. Setup saves exact preset locks and layouts in configuration.json; manifest v2 remains available. |
 | Cleanup | Temper can remove its receipted private installations. It never removes system-managed packages, including packages it requested. |
 
 The path exercised with a real model currently uses `llama-server`.
 Alternative serving engines—the programs that load a model and answer
 requests—can be selected for Rapid-MLX, MLX-VLM, and vLLM-Metal experiments,
 but they remain experimental until their exact dependencies and model families
-are qualified. In particular, vLLM-Metal is not yet installable through
-Temper's managed supply path. See the
+are qualified. The experimental Qwen catalog includes exact Python closures for
+Rapid-MLX and vLLM-Metal. See the
 [engine and manifest design](docs/design/manifest-schema.md) for the exact
 status and refusal rules.
 
@@ -185,7 +185,7 @@ Its experiments require an explicit experiment plan and machine-owner
 consent. No question has completed external-machine qualification yet.
 
 The [direct execution commands](docs/contracts/execution-runtime.md) consume
-locks without client-managed compatibility files and return supervised process
+execution-lock v3 inputs directly and return supervised process
 identities and shutdown results. Field Kit's revision 2 study pins the published
 alpha.9 host; catalog updates do not change its frozen experiment inputs.
 

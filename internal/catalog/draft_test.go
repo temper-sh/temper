@@ -13,9 +13,9 @@ import (
 func externalDraftCatalog(method string) catalog.Document {
 	d := document()
 	d.Artifacts["assistant"] = catalog.Artifact{Repo: "example/Assistant", Revision: strings.Repeat("f", 40), Format: "gguf", License: "Apache-2.0", Files: []catalog.File{{Path: "draft/model.gguf", Bytes: 11, SHA256: strings.Repeat("a", 64)}}}
-	l := d.Layouts["qwen-32k"]
+	l := d.Presets["qwen-32k"]
 	l.Speculation = catalog.Speculation{Method: method, Source: "artifact", DraftArtifact: "assistant", MaxDraftTokens: 3}
-	d.Layouts["qwen-32k"] = l
+	d.Presets["qwen-32k"] = l
 	return d
 }
 
@@ -41,7 +41,7 @@ func TestLlamaExternalDraftSurvivesCompilationAndRendersTheLockedFile(t *testing
 			if draft == nil || draft.Repo != "example/Assistant" || draft.Files[0].Name != "draft/model.gguf" {
 				t.Fatal("draft identity lost in artifact projection")
 			}
-			bundle, err := render.Build(render.Inputs{Manifest: p.Manifest, Lock: p.Artifacts, Mode: locked.Selection.Profile, Root: "/temper path"})
+			bundle, err := render.Build(render.Inputs{Manifest: p.Manifest, Lock: p.Artifacts, Mode: locked.Preset, Root: "/temper path"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -80,7 +80,7 @@ func TestExternalDraftUpdateChangesExecutionWithoutChangingTargetOrSoftware(t *t
 		t.Fatal(err)
 	}
 	e1, e2 := p1.Artifacts.Entries["qwen-32k"], p2.Artifacts.Entries["qwen-32k"]
-	if before.Digests.Profile == after.Digests.Profile || e1.Digest() == e2.Digest() || e1.Files[0] != e2.Files[0] {
+	if before.ExecutionDigest == after.ExecutionDigest || e1.Digest() == e2.Digest() || e1.Files[0] != e2.Files[0] {
 		t.Fatal("draft identity was lost or target changed")
 	}
 	s1, _ := p1.Software.SemanticDigest()
@@ -93,23 +93,23 @@ func TestExternalDraftUpdateChangesExecutionWithoutChangingTargetOrSoftware(t *t
 func TestExternalDraftRefusesMissingOrIncompatibleMaterial(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
-		change func(*catalog.Document, *catalog.Layout)
+		change func(*catalog.Document, *catalog.Preset)
 	}{
-		{"missing draft", func(d *catalog.Document, l *catalog.Layout) { delete(d.Artifacts, "assistant") }},
-		{"missing selection", func(d *catalog.Document, l *catalog.Layout) { l.Speculation.DraftArtifact = "" }},
-		{"embedded dflash", func(d *catalog.Document, l *catalog.Layout) { l.Speculation.Source = "embedded" }},
-		{"none with draft", func(d *catalog.Document, l *catalog.Layout) { l.Speculation.Method = "none" }},
-		{"no block", func(d *catalog.Document, l *catalog.Layout) { l.Speculation.MaxDraftTokens = 0 }},
-		{"oversized block", func(d *catalog.Document, l *catalog.Layout) { l.Speculation.MaxDraftTokens = 16 }},
-		{"wrong format", func(d *catalog.Document, l *catalog.Layout) {
+		{"missing draft", func(d *catalog.Document, l *catalog.Preset) { delete(d.Artifacts, "assistant") }},
+		{"missing selection", func(d *catalog.Document, l *catalog.Preset) { l.Speculation.DraftArtifact = "" }},
+		{"embedded dflash", func(d *catalog.Document, l *catalog.Preset) { l.Speculation.Source = "embedded" }},
+		{"none with draft", func(d *catalog.Document, l *catalog.Preset) { l.Speculation.Method = "none" }},
+		{"no block", func(d *catalog.Document, l *catalog.Preset) { l.Speculation.MaxDraftTokens = 0 }},
+		{"oversized block", func(d *catalog.Document, l *catalog.Preset) { l.Speculation.MaxDraftTokens = 16 }},
+		{"wrong format", func(d *catalog.Document, l *catalog.Preset) {
 			d.Artifacts["assistant"] = catalog.Artifact{Repo: "example/Assistant", Revision: strings.Repeat("f", 40), Format: "safetensors", License: "Apache-2.0", Files: []catalog.File{{Path: "config.json", Bytes: 1, SHA256: strings.Repeat("a", 64)}, {Path: "model.safetensors", Bytes: 11, SHA256: strings.Repeat("b", 64)}}}
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			d := externalDraftCatalog("dflash2")
-			l := d.Layouts["qwen-32k"]
+			l := d.Presets["qwen-32k"]
 			tc.change(&d, &l)
-			d.Layouts["qwen-32k"] = l
+			d.Presets["qwen-32k"] = l
 			if err := d.Validate(); err == nil {
 				t.Fatal("invalid draft composition accepted")
 			}

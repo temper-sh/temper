@@ -16,15 +16,12 @@ import (
 	"time"
 
 	"github.com/temper-sh/temper/internal/software"
-	"github.com/temper-sh/temper/internal/software/catalog"
-	"github.com/temper-sh/temper/internal/software/policy"
 	"gopkg.in/yaml.v3"
 )
 
 const SchemaV1 = "temper-software-lock/v1"
 
 const (
-	ProvenanceCatalog    = "catalog"
 	ProvenanceExperiment = "experiment"
 	ProvenanceExecution  = "execution"
 )
@@ -47,25 +44,16 @@ type Document struct {
 	Units      map[string]Unit           `yaml:"units"`
 }
 
-// Provenance records immutable inputs that authorized resolution. Catalog and
-// experiment are independent: a reviewed experiment may use a catalog and add
-// fresh software, while a direct experiment lock may have no catalog at all.
+// Provenance identifies the exact experiment or compiled preset that owns these inputs.
 type Provenance struct {
-	Catalog    *CatalogIdentity    `yaml:"catalog,omitempty" json:"catalog,omitempty"`
 	Experiment *ExperimentIdentity `yaml:"experiment,omitempty" json:"experiment,omitempty"`
 	Execution  *ExecutionIdentity  `yaml:"execution,omitempty" json:"execution,omitempty"`
 }
 
 type ExecutionIdentity struct {
-	Schema  string `yaml:"schema" json:"schema"`
-	Profile string `yaml:"profile" json:"profile"`
-	SHA256  string `yaml:"sha256" json:"sha256"`
-}
-
-type CatalogIdentity struct {
-	Schema   string `yaml:"schema" json:"schema"`
-	Sequence uint64 `yaml:"sequence" json:"sequence"`
-	SHA256   string `yaml:"sha256" json:"sha256"`
+	Schema string `yaml:"schema" json:"schema"`
+	Preset string `yaml:"preset" json:"preset"`
+	SHA256 string `yaml:"sha256" json:"sha256"`
 }
 
 type ExperimentIdentity struct {
@@ -152,23 +140,12 @@ func (d Document) Validate() error {
 	if d.Schema != SchemaV1 {
 		problem("schema is %q, want %q", d.Schema, SchemaV1)
 	}
-	if d.Provenance.Catalog == nil && d.Provenance.Experiment == nil && d.Provenance.Execution == nil {
-		problem("provenance must identify a catalog, experiment or execution lock")
+	if d.Provenance.Experiment == nil && d.Provenance.Execution == nil {
+		problem("provenance must identify an experiment or execution lock")
 	}
 	if identity := d.Provenance.Execution; identity != nil {
-		if identity.Schema != "temper-execution-lock/v2" || !idPattern.MatchString(identity.Profile) || !sha256Pattern.MatchString(identity.SHA256) {
-			problem("provenance.execution requires a v2 execution lock, profile and SHA-256")
-		}
-	}
-	if identity := d.Provenance.Catalog; identity != nil {
-		if identity.Schema != catalog.SchemaV1 {
-			problem("provenance.catalog.schema is %q, want %q", identity.Schema, catalog.SchemaV1)
-		}
-		if identity.Sequence == 0 {
-			problem("provenance.catalog.sequence must be greater than zero")
-		}
-		if !sha256Pattern.MatchString(identity.SHA256) {
-			problem("provenance.catalog.sha256 must be 64 lowercase hexadecimal characters")
+		if identity.Schema != "temper-execution-lock/v3" || !idPattern.MatchString(identity.Preset) || !sha256Pattern.MatchString(identity.SHA256) {
+			problem("provenance.execution requires a v3 execution lock, preset and SHA-256")
 		}
 	}
 	if identity := d.Provenance.Experiment; identity != nil {
@@ -223,16 +200,12 @@ func (d Document) Validate() error {
 			if d.Provenance.Execution == nil {
 				problem("selection %q has execution provenance but no execution identity", id)
 			}
-		case ProvenanceCatalog:
-			if d.Provenance.Catalog == nil {
-				problem("selection %q has catalog provenance but the lock has no catalog identity", id)
-			}
 		case ProvenanceExperiment:
 			if d.Provenance.Experiment == nil {
 				problem("selection %q has experiment provenance but the lock has no experiment identity", id)
 			}
 		default:
-			problem("selection %q provenance %q must be catalog, experiment or execution", id, selection.Provenance)
+			problem("selection %q provenance %q must be experiment or execution", id, selection.Provenance)
 		}
 		if !idPattern.MatchString(selection.Method) {
 			problem("selection %q method %q is not a lowercase stable id", id, selection.Method)
@@ -378,82 +351,6 @@ func (d Document) Validate() error {
 		}
 	}
 
-	if len(problems) > 0 {
-		return &ValidationError{Problems: problems}
-	}
-	return nil
-}
-
-// ValidateAgainst checks the lock's historical catalog identity and selection
-// references against the exact snapshot bytes supplied by the caller.
-func (d Document) ValidateAgainst(supply catalog.Document, snapshotDigest string) error {
-	if err := d.Validate(); err != nil {
-		return err
-	}
-	if err := supply.Validate(); err != nil {
-		return err
-	}
-	var problems []string
-	problem := func(format string, args ...any) {
-		problems = append(problems, fmt.Sprintf(format, args...))
-	}
-	identity := d.Provenance.Catalog
-	if identity == nil {
-		return errors.New("software lock has no catalog provenance to validate against")
-	}
-	if identity.Schema != supply.Schema {
-		problem("catalog schema mismatch: lock has %q, snapshot has %q", identity.Schema, supply.Schema)
-	}
-	if identity.Sequence != supply.Sequence {
-		problem("catalog sequence mismatch: lock has %d, snapshot has %d", identity.Sequence, supply.Sequence)
-	}
-	if identity.SHA256 != snapshotDigest {
-		problem("catalog digest mismatch: lock has %q, snapshot has %q", identity.SHA256, snapshotDigest)
-	}
-	resolvedUnits := make(map[string]software.ResolvedUnit, len(d.Units))
-	for unitID, unit := range d.Units {
-		resolvedUnits[unitID] = software.ResolvedUnit{
-			Scope: unit.Scope, NativeName: unit.NativeName, Version: unit.Version, Revision: unit.Revision,
-			Dependencies: append([]string(nil), unit.Dependencies...), Artifacts: append([]software.Artifact(nil), unit.Artifacts...),
-		}
-	}
-	for _, packageID := range sortedKeys(d.Selections) {
-		selection := d.Selections[packageID]
-		if selection.Provenance == ProvenanceExperiment {
-			continue
-		}
-		adapterID, err := supply.AdapterFor(selection.Method, d.Target)
-		if err != nil {
-			problem("selection %q target adapter: %v", packageID, err)
-		} else if adapterID != selection.Adapter {
-			problem("selection %q adapter is %q, catalog selects %q", packageID, selection.Adapter, adapterID)
-		}
-		pkg, ok := supply.Packages[packageID]
-		if !ok {
-			problem("selection %q references unknown catalog package", packageID)
-			continue
-		}
-		recipe, ok := pkg.Recipes[selection.Adapter]
-		if !ok {
-			problem("selection %q has no catalog recipe for adapter %q", packageID, selection.Adapter)
-			continue
-		}
-		if recipe.Method != selection.Method {
-			problem("selection %q method is %q, catalog recipe has %q", packageID, selection.Method, recipe.Method)
-		}
-		if recipe.RecipeRevision != selection.RecipeRevision {
-			problem("selection %q recipe_revision is %q, catalog has %q", packageID, selection.RecipeRevision, recipe.RecipeRevision)
-		}
-		if root, ok := d.Units[selection.RootUnit]; ok {
-			if root.NativeName != recipe.Source.NativeName() {
-				problem("selection %q root native_name is %q, catalog recipe has %q", packageID, root.NativeName, recipe.Source.NativeName())
-			} else if eligible, policyErr := policy.ClosureEligible(supply, selection.Adapter, packageID, selection.RootUnit, resolvedUnits, nil); policyErr != nil {
-				problem("selection %q catalog policy: %v", packageID, policyErr)
-			} else if !eligible {
-				problem("selection %q closure does not satisfy catalog policy", packageID)
-			}
-		}
-	}
 	if len(problems) > 0 {
 		return &ValidationError{Problems: problems}
 	}

@@ -34,10 +34,10 @@ func (t MemoryTier) Label() string {
 }
 
 func (d Document) validatePresentation() error {
-	seen := make(map[string]bool, len(d.LayoutOrder))
-	for _, id := range d.LayoutOrder {
-		if _, ok := d.Layouts[id]; !ok || seen[id] {
-			return fmt.Errorf("layout_order names an unknown or repeated layout %q", id)
+	seen := make(map[string]bool, len(d.PresetOrder))
+	for _, id := range d.PresetOrder {
+		if _, ok := d.Presets[id]; !ok || seen[id] {
+			return fmt.Errorf("preset_order names an unknown or repeated layout %q", id)
 		}
 		seen[id] = true
 	}
@@ -51,7 +51,7 @@ func (d Document) validatePresentation() error {
 			return fmt.Errorf("engine %q display_name must be plain text", id)
 		}
 	}
-	for id, l := range d.Layouts {
+	for id, l := range d.Presets {
 		if !plainText(l.Description) || l.AssessmentURL != "" && !webURL(l.AssessmentURL) {
 			return fmt.Errorf("preset %q description must be plain text and assessment_url an HTTP(S) URL", id)
 		}

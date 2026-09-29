@@ -23,14 +23,14 @@ func TestPiCanOverrideThinkingDefaultsThroughEachSupportedEngine(t *testing.T) {
 	} {
 		t.Run(tc.preset+"/"+tc.start, func(t *testing.T) {
 			d := piCatalog(t)
-			p := d.Layouts[tc.preset]
+			p := d.Presets[tc.preset]
 			p.RequestDefaults.Reasoning = tc.thinking
 			p.EngineConfig.Controls.ReasoningEffort = tc.effort
 			if p.EngineConfig.Splash != nil {
 				p.EngineConfig.Controls.ReasoningEffort = ""
 				p.EngineConfig.Splash.ReasoningEffort = tc.effort
 			}
-			d.Layouts[tc.preset] = p
+			d.Presets[tc.preset] = p
 			bundle := renderPresetWithPi(t, d, tc.preset, nil)
 			var models struct {
 				Providers map[string]struct {

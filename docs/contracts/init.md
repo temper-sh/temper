@@ -217,11 +217,8 @@ generation. Stop remains available even if the layout was deleted. Idle unload
 and demand reload are normal managed behavior; Field Kit's
 [fixed-lifetime supervisor](execution-runtime.md) remains separate.
 
-## Import historical choices
+## Schema boundary
 
-If `ROOT/configuration/` contains old local/utility pairs and no current
-`configuration.json` exists, `configure --import-legacy --dry-run` previews an
-explicit import. Omit `--dry-run` to save. Original pairs, exact locks and user
-manifests remain unchanged. Issued v1/v2 catalogs and experiment inputs keep
-their historical field meanings. The [old contract](legacy-init.md) records
-that format; new authoring uses presets and user-owned layouts.
+Configuration files embed execution-lock v3. Recreate pre-preset configurations
+from explicit current choices; there is no legacy importer. Historical Field Kit
+experiments keep their pinned older host and original inputs.

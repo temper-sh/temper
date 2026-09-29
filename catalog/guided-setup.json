@@ -47,9 +47,8 @@
         }
       ],
       "license": "Apache-2.0",
-      "description": "Useful for source-based document work and verified tool workflows. Strict output formats and Swedish prose need review.",
       "model_name": "Qwen3.8 27B",
-      "weights_name": "Unsloth UD-Q4_K_XL \u00b7 GGUF"
+      "weights_name": "Unsloth UD-Q4_K_XL · GGUF"
     },
     "qwen3.5-4b-q4km": {
       "repo": "unsloth/Qwen3.5-4B-GGUF",
@@ -63,9 +62,8 @@
         }
       ],
       "license": "Apache-2.0",
-      "description": "Compact model for extraction, classification and short tool tasks. Document editing and longer writing need careful review.",
       "model_name": "Qwen3.5 4B",
-      "weights_name": "Unsloth Q4_K_M \u00b7 GGUF"
+      "weights_name": "Unsloth Q4_K_M · GGUF"
     },
     "gemma-4-e2b-q4km": {
       "repo": "unsloth/gemma-4-E2B-it-GGUF",
@@ -79,9 +77,8 @@
         }
       ],
       "license": "Apache-2.0",
-      "description": "Small local main model for field extraction and short tool tasks. Check writing accuracy and unfinished recovery after conflicts.",
       "model_name": "Gemma 4 E2B",
-      "weights_name": "Unsloth Q4_K_M \u00b7 GGUF"
+      "weights_name": "Unsloth Q4_K_M · GGUF"
     },
     "gemma-4-e4b-q4km": {
       "repo": "unsloth/gemma-4-E4B-it-GGUF",
@@ -95,9 +92,8 @@
         }
       ],
       "license": "Apache-2.0",
-      "description": "Small local main model for short sourced drafts, extraction and tool workflows. Longer edits can retain false claims after feedback.",
       "model_name": "Gemma 4 E4B",
-      "weights_name": "Unsloth Q4_K_M \u00b7 GGUF"
+      "weights_name": "Unsloth Q4_K_M · GGUF"
     },
     "qwen3.8-27b-dflash2": {
       "repo": "incoai/Qwen3.8-27B-DFlash2",
@@ -117,8 +113,7 @@
       ],
       "license": "Apache-2.0",
       "model_name": "Qwen3.8 27B DFlash2",
-      "weights_name": "BF16 draft",
-      "description": "Architecture-matched DFlash2 sidecar selected by Splash 1.1.0. Included with the Qwen\u2013Splash layout."
+      "weights_name": "BF16 draft"
     },
     "muse-glimmer-30b-q4xl": {
       "repo": "unsloth/Muse-Glimmer-30B-GGUF",
@@ -133,8 +128,7 @@
       ],
       "license": "Apache-2.0",
       "model_name": "Muse Glimmer 30B",
-      "weights_name": "Unsloth UD-Q4_K_XL \u00b7 GGUF",
-      "description": "Technical explanations, structured drafts and a second review. Completed a conflict-recovery workflow; check database and rollout details in plans."
+      "weights_name": "Unsloth UD-Q4_K_XL · GGUF"
     },
     "gemma-4-26b-a4b-qat-ud-q4-k-xl": {
       "repo": "unsloth/gemma-4-26B-A4B-it-qat-GGUF",
@@ -149,8 +143,7 @@
       ],
       "license": "Apache-2.0",
       "model_name": "Gemma 4 26B-A4B",
-      "weights_name": "Unsloth QAT UD-Q4_K_XL \u00b7 GGUF",
-      "description": "Fast creative drafts, dialogue and tone revision. Review factual constraints and continuity; technical explanations and safety-related advice can need corrections."
+      "weights_name": "Unsloth QAT UD-Q4_K_XL · GGUF"
     },
     "gemma-4-31b-qat-ud-q4-k-xl": {
       "repo": "unsloth/gemma-4-31B-it-qat-GGUF",
@@ -565,7 +558,7 @@
       "recommended": false
     },
     "qwen3.8-27b-q4xl-splash": {
-      "display_name": "Qwen\u2013Splash / DFlash2",
+      "display_name": "Qwen–Splash / DFlash2",
       "artifact": "qwen3.8-27b-q4xl",
       "patches": [
         "froggeric-qwen38-v22.5"
@@ -736,7 +729,7 @@
       "description": "A lighter Gemma option for creative writing and general conversation, using Unsloth QAT weights. Its sparse architecture offers a different speed and memory tradeoff from Gemma 31B. Treat structured output and strict instruction following cautiously; the local writing samples are limited."
     },
     "gemma-4-31b-qat-ud-q4-k-xl-llama": {
-      "display_name": "Gemma 4 31B \u00b7 llama.cpp",
+      "display_name": "Gemma 4 31B · llama.cpp",
       "memory_tier": "S",
       "artifact": "gemma-4-31b-qat-ud-q4-k-xl",
       "patches": [],

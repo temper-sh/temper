@@ -71,7 +71,7 @@ For scripted choices:
   --context qwen3.8-27b-q4xl-mtp=40960 --dry-run --json
 ```
 
-The signed stable catalog and [`qwen38-m5-refresh.json`](qwen38-m5-refresh.json)
+The historical signed stable catalog
 retain their issued schemas and 32k configuration. They are historical exact
 inputs, not parallel mutable authoring sources.
 
@@ -202,12 +202,12 @@ Neither result qualifies arbitrary long-document reasoning. Smaller passed
 points retain their exact materials in the linked records; the older Google
 Gemma points are not measurements of the Unsloth target.
 
-To preview both writing choices with Gemma as the explicit default:
+To preview both writing choices before composing a layout:
 
 ```sh
 ./build/temper init --catalog catalog/guided-setup.json \
-  --profile muse-glimmer-30b-local --profile gemma-4-26b-a4b-local \
-  --default-profile gemma-4-26b-a4b-local \
+  --preset muse-glimmer-30b-q4xl-llama \
+  --preset gemma-4-26b-a4b-qat-ud-q4-k-xl-llama \
   --context muse-glimmer-30b-q4xl-llama=57344 \
   --context gemma-4-26b-a4b-qat-ud-q4-k-xl-llama=98304 --dry-run
 ```

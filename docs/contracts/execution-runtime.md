@@ -6,10 +6,10 @@ availability uses the separate [managed layout contract](layouts.md) and
 normal there; it still ends an observed fixed-lifetime experiment here.
 
 This development surface consumes an exact execution lock. It does not resolve
-updates or select software. The existing manifest commands and `execution export`
-remain available for issued clients.
+updates or select software. The current manifest v2 commands remain available as low-level primitives.
 
 ```
+temper execution configure --lock FILE --preset ID --context N --max-output N [--max-memory BYTES] --out FILE [--dry-run]
 temper execution inspect --lock FILE
 temper execution prepare --lock FILE --root PATH --installation ID
 temper execution render --lock FILE --root PATH --installation ID
@@ -18,14 +18,30 @@ temper execution serve --lock FILE --root PATH --installation ID --generation SH
 temper execution remove --lock FILE --root PATH --installation ID
 ```
 
+`configure` derives one exact preset execution from a frozen lock. Only the
+context window, output allowance and optional Splash memory cap may change;
+software, artifacts, templates, sampling and speculation remain frozen. It
+performs no machine detection, installation, model loading or upstream lookup.
+The source stays unchanged, existing different output is refused, and dry-run
+writes nothing. JSON `temper-execution-configuration/v1` returns `preset`, the
+explicit `settings` (`context_window_tokens`, `max_output_tokens`, optional
+`max_memory_bytes`), `execution_digest`, `path`, `changed`, `dry_run`, and
+`context_execution_sha256`. The latter is the existing
+catalog context identity used by `context_findings`, so a reviewed test can be
+matched by the wizard without depending on lock internals.
+
+`catalog compile --preset ID` compiles a current v3 catalog directly. A client
+needs no Selection file. The serialized lock is owned by Temper; clients pass
+it unchanged to the execution commands.
+
 `inspect` is read-only. Its JSON includes the lock checksum, execution digest,
 profile, layouts and request defaults. `prepare` installs exact software, fetches
 selected model files, renders, checks installed bytes and returns the generation
 and material binding as JSON. Each underlying effect remains independently
 recoverable and repeatable; a failed preparation can leave a partial installation.
 `render` verifies and binds already installed material without installing or
-downloading. Both commands derive private temporary legacy inputs inside Temper;
-clients never coordinate or retain the four compatibility exports. `remove`
+downloading. Both commands derive private temporary internal inputs inside Temper;
+clients pass the execution lock directly. `remove`
 uses the exact software receipt and retains system-managed packages.
 
 `paths` is read-only. It verifies the selected artifact sets and software

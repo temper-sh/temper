@@ -65,7 +65,7 @@ func (c Configuration) Validate() error {
 		if err := p.Lock.Validate(); err != nil {
 			return fmt.Errorf("preset %q: %w", id, err)
 		}
-		if len(p.Lock.Records.Layouts) != 1 {
+		if len(p.Lock.Records.Presets) != 1 {
 			return fmt.Errorf("preset %q requires one exact engine configuration", id)
 		}
 	}
@@ -207,45 +207,6 @@ func SaveConfiguration(ctx context.Context, root string, c Configuration, expect
 		return rev, true, fmt.Errorf("configuration saved but directory sync failed: %w", err)
 	}
 	return rev, true, nil
-}
-
-// ImportLegacy projects saved pairs without altering their locks or files.
-func ImportLegacy(root string) (Configuration, error) {
-	saved, err := Load(root)
-	if err != nil {
-		return Configuration{}, err
-	}
-	c := EmptyConfiguration()
-	for _, lock := range saved.Locks {
-		p := lock.Records.Profiles[lock.Selection.Profile]
-		if len(p.Bindings) != 1 {
-			return c, errors.New("legacy multi-preset pairs need an explicit composition edit")
-		}
-		b := p.Bindings[0]
-		id := b.Layout
-		if prior, ok := c.Presets[id]; ok && prior.Lock.Digests.Profile != lock.Digests.Profile {
-			id += "." + Mode(p)
-		}
-		name := lock.Records.Layouts[b.Layout].DisplayName
-		if strings.TrimSpace(name) == "" {
-			name = id
-		}
-		c.Presets[id] = Preset{Name: name, Lock: lock}
-		key := Mode(p)
-		l, ok := c.Layouts[key]
-		if !ok {
-			l = StarterLayouts()[key]
-		}
-		l.Presets = append(l.Presets, id)
-		if b.Preload {
-			l.Startup = append(l.Startup, id)
-		}
-		if lock.Selection.Profile == saved.DefaultProfile {
-			l.Default = id
-		}
-		c.Layouts[key] = l
-	}
-	return c, c.Validate()
 }
 
 func (c Configuration) References(preset string) []string {

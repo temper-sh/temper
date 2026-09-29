@@ -1,5 +1,5 @@
 // Package catalogsigning owns the pure release-side signing and verification
-// policy for software catalog publications. Private key material enters only
+// policy for catalog publications. Private key material enters only
 // as a caller-owned seed and is never retained by the tool.
 package catalogsigning
 
@@ -11,9 +11,7 @@ import (
 	"fmt"
 
 	current "github.com/temper-sh/temper/internal/catalog"
-	"github.com/temper-sh/temper/internal/software/catalog"
 	publication "github.com/temper-sh/temper/internal/software/catalogpublication"
-	"gopkg.in/yaml.v3"
 )
 
 const MaxSeedInputBytes = 128
@@ -25,24 +23,16 @@ const (
 	KindChannel Kind = "channel"
 )
 
-type CapabilityValidator interface {
-	ValidateCatalog(catalog.Document) error
-}
-
 type Tool struct {
-	keyID        string
-	trust        publication.TrustRoot
-	capabilities CapabilityValidator
+	keyID string
+	trust publication.TrustRoot
 }
 
-func New(keyID string, trust publication.TrustRoot, capabilities CapabilityValidator) (Tool, error) {
+func New(keyID string, trust publication.TrustRoot) (Tool, error) {
 	if keyID == "" {
 		return Tool{}, errors.New("catalog signing key id is required")
 	}
-	if capabilities == nil {
-		return Tool{}, errors.New("catalog signing capability validator is required")
-	}
-	return Tool{keyID: keyID, trust: trust, capabilities: capabilities}, nil
+	return Tool{keyID: keyID, trust: trust}, nil
 }
 
 func ParseKind(value string) (Kind, error) {
@@ -130,24 +120,8 @@ func (t Tool) validateArtifact(kind Kind, channel string, artifact, envelope []b
 		if channel != "" {
 			return errors.New("--channel is valid only for channel publications")
 		}
-		var header struct {
-			Schema string `yaml:"schema"`
-		}
-		if err := yaml.Unmarshal(artifact, &header); err != nil {
-			return fmt.Errorf("read catalog schema: %w", err)
-		}
-		if header.Schema == current.Schema {
-			_, err := current.Parse(artifact)
-			return err
-		}
-		snapshot, err := catalog.ParseSnapshot(artifact)
-		if err != nil {
-			return err
-		}
-		if err := t.capabilities.ValidateCatalog(snapshot.Document); err != nil {
-			return fmt.Errorf("software catalog is unsupported by this release tool: %w", err)
-		}
-		return nil
+		_, err := current.Parse(artifact)
+		return err
 	case KindChannel:
 		if err := publication.ValidateChannelName(channel); err != nil {
 			return err

@@ -446,7 +446,7 @@ func sharedLock(t *testing.T) softwarelock.Document {
 	t.Helper()
 	document := baseLock()
 	document.Selections["llama-swap"] = softwarelock.Selection{
-		Provenance: softwarelock.ProvenanceCatalog,
+		Provenance: softwarelock.ProvenanceExperiment,
 		Method:     "system-package", Adapter: "homebrew", RecipeRevision: "llama-swap/v1", RootUnit: "homebrew:system:llama-swap",
 	}
 	document.Units["homebrew:system:libomp"] = unit("homebrew", "system", "libomp", "19.1.0", nil, "b")
@@ -459,7 +459,7 @@ func isolatedLock(t *testing.T) softwarelock.Document {
 	t.Helper()
 	document := baseLock()
 	document.Selections["rapid-mlx"] = softwarelock.Selection{
-		Provenance: softwarelock.ProvenanceCatalog,
+		Provenance: softwarelock.ProvenanceExperiment,
 		Method:     "python-environment", Adapter: "uv", RecipeRevision: "rapid-mlx/v1", RootUnit: "uv:rapid-mlx:rapid-mlx",
 	}
 	document.Units["uv:rapid-mlx:cpython"] = unit("uv", "rapid-mlx", "cpython", "3.12.9", nil, "c")
@@ -471,8 +471,8 @@ func isolatedLock(t *testing.T) softwarelock.Document {
 func baseLock() softwarelock.Document {
 	return softwarelock.Document{
 		Schema: softwarelock.SchemaV1,
-		Provenance: softwarelock.Provenance{Catalog: &softwarelock.CatalogIdentity{
-			Schema: "temper-software-supply/v1", Sequence: 1, SHA256: strings.Repeat("e", 64),
+		Provenance: softwarelock.Provenance{Experiment: &softwarelock.ExperimentIdentity{
+			Schema: "test-input/v1", ID: "fixture", DefinitionSHA256: strings.Repeat("e", 64),
 		}},
 		Target:     software.Target{OS: "darwin", Arch: "arm64", Distribution: "macos", DistributionVersion: "15.6"},
 		Resolved:   "2026-08-20",

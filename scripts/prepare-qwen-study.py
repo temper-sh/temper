@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Author the exact Qwen study catalog from uv pylocks; never fetch weights.
+"""Refresh the current preset study catalog from uv pylocks; never fetch weights.
 
 Requires Python 3.11+. Resolve the input pylocks for CPython 3.12.13,
 aarch64-apple-darwin, MACOSX_DEPLOYMENT_TARGET=26.4. This authoring command
@@ -90,25 +90,25 @@ def hf_artifact(repo, revision, format, names=None):
 
 def main(args):
     repo=args.temper_repo
-    d=json.loads((repo/"catalog/guided-setup.json").read_text())
-    llama=json.loads(args.llama_lock.read_text())["records"]
-    d["date"]="2026-09-27"
-    d.pop("layout_order",None)
+    d=json.loads((repo/"catalog/experiments/qwen-study.json").read_text())
+    if d["schema"] != "temper-catalog/v3":
+        raise ValueError("Qwen authoring requires the current preset catalog")
+    d.pop("preset_order",None)
     for key in list(d):
-        if key not in ("schema","date","runtime","artifacts","patches","engines","layouts","profiles"):
+        if key not in ("schema","date","runtime","artifacts","patches","engines","presets"):
             d.pop(key)
     metadata=remote_json("https://raw.githubusercontent.com/astral-sh/uv/0.12.5/crates/uv-python/download-metadata.json")["cpython-3.12.13-darwin-aarch64-none"]
     runtime={"name":"cpython","version":"3.12.13","revision":"python-build-standalone:"+metadata["build"],
              "artifact":{"locator":metadata["url"],"sha256":metadata["sha256"]}}
-    d["runtime"]=copy.deepcopy(llama["runtime"])
     d["runtime"]["python_environments"]=[supply("coding-evaluator",args.closures/"pylock.evaluator.toml",runtime)]
-    d["engines"]={k:v for k,v in d["engines"].items() if k=="splash-darwin-arm64"}
-    d["engines"].update(llama["engines"])
+    llama_preset=copy.deepcopy(d["presets"]["llama-q5"])
+    selected_engines={d["presets"]["splash-q4"]["engine"], llama_preset["engine"]}
+    d["engines"]={k:v for k,v in d["engines"].items() if k in selected_engines}
     for family,filename in [("rapid-mlx","rapid"),("vllm-metal","vllm")]:
         d["engines"][family]={"family":family,"adapter":family+"/v1","interfaces":["chat-completions"],"modalities":["text"],
                               "supply":supply(family,args.closures/("pylock."+filename+".toml"),runtime)}
-    splash=copy.deepcopy(d["layouts"]["qwen3.8-27b-q4xl-splash"])
-    llama_layout=copy.deepcopy(next(iter(llama["layouts"].values())))
+    splash=copy.deepcopy(d["presets"]["splash-q4"])
+    llama_base=llama_preset
     base_artifact=splash["artifact"]
     draft=splash["speculation"]["draft_artifact"]
     d["artifacts"]={key:value for key,value in d["artifacts"].items() if key in (base_artifact,draft)}
@@ -121,22 +121,23 @@ def main(args):
     d["artifacts"]["qwen-vllm"]["format"]="safetensors"
     for patch in d["patches"].values():
         patch["compatible_artifacts"]=[base_artifact,"qwen-q5","qwen-q6","qwen-q8"]
-    d["layouts"],d["profiles"]={},{}
+    d["presets"]={}
     specs=[("splash-q4",splash,base_artifact),("splash-q5",splash,"qwen-q5"),("splash-q6",splash,"qwen-q6"),
-           ("llama-q5",llama_layout,"qwen-q5"),("llama-q6",llama_layout,"qwen-q6"),("llama-q8",llama_layout,"qwen-q8")]
+           ("llama-q5",llama_base,"qwen-q5"),("llama-q6",llama_base,"qwen-q6"),("llama-q8",llama_base,"qwen-q8")]
     for identity,base,artifact in specs:
-        layout=copy.deepcopy(base)
-        layout.update(display_name=identity,artifact=artifact,context_window_tokens=118000,context_limit_tokens=262144)
-        layout.pop("context_findings",None)
-        layout.pop("engine_versions",None)
-        layout["patches"]=splash["patches"]
-        layout["request_defaults"]["max_output_tokens"]=100000
+        preset=copy.deepcopy(base)
+        preset.update(display_name=identity,artifact=artifact,context_window_tokens=118000,context_limit_tokens=262144)
+        preset["recommended"]=False
+        preset.pop("context_findings",None)
+        preset.pop("engine_versions",None)
+        preset["patches"]=splash["patches"]
+        preset["request_defaults"]["max_output_tokens"]=100000
         if identity.startswith("splash"):
-            layout["engine_config"].update(max_memory_bytes=27*1024**3,request_timeout_seconds=14400)
-        d["layouts"][identity]=layout
+            preset["engine_config"].update(max_memory_bytes=27*1024**3,request_timeout_seconds=14400)
+        d["presets"][identity]=preset
     for family,artifact in [("rapid-mlx","qwen-mlx"),("vllm-metal","qwen-vllm")]:
-        layout=copy.deepcopy(d["layouts"]["splash-q4"])
-        layout.update(display_name=family,artifact=artifact,engine=family,patches=[],speculation={"method":"none","source":"none","max_draft_tokens":0})
+        preset=copy.deepcopy(d["presets"]["splash-q4"])
+        preset.update(display_name=family,artifact=artifact,engine=family,patches=[],speculation={"method":"none","source":"none","max_draft_tokens":0})
         if family=="rapid-mlx":
             tuning={"max_num_seqs":1,"max_concurrent_requests":1,"prefill_batch_size":1,"completion_batch_size":1,
                     "gpu_memory_utilization":0.75,"prefix_cache":"off","kv_cache_dtype":"bf16","pflash":"off",
@@ -145,15 +146,12 @@ def main(args):
             tuning={"max_num_seqs":1,"max_num_batched_tokens":1024,"gpu_memory_utilization":0.75,"prefix_cache":"off",
                     "kv_cache_dtype":"auto","reasoning_parser":"qwen3","tool_call_parser":"qwen3_coder",
                     "language_model_only":True,"chunked_prefill":True,"block_size":16}
-        layout["engine_config"]={"kind":family+"/v1",family.replace("-","_"):tuning}
-        d["layouts"][family]=layout
-    for identity in d["layouts"]:
-        d["profiles"][identity]={"gpu_memory_utilization":0.75,
-            "bindings":[{"layout":identity,"route":"default","residency":"resident","idle_ttl_seconds":0,"preload":False}]}
+        preset["engine_config"]={"kind":family+"/v1",family.replace("-","_"):tuning}
+        d["presets"][family]=preset
     write(args.out,d)
 
 if __name__=="__main__":
     parser=argparse.ArgumentParser(description=__doc__)
-    for name in ("temper-repo","closures","llama-lock","out"):
+    for name in ("temper-repo","closures","out"):
         parser.add_argument("--"+name,type=Path,required=True)
     main(parser.parse_args())

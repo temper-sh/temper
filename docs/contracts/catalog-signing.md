@@ -1,9 +1,9 @@
 # `temper-catalog` release signing contract
 
-Status: current and retained software-catalog publication tooling, 2026-09-22.
+Status: current catalog publication tooling, 2026-09-29.
 
-This tooling signs the maintained `temper-catalog/v2` and its stable channel,
-and retains verification of the earlier software-publication format. The
+This tooling signs `temper-catalog/v3` and its stable channel. Older catalog
+and software-publication formats are rejected. The
 [distribution contract](catalog-distribution.md) owns the current publication
 and consumer behavior.
 
@@ -87,7 +87,7 @@ go run ./cmd/temper-catalog verify-publication --root docs/catalog
 This verifies the stable channel, immutable locator, exact snapshot digest, both
 production signatures and current catalog capabilities. It reads only local
 publication files and emits `RESULT catalog-publication verified` with the
-sequence, digest and profile count. An individually valid signature does not
+sequence, digest and preset count. An individually valid signature does not
 by itself establish that the channel names the correct snapshot.
 
 Exit `0` means the result line is valid. Exit `1` is a key-input, artifact,

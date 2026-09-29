@@ -15,9 +15,9 @@ import (
 func contextCatalog(t *testing.T) (catalog.Document, machine.Facts) {
 	t.Helper()
 	d := document()
-	l := d.Layouts["qwen-32k"]
+	l := d.Presets["qwen-32k"]
 	l.ContextLimitTokens = 262144
-	d.Layouts["qwen-32k"] = l
+	d.Presets["qwen-32k"] = l
 	facts := machine.Facts{Schema: machine.FactsSchemaV1,
 		Target: software.Target{OS: "darwin", Arch: "arm64", Distribution: "macos", DistributionVersion: "26.6"},
 		Chip:   "Apple M5", HardwareModel: "Mac17,3", OSBuild: "25G76", PhysicalMemoryBytes: 32 << 30,
@@ -33,25 +33,25 @@ func contextCatalog(t *testing.T) (catalog.Document, machine.Facts) {
 			Machine:                catalog.ContextMachine{Target: facts.Target, Chip: facts.Chip, HardwareModel: facts.HardwareModel, PhysicalMemoryBytes: facts.PhysicalMemoryBytes, MinimumWiredLimitMiB: 24000},
 			EngineMemoryLimitBytes: 24 << 30, SwapGrowthLimitBytes: 512 << 20, Evidence: "https://example.test/context-fixture", LatencyNote: "Initial answer took 20 minutes; above the interactive budget."})
 	}
-	d.Layouts["qwen-32k"] = l
+	d.Presets["qwen-32k"] = l
 	return d, facts
 }
 
-func TestAutomaticContextChoosesLargestApplicableTestNotNativeLimitOrLatencyCap(t *testing.T) {
+func TestMatchingContextsSortsApplicableTestsWithoutLatencyCap(t *testing.T) {
 	d, facts := contextCatalog(t)
 	before, _ := json.Marshal(d)
-	s := catalog.Selection{Schema: catalog.SelectionSchema, Profile: "local-qwen"}
-	resolved, err := catalog.ResolveMachineContexts(d, s, facts)
+	template := "template"
+	resolved, err := catalog.MatchingContexts(d, "qwen-32k", template, facts)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := resolved.ContextWindows["qwen-32k"]; got != 65536 {
+	if len(resolved) != 2 {
+		t.Fatalf("matching contexts: %+v", resolved)
+	}
+	if got := resolved[0].WindowTokens; got != 65536 {
 		t.Fatalf("automatic context = %d", got)
 	}
-	if s.ContextWindows != nil {
-		t.Fatal("resolution changed the supplied selection")
-	}
-	locked, err := catalog.Compile(d, resolved, software.Target{OS: "darwin", Arch: "arm64"})
+	locked, err := catalog.CompilePreset(d, "qwen-32k", "", resolved[0].WindowTokens, software.Target{OS: "darwin", Arch: "arm64"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,13 +82,13 @@ func TestContextMatchingUsesEffectiveMetalBudgetNotConfiguredOverride(t *testing
 	facts.WiredLimitOverrideMiB = &override
 	facts.MetalDeviceMemorySource, facts.WiredLimitSource = machine.MetalDeviceSourceLive, budget.WiredSourceMetal
 	facts.MetalDeviceMemoryMiB, facts.WiredLimitMiB = 23000, 23000
-	s := catalog.Selection{Schema: catalog.SelectionSchema, Profile: "local-qwen"}
-	if _, err := catalog.ResolveMachineContexts(d, s, facts); err == nil || !strings.Contains(err.Error(), "tested context is unknown") {
+	template := "template"
+	if matches, err := catalog.MatchingContexts(d, "qwen-32k", template, facts); err != nil || len(matches) != 0 {
 		t.Fatalf("configured override admitted a context above the actual Metal budget: %v", err)
 	}
 	facts.MetalDeviceMemoryMiB, facts.WiredLimitMiB = 24576, 24576
-	resolved, err := catalog.ResolveMachineContexts(d, s, facts)
-	if err != nil || resolved.ContextWindows["qwen-32k"] != 65536 {
+	resolved, err := catalog.MatchingContexts(d, "qwen-32k", template, facts)
+	if err != nil || len(resolved) != 2 || resolved[0].WindowTokens != 65536 {
 		t.Fatalf("effective budget did not admit matching evidence: %+v, %v", resolved, err)
 	}
 }
@@ -97,8 +97,8 @@ func TestContextEvidenceDoesNotTransferAcrossMachinesOrExecutionChanges(t *testi
 	for _, name := range []string{"chip", "larger RAM", "hardware model", "OS", "wired allowance", "template choice", "template bytes", "weights", "engine", "router", "output allowance", "kv", "mtp", "parallel", "cache", "batch"} {
 		t.Run(name, func(t *testing.T) {
 			d, facts := contextCatalog(t)
-			l := d.Layouts["qwen-32k"]
-			s := catalog.Selection{Schema: catalog.SelectionSchema, Profile: "local-qwen"}
+			l := d.Presets["qwen-32k"]
+			template := "template"
 			switch name {
 			case "chip":
 				facts.Chip = "Apple M4"
@@ -112,7 +112,7 @@ func TestContextEvidenceDoesNotTransferAcrossMachinesOrExecutionChanges(t *testi
 			case "wired allowance":
 				facts.WiredLimitMiB = 23000
 			case "template choice":
-				s.Templates = map[string]string{"qwen-32k": ""}
+				template = ""
 			case "template bytes":
 				p := d.Patches["template"]
 				p.Files[0].SHA256 = strings.Repeat("f", 64)
@@ -140,14 +140,13 @@ func TestContextEvidenceDoesNotTransferAcrossMachinesOrExecutionChanges(t *testi
 			case "batch":
 				l.EngineConfig.BatchTokens = 1024
 			}
-			d.Layouts["qwen-32k"] = l
-			if _, err := catalog.ResolveMachineContexts(d, s, facts); err == nil || !strings.Contains(err.Error(), "tested context is unknown") {
+			d.Presets["qwen-32k"] = l
+			if matches, err := catalog.MatchingContexts(d, "qwen-32k", template, facts); err != nil || len(matches) != 0 {
 				t.Fatalf("changed condition inherited a default: %v", err)
 			}
 			// Lack of a tested claim must not lock out an explicit experiment.
-			s.ContextWindows = map[string]int{"qwen-32k": 98304}
-			chosen, err := catalog.ResolveMachineContexts(d, s, facts)
-			if err != nil || chosen.ContextWindows["qwen-32k"] != 98304 {
+			chosen, err := catalog.CompilePreset(d, "qwen-32k", "", 98304, software.Target{OS: "darwin", Arch: "arm64"})
+			if err != nil || chosen.Records.Presets["qwen-32k"].ContextWindowTokens != 98304 {
 				t.Fatalf("explicit choice refused: %v", err)
 			}
 		})
@@ -156,36 +155,36 @@ func TestContextEvidenceDoesNotTransferAcrossMachinesOrExecutionChanges(t *testi
 
 func TestMissingContextEvidenceStaysUnknownAndDescriptionEditsPreserveEvidence(t *testing.T) {
 	d, facts := contextCatalog(t)
-	l := d.Layouts["qwen-32k"]
+	l := d.Presets["qwen-32k"]
 	l.ContextFindings = nil
-	d.Layouts["qwen-32k"] = l
-	if _, err := catalog.ResolveMachineContexts(d, catalog.Selection{Schema: catalog.SelectionSchema, Profile: "local-qwen"}, facts); err == nil {
+	d.Presets["qwen-32k"] = l
+	if matches, err := catalog.MatchingContexts(d, "qwen-32k", "template", facts); err != nil || len(matches) != 0 {
 		t.Fatal("no findings silently used the authored window or native maximum")
 	}
 	d, facts = contextCatalog(t)
 	baseline := compile(t, d)
 	url := "https://example.test/my-assessment"
-	edited, err := catalog.Describe(d, "qwen-q4", "My preferred document model; check quotations.", &url, false)
+	edited, err := catalog.DescribePreset(d, "qwen-32k", "My preferred document model; check quotations.", &url, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	next := compile(t, edited)
-	if next.Digests.Profile != baseline.Digests.Profile || next.SourceSnapshotSHA256 == baseline.SourceSnapshotSHA256 {
+	if next.ExecutionDigest != baseline.ExecutionDigest || next.SourceSnapshotSHA256 == baseline.SourceSnapshotSHA256 {
 		t.Fatal("editorial change altered execution identity or failed to alter catalog identity")
 	}
-	if d.Artifacts["qwen-q4"].Description != "" {
+	if d.Presets["qwen-32k"].Description != "" {
 		t.Fatal("description edit mutated its input")
 	}
-	if !reflect.DeepEqual(d.Layouts, edited.Layouts) {
+	if !reflect.DeepEqual(d.Presets["qwen-32k"].ContextFindings, edited.Presets["qwen-32k"].ContextFindings) {
 		t.Fatal("description edit changed context evidence")
 	}
 	suggestion := "Automatically refreshed wording"
-	preserved, err := catalog.Describe(edited, "qwen-q4", suggestion, nil, true)
-	if err != nil || preserved.Artifacts["qwen-q4"].Description != edited.Artifacts["qwen-q4"].Description {
+	preserved, err := catalog.DescribePreset(edited, "qwen-32k", suggestion, nil, true)
+	if err != nil || preserved.Presets["qwen-32k"].Description != edited.Presets["qwen-32k"].Description {
 		t.Fatal("suggestion replaced custom copy")
 	}
-	s, err := catalog.ResolveMachineContexts(preserved, catalog.Selection{Schema: catalog.SelectionSchema, Profile: "local-qwen"}, facts)
-	if err != nil || s.ContextWindows["qwen-32k"] != 65536 {
+	s, err := catalog.MatchingContexts(preserved, "qwen-32k", "template", facts)
+	if err != nil || len(s) != 2 || s[0].WindowTokens != 65536 {
 		t.Fatalf("description invalidated context finding: %v", err)
 	}
 }
@@ -194,7 +193,7 @@ func TestContextFindingValidationRejectsMalformedEvidenceAndBudgets(t *testing.T
 	for _, name := range []string{"identity", "output", "ceiling", "RAM", "wired", "engine memory", "swap", "evidence", "escape"} {
 		t.Run(name, func(t *testing.T) {
 			d, _ := contextCatalog(t)
-			l := d.Layouts["qwen-32k"]
+			l := d.Presets["qwen-32k"]
 			f := &l.ContextFindings[0]
 			switch name {
 			case "identity":
@@ -216,7 +215,7 @@ func TestContextFindingValidationRejectsMalformedEvidenceAndBudgets(t *testing.T
 			case "escape":
 				f.LatencyNote = "\x1b[31m"
 			}
-			d.Layouts["qwen-32k"] = l
+			d.Presets["qwen-32k"] = l
 			if err := d.Validate(); err == nil {
 				t.Fatal("invalid context finding accepted")
 			}

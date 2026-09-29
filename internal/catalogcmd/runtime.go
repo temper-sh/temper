@@ -23,7 +23,7 @@ import (
 	"github.com/temper-sh/temper/internal/splash"
 )
 
-// Dispatch invokes the existing CLI primitives in-process. Temporary legacy
+// Dispatch invokes the existing CLI primitives in-process. Temporary derived
 // projections remain an implementation detail; the caller supplies one lock.
 type Dispatch func(context.Context, []string, io.Writer, io.Writer) int
 
@@ -32,6 +32,9 @@ func Runtime(ctx context.Context, args []string, stdout, stderr io.Writer, dispa
 		return failed(stderr, errors.New("execution operation required"))
 	}
 	operation := args[0]
+	if operation == "configure" {
+		return configureExecution(ctx, args[1:], stdout, stderr)
+	}
 	switch operation {
 	case "inspect", "prepare", "render", "serve", "remove", "paths":
 	default:
@@ -72,8 +75,8 @@ func Runtime(ctx context.Context, args []string, stdout, stderr io.Writer, dispa
 		return failed(stderr, err)
 	}
 	sum := sha256.Sum256(raw)
-	identity := map[string]any{"schema": "temper-execution/v1", "lock_sha256": hex.EncodeToString(sum[:]), "execution_digest": l.Digests.Profile,
-		"profile": l.Selection.Profile, "layouts": sortedKeys(l.Records.Layouts), "request_defaults": p.RequestDefaults}
+	identity := map[string]any{"schema": "temper-execution/v1", "lock_sha256": hex.EncodeToString(sum[:]), "execution_digest": l.ExecutionDigest,
+		"profile": l.Preset, "layouts": sortedKeys(l.Records.Presets), "request_defaults": p.RequestDefaults}
 	if operation == "inspect" {
 		return encode(stdout, stderr, identity)
 	}
@@ -91,14 +94,14 @@ func Runtime(ctx context.Context, args []string, stdout, stderr io.Writer, dispa
 		return failed(stderr, errors.New("serve requires --generation and a new --status-file"))
 	}
 	if operation == "serve" {
-		if len(l.Records.Layouts) != 1 {
+		if len(l.Records.Presets) != 1 {
 			return failed(stderr, errors.New("supervised serving currently requires exactly one layout"))
 		}
 		supervision := probecmd.Supervision{StatusPath: *statusFile, Root: resolved, Installation: *installation, Generation: *generation, Listen: *listen}
 		if err := supervision.Validate(); err != nil {
 			return failed(stderr, err)
 		}
-		bundle, err := render.Build(render.Inputs{Manifest: p.Manifest, Lock: p.Artifacts, Mode: l.Selection.Profile, Root: resolved})
+		bundle, err := render.Build(render.Inputs{Manifest: p.Manifest, Lock: p.Artifacts, Mode: l.Preset, Root: resolved})
 		if err != nil {
 			return failed(stderr, err)
 		}
@@ -220,7 +223,7 @@ func Runtime(ctx context.Context, args []string, stdout, stderr io.Writer, dispa
 		if _, err := run(append([]string{"software", "install"}, softwareArgs...)); err != nil {
 			return failed(stderr, err)
 		}
-		for _, layout := range sortedKeys(l.Records.Layouts) {
+		for _, layout := range sortedKeys(l.Records.Presets) {
 			if _, err := run(append([]string{"fetch", layout}, modelArgs...)); err != nil {
 				return failed(stderr, err)
 			}
@@ -250,7 +253,7 @@ func Runtime(ctx context.Context, args []string, stdout, stderr io.Writer, dispa
 			return failed(stderr, err)
 		}
 	}
-	output, err := run(append(append([]string{"apply"}, modelArgs...), "--mode", l.Selection.Profile))
+	output, err := run(append(append([]string{"apply"}, modelArgs...), "--mode", l.Preset))
 	if err != nil {
 		return failed(stderr, err)
 	}
@@ -258,7 +261,7 @@ func Runtime(ctx context.Context, args []string, stdout, stderr io.Writer, dispa
 	if len(matched) != 2 {
 		return failed(stderr, errors.New("apply returned no generation"))
 	}
-	if _, err := run(append(append([]string{"check"}, modelArgs...), "--mode", l.Selection.Profile, "--verify")); err != nil {
+	if _, err := run(append(append([]string{"check"}, modelArgs...), "--mode", l.Preset, "--verify")); err != nil {
 		return failed(stderr, err)
 	}
 	binding, err := run([]string{"field-kit", "bind", "--root", resolved, "--manifest-lock", manifestLock,

@@ -10,8 +10,10 @@ All remains available. [Setup and operations](contracts/init.md) and
 managed lifecycle checks passed on M5 / 32 GiB after the fixes and with the
 startup and cold-cache limits in the [bounded smoke](design/managed-layout-smoke.md#observed-result).
 Older mode/profile terminology below describes retained design history or issued
-formats; it must not override the current contract. Historical wire meanings,
-Field Kit lifetime supervision and live-cutover boundaries remain intact.
+formats; it must not override the current contract. The current binary rejects catalog v1/v2, execution-lock v1/v2, Selection files,
+software-supply catalogs and manifest v1. No importer or compatibility export is
+retained. Historical experiments use their pinned older host. Field Kit lifetime
+supervision and live-cutover boundaries remain intact.
 
 Adopted 2026-08-14 as this repository's working product spec. Drafted
 2026-08-07 in `local-ai-setup/docs/TEMPER.md` by the working session that ran
@@ -34,15 +36,13 @@ discovery, disclosure, consent, sessions, protocols, evidence, and cleanup;
 Temper supplies stable machine/install/check/bind/probe primitives (ownership
 revised by owner 2026-08-28). Labs remains the only editable investigation source.
 
-An additive local V3 path, implemented 2026-09-13, accepts an explicitly supplied
-catalog and selection and compiles a self-contained execution lock. Its five
-records are Artifact, Patch, Engine, Layout and Profile; Results retains public
-portfolio assessment. [The execution-lock contract](contracts/execution-lock.md)
-owns this narrow compiler/export surface and the refreshed llama-server controls.
-It feeds the existing primitives and retains their manifest workflow. The
-[distribution contract](contracts/catalog-distribution.md) adds signed catalog
-publication, explicit selection and offline rollback. Broader engine closures
-remain separate work; managed layouts have their own current contract above.
+The current compiler accepts `temper-catalog/v3` Artifact, Patch, Engine and
+Preset records and produces one self-contained `temper-execution-lock/v3` per
+explicitly selected preset. Results retains public portfolio assessment.
+[The execution-lock contract](contracts/execution-lock.md) owns the compiler,
+per-run limits and engine controls. [Distribution](contracts/catalog-distribution.md)
+owns signed catalog updates and verified offline rollback. The independent
+manifest workflow accepts v2 only.
 
 The guided setup implementation uses `~/.temper` by default and is unreleased
 source work. Presets → Layouts → Review and prepare replaces the modes-first
@@ -53,8 +53,8 @@ catalog and rendering paths; the editors do not invent them.
 The 2026-09-22 Field Kit simplification adds direct execution-lock consumption
 and supervised foreground probes. The [execution runtime contract](contracts/execution-runtime.md)
 owns preparation, rendering, process identities, listener validation and shutdown
-results. Field Kit retains protocols, measurements and stop decisions. Issued
-client exports remain compatible; alpha.9 supplies the current contributor host.
+results. Field Kit retains protocols, measurements and stop decisions. Historical
+clients retain their pinned older hosts; current packages must regenerate v3 locks.
 
 The explicit workflow's manifest file is **`manifest.yaml`** with **`manifest.lock.yaml`**
 beside it (decided 2026-08-14: it carries the whole manifest selection —
@@ -348,13 +348,10 @@ and bytes for installation, reproduction and rollback. The user can explicitly
 change or update the template; a changed catalog default leaves existing choices
 and locks intact.
 
-The alpha.10 Qwen profile contains Frog v22.5 as its recorded composition.
-That entry does not make Frog mandatory for Qwen users. The current source
-accepts `Selection.templates`, mapping each selected layout to a compatible
-patch or the embedded template. New guided and catalog selections make defaults
-explicit; older selections that omit overrides retain their original semantics
-and lock bytes. The wizard presents alternatives under their model and saves
-the exact composition the user accepts.
+The catalog records a default template for each preset. `configure --template
+PRESET=PATCH|builtin` freezes an explicit alternative in that preset's execution
+lock. Changed defaults never rewrite saved choices. The current compiler does
+not accept Selection files.
 
 ### The model section groups exact layouts into portfolio choices
 

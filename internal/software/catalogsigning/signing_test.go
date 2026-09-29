@@ -3,21 +3,17 @@ package catalogsigning_test
 import (
 	"bytes"
 	"crypto/ed25519"
+	"crypto/sha256"
 	"encoding/base64"
-	"errors"
+
 	"fmt"
 	"os"
 	"strings"
 	"testing"
 
-	"github.com/temper-sh/temper/internal/software/catalog"
 	publication "github.com/temper-sh/temper/internal/software/catalogpublication"
 	"github.com/temper-sh/temper/internal/software/catalogsigning"
 )
-
-type capabilities struct{ err error }
-
-func (c capabilities) ValidateCatalog(catalog.Document) error { return c.err }
 
 func TestParseSeedAcceptsOnlyCanonicalBoundedInput(t *testing.T) {
 	seed := bytes.Repeat([]byte{7}, ed25519.SeedSize)
@@ -46,8 +42,8 @@ func TestParseSeedAcceptsOnlyCanonicalBoundedInput(t *testing.T) {
 }
 
 func TestSignAndVerifyCatalogAndChannel(t *testing.T) {
-	tool, seed := fixtureTool(t, capabilities{})
-	catalogData := fixtureCatalog(1)
+	tool, seed := fixtureTool(t)
+	catalogData := fixtureCatalog(t)
 	catalogEnvelope, err := tool.Sign(catalogsigning.KindCatalog, "", catalogData, seed)
 	if err != nil {
 		t.Fatal(err)
@@ -56,7 +52,7 @@ func TestSignAndVerifyCatalogAndChannel(t *testing.T) {
 		t.Fatalf("Verify(catalog) = key %q, error %v", keyID, err)
 	}
 
-	digest := catalog.SnapshotDigest(catalogData)
+	digest := fmt.Sprintf("%x", sha256.Sum256(catalogData))
 	channelData := fixtureChannel("stable", 1, digest)
 	channelEnvelope, err := tool.Sign(catalogsigning.KindChannel, "stable", channelData, seed)
 	if err != nil {
@@ -68,8 +64,8 @@ func TestSignAndVerifyCatalogAndChannel(t *testing.T) {
 }
 
 func TestCurrentCatalogSigningUsesItsCompiledCapabilities(t *testing.T) {
-	tool, seed := fixtureTool(t, capabilities{})
-	data, err := os.ReadFile("../../../catalog/qwen38-m5-refresh.json")
+	tool, seed := fixtureTool(t)
+	data, err := os.ReadFile("../../../catalog/guided-setup.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,9 +83,9 @@ func TestCurrentCatalogSigningUsesItsCompiledCapabilities(t *testing.T) {
 }
 
 func TestSignRefusesWrongKeyInvalidArtifactAndUnsupportedCatalog(t *testing.T) {
-	tool, seed := fixtureTool(t, capabilities{})
+	tool, seed := fixtureTool(t)
 	wrong := bytes.Repeat([]byte{9}, ed25519.SeedSize)
-	_, err := tool.Sign(catalogsigning.KindCatalog, "", fixtureCatalog(1), wrong)
+	_, err := tool.Sign(catalogsigning.KindCatalog, "", fixtureCatalog(t), wrong)
 	if err == nil || !strings.Contains(err.Error(), "does not match configured trust key") {
 		t.Fatalf("Sign(wrong key) error = %v", err)
 	}
@@ -99,14 +95,9 @@ func TestSignRefusesWrongKeyInvalidArtifactAndUnsupportedCatalog(t *testing.T) {
 		t.Fatalf("Sign(invalid channel) error = %v", err)
 	}
 
-	unsupported, _ := fixtureTool(t, capabilities{err: errors.New("missing adapter")})
-	_, err = unsupported.Sign(catalogsigning.KindCatalog, "", fixtureCatalog(1), seed)
-	if err == nil || !strings.Contains(err.Error(), "unsupported by this release tool") {
-		t.Fatalf("Sign(unsupported catalog) error = %v", err)
-	}
 }
 
-func fixtureTool(t *testing.T, validator capabilities) (catalogsigning.Tool, []byte) {
+func fixtureTool(t *testing.T) (catalogsigning.Tool, []byte) {
 	t.Helper()
 	seed := bytes.Repeat([]byte{7}, ed25519.SeedSize)
 	privateKey := ed25519.NewKeyFromSeed(seed)
@@ -115,7 +106,7 @@ func fixtureTool(t *testing.T, validator capabilities) (catalogsigning.Tool, []b
 	if err != nil {
 		t.Fatal(err)
 	}
-	tool, err := catalogsigning.New("fixture-key", trust, validator)
+	tool, err := catalogsigning.New("fixture-key", trust)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,38 +114,14 @@ func fixtureTool(t *testing.T, validator capabilities) (catalogsigning.Tool, []b
 }
 
 func fixtureChannel(name string, sequence uint64, digest string) []byte {
-	return []byte(fmt.Sprintf("schema: temper-software-channel/v1\nchannel: %s\ncatalog:\n  schema: temper-software-supply/v1\n  sequence: %d\n  sha256: %s\n  locator: https://example.test/catalog/%s/\n", name, sequence, digest, digest))
+	return []byte(fmt.Sprintf("schema: temper-catalog-channel/v1\nchannel: %s\ncatalog:\n  schema: temper-catalog/v3\n  sequence: %d\n  sha256: %s\n  locator: https://example.test/snapshots/%s/\n", name, sequence, digest, digest))
 }
 
-func fixtureCatalog(sequence uint64) []byte {
-	return []byte(fmt.Sprintf(`schema: temper-software-supply/v1
-sequence: %d
-published_at: 2026-08-24T17:36:04Z
-methods:
-  system-package:
-    description: Shared target package manager
-adapters:
-  homebrew:
-    method: system-package
-    protocol: temper-installer-adapter/v1
-    effect_model: shared
-target_bindings:
-  - method: system-package
-    target: {os: darwin, arch: arm64}
-    adapter: homebrew
-packages:
-  fixture:
-    description: Fixture package
-    recipes:
-      homebrew:
-        method: system-package
-        recipe_revision: fixture-homebrew/v1
-        source: {kind: homebrew-formula, tap: homebrew/core, formula: fixture}
-        version_scheme: semver
-        selection: {policy: exact, exact: 1.0.0}
-        dependencies: []
-        exclude: []
-        gates: [fixture-smoke.v1]
-        tested: []
-`, sequence))
+func fixtureCatalog(t *testing.T) []byte {
+	t.Helper()
+	raw, err := os.ReadFile("../../../catalog/guided-setup.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
 }

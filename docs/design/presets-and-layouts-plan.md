@@ -159,12 +159,16 @@ Deleting a layout removes its composition, not shared preset files. Referenced
 preset removal must identify affected layouts and require an explicit resolution.
 Saving an edit does not silently change the active runtime.
 
-## Existing implementation and gaps
+## Implementation baseline and original gaps
+
+This table records the baseline before implementation. Current behavior is
+defined by the [setup contract](../contracts/init.md) and
+[execution-lock contract](../contracts/execution-lock.md).
 
 | Current surface | Change needed |
 |---|---|
 | [Setup command](../../internal/setupcmd/command.go) and [TUI](../../internal/setupui/setupui.go) | Local/Utility are hardcoded selection paths; installation and default choice are coupled to local profiles. Replace with one preset selection and user-owned layouts. |
-| [Catalog records](../../internal/catalog/catalog.go), [presentation](../../internal/catalog/presentation.go) and [description editing](../../internal/catalog/description.go) | Descriptions currently belong to artifacts; there is ordering but no recommended/all distinction. Add preset editorial data and the mandatory-description rule. |
+| [Catalog records](../../internal/catalog/catalog.go), [presentation](../../internal/catalog/presentation.go) and [description editing](../../internal/catalog/presets.go) | Descriptions belong to artifacts in the baseline; there is ordering but no recommended/all distinction. Add preset editorial data and the mandatory-description rule. |
 | [Setup planning](../../internal/setup/plan.go) and [storage](../../internal/setup/store.go) | Saved pairs and defaults rely on local/utility names. Preparation refuses a profile with more than one current Layout. Support arbitrary named compositions and shared presets. |
 | [Catalog compilation](../../internal/catalog/compile.go) and [rendering](../../internal/render/render.go) | Catalog validation currently rejects conflicting engine closures in a profile. Qwen/Splash plus llama.cpp, including different llama.cpp versions, must compose without collapsing their exact dependencies. |
 | [Execution runtime](../contracts/execution-runtime.md) | The measurement supervisor expects a fixed engine lifetime. Managed availability, idle unload/reload and layout transitions need their own lifecycle behavior. Preserve Field Kit's measurement contract. |

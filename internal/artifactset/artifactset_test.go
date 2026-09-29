@@ -189,7 +189,7 @@ func fixtureSet(t *testing.T, root string) (artifactset.Set, map[string][]byte) 
 		Resolved: "2026-08-20",
 	}
 	layout := manifest.Layout{
-		Model:        manifest.Model{Repo: "owner/model", File: "nested/model.gguf"},
+		Model:        manifest.Model{Repo: "owner/model", Format: "gguf", Files: []string{"nested/model.gguf"}},
 		ChatTemplate: "stable-template",
 	}
 	set, err := artifactset.New(root, "coder", layout, entry, map[string]manifest.Patch{

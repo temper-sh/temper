@@ -205,25 +205,26 @@ func materializeCoder(t *testing.T, root, manifestPath, lockPath string) string 
 	return filepath.Join(set.Path(), "receipt.json")
 }
 
-const applyManifest = `schema: temper-manifest/v1
+const applyManifest = `schema: temper-manifest/v2
 defaults: {ttl: 1800, gpu_memory_utilization: 0.85}
 layouts:
   coder:
     display_name: Coder
-    model: {repo: org/Coder, file: coder.gguf}
+    model: {repo: org/Coder, format: gguf, files: [coder.gguf]}
     engine: llama-server
-    role: coder
+    interface: chat-completions
+    modalities: [text]
+    speculation: {method: none}
     window: 8192
     max_tokens: 2048
-    kv: q8
     thinking: off
-    llama: {parallel: 1, flash_attention: on, batch: 512, ubatch: 512}
+    llama: {kv: q8, parallel: 1, flash_attention: on, batch: 512, ubatch: 512}
 modes:
   local:
-    foreground: local
+    foreground: coder
     harnesses: [pi]
     members:
-      resident: [{layout: coder, ttl: 7200, preferred: true}]
+      resident: [{layout: coder, ttl: 7200}]
   off:
     foreground: none
 `

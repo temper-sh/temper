@@ -25,9 +25,9 @@ func qwenStudy(t *testing.T) catalog.Document {
 
 func TestStudyCompositionsCompileRenderAndKeepTheExactPythonClosure(t *testing.T) {
 	document := qwenStudy(t)
-	for id := range document.Profiles {
+	for id := range document.Presets {
 		t.Run(id, func(t *testing.T) {
-			lock, err := catalog.Compile(document, catalog.Selection{Schema: catalog.SelectionSchema, Profile: id}, software.Target{OS: "darwin", Arch: "arm64"})
+			lock, err := catalog.CompilePreset(document, id, "", 0, software.Target{OS: "darwin", Arch: "arm64"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -123,18 +123,18 @@ func TestPythonCatalogRefusesMixedOrIncompleteSupplies(t *testing.T) {
 
 func TestAuxiliaryPythonInputsInvalidateExecutionWithoutChangingEngine(t *testing.T) {
 	document := qwenStudy(t)
-	selection := catalog.Selection{Schema: catalog.SelectionSchema, Profile: "splash-q4"}
+	id := "splash-q4"
 	target := software.Target{OS: "darwin", Arch: "arm64"}
-	before, err := catalog.Compile(document, selection, target)
+	before, err := catalog.CompilePreset(document, id, "", 0, target)
 	if err != nil {
 		t.Fatal(err)
 	}
 	document.Runtime.PythonEnvironments[0].Python.Packages[0].Artifact.SHA256 = strings.Repeat("a", 64)
-	after, err := catalog.Compile(document, selection, target)
+	after, err := catalog.CompilePreset(document, id, "", 0, target)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if before.Digests.Profile == after.Digests.Profile {
+	if before.ExecutionDigest == after.ExecutionDigest {
 		t.Fatal("evaluator change did not invalidate execution")
 	}
 }

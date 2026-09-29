@@ -34,9 +34,6 @@ import (
 	"github.com/temper-sh/temper/internal/software/adapter"
 	"github.com/temper-sh/temper/internal/software/adapter/upstreamrelease"
 	"github.com/temper-sh/temper/internal/software/adapter/uv"
-	"github.com/temper-sh/temper/internal/software/catalogsource"
-	"github.com/temper-sh/temper/internal/software/catalogtrust"
-	"github.com/temper-sh/temper/internal/software/catalogupdate"
 	"github.com/temper-sh/temper/internal/softwarecmd"
 	updateverb "github.com/temper-sh/temper/internal/update"
 	"github.com/temper-sh/temper/internal/upstream"
@@ -126,14 +123,9 @@ func runWithDependencies(ctx context.Context, arguments []string, stdout, stderr
 			return runWithDependencies(ctx, args, out, diagnostics, deps)
 		})
 		command.CacheRoot = deps.cacheRoot
-		for _, arg := range arguments[1:] {
-			if arg == "--profile" || strings.HasPrefix(arg, "--profile=") {
-				return command.Run(ctx, arguments[1:], os.Stdin, stdout, stderr)
-			}
-		}
 		return command.Configure(ctx, arguments[1:], os.Stdin, stdout, stderr)
 	case "catalog", "execution":
-		if arguments[0] == "execution" && len(arguments) > 1 && arguments[1] != "export" {
+		if arguments[0] == "execution" && len(arguments) > 1 {
 			return catalogcmd.Runtime(ctx, arguments[1:], stdout, stderr, func(ctx context.Context, args []string, out, err io.Writer) int {
 				return runWithDependencies(ctx, args, out, err, deps)
 			})
@@ -475,22 +467,7 @@ func newSoftwareCommand() (softwarecmd.Command, error) {
 	if err != nil {
 		return softwarecmd.Command{}, err
 	}
-	trust, err := catalogtrust.Production()
-	if err != nil {
-		return softwarecmd.Command{}, err
-	}
-	source, err := catalogsource.NewProductionHTTPS(&http.Client{})
-	if err != nil {
-		return softwarecmd.Command{}, err
-	}
-	capabilities, err := adapter.NewRegistry(upstreamrelease.Descriptor(), uv.Descriptor())
-	if err != nil {
-		return softwarecmd.Command{}, err
-	}
-	updateCatalog := func(ctx context.Context, options catalogupdate.Options) (catalogupdate.Result, error) {
-		return catalogupdate.Run(ctx, options, trust, source, capabilities)
-	}
-	return softwarecmd.New(family, machine.DetectTarget, newSoftwareInvocationID, updateCatalog)
+	return softwarecmd.New(family, machine.DetectTarget, newSoftwareInvocationID)
 }
 
 func newSoftwareInvocationID() (string, error) {
@@ -574,10 +551,10 @@ func usage(writer io.Writer) {
 	fmt.Fprintln(writer, "  temper probe serve [options]")
 	fmt.Fprintln(writer, "  temper probe tokenize [options]")
 	fmt.Fprintln(writer, "  temper software <install|check|remove> [options]")
-	fmt.Fprintln(writer, "  temper catalog update|inspect|select|rollback --root ROOT [options]")
-	fmt.Fprintln(writer, "  temper catalog describe --catalog FILE --artifact ID --description TEXT [--dry-run]")
-	fmt.Fprintln(writer, "  temper catalog compile (--catalog FILE | --root ROOT) --selection FILE --target darwin/arm64 --out FILE [--software recorded|latest|tested] [--dry-run]")
-	fmt.Fprintln(writer, "  temper execution export --lock FILE --out DIRECTORY [--dry-run]")
+	fmt.Fprintln(writer, "  temper catalog update|inspect|rollback --root ROOT [options]")
+	fmt.Fprintln(writer, "  temper catalog describe --catalog FILE --preset ID --description TEXT [--dry-run]")
+	fmt.Fprintln(writer, "  temper catalog compile (--catalog FILE | --root ROOT) --preset ID --target darwin/arm64 --out FILE [--software recorded|latest|tested] [--dry-run]")
+	fmt.Fprintln(writer, "  temper execution configure --lock FILE --preset ID --context N --max-output N [--max-memory BYTES] --out FILE [--dry-run]")
 	fmt.Fprintln(writer, "  temper execution inspect --lock FILE")
 	fmt.Fprintln(writer, "  temper execution prepare|render|paths|remove --lock FILE --root PATH --installation ID [--dry-run]")
 	fmt.Fprintln(writer, "  temper execution serve --lock FILE --root PATH --installation ID --generation SHA256 --status-file FILE [--listen 127.0.0.1:PORT] [--dry-run]")

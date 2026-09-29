@@ -109,7 +109,7 @@ func reuseFixtureSet(t *testing.T, root, layoutID string, model []byte) artifact
 		Files: []lockfile.File{{Name: "model.gguf", SHA256: hash(model)}},
 	}
 	set, err := artifactset.New(root, layoutID,
-		manifest.Layout{Model: manifest.Model{Repo: "owner/model", File: "model.gguf"}}, entry, nil)
+		manifest.Layout{Model: manifest.Model{Repo: "owner/model", Format: "gguf", Files: []string{"model.gguf"}}}, entry, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

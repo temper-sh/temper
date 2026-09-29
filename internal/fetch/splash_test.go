@@ -14,7 +14,6 @@ import (
 	"github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/fetch"
 	"github.com/temper-sh/temper/internal/lockfile"
-	"github.com/temper-sh/temper/internal/testfixture"
 )
 
 func TestSplashFetchPinsDraftReusesTargetAndRejectsPartialPublication(t *testing.T) {
@@ -22,7 +21,7 @@ func TestSplashFetchPinsDraftReusesTargetAndRejectsPartialPublication(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	doc, err := testfixture.LegacySetupCatalog(raw)
+	doc, err := catalog.Parse(raw)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +48,7 @@ func TestSplashFetchPinsDraftReusesTargetAndRejectsPartialPublication(t *testing
 	root := filepath.Join(t.TempDir(), "root")
 	write := func(profile, layout string) (fetch.Options, catalog.Projections) {
 		t.Helper()
-		locked, err := catalog.Compile(doc, catalog.Selection{Schema: catalog.SelectionSchema, Profile: profile, ContextWindows: map[string]int{layout: 32768}}, doc.Runtime.Router.Target)
+		locked, err := catalog.CompilePreset(doc, layout, "", 32768, doc.Runtime.Router.Target)
 		if err != nil {
 			t.Fatal(err)
 		}
