@@ -1,7 +1,7 @@
 schema: temper-catalog-channel/v1
 channel: stable
 catalog:
-  schema: temper-catalog/v2
-  sequence: 2
-  sha256: 8123f2b65c5e0e071a9944d07f04f40e1f50f6a4872199f72fd20c040efadebe
-  locator: https://temper-sh.github.io/temper/catalog/snapshots/8123f2b65c5e0e071a9944d07f04f40e1f50f6a4872199f72fd20c040efadebe/
+  schema: temper-catalog/v3
+  sequence: 3
+  sha256: 951f957516566a44d7c45e948b85f4ce10cda6c46be2fb1f09bc7aed74dc0d7d
+  locator: https://temper-sh.github.io/temper/catalog/snapshots/951f957516566a44d7c45e948b85f4ce10cda6c46be2fb1f09bc7aed74dc0d7d/

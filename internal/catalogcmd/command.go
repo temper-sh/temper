@@ -161,9 +161,9 @@ func inspectFile(path string, data []byte) (bool, error) {
 	return true, nil
 }
 
-// Each file publishes atomically without replacement. A crash between exported
-// files leaves exact reusable inputs; a later export verifies them and fills only
-// absent files. Callers may consume the set only after a successful command.
+// Publish one immutable output atomically. Replays verify existing bytes;
+// different content and nonregular destinations are refused.
+// A successful return means the output is ready to consume.
 func publishFile(ctx context.Context, path string, data []byte, dry bool) (bool, error) {
 	exists, err := inspectFile(path, data)
 	if err != nil {

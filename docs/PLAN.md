@@ -26,7 +26,7 @@ promotion, resolver and bootstrap proposals are no longer an active backlog.
 | Current router compatibility | The working tree recognizes llama-swap's narrowly scoped macOS inspection helpers and Rapid 0.15.2's reviewed crash-log child, using kernel identity and ancestry. v260 passed native writing/context work. Engine lifetime remains fixed for measurements; unknown children still refuse ownership. Full Go tests, vet and race checks pass; failures and recovery remain in [Labs](../../v3/labs/workstreams/writing-and-orchestration/README.md). |
 | Source and build | Catalog delivery `a9b4a7f` is pushed and tagged alpha.10. Guided setup, native Metal detection and Splash are committed in `3ba7813`. The software receipt simplification is committed in `98b99ce`; the Qwen study preparation adds exact Python closures and probe identities. These changes await release. |
 | Public binary | Signed/notarized [0.1.0-alpha.10](https://github.com/temper-sh/temper/releases/tag/v0.1.0-alpha.10) adds catalog commands. Its downloaded checksum, signing identity, notarization and live-catalog compilation pass. Field Kit `01dd867` keeps its verified alpha.9 host; alpha.7 remains the dispatched revision 1 host. |
-| Catalog distribution | The [stable channel](https://temper-sh.github.io/temper/catalog/channels/stable/channel.yaml) publishes signed sequence 2 with one Qwen profile. Current code requires v3; the signed v3 publication remains a separate release step. [The catalog guide](CATALOG.md) owns use. |
+| Catalog distribution | The live [stable channel](https://temper-sh.github.io/temper/catalog/channels/stable/channel.yaml) serves sequence 2. Signed v3 sequence 3 is prepared and locally verified for alpha.11. [The catalog guide](CATALOG.md) owns use. |
 | Catalog candidate | V3 authoring has five Recommended presets: Qwen/Splash, Glimmer, Gemma 26B, Gemma 31B and Qwen/llama. All retains Gemma E2B/E4B and Qwen3.5. The writing presets use b11205; Qwen/llama and smaller presets retain their exact closures. The router is v260. Historical evidence keeps its producing versions. The catalog is unpublished. |
 
 The receipt simplification passes full Go tests, vet and race checks after
@@ -79,17 +79,39 @@ execution exports, the separate software catalog/updater and dead generic
 resolvers/policy. Preset compilation is native. The proposed study patch is
 integrated, including per-run configuration and v3 study authoring.
 
-Historical context-evidence hashes retain their original definition. Signed
-published snapshot bytes and historical measurements are unchanged. Before a
-release, publish a reviewed v3 signed catalog and regenerate the current Field
-Kit package with this host; issued experiments retain their pinned older host.
-These are explicit release boundaries, not compatibility work to reintroduce.
+Historical context-evidence hashes retain their original definition. Published
+snapshot bytes and historical measurements are unchanged. The cleanup is
+committed as `24df332`. Issued experiments retain their pinned older host.
 
 Verification passed: the full Go suite, vet and race checks; all eight study
 presets compiled in a temporary Field Kit copy, whose verifier and 96 hermetic
 tests passed. Its public inspect/configure integration accepted the new locks;
 dry runs left no runtime root, and repeated configuration left output untouched.
-The adjacent Field Kit tree and live service were not changed.
+The subsequent owner-authorized release preparation regenerates the current
+Field Kit package with alpha.11; older packages and the live service are unchanged.
+
+## Alpha.11 release preparation
+
+The release candidate is `0.1.0-alpha.11`; remote tags were checked before
+preparation. Signed catalog sequence 3 contains the exact guided catalog
+snapshot `951f957516566a44d7c45e948b85f4ce10cda6c46be2fb1f09bc7aed74dc0d7d`.
+Both signatures and their channel/snapshot join verify with the production key.
+[Release notes](releases/0.1.0-alpha.11.md) cover the new operations and explicit
+format break. The tag workflow requires those notes and a valid publication.
+
+Local packaging uses `build/release-0.1.0-alpha.11/temper` and
+`dist/unsigned-0.1.0-alpha.11/`. This is an unsigned rehearsal. Publishing the
+master commit deploys the catalog; pushing `v0.1.0-alpha.11` starts signing,
+notarization and release publication. Verify the downloaded signed assets before
+updating Field Kit's bootstrap version and checksum. That final pin cannot use
+the unsigned rehearsal's checksum.
+
+The candidate passes the full Go suite, vet and race checks. Building and
+packaging twice leaves identical output. The cleanly extracted archive passes
+version, shape, checksum, compile/configure/replay and execution dry-run checks.
+Field Kit verifies and passes 97 tests on Python 3.9 and 3.14. Both synthetic RAM
+routes pass real-host preview without writes, and all 17 route cells pass exact
+configuration and inspection. No study inference is implied by these checks.
 
 ## Next delivery
 

@@ -71,9 +71,8 @@ For scripted choices:
   --context qwen3.8-27b-q4xl-mtp=40960 --dry-run --json
 ```
 
-The historical signed stable catalog
-retain their issued schemas and 32k configuration. They are historical exact
-inputs, not parallel mutable authoring sources.
+Signed sequence 3 is prepared from this catalog for alpha.11. Historical signed
+snapshots retain their issued schemas and 32k configuration for pinned clients.
 
 ## Assessed uses and boundaries
 

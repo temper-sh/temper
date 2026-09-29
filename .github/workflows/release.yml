@@ -46,6 +46,8 @@ jobs:
           go test -count=1 ./...
           go vet ./...
           go test -race -count=1 ./...
+          go run ./cmd/temper-catalog verify-publication --root docs/catalog
+          test -s "docs/releases/${RELEASE_TAG#v}.md"
 
       - name: Build versioned macOS ARM64 binary
         shell: bash
@@ -74,9 +76,11 @@ jobs:
           keychain_password="$(uuidgen)"
 
           printf '::add-mask::%s\n' "$keychain_password"
-          printf 'TEMPER_CERTIFICATE_PATH=%s\n' "$certificate_path" >> "$GITHUB_ENV"
-          printf 'TEMPER_KEYCHAIN_PATH=%s\n' "$keychain_path" >> "$GITHUB_ENV"
-          printf 'TEMPER_KEYCHAIN_PASSWORD=%s\n' "$keychain_password" >> "$GITHUB_ENV"
+          {
+            printf 'TEMPER_CERTIFICATE_PATH=%s\n' "$certificate_path"
+            printf 'TEMPER_KEYCHAIN_PATH=%s\n' "$keychain_path"
+            printf 'TEMPER_KEYCHAIN_PASSWORD=%s\n' "$keychain_password"
+          } >> "$GITHUB_ENV"
           printf '%s' "$APPLE_DEVELOPER_ID_APPLICATION" |
             openssl base64 -d -A -out "$certificate_path"
           security create-keychain -p "$keychain_password" "$keychain_path"
@@ -181,7 +185,7 @@ jobs:
           codesign --verify --strict --verbose=2 "$binary"
 
           notarization_verified=false
-          for attempt in 1 2 3 4 5; do
+          for _attempt in 1 2 3 4 5; do
             if codesign \
               --verify \
               --strict \
@@ -266,11 +270,12 @@ jobs:
           create_body="$(jq -nc \
             --arg tag "$RELEASE_TAG" \
             --argjson prerelease "$prerelease" \
+            --rawfile body "docs/releases/$VERSION.md" \
             '{
               tag_name: $tag,
               draft: true,
               prerelease: $prerelease,
-              generate_release_notes: true
+              body: $body
             }')"
           release_response="$(curl --fail --silent --show-error --location \
             "${api_headers[@]}" \

@@ -38,10 +38,9 @@ satisfy required versions; failures never select a fallback automatically.
 
 ## Signed catalog updates
 
-Current source accepts only catalog v3 and execution-lock v3. The checked-in
-stable publication still contains catalog v2 for released alpha clients. A
-reviewed, signed v3 publication is required before the current source can use
-`catalog update`; use the explicit authoring catalog until then.
+Current source accepts only catalog v3 and execution-lock v3. Signed sequence 3
+is prepared in `docs/catalog` for alpha.11. The live channel still serves v2
+until that commit is deployed; use the explicit authoring catalog until then.
 
 Once a v3 catalog is published:
 
@@ -60,5 +59,6 @@ accepted sequence, so an older network response cannot silently roll it back.
 See the [distribution contract](contracts/catalog-distribution.md).
 
 Older catalogs, Selection files and saved execution locks need fresh compilation
-and configuration. Historical experiments keep their pinned older host; current
-Temper does not migrate them.
+and configuration in a fresh root, such as `--root "$HOME/.temper-alpha11"`.
+Historical experiments keep their pinned older host; current Temper does not
+migrate their catalog stores or configuration.

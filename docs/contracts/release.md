@@ -67,6 +67,10 @@ The tag workflow runs on a native GitHub-hosted macOS ARM64 runner. It:
 8. uses GitHub's REST API and the scoped workflow token to create a draft,
    upload both verified assets, and publish only after every prior gate passes.
 
+The tagged tree must include a valid signed catalog publication and reviewed
+release notes at `docs/releases/<SEMVER>.md`. The workflow uses those notes as
+the release body so incompatible alpha changes are explicit.
+
 The signing certificate, certificate password, Apple ID app password, team
 identity, and temporary keychain password never enter the tree or release
 asset. A missing signing/notarization credential fails closed. The temporary

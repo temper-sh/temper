@@ -80,7 +80,7 @@ steps.
 
 The current source compiles catalog presets to exact execution-lock v3 inputs.
 [Browse and use the catalog](docs/CATALOG.md). Use the local authoring catalog
-until its v3 signed publication is released; the existing alpha publication
+until signed sequence 3 is deployed with alpha.11; the live alpha publication
 still serves older clients.
 
 ### Preview guided setup from source
@@ -118,8 +118,8 @@ It does not change the running legacy service.
 [Set up and manage presets and layouts](docs/contracts/init.md) covers scripted
 editing, offline resume, activation and recovery. The
 [authoring catalog guide](catalog/README.md) links measured configurations and
-limitations. Its five recommendations are unpublished; the released signed
-catalog retains its original configuration for older clients. Memory figures are predictions
+limitations. Its five recommendations are signed in the prepared sequence 3;
+deployment remains pending. Memory figures are predictions
 unless tied to exact applicable evidence; 8/16 GiB machine fit remains
 unmeasured.
 
