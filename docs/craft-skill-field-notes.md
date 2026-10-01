@@ -422,5 +422,16 @@ compiler and configuration commands across Field Kit's frozen matrix. A real-hos
 preview exposed an output-parent precondition missing from the fake; the preview
 now uses the existing private directory without writing a lock. Reliable-effects
 guidance kept the bootstrap pin tied to the downloaded signed archive and checked
-fresh setup plus unchanged replay. [Delivery verification](PLAN.md#alpha11-delivery)
-records the result. Existing guidance was sufficient; no skill change is proposed.
+fresh setup plus unchanged replay. The local maintainer plan records delivery
+verification. Existing guidance was sufficient; no skill change is proposed.
+
+## Homebrew distribution — 2026-09-30
+
+Ruby guidance followed Homebrew's formula conventions. Reliable-effects guidance
+kept immutable bottle assets ahead of the formula update and retained published
+bytes on retry. Testing exercised a real source install and bottle pour in an
+isolated prefix. Homebrew's local-package-path policy required the normal trusted
+formula and checksum-cache route; a syntax check alone would not have exposed
+that installation boundary. The formula's functional test reads an empty user
+configuration without creating a root or requiring a GPU. Existing guidance was
+sufficient; no skill change is proposed. Bottle asset publication remains pending.

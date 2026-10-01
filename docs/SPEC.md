@@ -1,7 +1,7 @@
 # temper — product spec
 
 **Current preset/layout contract, 2026-09-29:** the
-[accepted decisions](design/presets-and-layouts-plan.md#accepted-decisions)
+[preset and layout contract](contracts/layouts.md)
 ship in alpha.11. A preset owns weights, engine and settings; a layout
 is the user's named composition with independent membership, startup loading
 and optional default. Five presets are Recommended and require manual copy;
@@ -1005,11 +1005,9 @@ reach the same standard before an installable tool is offered with those claims.
 
 ## Open questions (owner)
 
-1. Final public distribution: brew formula vs curl-installer vs release-asset
-   binary. A directly supplied checksummed pre-release binary is sufficient
-   for Field Kit installed-base work and does not settle this choice.
-   (The Go-*scope* half that used to fold in here was settled 2026-08-14 —
-   the whole CLI is Go; only distribution remains.)
+1. Distribution (settled 2026-09-30): a Homebrew formula and bottles accompany
+   the signed release ZIP. The [release contract](contracts/release.md#homebrew-formula-and-bottles)
+   owns packaging and publication; Field Kit continues to pin the signed ZIP.
 2. Do `local` and `utility` each have enough complete model + tool + harness
    evidence to ship as qualified v1 modes? (Reframed 2026-08-19: the four
    candidates collapsed to two, so this is now two questions rather than

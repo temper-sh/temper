@@ -1,12 +1,12 @@
 # Run an explicit Temper configuration
 
-This guide is for collaborators who already have a reviewed `manifest.yaml`,
-its `manifest.lock.yaml`, and any required `software.lock.yaml`. It is not a
-model-selection guide: Temper will not infer a model, engine, mode, tool, or
-live installation for you.
+Use this advanced workflow to download, inspect and render a configuration
+you maintain yourself. You need a `manifest.yaml`, its `manifest.lock.yaml`,
+and a `software.lock.yaml` if you also want to install the serving software.
 
-Use an isolated Temper root. Do not point these commands at a live service or
-consumer configuration unless that cutover has been reviewed separately.
+For everyday setup, follow [Set up and use your local models](contracts/init.md).
+The commands below use a separate Temper root so you can inspect the result
+before connecting it to an application.
 
 ## Resolve and inspect the model configuration
 
@@ -55,7 +55,7 @@ temper check \
 ```
 
 Add `--verify` when you want a full SHA-256 read of every selected artifact.
-Without it, the check uses the admitted immutable artifact-set records.
+Without it, the check uses the records created when the files were fetched.
 
 Preview the rendered generation:
 
@@ -74,7 +74,7 @@ Temper will not preview configuration backed by missing model material. Remove
 root. `apply` does not activate that generation in a live llama-swap or harness
 configuration.
 
-## Install an exact software closure
+## Install the software listed in a lock
 
 An already-resolved software lock can describe a shared base or an isolated
 experiment environment. Preview the complete installation first:
@@ -87,12 +87,12 @@ temper software install \
   --dry-run
 ```
 
-Remove `--dry-run` to install only the named, locked closure. Temper's compiled
-isolated methods support reviewed upstream release archives and uv environments
-made from an exact managed CPython plus a hash-required wheel set. Temper does
-not discover ambient Python packages, indexes, or caches as dependencies.
+Remove `--dry-run` to install the software and dependencies listed in the lock.
+Supported installations use release archives or isolated Python environments
+with pinned, verified packages. They do not depend on your system's Python
+packages.
 
-Check the installed provider, receipt, requirements, and shared claims:
+Check that the installation matches its lock:
 
 ```sh
 temper software check \
@@ -101,7 +101,7 @@ temper software check \
   --root /path/to/isolated/temper-root
 ```
 
-Preview provenance-guided removal:
+Preview removal:
 
 ```sh
 temper software remove \
@@ -117,12 +117,11 @@ another installation.
 
 ## Start a bounded probe
 
-`temper probe serve` is intended for a Field Kit stage rather than direct
-interactive use. It admits only a rendered generation whose required
-executables resolve inside matching software receipts, then starts a loopback
-foreground process group. Review the exact interface and shutdown behavior in
-the [probe contract](contracts/probe-serve.md).
+`temper probe serve` starts a temporary local server for an experiment. It
+checks the rendered configuration and installed software before starting, and
+runs in the foreground. Field Kit uses this command to manage bounded tests;
+the [probe reference](contracts/probe-serve.md) describes its inputs and shutdown
+behavior.
 
-This isolated probe is not Temper's future production `start`, `stop`, or
-`status` lifecycle. It never selects a question, model, or experiment and does
-not take over the live service.
+For a saved everyday layout, use
+[`temper layout activate`, `status` and `stop`](contracts/init.md#activate-inspect-and-stop).

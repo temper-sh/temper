@@ -1,9 +1,16 @@
 # Working in Temper
 
-Read `README.md`, `docs/SPEC.md`, and `docs/PLAN.md` before designing or
-building anything here. This repository carries the product quality bar:
+Read `README.md` and `docs/SPEC.md` before designing or building anything here.
+Also read `docs/PLAN.md` when present in the maintainer's workspace; planning
+documents stay local and are not tracked. This repository carries the product quality bar:
 lab-grade, disposable, machine-specific code does not land here, however well
 it worked once.
+
+For work involving Guild, agentic-research or harness integration, read the
+[shared engineering charter](../../guild/work/coordination/charter.md) and the
+relevant [coordination exchanges](../../guild/work/plan.md#dependencies-and-integration).
+These describe common purpose and feedback; Temper's product boundaries and
+local plan remain authoritative.
 
 ## Boundaries
 

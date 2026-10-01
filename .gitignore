@@ -7,3 +7,7 @@
 /temper
 /build/
 /dist/
+
+# Planning documents stay in the maintainer's local workspace.
+*[Pp][Ll][Aa][Nn]*.md
+plans/

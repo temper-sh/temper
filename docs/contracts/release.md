@@ -1,10 +1,11 @@
 # Temper release artifact contract
 
-Status: approved pre-alpha release surface, 2026-08-27.
+Status: direct-download release and Homebrew distribution contract, 2026-09-30.
 
-The first public distribution is one Developer ID-signed and Apple-notarized
-macOS ARM64 release asset. Homebrew and a curl installer may follow after the
-alpha stabilizes; neither is required to install or run Field Kit.
+The direct-download distribution is one Developer ID-signed and Apple-notarized
+macOS ARM64 release asset. Homebrew supplies a source formula and ARM64 bottles
+through this repository's tap. Field Kit continues to pin the signed ZIP;
+Homebrew installation does not change its host identity.
 
 ## Version and target
 
@@ -119,3 +120,80 @@ go run ./cmd/temper-release package \
 Running the two Go commands again must report `state=unchanged`. A different
 binary or checksum at an existing version is a hard error. The example version
 is illustrative; a rehearsal does not create or reserve a tag.
+
+## Homebrew formula and bottles
+
+`Formula/temper.rb` makes the existing repository a tap; no separate tap
+repository or credential is needed:
+
+```sh
+brew tap temper-sh/temper https://github.com/temper-sh/temper
+brew trust --formula temper-sh/temper/temper
+brew install temper-sh/temper/temper
+```
+
+Homebrew 7 requires explicit formula trust; older versions omit that command.
+The formula is macOS ARM64 only. Its SHA-256 pins the tagged source archive,
+and its build invokes the existing `temper-release build` and `package`
+commands. The keg contains the CLI, Temper's license and the generated linked
+dependency notices. Go is a build dependency, not a bottle runtime dependency.
+There is no Homebrew service or post-install setup hook. Installing, upgrading
+or removing the formula does not configure models or manage a Temper root.
+Stop active layouts before upgrading or removing their CLI: a managed layout
+retains the exact launcher path from activation.
+
+These are ordinary Homebrew builds and checksummed bottles, independently built
+from the release's source. They do not carry the direct ZIP's Developer ID
+signature or notarization. The signed ZIP remains available for callers that
+require that distribution identity.
+
+The `Homebrew` workflow runs after the signed release has been published. It
+can also prepare or publish a bottle for an existing release through
+`workflow_dispatch`; its `publish` input defaults to false. It:
+
+1. checks out the current default branch as the maintained tap;
+2. verifies the named release exists, is public and contains the direct ZIP;
+3. checksums the source archive and updates the formula with Homebrew's
+   `bump-formula-pr --write-only`, refusing a version downgrade;
+4. builds the formula with `--build-bottle`, runs `brew test`, and creates a
+   genuine Homebrew bottle with `brew bottle --json`;
+5. merges the generated bottle block without committing, removes the build's
+   keg, pours the bottle, then reruns the formula test and strict audit;
+6. retains the verified formula, bottle and Homebrew bottle JSON as a workflow
+   artifact; and
+7. when publication was requested, uploads the bottle and JSON to the existing
+   release before committing only the updated formula to the default branch.
+
+The native `macos-15` ARM64 runner emits an `arm64_sequoia` bottle. Homebrew
+chooses compatible bottles on newer macOS versions; other eligible versions
+use the source build. A locally prepared bottle retains its actual platform tag.
+Local bottles are rehearsal artifacts: their Homebrew receipts can contain
+workstation paths. Publish bottles from CI. The initial maintained formula
+supports source installation; its bottle block is added only after the CI
+archive is uploaded, so it never advertises an unavailable download.
+The formula test verifies the version, reads an empty configuration without
+creating its root, and checks that dependency notices were installed. It needs
+no model, network request, Metal device or launchd operation.
+
+Publication uses the workflow's `contents: write` token. The default branch
+must permit that workflow to commit the formula. The release tag and existing
+ZIP/checksum are never rewritten. A published bottle and its JSON are reused
+on a repeated run, preserving their exact bytes. Existing assets are compared
+before upload; different bytes at the same name refuse publication. The formula
+advances only after both assets are available. A concurrent branch update
+refuses the push rather than force-pushing; rerunning uses the existing bottle
+and applies its formula to the current branch.
+
+For the initial release or a failed formula update, invoke the same workflow:
+
+```sh
+gh workflow run homebrew.yml --repo temper-sh/temper \
+  -f tag=v0.1.0-alpha.11 -F publish=false
+```
+
+Review its `homebrew-v0.1.0-alpha.11` artifact and checks, then repeat with
+`-F publish=true` to publish. A partial upload with no bottle JSON is recovered
+using the retained workflow artifact; upload its missing bytes unchanged.
+Do not delete or overwrite an existing bottle to make a retry succeed. A
+deliberate packaging change to already published bytes requires Homebrew's
+bottle rebuild mechanism and a reviewed formula update.

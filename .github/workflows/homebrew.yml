@@ -1,0 +1,185 @@
+name: Homebrew
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+      publish:
+        default: false
+        type: boolean
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing Temper release tag
+        required: true
+        type: string
+      publish:
+        description: Upload the bottle and update the formula on the default branch
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: homebrew-publication
+  cancel-in-progress: false
+
+jobs:
+  bottle:
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ inputs.tag }}
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_ANALYTICS: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+    steps:
+      # The release tag stays immutable; the tap tracks the default branch.
+      - name: Check out the maintained formula
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+
+      - name: Register the checkout as a tap
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = arm64
+          tap_path="$(brew --repository)/Library/Taps/temper-sh/homebrew-temper"
+          mkdir -p "$(dirname "$tap_path")"
+          test ! -e "$tap_path"
+          ln -s "$GITHUB_WORKSPACE" "$tap_path"
+          if brew command trust >/dev/null 2>&1; then
+            brew trust --formula temper-sh/temper/temper
+          fi
+
+      - name: Prepare the exact released source
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.+-]+)?$ ]]
+          version="${RELEASE_TAG#v}"
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --json tagName,isDraft,assets > "$RUNNER_TEMP/temper-release.json"
+          jq -e --arg tag "$RELEASE_TAG" --arg asset "temper_${version}_darwin_arm64.zip" \
+            '.tagName == $tag and .isDraft == false and any(.assets[]; .name == $asset)' \
+            "$RUNNER_TEMP/temper-release.json"
+
+          url="https://github.com/temper-sh/temper/archive/refs/tags/$RELEASE_TAG.tar.gz"
+          curl --fail --location --silent --show-error "$url" -o "$RUNNER_TEMP/temper-source.tar.gz"
+          checksum="$(shasum -a 256 "$RUNNER_TEMP/temper-source.tar.gz" | cut -d ' ' -f 1)"
+          brew info --json=v2 temper-sh/temper/temper > "$RUNNER_TEMP/temper-formula.json"
+          current="$(jq -r '.formulae[0].versions.stable' "$RUNNER_TEMP/temper-formula.json")"
+          if [[ "$current" != "$version" ]]; then
+            brew bump-formula-pr --write-only --no-audit \
+              --url="$url" --sha256="$checksum" temper-sh/temper/temper
+          else
+            jq -e --arg url "$url" --arg sha "$checksum" \
+              '.formulae[0].urls.stable | .url == $url and .checksum == $sha' \
+              "$RUNNER_TEMP/temper-formula.json"
+          fi
+
+          bottle_tag="$(brew ruby -e 'require "utils/bottles"; puts Utils::Bottles.tag')"
+          {
+            printf 'VERSION=%s\n' "$version"
+            printf 'BOTTLE_JSON=temper--%s.%s.bottle.json\n' "$version" "$bottle_tag"
+            printf 'BOTTLE_ROOT=https://github.com/temper-sh/temper/releases/download/%s\n' "$RELEASE_TAG"
+          } >> "$GITHUB_ENV"
+
+      - name: Build a bottle or reuse the published bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/homebrew
+          cd dist/homebrew
+          if jq -e --arg name "$BOTTLE_JSON" 'any(.assets[]; .name == $name)' \
+            "$RUNNER_TEMP/temper-release.json" >/dev/null; then
+            gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$BOTTLE_JSON"
+            filename="$(jq -r '.[].bottle.tags[].filename' "$BOTTLE_JSON" |
+              python3 -c 'import sys, urllib.parse; print(urllib.parse.unquote(sys.stdin.read().strip()))')"
+            gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$filename"
+          else
+            brew install --build-bottle temper-sh/temper/temper
+            brew test temper-sh/temper/temper
+            brew bottle --json --no-rebuild --root-url="$BOTTLE_ROOT" temper-sh/temper/temper
+            filename="$(jq -r '.[].bottle.tags[].filename' "$BOTTLE_JSON" |
+              python3 -c 'import sys, urllib.parse; print(urllib.parse.unquote(sys.stdin.read().strip()))')"
+            local_filename="$(jq -r '.[].bottle.tags[].local_filename' "$BOTTLE_JSON")"
+            mv "$local_filename" "$filename"
+            brew uninstall temper-sh/temper/temper
+          fi
+
+          jq -e --arg version "$VERSION" --arg root "$BOTTLE_ROOT" \
+            'length == 1 and (.[].formula.pkg_version == $version) and
+             (.[].bottle.root_url == $root) and (.[].bottle.tags | length == 1)' "$BOTTLE_JSON"
+          checksum="$(jq -r '.[].bottle.tags[].sha256' "$BOTTLE_JSON")"
+          printf '%s  %s\n' "$checksum" "$filename" | shasum -a 256 -c -
+          printf 'BOTTLE_FILE=%s\n' "$filename" >> "$GITHUB_ENV"
+
+      - name: Pour and test the bottle
+        shell: bash
+        run: |
+          set -euo pipefail
+          brew bottle --merge --write --no-commit "dist/homebrew/$BOTTLE_JSON"
+          # Use the trusted formula's normal download/checksum path, including
+          # on hosts whose Homebrew policy forbids package paths as arguments.
+          cache_path="$(brew ruby -e 'puts Formulary.factory("temper-sh/temper/temper").bottle.cached_download')"
+          mkdir -p "$(dirname "$cache_path")"
+          cp "dist/homebrew/$BOTTLE_FILE" "$cache_path"
+          brew install --force-bottle temper-sh/temper/temper
+          brew test temper-sh/temper/temper
+          brew audit --strict temper-sh/temper/temper
+          git diff --check
+          cp Formula/temper.rb dist/homebrew/temper.rb
+
+      - name: Preserve the verified bottle and formula
+        uses: actions/upload-artifact@v7
+        with:
+          name: homebrew-${{ inputs.tag }}
+          path: dist/homebrew/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish immutable bottle assets
+        if: inputs.publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist/homebrew
+          # Upload the archive before its discovery metadata. An interrupted
+          # upload can be retried only with identical bytes, never --clobber.
+          for asset in "$BOTTLE_FILE" "$BOTTLE_JSON"; do
+            gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets \
+              > "$RUNNER_TEMP/temper-homebrew-assets.json"
+            if jq -e --arg name "$asset" 'any(.assets[]; .name == $name)' \
+              "$RUNNER_TEMP/temper-homebrew-assets.json" >/dev/null; then
+              verify_dir="$(mktemp -d "$RUNNER_TEMP/temper-bottle-verify.XXXXXX")"
+              gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+                --pattern "$asset" --dir "$verify_dir"
+              cmp "$asset" "$verify_dir/$asset"
+            else
+              gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" "$asset"
+            fi
+          done
+
+      - name: Advance the maintained formula
+        if: inputs.publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add Formula/temper.rb
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m "Homebrew: temper $VERSION"
+          # A concurrent branch update refuses the push. A rerun reuses the
+          # uploaded bottle and reapplies the formula to the current branch.
+          git push origin "HEAD:$DEFAULT_BRANCH"

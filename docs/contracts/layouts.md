@@ -77,3 +77,52 @@ The [bounded M5 smoke](../design/managed-layout-smoke.md#observed-result) exerci
 mixed engines, idle reload, busy transitions and owned shutdown. Its startup
 and cold-cache limits remain explicit; unit recovery tests and the harmless
 exec/reload test establish separate mechanical behavior.
+
+## Script preset and layout changes
+
+Select exact catalog presets, optionally customize settings or save one under a
+new name. Omitting layout editing creates no implicit layout or default:
+
+```sh
+temper configure --root "$HOME/.temper-script" \
+  --preset qwen3.5-4b-q4km-off --context qwen3.5-4b-q4km-off=16384 --dry-run --json
+```
+
+Omit `--dry-run` to save. Repeat `--preset` for several choices. `--template
+PRESET=PATCH|builtin` overrides its template. `--as ID --name NAME`, with one
+`--preset`, creates a separately named customization. Replacing an existing
+preset ID updates every layout referencing it; review lists those references.
+
+Inspect and edit a saved configuration without a catalog read:
+
+```sh
+temper configure --root "$HOME/.temper-script" --show --json > current.json
+```
+
+That response contains `revision` and `configuration`. Save the edited
+`configuration` object as `choices.json`, keeping exact locks unchanged when
+only changing layouts. Its layout map can contain, for example:
+
+```json
+{
+  "desk": {
+    "name": "Writing desk",
+    "presets": ["qwen3.5-4b-q4km-off"],
+    "startup": [],
+    "default": "qwen3.5-4b-q4km-off",
+    "idle_seconds": 600
+  }
+}
+```
+
+Submit the complete configuration with the observed revision:
+
+```sh
+temper configure --root "$HOME/.temper-script" --file choices.json \
+  --revision REVISION_FROM_CURRENT_JSON --dry-run --json
+```
+
+Omit `--dry-run` to commit. `--remove-preset ID --revision REVISION` removes only
+an unreferenced choice. `--resume --json` reports saved exact choices and fresh
+machine facts without a catalog/network read. JSON review uses
+`temper-configuration-result/v1`; the schema above defines the saved configuration.

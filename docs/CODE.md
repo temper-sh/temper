@@ -1,4 +1,24 @@
-# Maintainer code map
+# Contributing and building from source
+
+For normal installation, use [Homebrew](../README.md#get-started). To work on
+Temper itself, clone this repository and install Go 1.26 or newer. On an Apple
+Silicon Mac, build from the repository root:
+
+```sh
+go build -o build/temper ./cmd/temper
+./build/temper --help
+```
+
+Run `go test ./...` for code changes. Tests use isolated fixtures and do not
+start your local model service. Documentation changes need link and command
+checks; they do not need a model run. See the
+[release reference](contracts/release.md) for packaging and signing.
+
+Use [issues](https://github.com/temper-sh/temper/issues) for bugs and proposals.
+Include the Temper version, machine, command and error when reporting a problem.
+For a code change, the map below locates the relevant implementation and tests.
+
+## Maintainer code map
 
 This document answers the maintenance question: **where does a change go, and
 what else must move with it?** It maps the current Go implementation without
@@ -7,7 +27,8 @@ replacing its product contracts or narrating every function.
 Use the authority stack in this order:
 
 1. `docs/SPEC.md` defines product behavior and non-negotiable boundaries.
-2. `docs/PLAN.md` defines sequencing, gates, and accepted engineering work.
+2. The local `docs/PLAN.md`, when present, defines sequencing, gates, and accepted
+   engineering work. Planning documents are not tracked or published.
 3. `docs/design/` defines persistent schemas and cross-component contracts.
 4. `docs/contracts/` defines public command behavior and stable output.
 5. This file locates the implementation of those decisions.
@@ -165,11 +186,15 @@ Current Field Kit source and runtime live in the adjacent repository and call
 only public Temper primitives. Field Kit catalogs, question packages, sessions,
 protocols, evidence, and reports are not copied into this repository.
 
-Release assets are assembled only by `cmd/temper-release` under
+Direct-download release assets are assembled only by `cmd/temper-release` under
 `docs/contracts/release.md`. The command refuses non-ARM64 Mach-O input,
 module replacements, missing root license/notice material, and same-version
-artifact collisions. Developer ID credentials and publication authority exist
-only in the tag workflow.
+artifact collisions. Developer ID credentials exist only in the tag workflow.
+`Formula/temper.rb` invokes that builder and notice packaging for source installs;
+`.github/workflows/homebrew.yml` uses Homebrew itself to build, test and package
+bottles. Bottle assets precede the formula's default-branch update. The
+[release contract](contracts/release.md#homebrew-formula-and-bottles) owns this
+distribution path and its publication/retry boundaries.
 
 The use-case packages `resolve`, `update`, `fetch`, `apply`, and `check`
 compose these capabilities. Cross-use-case facts belong in the packages above;
@@ -332,7 +357,7 @@ Update documentation in the same commit as the change it explains:
 | Change | Documentation home |
 |---|---|
 | Product behavior or boundary | `docs/SPEC.md` |
-| Milestone, gate, or sequencing | `docs/PLAN.md` |
+| Milestone, gate, or sequencing | Local `docs/PLAN.md` (not tracked) |
 | Persistent schema or cross-component contract | `docs/design/` |
 | Public flags, output, refusal, or mutation behavior | `docs/contracts/` |
 | Package boundary, operation path, dependency direction, or durable path | this file |
