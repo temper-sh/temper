@@ -1,0 +1,408 @@
+// Package render turns validated Temper inputs into a complete config bundle.
+// It is deliberately pure: callers provide bytes and paths, and it performs
+// no filesystem or network access.
+package render
+
+import (
+	"crypto/sha256"
+	"encoding/binary"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
+
+	"github.com/temper-sh/temper/internal/artifactset"
+	"github.com/temper-sh/temper/internal/lockfile"
+	"github.com/temper-sh/temper/internal/manifest"
+	"github.com/temper-sh/temper/internal/render/engine"
+	"github.com/temper-sh/temper/internal/runtimeconfig"
+	"github.com/temper-sh/temper/internal/splash"
+)
+
+type Inputs struct {
+	Manifest manifest.Document
+	Lock     lockfile.Document
+	Mode     string
+	Root     string
+}
+
+type Artifact struct {
+	Path string
+	Data []byte
+}
+
+type Bundle struct {
+	Mode      string
+	Artifacts []Artifact
+}
+
+func (b Bundle) Digest() string {
+	hash := sha256.New()
+	artifacts := append([]Artifact(nil), b.Artifacts...)
+	sort.Slice(artifacts, func(i, j int) bool { return artifacts[i].Path < artifacts[j].Path })
+	for _, artifact := range artifacts {
+		writeHashPart(hash, []byte(artifact.Path))
+		writeHashPart(hash, artifact.Data)
+	}
+	return hex.EncodeToString(hash.Sum(nil))
+}
+
+func Build(inputs Inputs) (Bundle, error) {
+	if err := inputs.Manifest.Validate(); err != nil {
+		return Bundle{}, err
+	}
+	if err := inputs.Lock.Validate(); err != nil {
+		return Bundle{}, err
+	}
+	if !filepath.IsAbs(inputs.Root) || filepath.Clean(inputs.Root) != inputs.Root || inputs.Root == string(filepath.Separator) {
+		return Bundle{}, errors.New("render root must be a clean absolute path other than filesystem root")
+	}
+	if strings.ContainsAny(inputs.Root, "\r\n\x00") {
+		return Bundle{}, errors.New("render root contains an unsupported control character")
+	}
+
+	mode, err := inputs.Manifest.Mode(inputs.Mode)
+	if err != nil {
+		return Bundle{}, err
+	}
+	resolved, err := resolveMembers(inputs.Manifest, inputs.Lock, mode, inputs.Root)
+	if err != nil {
+		return Bundle{}, err
+	}
+
+	llamaSwap, requirements, err := renderLlamaSwap(inputs.Manifest.Defaults, resolved, !mode.ExternalForeground)
+	if err != nil {
+		return Bundle{}, err
+	}
+	runtimeRequirements, err := renderRuntimeRequirements(requirements)
+	if err != nil {
+		return Bundle{}, err
+	}
+	bundle := Bundle{
+		Mode: inputs.Mode,
+		Artifacts: []Artifact{
+			{Path: "llama-swap/config.yaml", Data: llamaSwap},
+			{Path: "runtime/requirements.json", Data: runtimeRequirements},
+		},
+	}
+
+	return bundle, nil
+}
+
+type resolvedMember struct {
+	ID              string
+	Layout          manifest.Layout
+	Member          manifest.Member
+	Placement       string
+	ModelPath       string
+	DraftPath       string
+	ProjectorPath   string
+	PatchPath       string
+	PythonStatePath string
+	Splash          *engine.SplashTuning
+}
+
+func resolveMembers(document manifest.Document, lock lockfile.Document, mode manifest.Mode, root string) ([]resolvedMember, error) {
+	var resolved []resolvedMember
+	placements := []struct {
+		name    string
+		members []manifest.Member
+	}{
+		{name: "resident", members: mode.Members.Resident},
+		{name: "on_demand", members: mode.Members.OnDemand},
+	}
+
+	for _, placement := range placements {
+		for _, member := range placement.members {
+			layout := document.Layouts[member.Layout]
+			entry, ok := lock.Entry(member.Layout)
+			if !ok {
+				return nil, fmt.Errorf("layout %q has no lock entry", member.Layout)
+			}
+			set, err := artifactset.New(root, member.Layout, layout, entry, document.Patches)
+			if err != nil {
+				return nil, err
+			}
+
+			item := resolvedMember{
+				ID:        member.Layout,
+				Layout:    layout,
+				Member:    member,
+				Placement: placement.name,
+				ModelPath: set.ModelPath(),
+			}
+			if layout.Engine == engine.LlamaServer && layout.Draft != nil {
+				item.DraftPath = filepath.Join(set.Path(), "draft", layout.Draft.Files[0])
+			}
+			if layout.Projector != nil {
+				item.ProjectorPath = filepath.Join(set.Path(), "projector", layout.Projector.Files[0])
+			}
+			if layout.Engine == engine.RapidMLX || layout.Engine == engine.VLLMMetal {
+				item.PythonStatePath = filepath.Join(root, "runtime-state", member.Layout)
+			}
+			if layout.Splash != nil {
+				assembly, state := splash.Paths(root, member.Layout, entry.Digest(), layout.Splash.SoftwareSHA256)
+				item.Splash = &engine.SplashTuning{SplashConfig: layout.Splash.SplashConfig, ModelID: layout.Model.Repo, AssemblyPath: assembly, StatePath: state}
+			}
+			if layout.ChatTemplate != "" {
+				patch := document.Patches[layout.ChatTemplate]
+				item.PatchPath = filepath.Join(set.Path(), "patches", layout.ChatTemplate, patch.File)
+			}
+			resolved = append(resolved, item)
+		}
+	}
+	return resolved, nil
+}
+
+func renderLlamaSwap(defaults manifest.Defaults, members []resolvedMember, groupRoute bool) ([]byte, []engine.RuntimeRequirement, error) {
+	var output strings.Builder
+	output.WriteString("# GENERATED by temper — edit manifest.yaml instead\n")
+	timeout := 300
+	for _, member := range members {
+		if member.Splash != nil {
+			if len(members) != 1 {
+				return nil, nil, errors.New("Splash currently requires one layout per runtime")
+			}
+			timeout = 660 // The native frontend has a 600-second preparation deadline.
+			output.WriteString("logToStdout: both\n")
+		}
+	}
+	fmt.Fprintf(&output, "healthCheckTimeout: %d\n", timeout)
+	output.WriteString("startPort: 10001\n")
+	fmt.Fprintf(&output, "globalTTL: %d\n", defaults.TTL)
+	output.WriteString("captureBuffer: 15                 # request/response capture for the /ui inspector\n")
+	requirements := []engine.RuntimeRequirement{{Package: "llama-swap", RelativeExecutable: "llama-swap"}}
+	seenRequirements := map[string]bool{"llama-swap\x00llama-swap": true}
+
+	var preloads []string
+	for _, member := range members {
+		if member.Member.Preload {
+			preloads = append(preloads, member.ID)
+		}
+	}
+	if len(preloads) > 0 {
+		output.WriteString("\nhooks:\n  on_startup:\n    preload:\n")
+		for _, id := range preloads {
+			fmt.Fprintf(&output, "      - %s\n", strconv.Quote(id))
+		}
+	}
+
+	output.WriteString("\nmodels:")
+	if len(members) == 0 {
+		output.WriteString(" {}\n")
+	} else {
+		output.WriteByte('\n')
+	}
+	for _, member := range members {
+		fmt.Fprintf(&output, "  %s:\n", strconv.Quote(member.ID))
+		fmt.Fprintf(&output, "    name: %s\n", strconv.Quote(member.Layout.DisplayName))
+		command, err := engine.Build(engineRequest(member))
+		if err != nil {
+			return nil, nil, fmt.Errorf("render layout %q command: %w", member.ID, err)
+		}
+		runtime := command.Runtime()
+		if member.PythonStatePath != "" {
+			runtime.Environment = append(runtime.Environment,
+				engine.EnvironmentAssignment{Name: "HOME", Value: filepath.Join(member.PythonStatePath, "home")},
+				engine.EnvironmentAssignment{Name: "XDG_CACHE_HOME", Value: filepath.Join(member.PythonStatePath, "cache")},
+				engine.EnvironmentAssignment{Name: "HF_HOME", Value: filepath.Join(member.PythonStatePath, "huggingface")})
+		}
+		if runtime.ContextWindow <= 0 {
+			return nil, nil, fmt.Errorf("render layout %q command: engine omitted the effective context window", member.ID)
+		}
+		output.WriteString("    capabilities:\n")
+		fmt.Fprintf(&output, "      context: %d\n", runtime.ContextWindow)
+		output.WriteString("    cmd: >\n")
+		for _, argumentLine := range command.Lines() {
+			fmt.Fprintf(&output, "      %s\n", argumentLine)
+		}
+		if len(runtime.Environment) > 0 {
+			output.WriteString("    env:\n")
+			for _, assignment := range runtime.Environment {
+				fmt.Fprintf(&output, "      - %s\n", strconv.Quote(assignment.Name+"="+assignment.Value))
+			}
+		}
+		if runtime.CheckEndpoint != "/health" {
+			fmt.Fprintf(&output, "    checkEndpoint: %s\n", strconv.Quote(runtime.CheckEndpoint))
+		}
+		if runtime.UseModelName != "" {
+			fmt.Fprintf(&output, "    useModelName: %s\n", strconv.Quote(runtime.UseModelName))
+		}
+		for _, requirement := range append([]engine.RuntimeRequirement{runtime.Requirement}, runtime.AdditionalRequirements...) {
+			key := requirement.Package + "\x00" + requirement.RelativeExecutable
+			if !seenRequirements[key] {
+				requirements = append(requirements, requirement)
+				seenRequirements[key] = true
+			}
+		}
+		if len(runtime.DefaultParameters) > 0 {
+			output.WriteString("    filters:\n      setParams:\n")
+			names := make([]string, 0, len(runtime.DefaultParameters))
+			for name := range runtime.DefaultParameters {
+				names = append(names, name)
+			}
+			sort.Strings(names)
+			for _, name := range names {
+				value, _ := json.Marshal(runtime.DefaultParameters[name])
+				fmt.Fprintf(&output, "        %s: %s\n", strconv.Quote(name+"?"), value)
+			}
+		}
+		ttl := defaults.TTL
+		if member.Member.TTL != nil {
+			ttl = *member.Member.TTL
+		}
+		fmt.Fprintf(&output, "    ttl: %d\n", ttl)
+	}
+
+	pinned := groupMembers(members, func(member resolvedMember) bool {
+		return member.Placement == "resident" && member.Layout.TechnicalInterface() == engine.InterfaceChatCompletions
+	})
+	utilities := groupMembers(members, func(member resolvedMember) bool {
+		return member.Placement == "resident" && member.Layout.TechnicalInterface() != engine.InterfaceChatCompletions
+	})
+	heavy := groupMembers(members, func(member resolvedMember) bool {
+		return member.Placement == "on_demand"
+	})
+	if groupRoute && len(pinned)+len(utilities)+len(heavy) > 0 {
+		output.WriteString("\nrouting:\n  router:\n    use: group\n    settings:\n      groups:\n")
+		if len(pinned) > 0 {
+			output.WriteString("        pinned:            # resident coders\n")
+			output.WriteString("          persistent: true\n          swap: false\n          exclusive: false\n")
+			fmt.Fprintf(&output, "          members: %s\n", yamlStringList(pinned))
+		}
+		if len(utilities) > 0 {
+			output.WriteString("        utilities:         # resident specialists\n")
+			output.WriteString("          persistent: true\n          swap: false\n          exclusive: false\n")
+			fmt.Fprintf(&output, "          members: %s\n", yamlStringList(utilities))
+		}
+		if len(heavy) > 0 {
+			output.WriteString("        heavy:              # on-demand members\n")
+			output.WriteString("          swap: true\n          exclusive: false\n")
+			fmt.Fprintf(&output, "          members: %s\n", yamlStringList(heavy))
+		}
+	}
+	return []byte(output.String()), requirements, nil
+}
+
+func engineRequest(member resolvedMember) engine.Request {
+	layout := member.Layout
+	speculation, speculativeTokens := layout.SpeculationContract()
+	return engine.Request{
+		CrispEmbed:        layout.CrispEmbed,
+		Engine:            layout.Engine,
+		LayoutID:          member.ID,
+		ModelPath:         member.ModelPath,
+		DraftModelPath:    member.DraftPath,
+		ProjectorPath:     member.ProjectorPath,
+		ArtifactFormat:    layout.ModelFormat(),
+		KVCache:           layout.KVCache(),
+		Interface:         layout.TechnicalInterface(),
+		Modalities:        layout.InputModalities(),
+		Window:            layout.Window,
+		MaxTokens:         layout.MaxTokens,
+		Thinking:          layout.Thinking,
+		Speculation:       speculation,
+		SpeculativeTokens: speculativeTokens,
+		ChatTemplatePath:  member.PatchPath,
+		NGL:               member.Member.NGL,
+		LlamaServer:       llamaServerTuning(layout.Llama),
+		RapidMLX:          rapidMLXTuning(layout.RapidMLX),
+		VLLMMetal:         vllmMetalTuning(layout.VLLMMetal),
+		Sampling:          layout.Sampling,
+		Splash:            member.Splash,
+	}
+}
+
+func llamaServerTuning(tuning *manifest.LlamaTuning) *engine.LlamaServerTuning {
+	if tuning == nil {
+		return nil
+	}
+	return &engine.LlamaServerTuning{
+		Parallel: tuning.Parallel, FlashAttention: tuning.FlashAttention,
+		Batch: tuning.Batch, UBatch: tuning.UBatch, ContextCheckpoints: tuning.ContextCheckpoints,
+		PromptCacheRAMMiB: tuning.PromptCacheRAMMiB,
+		Controls:          tuning.Controls,
+	}
+}
+
+func rapidMLXTuning(tuning *manifest.RapidMLXTuning) *engine.RapidMLXTuning {
+	if tuning == nil {
+		return nil
+	}
+	return &engine.RapidMLXTuning{
+		ToolCallParser: tuning.ToolCallParser, PrefillStepSize: tuning.PrefillStepSize, RequestTimeoutSeconds: tuning.RequestTimeoutSeconds,
+		MaxNumSeqs: tuning.MaxNumSeqs, MaxConcurrentRequests: tuning.MaxConcurrentRequests,
+		PrefillBatchSize: tuning.PrefillBatchSize, CompletionBatchSize: tuning.CompletionBatchSize,
+		GPUMemoryUtilization: tuning.GPUMemoryUtilization, PrefixCache: tuning.PrefixCache,
+		CacheMemoryMiB: tuning.CacheMemoryMiB, KVCacheDType: tuning.KVCacheDType,
+		PFlash: tuning.PFlash, ReasoningParser: tuning.ReasoningParser,
+	}
+}
+
+func vllmMetalTuning(tuning *manifest.VLLMMetalTuning) *engine.VLLMMetalTuning {
+	if tuning == nil {
+		return nil
+	}
+	return &engine.VLLMMetalTuning{
+		ToolCallParser: tuning.ToolCallParser, ReasoningParser: tuning.ReasoningParser,
+		LanguageModelOnly: tuning.LanguageModelOnly, ChunkedPrefill: tuning.ChunkedPrefill, BlockSize: tuning.BlockSize,
+		MaxNumSeqs: tuning.MaxNumSeqs, MaxNumBatchedTokens: tuning.MaxNumBatchedTokens,
+		GPUMemoryUtilization: tuning.GPUMemoryUtilization, KVCacheDType: tuning.KVCacheDType,
+		PrefixCache: tuning.PrefixCache,
+	}
+}
+
+func renderRuntimeRequirements(requirements []engine.RuntimeRequirement) ([]byte, error) {
+	sort.Slice(requirements, func(i, j int) bool {
+		if requirements[i].Package != requirements[j].Package {
+			return requirements[i].Package < requirements[j].Package
+		}
+		return requirements[i].RelativeExecutable < requirements[j].RelativeExecutable
+	})
+	converted := make([]runtimeconfig.Requirement, 0, len(requirements))
+	for _, requirement := range requirements {
+		converted = append(converted, runtimeconfig.Requirement{
+			Package: requirement.Package, RelativeExecutable: requirement.RelativeExecutable, Role: requirement.Role, Arguments: requirement.Arguments,
+		})
+	}
+	data, err := runtimeconfig.Marshal(runtimeconfig.Document{
+		Schema: runtimeconfig.SchemaV1, Requirements: converted,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("render runtime requirements: %w", err)
+	}
+	return data, nil
+}
+
+func groupMembers(members []resolvedMember, include func(resolvedMember) bool) []string {
+	var ids []string
+	for _, member := range members {
+		if include(member) {
+			ids = append(ids, member.ID)
+		}
+	}
+	return ids
+}
+
+func yamlStringList(values []string) string {
+	quoted := make([]string, 0, len(values))
+	for _, value := range values {
+		quoted = append(quoted, strconv.Quote(value))
+	}
+	return "[" + strings.Join(quoted, ", ") + "]"
+}
+
+type hashWriter interface {
+	Write([]byte) (int, error)
+}
+
+func writeHashPart(writer hashWriter, data []byte) {
+	var size [8]byte
+	binary.BigEndian.PutUint64(size[:], uint64(len(data)))
+	_, _ = writer.Write(size[:])
+	_, _ = writer.Write(data)
+}

@@ -1,0 +1,166 @@
+package engine
+
+import (
+	"errors"
+	"fmt"
+)
+
+type llamaServerOptions struct {
+	modelPath          string
+	draftModelPath     string
+	projectorPath      string
+	chatTemplatePath   string
+	reranking          bool
+	parallel           int
+	window             int
+	contextCheckpoints *int
+	promptCacheRAMMiB  *int
+	flashAttention     string
+	kv                 string
+	batch              int
+	ubatch             int
+	specType           string
+	specDraftNMax      int
+	reasoning          string
+	maxTokens          int
+	ngl                *int
+	controls           *LlamaServerControls
+	sampling           *SamplingDefaults
+}
+
+func buildLlamaServer(request Request) (Command, error) {
+	if err := validateLlamaServerRequest(request); err != nil {
+		return Command{}, err
+	}
+
+	options := llamaServerOptions{
+		modelPath:          request.ModelPath,
+		draftModelPath:     request.DraftModelPath,
+		projectorPath:      request.ProjectorPath,
+		chatTemplatePath:   request.ChatTemplatePath,
+		reranking:          request.Interface == InterfaceReranking,
+		parallel:           request.LlamaServer.Parallel,
+		window:             request.Window,
+		contextCheckpoints: request.LlamaServer.ContextCheckpoints,
+		promptCacheRAMMiB:  request.LlamaServer.PromptCacheRAMMiB,
+		flashAttention:     request.LlamaServer.FlashAttention,
+		batch:              request.LlamaServer.Batch,
+		ubatch:             request.LlamaServer.UBatch,
+		specType:           request.Speculation,
+		specDraftNMax:      request.SpeculativeTokens,
+		ngl:                request.NGL,
+		controls:           request.LlamaServer.Controls,
+		sampling:           request.Sampling,
+	}
+	if options.specType == "mtp" {
+		options.specType = "draft-mtp"
+	} else if options.specType == "dflash" || options.specType == "dflash2" {
+		options.specType = "draft-dflash"
+	} else if options.specType == "none" {
+		options.specType = ""
+	}
+	if request.Interface == InterfaceChatCompletions {
+		options.reasoning = request.Thinking
+		options.maxTokens = request.MaxTokens
+		options.kv = "f16"
+		switch request.KVCache {
+		case "q4":
+			options.kv = "q4_0"
+		case "q8":
+			options.kv = "q8_0"
+		}
+	}
+	return llamaServerCommand(options)
+}
+
+func validateLlamaServerRequest(request Request) error {
+	if request.ModelPath == "" {
+		return errors.New("llama-server model path is required")
+	}
+	if request.ArtifactFormat != "gguf" {
+		return fmt.Errorf("llama-server artifact format %q must be gguf", request.ArtifactFormat)
+	}
+	textOnly := len(request.Modalities) == 1 && request.Modalities[0] == "text"
+	imageInput := len(request.Modalities) == 2 && request.Modalities[0] == "text" && request.Modalities[1] == "image"
+	if !textOnly && !imageInput || imageInput && (request.ProjectorPath == "" || request.Interface != InterfaceChatCompletions) || textOnly && request.ProjectorPath != "" {
+		return errors.New("llama-server requires text input or text/image input with an exact projector")
+	}
+	if request.Window <= 0 {
+		return errors.New("llama-server window must be greater than zero")
+	}
+	tuning := *request.LlamaServer
+	if tuning.Parallel <= 0 || tuning.Batch <= 0 || tuning.UBatch <= 0 {
+		return errors.New("llama-server parallel, batch and ubatch must be greater than zero")
+	}
+	if tuning.UBatch > tuning.Batch {
+		return errors.New("llama-server ubatch must not exceed batch")
+	}
+	if tuning.FlashAttention != "on" && tuning.FlashAttention != "off" && tuning.FlashAttention != "auto" {
+		return fmt.Errorf("llama-server flash attention %q must be on, off or auto", tuning.FlashAttention)
+	}
+	if tuning.ContextCheckpoints != nil && *tuning.ContextCheckpoints < 0 {
+		return errors.New("llama-server context checkpoints must be zero or greater")
+	}
+	if tuning.PromptCacheRAMMiB != nil && *tuning.PromptCacheRAMMiB < 0 {
+		return errors.New("llama-server prompt cache RAM must be zero or greater")
+	}
+	if request.NGL != nil && *request.NGL < 0 {
+		return errors.New("llama-server ngl must be zero or greater")
+	}
+	if request.DraftModelPath != "" && request.NGL == nil {
+		return errors.New("llama-server external draft requires explicit target and draft GPU placement")
+	}
+	if c := tuning.Controls; c != nil {
+		if err := c.Validate(); err != nil {
+			return err
+		}
+	}
+	if s := request.Sampling; s != nil {
+		if err := s.Validate(); err != nil {
+			return err
+		}
+	}
+
+	switch request.Speculation {
+	case "none":
+		if request.SpeculativeTokens != 0 || request.DraftModelPath != "" {
+			return errors.New("llama-server speculation maximum requires a type")
+		}
+	case "mtp":
+		if request.Interface != InterfaceChatCompletions {
+			return errors.New("llama-server draft-mtp speculation requires chat completions")
+		}
+		if request.SpeculativeTokens <= 0 || request.SpeculativeTokens > 16 {
+			return errors.New("llama-server draft-mtp maximum must be between 1 and 16")
+		}
+	case "dflash", "dflash2":
+		if request.Interface != InterfaceChatCompletions || request.DraftModelPath == "" {
+			return errors.New("llama-server DFlash requires chat completions and an exact GGUF draft")
+		}
+		if request.SpeculativeTokens <= 0 || request.SpeculativeTokens > 15 {
+			return errors.New("llama-server DFlash maximum must be between 1 and 15")
+		}
+	default:
+		return fmt.Errorf("llama-server speculation type %q is unsupported", request.Speculation)
+	}
+
+	switch request.Interface {
+	case InterfaceChatCompletions:
+		if request.MaxTokens <= 0 || request.MaxTokens >= request.Window {
+			return errors.New("llama-server coder max tokens must be greater than zero and below window")
+		}
+		if request.KVCache != "q4" && request.KVCache != "q8" && request.KVCache != "f16" {
+			return fmt.Errorf("llama-server KV cache %q must be q4, q8 or f16", request.KVCache)
+		}
+		if request.Thinking != "on" && request.Thinking != "off" {
+			return fmt.Errorf("llama-server coder thinking %q must be on or off", request.Thinking)
+		}
+	case InterfaceReranking:
+		if request.MaxTokens != 0 || request.Thinking != "" || request.ChatTemplatePath != "" || request.Sampling != nil {
+			return errors.New("llama-server reranker cannot declare chat-completion tuning")
+		}
+	default:
+		return fmt.Errorf("llama-server interface %q is unsupported", request.Interface)
+	}
+	return nil
+}

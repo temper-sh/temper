@@ -1,0 +1,1929 @@
+{
+  "schema": "temper-catalog/v1",
+  "date": "2026-10-04",
+  "platform": "apple-silicon",
+  "runtime": {
+    "router": {
+      "package": "llama-swap",
+      "target": {
+        "os": "darwin",
+        "arch": "arm64"
+      },
+      "source": {
+        "repository": "mostlygeek/llama-swap",
+        "asset": "llama-swap_{number}_darwin_arm64.tar.gz",
+        "archive_root": "."
+      },
+      "release": {
+        "version": "v262",
+        "revision": "079c35ae82fb2816d319f7bd16936675597b262d",
+        "artifact": {
+          "locator": "https://github.com/mostlygeek/llama-swap/releases/download/v262/llama-swap_262_darwin_arm64.tar.gz",
+          "sha256": "d0f126db482dcad1bf4c31fbc1fadd432215d9dd3d6c471ce84fb74846047ff3",
+          "size": 22012082,
+          "unpacked_size": 40760013,
+          "installed_entries": 4,
+          "format": "tar.gz",
+          "archive_root": "."
+        }
+      },
+      "exclude_versions": [
+        {
+          "range": "< v257",
+          "reason": "needs llama-swap v257 or newer: setParams defaults that keep explicit request settings"
+        }
+      ]
+    }
+  },
+  "artifacts": {
+    "qwen3.8-27b-q4xl": {
+      "sources": [
+        {
+          "hub": "huggingface",
+          "repo": "unsloth/Qwen3.8-27B-GGUF",
+          "revision": "4ca720788d1e01f1bff70c033e0d0028fd02e502"
+        }
+      ],
+      "format": "gguf",
+      "files": [
+        {
+          "path": "Qwen3.8-27B-UD-Q4_K_XL.gguf",
+          "bytes": 17559178144,
+          "sha256": "3f227079003add2511437e5b1e94812e363385225bf6a9b47b0054a72bc8b01e"
+        }
+      ],
+      "license": "Apache-2.0",
+      "presentation": {
+        "model_name": "Qwen3.8 27B",
+        "weights_name": "Unsloth UD-Q4_K_XL · GGUF"
+      }
+    },
+    "qwen3.5-4b-q4km": {
+      "sources": [
+        {
+          "hub": "huggingface",
+          "repo": "unsloth/Qwen3.5-4B-GGUF",
+          "revision": "e87f176479d0855a907a41277aca2f8ee7a09523"
+        }
+      ],
+      "format": "gguf",
+      "files": [
+        {
+          "path": "Qwen3.5-4B-Q4_K_M.gguf",
+          "bytes": 2740937888,
+          "sha256": "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4"
+        }
+      ],
+      "license": "Apache-2.0",
+      "presentation": {
+        "model_name": "Qwen3.5 4B",
+        "weights_name": "Unsloth Q4_K_M · GGUF"
+      }
+    },
+    "gemma-4-e2b-q4km": {
+      "sources": [
+        {
+          "hub": "huggingface",
+          "repo": "unsloth/gemma-4-E2B-it-GGUF",
+          "revision": "0314792d7f1f7e229411f620751375812bb9faf2"
+        }
+      ],
+      "format": "gguf",
+      "files": [
+        {
+          "path": "gemma-4-E2B-it-Q4_K_M.gguf",
+          "bytes": 3106738272,
+          "sha256": "740185b21d22ceb83a11c3aa62ad5842ef32c70f6096d756bbee85a1e4ec34b8"
+        }
+      ],
+      "license": "Apache-2.0",
+      "presentation": {
+        "model_name": "Gemma 4 E2B",
+        "weights_name": "Unsloth Q4_K_M · GGUF"
+      }
+    },
+    "gemma-4-e4b-q4km": {
+      "sources": [
+        {
+          "hub": "huggingface",
+          "repo": "unsloth/gemma-4-E4B-it-GGUF",
+          "revision": "bfc15c382204943c3a8fff0c750b94ae2364d7a3"
+        }
+      ],
+      "format": "gguf",
+      "files": [
+        {
+          "path": "gemma-4-E4B-it-Q4_K_M.gguf",
+          "bytes": 4977171584,
+          "sha256": "85a896a047553e842f25297ee5b031d64ff30147d9c4af17b1e4b394cd1fab87"
+        }
+      ],
+      "license": "Apache-2.0",
+      "presentation": {
+        "model_name": "Gemma 4 E4B",
+        "weights_name": "Unsloth Q4_K_M · GGUF"
+      }
+    },
+    "qwen3.8-27b-dflash2": {
+      "sources": [
+        {
+          "hub": "huggingface",
+          "repo": "incoai/Qwen3.8-27B-DFlash2",
+          "revision": "015e795645c74b1a0eeef3b570031fb62e769bc5"
+        }
+      ],
+      "format": "safetensors",
+      "files": [
+        {
+          "path": "config.json",
+          "bytes": 1239,
+          "sha256": "873e3556509b0da06e29654ba00d4944888d4b5e8a33afde25f7eb27d321e980"
+        },
+        {
+          "path": "model.safetensors",
+          "bytes": 3848817896,
+          "sha256": "67fc76d68dc5a9415511a4f394ef744d67510cd20e93b37cc2cc7d28e4bab65c"
+        }
+      ],
+      "license": "Apache-2.0",
+      "presentation": {
+        "model_name": "Qwen3.8 27B DFlash2",
+        "weights_name": "BF16 draft"
+      }
+    },
+    "muse-glimmer-30b-q4xl": {
+      "sources": [
+        {
+          "hub": "huggingface",
+          "repo": "unsloth/Muse-Glimmer-30B-GGUF",
+          "revision": "faa5b025c584459c13febfa5c59883516710ae39"
+        }
+      ],
+      "format": "gguf",
+      "files": [
+        {
+          "path": "Muse-Glimmer-30B-UD-Q4_K_XL.gguf",
+          "bytes": 15878222368,
+          "sha256": "82bece304887a313ece08400bc030f6066c7bff5b906b0cd40308ec8a409fd38"
+        }
+      ],
+      "license": "Apache-2.0",
+      "presentation": {
+        "model_name": "Muse Glimmer 30B",
+        "weights_name": "Unsloth UD-Q4_K_XL · GGUF"
+      }
+    },
+    "gemma-4-26b-a4b-qat-ud-q4-k-xl": {
+      "sources": [
+        {
+          "hub": "huggingface",
+          "repo": "unsloth/gemma-4-26B-A4B-it-qat-GGUF",
+          "revision": "7b92b5b28818151e8669af2e45e88d6086f490dd"
+        }
+      ],
+      "format": "gguf",
+      "files": [
+        {
+          "path": "gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf",
+          "bytes": 14249047104,
+          "sha256": "a7c5bc715f5ff8e99a3e8901ce7d2b42b402c669bf24f7c5250747633d0f5891"
+        }
+      ],
+      "license": "Apache-2.0",
+      "presentation": {
+        "model_name": "Gemma 4 26B-A4B",
+        "weights_name": "Unsloth QAT UD-Q4_K_XL · GGUF"
+      }
+    },
+    "gemma-4-31b-qat-ud-q4-k-xl": {
+      "sources": [
+        {
+          "hub": "huggingface",
+          "repo": "unsloth/gemma-4-31B-it-qat-GGUF",
+          "revision": "43cc1aeb31adf47ec06a854507ce552cd9862e6f"
+        }
+      ],
+      "format": "gguf",
+      "files": [
+        {
+          "path": "gemma-4-31B-it-qat-UD-Q4_K_XL.gguf",
+          "bytes": 17287670048,
+          "sha256": "00b5a7c497f0c8934033088c10a7fa9a4c015e46ee6d89e9c6890650ba5d0e71"
+        }
+      ],
+      "license": "Apache-2.0",
+      "presentation": {
+        "model_name": "Gemma 4 31B",
+        "weights_name": "Unsloth QAT UD-Q4_K_XL"
+      }
+    },
+    "nuextract3-q4km": {
+      "sources": [
+        {
+          "hub": "huggingface",
+          "repo": "numind/NuExtract3-GGUF",
+          "revision": "28a1aae6288c5d50bdf999ca2e572240966d669b"
+        }
+      ],
+      "format": "gguf",
+      "files": [
+        {
+          "path": "NuExtract3-Q4_K_M.gguf",
+          "bytes": 2783445984,
+          "sha256": "7ee3c0ee9e5699a4391624ae758487f583f73b3242aa4e73dc2bb33e508d703e"
+        }
+      ],
+      "license": "Apache-2.0",
+      "presentation": {
+        "model_name": "NuExtract3 4B",
+        "weights_name": "NuMind Q4_K_M · GGUF"
+      }
+    },
+    "nuextract3-projector-bf16": {
+      "sources": [
+        {
+          "hub": "huggingface",
+          "repo": "numind/NuExtract3-GGUF",
+          "revision": "28a1aae6288c5d50bdf999ca2e572240966d669b"
+        }
+      ],
+      "format": "gguf",
+      "files": [
+        {
+          "path": "mmproj-NuExtract3-BF16.gguf",
+          "bytes": 675569184,
+          "sha256": "9a506ce43544691f4f56f1533768f43e1887ef69b8cd74b2e7a46c4d9a155a01"
+        }
+      ],
+      "license": "Apache-2.0",
+      "presentation": {
+        "model_name": "NuExtract3 image projector",
+        "weights_name": "NuMind BF16 · GGUF"
+      }
+    },
+    "qwen3-reranker-0.6b-q8": {
+      "sources": [
+        {
+          "hub": "huggingface",
+          "repo": "Voodisss/Qwen3-Reranker-0.6B-GGUF-llama_cpp",
+          "revision": "eb9ad47d4e53c2a6abd6158b505f1539d1c5650c"
+        }
+      ],
+      "format": "gguf",
+      "files": [
+        {
+          "path": "Qwen3-Reranker-0.6B.Q8_0.gguf",
+          "bytes": 639153344,
+          "sha256": "6ddab39a36c6c87fdb76f0e5f05657012d5dbc97034c0983c157f17ef9f34d55"
+        }
+      ],
+      "license": "Apache-2.0",
+      "presentation": {
+        "model_name": "Qwen3 Reranker 0.6B",
+        "weights_name": "Voodisss Q8_0 · GGUF"
+      }
+    },
+    "ettin-reranker-150m-q8": {
+      "sources": [
+        {
+          "hub": "huggingface",
+          "repo": "cstr/ettin-reranker-150m-v1-GGUF",
+          "revision": "9c680bcef3a5114a708911462eb110e029ce2b87"
+        }
+      ],
+      "format": "gguf",
+      "files": [
+        {
+          "path": "ettin-reranker-150m-v1-q8_0.gguf",
+          "bytes": 162027264,
+          "sha256": "7768a78c7a8d87dacc2cc90b03b6080dbba6a8ec6e89da344bea2791932d8f8b"
+        }
+      ],
+      "license": "Apache-2.0",
+      "presentation": {
+        "model_name": "Ettin Reranker 150M",
+        "weights_name": "CrispEmbed Q8_0 · GGUF"
+      }
+    },
+    "translategemma-4b-q5km": {
+      "sources": [
+        {
+          "hub": "huggingface",
+          "repo": "bullerwins/translategemma-4b-it-GGUF",
+          "revision": "7c938465a870d8624bcfa98a8e4a3510053c19a8"
+        }
+      ],
+      "format": "gguf",
+      "files": [
+        {
+          "path": "translategemma-4b-it-Q5_K_M.gguf",
+          "bytes": 2829713472,
+          "sha256": "3fd2255970d47ba85730c6d865ea23cd5eca9a67169b65dd4c90947e215928ce"
+        }
+      ],
+      "license": "Gemma",
+      "presentation": {
+        "model_name": "TranslateGemma 4B",
+        "weights_name": "bullerwins Q5_K_M · GGUF"
+      }
+    },
+    "translategemma-12b-q5km": {
+      "sources": [
+        {
+          "hub": "huggingface",
+          "repo": "bullerwins/translategemma-12b-it-GGUF",
+          "revision": "d7d1d8cc4ff53d4bc883ef33eae3894f07833b63"
+        }
+      ],
+      "format": "gguf",
+      "files": [
+        {
+          "path": "translategemma-12b-it-Q5_K_M.gguf",
+          "bytes": 8445052224,
+          "sha256": "fa1f1bf392d24f1aa6551a5e0f5128c698ed0611c2c8d583a6bb764267c8035f"
+        }
+      ],
+      "license": "Gemma",
+      "presentation": {
+        "model_name": "TranslateGemma 12B",
+        "weights_name": "bullerwins Q5_K_M · GGUF"
+      }
+    },
+    "translategemma-27b-q4km": {
+      "sources": [
+        {
+          "hub": "huggingface",
+          "repo": "bullerwins/translategemma-27b-it-GGUF",
+          "revision": "648ab470301440606384471ef4edb1ffc2a4b88c"
+        }
+      ],
+      "format": "gguf",
+      "files": [
+        {
+          "path": "translategemma-27b-it-Q4_K_M.gguf",
+          "bytes": 16546704032,
+          "sha256": "475bb629b999b4a197f5f0165503bc935a28e39a34cbeb32f73fc8b683deb5fa"
+        }
+      ],
+      "license": "Gemma",
+      "presentation": {
+        "model_name": "TranslateGemma 27B",
+        "weights_name": "bullerwins Q4_K_M · GGUF"
+      }
+    },
+    "tiny-aya-global-q8": {
+      "sources": [
+        {
+          "hub": "huggingface",
+          "repo": "CohereLabs/tiny-aya-global-GGUF",
+          "revision": "a602ea7eeec3a4ad6f77a1b8cf6a53512824922b"
+        }
+      ],
+      "format": "gguf",
+      "files": [
+        {
+          "path": "tiny-aya-global-q8_0.gguf",
+          "bytes": 3570654816,
+          "sha256": "947713a2710e23fc80aa860a04d46131d5cf8bbb73e164edb5d8d30e2d14f795"
+        }
+      ],
+      "license": "CC-BY-NC-4.0",
+      "presentation": {
+        "model_name": "Tiny Aya Global",
+        "weights_name": "Cohere Labs Q8_0 · GGUF"
+      }
+    },
+    "tiny-aya-water-q8": {
+      "sources": [
+        {
+          "hub": "huggingface",
+          "repo": "CohereLabs/tiny-aya-water-GGUF",
+          "revision": "bfe7fe10f8f206192097eeedcecdfbb1a11f9ca7"
+        }
+      ],
+      "format": "gguf",
+      "files": [
+        {
+          "path": "tiny-aya-water-q8_0.gguf",
+          "bytes": 3570654816,
+          "sha256": "f2e7566e5099548ccc396cc44ceacb847293fb050b6554f08d8b0a06c5220b7c"
+        }
+      ],
+      "license": "CC-BY-NC-4.0",
+      "presentation": {
+        "model_name": "Tiny Aya Water",
+        "weights_name": "Cohere Labs Q8_0 · GGUF"
+      }
+    },
+    "tiny-aya-fire-q8": {
+      "sources": [
+        {
+          "hub": "huggingface",
+          "repo": "CohereLabs/tiny-aya-fire-GGUF",
+          "revision": "141fb1f00fe982199d4e01a754ad68abf4205b95"
+        }
+      ],
+      "format": "gguf",
+      "files": [
+        {
+          "path": "tiny-aya-fire-q8_0.gguf",
+          "bytes": 3570654816,
+          "sha256": "2fba57a23aab098221563a807edd7a575180f4b04a56b32abe86dfffa5512eea"
+        }
+      ],
+      "license": "CC-BY-NC-4.0",
+      "presentation": {
+        "model_name": "Tiny Aya Fire",
+        "weights_name": "Cohere Labs Q8_0 · GGUF"
+      }
+    },
+    "tiny-aya-earth-q8": {
+      "sources": [
+        {
+          "hub": "huggingface",
+          "repo": "CohereLabs/tiny-aya-earth-GGUF",
+          "revision": "be0b513fa757880688c48aa688742729c19c09df"
+        }
+      ],
+      "format": "gguf",
+      "files": [
+        {
+          "path": "tiny-aya-earth-q8_0.gguf",
+          "bytes": 3570654816,
+          "sha256": "8415481e1d8c982a06f049b6031887a7d40525aba4672404149f00ecc1c57ea8"
+        }
+      ],
+      "license": "CC-BY-NC-4.0",
+      "presentation": {
+        "model_name": "Tiny Aya Earth",
+        "weights_name": "Cohere Labs Q8_0 · GGUF"
+      }
+    }
+  },
+  "templates": {
+    "froggeric-qwen38": {
+      "sources": [
+        {
+          "hub": "huggingface",
+          "repo": "froggeric/Qwen-Fixed-Chat-Templates",
+          "revision": "855bffc49448e299789730ff92c9b8d834d6cc14"
+        }
+      ],
+      "files": [
+        {
+          "path": "chat_template.jinja",
+          "bytes": 28234,
+          "sha256": "e57684bae4156211a55473c5a63be976a405a37ab5be5ae0e5abf1df5349c4b2"
+        }
+      ],
+      "compatible_artifacts": [
+        "qwen3.8-27b-q4xl",
+        "qwen3.5-4b-q4km"
+      ],
+      "license": "Apache-2.0",
+      "presentation": {
+        "display_name": "Froggeric fixed Qwen chat template",
+        "version": "22.5"
+      }
+    },
+    "sharp-qwen": {
+      "sources": [
+        {
+          "hub": "huggingface",
+          "repo": "peculiar-ragdoll/Qwen-Sharp-Chat-Templates",
+          "revision": "85461fc118aaf25e7319c7ecf2481f944aac3a32"
+        }
+      ],
+      "files": [
+        {
+          "path": "chat_template.jinja",
+          "bytes": 30411,
+          "sha256": "cdff39fb26b60dc90faa292e726655c6b21f62db497846e02e4c4bbab942a84a"
+        }
+      ],
+      "compatible_artifacts": [
+        "qwen3.8-27b-q4xl",
+        "qwen3.5-4b-q4km"
+      ],
+      "license": "Apache-2.0",
+      "presentation": {
+        "display_name": "Sharp Qwen chat template",
+        "version": "22.5.0"
+      }
+    },
+    "muse-glimmer-30b-official": {
+      "sources": [
+        {
+          "hub": "huggingface",
+          "repo": "meta-models/Muse-Glimmer-30B",
+          "revision": "a4e59da52a7bc87ae7251dd5545c0dd437c44b68"
+        }
+      ],
+      "files": [
+        {
+          "path": "chat_template.jinja",
+          "bytes": 9992,
+          "sha256": "cfc67e5f349f37690dfd31ed1f18bc4442a9dd32fe39a648f993cb4eb3cae678"
+        }
+      ],
+      "compatible_artifacts": [
+        "muse-glimmer-30b-q4xl"
+      ],
+      "license": "Apache-2.0",
+      "presentation": {
+        "display_name": "Muse Glimmer 30B official chat template"
+      }
+    },
+    "translategemma-text-input": {
+      "transform": "translategemma-text-input-v1",
+      "sources": [
+        {
+          "hub": "huggingface",
+          "repo": "mlx-community/translategemma-4b-it-4bit",
+          "revision": "5788ec08c047f3f2e17808101b8d9566ac930d58"
+        }
+      ],
+      "files": [
+        {
+          "path": "chat_template.jinja",
+          "bytes": 17785,
+          "sha256": "2c591a52d48fd56f9cbad24a5e5858bf3498bed726dace1c66dcc8359b3781bd"
+        }
+      ],
+      "compatible_artifacts": [
+        "translategemma-4b-q5km",
+        "translategemma-12b-q5km",
+        "translategemma-27b-q4km"
+      ],
+      "license": "Gemma",
+      "presentation": {
+        "display_name": "TranslateGemma text-input chat template"
+      }
+    }
+  },
+  "engines": {
+    "llama-cpp": {
+      "adapter": "llama-server/v1",
+      "interfaces": [
+        "chat-completions"
+      ],
+      "modalities": [
+        "text"
+      ],
+      "supply": {
+        "package": "llama-cpp",
+        "target": {
+          "os": "darwin",
+          "arch": "arm64"
+        },
+        "source": {
+          "repository": "ggml-org/llama.cpp",
+          "asset": "llama-{version}-bin-macos-arm64.tar.gz",
+          "archive_root": "llama-{version}"
+        },
+        "release": {
+          "version": "b11381",
+          "revision": "836d57176dc699a726c55418e4f96b8ca628e1bf",
+          "artifact": {
+            "locator": "https://github.com/ggml-org/llama.cpp/releases/download/b11381/llama-b11381-bin-macos-arm64.tar.gz",
+            "sha256": "ea92f83904a1a1d76752581acbb87c7099ae1a3ac37cc6a634b1648d707dc341",
+            "size": 11925693,
+            "unpacked_size": 31524694,
+            "installed_entries": 60,
+            "format": "tar.gz",
+            "archive_root": "llama-b11381"
+          }
+        }
+      },
+      "presentation": {
+        "display_name": "llama.cpp"
+      }
+    },
+    "splash": {
+      "adapter": "splash/v1",
+      "interfaces": [
+        "chat-completions"
+      ],
+      "modalities": [
+        "text"
+      ],
+      "supply": {
+        "package": "splash",
+        "target": {
+          "os": "darwin",
+          "arch": "arm64"
+        },
+        "source": {
+          "repository": "incoai/splash",
+          "asset": "splash-{version}-arm64-macos26.tar.gz",
+          "archive_root": "splash-{version}-arm64-macos26"
+        },
+        "release": {
+          "version": "1.1.0",
+          "revision": "3e1f9ece3e2528f3eb46b82a05911591f34a4317",
+          "artifact": {
+            "locator": "https://github.com/incoai/splash/releases/download/1.1.0/splash-1.1.0-arm64-macos26.tar.gz",
+            "sha256": "255be83f404b1e31e4d98a863ccce05004d348fb6662c68afced4ff992402437",
+            "size": 70643150,
+            "unpacked_size": 230045665,
+            "installed_entries": 8118,
+            "format": "tar.gz",
+            "archive_root": "splash-1.1.0-arm64-macos26"
+          }
+        }
+      },
+      "presentation": {
+        "display_name": "Splash 1.1.0 / DFlash2"
+      }
+    },
+    "llama-cpp-specialists": {
+      "adapter": "llama-server/v1",
+      "interfaces": [
+        "chat-completions",
+        "reranking"
+      ],
+      "modalities": [
+        "text",
+        "image"
+      ],
+      "supply": {
+        "package": "llama-cpp",
+        "target": {
+          "os": "darwin",
+          "arch": "arm64"
+        },
+        "source": {
+          "repository": "ggml-org/llama.cpp",
+          "asset": "llama-{version}-bin-macos-arm64.tar.gz",
+          "archive_root": "llama-{version}"
+        },
+        "release": {
+          "version": "b11396",
+          "revision": "2e7c58c5477478c8cf6e199cfaa5dcd5a4319c81",
+          "artifact": {
+            "locator": "https://github.com/ggml-org/llama.cpp/releases/download/b11396/llama-b11396-bin-macos-arm64.tar.gz",
+            "sha256": "8e9836c5a5450e3d5664c79d6394a7310e13f008ea093f7073b75665f71a4cb1",
+            "size": 11915808,
+            "unpacked_size": 31490582,
+            "installed_entries": 60,
+            "format": "tar.gz",
+            "archive_root": "llama-b11396"
+          }
+        }
+      },
+      "presentation": {
+        "display_name": "llama.cpp"
+      }
+    },
+    "crispembed": {
+      "adapter": "crispembed/v1",
+      "interfaces": [
+        "reranking"
+      ],
+      "modalities": [
+        "text"
+      ],
+      "supply": {
+        "package": "crispembed",
+        "target": {
+          "os": "darwin",
+          "arch": "arm64"
+        },
+        "source": {
+          "repository": "CrispStrobe/CrispEmbed",
+          "asset": "crispembed-macos-arm64.tar.gz",
+          "archive_root": "."
+        },
+        "release": {
+          "version": "v0.17.11",
+          "revision": "dfff1cfd38f5d80e4a2747009a4d82d1034bdc52",
+          "artifact": {
+            "locator": "https://github.com/CrispStrobe/CrispEmbed/releases/download/v0.17.11/crispembed-macos-arm64.tar.gz",
+            "sha256": "24d64f99ebeb6797e3808f2ed933d5bc66d28c054ad4fd48c990e1c27f3d321b",
+            "size": 8902176,
+            "unpacked_size": 20193196,
+            "installed_entries": 41,
+            "format": "tar.gz",
+            "archive_root": "."
+          }
+        }
+      },
+      "presentation": {
+        "display_name": "CrispEmbed"
+      }
+    }
+  },
+  "presets": {
+    "qwen3.8-27b-q4xl-mtp": {
+      "artifact": "qwen3.8-27b-q4xl",
+      "template": "froggeric-qwen38",
+      "engine": "llama-cpp",
+      "interface": "chat-completions",
+      "modalities": [
+        "text"
+      ],
+      "request_defaults": {
+        "max_output_tokens": 4096,
+        "reasoning": "on",
+        "sampling": {
+          "temperature": 1.0,
+          "top_k": 20,
+          "top_p": 0.95,
+          "min_p": 0.0,
+          "repeat_penalty": 1.0,
+          "presence_penalty": 0.0,
+          "seed": 17
+        }
+      },
+      "speculation": {
+        "method": "mtp",
+        "source": "embedded",
+        "max_draft_tokens": 3
+      },
+      "context_limit_tokens": 262144,
+      "compute": "gpu",
+      "compute_options": [
+        "gpu"
+      ],
+      "profiles": [
+        {
+          "min_memory_gib": 32,
+          "context_window_tokens": 65536,
+          "engine_config": {
+            "kind": "llama-server/v1",
+            "parallel": 1,
+            "kv_cache": "q8",
+            "flash_attention": "on",
+            "batch_tokens": 512,
+            "microbatch_tokens": 512,
+            "context_checkpoints": 14,
+            "prompt_cache_ram_mib": 2048,
+            "gpu_layers": 99,
+            "controls": {
+              "cache_reuse": 0,
+              "reasoning_effort": "medium",
+              "preserve_reasoning": false,
+              "context_shift": false,
+              "cache_prompt": true,
+              "fit": "off",
+              "threads": 4,
+              "threads_batch": 4,
+              "load_mode": "mmap",
+              "checkpoint_min_step": 8192
+            }
+          }
+        }
+      ],
+      "presentation": {
+        "display_name": "Qwen3.8 27B Q4 XL / MTP",
+        "description": "A battle-tested default for coding and general use. It trades some speed for the predictability and familiarity of llama.cpp.",
+        "group": "general",
+        "memory_tier": "S"
+      }
+    },
+    "qwen3.5-4b-q4km-off": {
+      "artifact": "qwen3.5-4b-q4km",
+      "template": "builtin",
+      "engine": "llama-cpp",
+      "interface": "chat-completions",
+      "modalities": [
+        "text"
+      ],
+      "request_defaults": {
+        "max_output_tokens": 4096,
+        "reasoning": "on",
+        "sampling": {
+          "temperature": 0.7,
+          "top_k": 20,
+          "top_p": 0.8,
+          "min_p": 0.0,
+          "repeat_penalty": 1.0,
+          "presence_penalty": 1.5,
+          "seed": 17
+        }
+      },
+      "speculation": {
+        "method": "none",
+        "source": "none",
+        "max_draft_tokens": 0
+      },
+      "context_limit_tokens": 262144,
+      "compute": "gpu",
+      "compute_options": [
+        "gpu"
+      ],
+      "profiles": [
+        {
+          "min_memory_gib": 32,
+          "context_window_tokens": 16384,
+          "engine_config": {
+            "kind": "llama-server/v1",
+            "parallel": 1,
+            "kv_cache": "q8",
+            "flash_attention": "on",
+            "batch_tokens": 256,
+            "microbatch_tokens": 256,
+            "context_checkpoints": 0,
+            "prompt_cache_ram_mib": 0,
+            "gpu_layers": 99,
+            "controls": {
+              "cache_reuse": 0,
+              "reasoning_effort": "medium",
+              "preserve_reasoning": false,
+              "context_shift": false,
+              "cache_prompt": true,
+              "fit": "off",
+              "threads": 4,
+              "threads_batch": 4,
+              "load_mode": "mmap"
+            }
+          }
+        }
+      ],
+      "presentation": {
+        "display_name": "Qwen3.5 4B Q4_K_M / text",
+        "description": "A very compact model for general use.",
+        "group": "other",
+        "memory_tier": "XS"
+      }
+    },
+    "gemma-4-e2b-q4km-off": {
+      "artifact": "gemma-4-e2b-q4km",
+      "template": "builtin",
+      "engine": "llama-cpp",
+      "interface": "chat-completions",
+      "modalities": [
+        "text"
+      ],
+      "request_defaults": {
+        "max_output_tokens": 4096,
+        "reasoning": "on",
+        "sampling": {
+          "temperature": 0.0,
+          "top_k": 1,
+          "top_p": 1.0,
+          "min_p": 0.0,
+          "repeat_penalty": 1.0,
+          "presence_penalty": 0.0,
+          "seed": 17
+        }
+      },
+      "speculation": {
+        "method": "none",
+        "source": "none",
+        "max_draft_tokens": 0
+      },
+      "context_limit_tokens": 131072,
+      "compute": "gpu",
+      "compute_options": [
+        "gpu"
+      ],
+      "profiles": [
+        {
+          "min_memory_gib": 32,
+          "context_window_tokens": 16384,
+          "engine_config": {
+            "kind": "llama-server/v1",
+            "parallel": 1,
+            "kv_cache": "q8",
+            "flash_attention": "on",
+            "batch_tokens": 256,
+            "microbatch_tokens": 256,
+            "context_checkpoints": 0,
+            "prompt_cache_ram_mib": 0,
+            "gpu_layers": 99,
+            "controls": {
+              "cache_reuse": 0,
+              "reasoning_effort": "medium",
+              "preserve_reasoning": false,
+              "context_shift": false,
+              "cache_prompt": true,
+              "fit": "off",
+              "threads": 4,
+              "threads_batch": 4,
+              "load_mode": "mmap"
+            }
+          }
+        }
+      ],
+      "presentation": {
+        "display_name": "Gemma 4 E2B Q4_K_M / text",
+        "description": "Our smallest Gemma option for short text tasks and simple tool workflows.",
+        "group": "other",
+        "memory_tier": "XS"
+      }
+    },
+    "gemma-4-e4b-q4km-off": {
+      "artifact": "gemma-4-e4b-q4km",
+      "template": "builtin",
+      "engine": "llama-cpp",
+      "interface": "chat-completions",
+      "modalities": [
+        "text"
+      ],
+      "request_defaults": {
+        "max_output_tokens": 4096,
+        "reasoning": "on",
+        "sampling": {
+          "temperature": 1.0,
+          "top_k": 64,
+          "top_p": 0.95,
+          "min_p": 0.0,
+          "repeat_penalty": 1.0,
+          "presence_penalty": 0.0,
+          "seed": 17
+        }
+      },
+      "speculation": {
+        "method": "none",
+        "source": "none",
+        "max_draft_tokens": 0
+      },
+      "context_limit_tokens": 131072,
+      "compute": "gpu",
+      "compute_options": [
+        "gpu"
+      ],
+      "profiles": [
+        {
+          "min_memory_gib": 32,
+          "context_window_tokens": 16384,
+          "engine_config": {
+            "kind": "llama-server/v1",
+            "parallel": 1,
+            "kv_cache": "q8",
+            "flash_attention": "on",
+            "batch_tokens": 256,
+            "microbatch_tokens": 256,
+            "context_checkpoints": 0,
+            "prompt_cache_ram_mib": 0,
+            "gpu_layers": 99,
+            "controls": {
+              "cache_reuse": 0,
+              "reasoning_effort": "medium",
+              "preserve_reasoning": false,
+              "context_shift": false,
+              "cache_prompt": true,
+              "fit": "off",
+              "threads": 4,
+              "threads_batch": 4,
+              "load_mode": "mmap"
+            }
+          }
+        }
+      ],
+      "presentation": {
+        "display_name": "Gemma 4 E4B Q4_K_M / text",
+        "description": "A larger alternative to E2B for everyday text and tool tasks. Expected to offer better fidelity and broader knowledge at a higher memory cost.",
+        "group": "other",
+        "memory_tier": "XS"
+      }
+    },
+    "qwen3.8-27b-q4xl-splash": {
+      "artifact": "qwen3.8-27b-q4xl",
+      "template": "froggeric-qwen38",
+      "engine": "splash",
+      "interface": "chat-completions",
+      "modalities": [
+        "text"
+      ],
+      "request_defaults": {
+        "max_output_tokens": 4096,
+        "reasoning": "on",
+        "sampling": {
+          "temperature": 1.0,
+          "top_k": 20,
+          "top_p": 0.95,
+          "min_p": 0.0,
+          "repeat_penalty": 1.0,
+          "presence_penalty": 0.0,
+          "seed": 17
+        }
+      },
+      "speculation": {
+        "method": "dflash2",
+        "source": "artifact",
+        "max_draft_tokens": 0,
+        "draft_artifact": "qwen3.8-27b-dflash2"
+      },
+      "context_limit_tokens": 262144,
+      "compute": "gpu",
+      "compute_options": [
+        "gpu"
+      ],
+      "exclude_engine_versions": [
+        {
+          "range": "< 1.1.0",
+          "reason": "needs Splash 1.1.0 or newer: GGUF metadata derivation and architecture-matched DFlash2"
+        }
+      ],
+      "profiles": [
+        {
+          "min_memory_gib": 32,
+          "context_window_tokens": 118000,
+          "engine_config": {
+            "kind": "splash/v1",
+            "kv_cache": "int8",
+            "max_memory_bytes": 25769803776,
+            "reasoning_effort": "medium",
+            "request_timeout_seconds": 1800
+          }
+        }
+      ],
+      "presentation": {
+        "display_name": "Qwen–Splash / DFlash2",
+        "description": "Our top choice in size S for coding tasks. Combines Unsloth’s UD3.0 quantization with Splash and DFlash2, delivering up to twice llama.cpp’s throughput. Requires extra disk space for its native weight cache.",
+        "group": "general",
+        "memory_tier": "S"
+      }
+    },
+    "muse-glimmer-30b-q4xl-llama": {
+      "artifact": "muse-glimmer-30b-q4xl",
+      "template": "muse-glimmer-30b-official",
+      "engine": "llama-cpp",
+      "interface": "chat-completions",
+      "modalities": [
+        "text"
+      ],
+      "context_limit_tokens": 131072,
+      "request_defaults": {
+        "max_output_tokens": 4096,
+        "reasoning": "on",
+        "sampling": {
+          "temperature": 1,
+          "top_k": 64,
+          "top_p": 0.95,
+          "min_p": 0,
+          "repeat_penalty": 1,
+          "presence_penalty": 0,
+          "seed": 17
+        }
+      },
+      "speculation": {
+        "method": "none",
+        "source": "none",
+        "max_draft_tokens": 0
+      },
+      "compute": "gpu",
+      "compute_options": [
+        "gpu"
+      ],
+      "profiles": [
+        {
+          "min_memory_gib": 32,
+          "context_window_tokens": 57344,
+          "engine_config": {
+            "kind": "llama-server/v1",
+            "parallel": 1,
+            "kv_cache": "f16",
+            "flash_attention": "on",
+            "batch_tokens": 1024,
+            "microbatch_tokens": 512,
+            "context_checkpoints": 2,
+            "prompt_cache_ram_mib": 0,
+            "gpu_layers": 99,
+            "controls": {
+              "checkpoint_min_step": 8192,
+              "cache_reuse": 0,
+              "reasoning_effort": "medium",
+              "preserve_reasoning": false,
+              "context_shift": false,
+              "cache_prompt": true,
+              "fit": "off",
+              "threads": 4,
+              "threads_batch": 4,
+              "load_mode": "mmap"
+            }
+          }
+        }
+      ],
+      "presentation": {
+        "display_name": "Muse Glimmer 30B",
+        "description": "A companion for technical writing, planning and orchestration.",
+        "group": "general",
+        "memory_tier": "S"
+      }
+    },
+    "gemma-4-26b-a4b-qat-ud-q4-k-xl-llama": {
+      "artifact": "gemma-4-26b-a4b-qat-ud-q4-k-xl",
+      "template": "builtin",
+      "engine": "llama-cpp",
+      "interface": "chat-completions",
+      "modalities": [
+        "text"
+      ],
+      "context_limit_tokens": 262144,
+      "request_defaults": {
+        "max_output_tokens": 4096,
+        "reasoning": "on",
+        "sampling": {
+          "temperature": 1,
+          "top_k": 64,
+          "top_p": 0.95,
+          "min_p": 0,
+          "repeat_penalty": 1,
+          "presence_penalty": 0,
+          "seed": 17
+        }
+      },
+      "speculation": {
+        "method": "none",
+        "source": "none",
+        "max_draft_tokens": 0
+      },
+      "compute": "gpu",
+      "compute_options": [
+        "gpu"
+      ],
+      "profiles": [
+        {
+          "min_memory_gib": 32,
+          "context_window_tokens": 98304,
+          "engine_config": {
+            "kind": "llama-server/v1",
+            "parallel": 1,
+            "kv_cache": "f16",
+            "flash_attention": "on",
+            "batch_tokens": 1024,
+            "microbatch_tokens": 1024,
+            "context_checkpoints": 2,
+            "prompt_cache_ram_mib": 0,
+            "gpu_layers": 99,
+            "controls": {
+              "checkpoint_min_step": 8192,
+              "cache_reuse": 0,
+              "reasoning_effort": "medium",
+              "preserve_reasoning": false,
+              "context_shift": false,
+              "cache_prompt": true,
+              "fit": "off",
+              "threads": 4,
+              "threads_batch": 4,
+              "load_mode": "mmap"
+            }
+          }
+        }
+      ],
+      "presentation": {
+        "display_name": "Gemma 4 26B-A4B / plain",
+        "description": "A lighter, faster alternative to Gemma 4 31B for creative writing and general conversation.",
+        "group": "general",
+        "memory_tier": "S"
+      }
+    },
+    "gemma-4-31b-qat-ud-q4-k-xl-llama": {
+      "artifact": "gemma-4-31b-qat-ud-q4-k-xl",
+      "template": "builtin",
+      "engine": "llama-cpp",
+      "interface": "chat-completions",
+      "modalities": [
+        "text"
+      ],
+      "context_limit_tokens": 262144,
+      "request_defaults": {
+        "max_output_tokens": 4096,
+        "reasoning": "on",
+        "sampling": {
+          "temperature": 1,
+          "top_k": 64,
+          "top_p": 0.95,
+          "min_p": 0,
+          "repeat_penalty": 1,
+          "presence_penalty": 0,
+          "seed": 17
+        }
+      },
+      "speculation": {
+        "method": "none",
+        "source": "none",
+        "max_draft_tokens": 0
+      },
+      "compute": "gpu",
+      "compute_options": [
+        "gpu"
+      ],
+      "profiles": [
+        {
+          "min_memory_gib": 32,
+          "context_window_tokens": 40960,
+          "engine_config": {
+            "kind": "llama-server/v1",
+            "parallel": 1,
+            "kv_cache": "q8",
+            "flash_attention": "on",
+            "batch_tokens": 512,
+            "microbatch_tokens": 512,
+            "context_checkpoints": 2,
+            "prompt_cache_ram_mib": 0,
+            "gpu_layers": 99,
+            "controls": {
+              "checkpoint_min_step": 8192,
+              "cache_reuse": 0,
+              "reasoning_effort": "medium",
+              "preserve_reasoning": false,
+              "context_shift": false,
+              "cache_prompt": true,
+              "fit": "off",
+              "threads": 4,
+              "threads_batch": 4,
+              "load_mode": "mmap"
+            }
+          }
+        }
+      ],
+      "presentation": {
+        "display_name": "Gemma 4 31B · llama.cpp",
+        "description": "The larger Gemma option for creative writing and general conversation. Expected to offer better fidelity and broader knowledge than 26B-A4B, at the cost of speed. Uses Unsloth QAT weights on llama.cpp with plain decoding.",
+        "group": "general",
+        "memory_tier": "S"
+      }
+    },
+    "nuextract3-q4km-llama": {
+      "artifact": "nuextract3-q4km",
+      "projector_artifact": "nuextract3-projector-bf16",
+      "template": "builtin",
+      "engine": "llama-cpp-specialists",
+      "interface": "chat-completions",
+      "modalities": [
+        "text",
+        "image"
+      ],
+      "request_defaults": {
+        "max_output_tokens": 1536,
+        "reasoning": "off",
+        "sampling": {
+          "temperature": 0,
+          "top_k": 1,
+          "top_p": 1,
+          "min_p": 0,
+          "repeat_penalty": 1,
+          "presence_penalty": 0,
+          "seed": 17
+        }
+      },
+      "speculation": {
+        "method": "none",
+        "source": "none",
+        "max_draft_tokens": 0
+      },
+      "context_limit_tokens": 8192,
+      "compute": "gpu",
+      "compute_options": [
+        "gpu",
+        "cpu"
+      ],
+      "profiles": [
+        {
+          "min_memory_gib": 32,
+          "context_window_tokens": 8192,
+          "engine_config": {
+            "kind": "llama-server/v1",
+            "parallel": 1,
+            "kv_cache": "q8",
+            "flash_attention": "on",
+            "batch_tokens": 256,
+            "microbatch_tokens": 256,
+            "context_checkpoints": 0,
+            "prompt_cache_ram_mib": 0,
+            "gpu_layers": 99,
+            "controls": {
+              "cache_reuse": 0,
+              "reasoning_effort": "medium",
+              "preserve_reasoning": false,
+              "context_shift": false,
+              "cache_prompt": false,
+              "fit": "off",
+              "threads": 4,
+              "threads_batch": 4,
+              "load_mode": "mmap"
+            }
+          }
+        }
+      ],
+      "presentation": {
+        "display_name": "NuExtract3 4B · llama.cpp",
+        "description": "Extracts structured data from text and document images, and converts documents to Markdown. CPU keeps the GPU available for other models; GPU is faster and recommended for images.",
+        "group": "specialist",
+        "section": "extraction",
+        "memory_tier": "XS"
+      }
+    },
+    "ettin-reranker-150m-q8-crispembed": {
+      "artifact": "ettin-reranker-150m-q8",
+      "engine": "crispembed",
+      "interface": "reranking",
+      "modalities": [
+        "text"
+      ],
+      "request_defaults": {},
+      "speculation": {
+        "method": "none",
+        "source": "none",
+        "max_draft_tokens": 0
+      },
+      "context_limit_tokens": 7999,
+      "compute": "cpu",
+      "compute_options": [
+        "cpu"
+      ],
+      "profiles": [
+        {
+          "min_memory_gib": 32,
+          "context_window_tokens": 7999,
+          "engine_config": {
+            "kind": "crispembed/v1",
+            "threads": 4
+          }
+        }
+      ],
+      "presentation": {
+        "display_name": "Ettin Reranker 150M · CrispEmbed",
+        "description": "A compact English reranker that runs on CPU, leaving the GPU available for other models.",
+        "group": "specialist",
+        "section": "reranking",
+        "memory_tier": "XS"
+      }
+    },
+    "qwen3-reranker-0.6b-q8-llama": {
+      "artifact": "qwen3-reranker-0.6b-q8",
+      "engine": "llama-cpp-specialists",
+      "interface": "reranking",
+      "modalities": [
+        "text"
+      ],
+      "request_defaults": {},
+      "speculation": {
+        "method": "none",
+        "source": "none",
+        "max_draft_tokens": 0
+      },
+      "context_limit_tokens": 4096,
+      "compute": "cpu",
+      "compute_options": [
+        "cpu",
+        "gpu"
+      ],
+      "profiles": [
+        {
+          "min_memory_gib": 32,
+          "context_window_tokens": 4096,
+          "engine_config": {
+            "kind": "llama-server/v1",
+            "parallel": 1,
+            "kv_cache": "",
+            "flash_attention": "on",
+            "batch_tokens": 256,
+            "microbatch_tokens": 256,
+            "context_checkpoints": 0,
+            "prompt_cache_ram_mib": 0,
+            "gpu_layers": 99,
+            "controls": {
+              "cache_reuse": 0,
+              "reasoning_effort": "medium",
+              "preserve_reasoning": false,
+              "context_shift": false,
+              "cache_prompt": false,
+              "fit": "off",
+              "threads": 4,
+              "threads_batch": 4,
+              "load_mode": "mmap"
+            }
+          }
+        }
+      ],
+      "presentation": {
+        "display_name": "Qwen3 Reranker 0.6B · llama.cpp",
+        "description": "A multilingual alternative to Ettin with a larger memory footprint. CPU keeps the GPU available for other models; GPU gives faster reranking.",
+        "group": "specialist",
+        "section": "reranking",
+        "memory_tier": "XS"
+      }
+    },
+    "translategemma-4b-q5km-llama": {
+      "artifact": "translategemma-4b-q5km",
+      "template": "translategemma-text-input",
+      "engine": "llama-cpp-specialists",
+      "interface": "chat-completions",
+      "modalities": [
+        "text"
+      ],
+      "request_defaults": {
+        "max_output_tokens": 2048,
+        "reasoning": "off",
+        "sampling": {
+          "temperature": 0,
+          "top_k": 1,
+          "top_p": 1,
+          "min_p": 0,
+          "repeat_penalty": 1,
+          "presence_penalty": 0,
+          "seed": 17
+        }
+      },
+      "speculation": {
+        "method": "none",
+        "source": "none",
+        "max_draft_tokens": 0
+      },
+      "context_limit_tokens": 4096,
+      "compute": "gpu",
+      "compute_options": [
+        "gpu"
+      ],
+      "profiles": [
+        {
+          "min_memory_gib": 32,
+          "context_window_tokens": 4096,
+          "engine_config": {
+            "kind": "llama-server/v1",
+            "parallel": 1,
+            "kv_cache": "f16",
+            "flash_attention": "on",
+            "batch_tokens": 512,
+            "microbatch_tokens": 256,
+            "context_checkpoints": 0,
+            "prompt_cache_ram_mib": 0,
+            "gpu_layers": 99,
+            "controls": {
+              "cache_reuse": 0,
+              "reasoning_effort": "medium",
+              "preserve_reasoning": false,
+              "context_shift": false,
+              "cache_prompt": false,
+              "fit": "off",
+              "threads": 4,
+              "threads_batch": 4,
+              "load_mode": "mmap"
+            }
+          }
+        }
+      ],
+      "presentation": {
+        "display_name": "TranslateGemma 4B · llama.cpp",
+        "description": "The smallest TranslateGemma option, prioritizing translation speed and low memory use.",
+        "group": "specialist",
+        "section": "translation",
+        "memory_tier": "XS"
+      }
+    },
+    "translategemma-12b-q5km-llama": {
+      "artifact": "translategemma-12b-q5km",
+      "template": "translategemma-text-input",
+      "engine": "llama-cpp-specialists",
+      "interface": "chat-completions",
+      "modalities": [
+        "text"
+      ],
+      "request_defaults": {
+        "max_output_tokens": 2048,
+        "reasoning": "off",
+        "sampling": {
+          "temperature": 0,
+          "top_k": 1,
+          "top_p": 1,
+          "min_p": 0,
+          "repeat_penalty": 1,
+          "presence_penalty": 0,
+          "seed": 17
+        }
+      },
+      "speculation": {
+        "method": "none",
+        "source": "none",
+        "max_draft_tokens": 0
+      },
+      "context_limit_tokens": 4096,
+      "compute": "gpu",
+      "compute_options": [
+        "gpu"
+      ],
+      "profiles": [
+        {
+          "min_memory_gib": 32,
+          "context_window_tokens": 4096,
+          "engine_config": {
+            "kind": "llama-server/v1",
+            "parallel": 1,
+            "kv_cache": "f16",
+            "flash_attention": "on",
+            "batch_tokens": 512,
+            "microbatch_tokens": 256,
+            "context_checkpoints": 0,
+            "prompt_cache_ram_mib": 0,
+            "gpu_layers": 99,
+            "controls": {
+              "cache_reuse": 0,
+              "reasoning_effort": "medium",
+              "preserve_reasoning": false,
+              "context_shift": false,
+              "cache_prompt": false,
+              "fit": "off",
+              "threads": 4,
+              "threads_batch": 4,
+              "load_mode": "mmap"
+            }
+          }
+        }
+      ],
+      "presentation": {
+        "display_name": "TranslateGemma 12B · llama.cpp",
+        "description": "The middle TranslateGemma option, with better fidelity expected than 4B and lower memory use and faster responses than 27B.",
+        "group": "specialist",
+        "section": "translation",
+        "memory_tier": "XS"
+      }
+    },
+    "translategemma-27b-q4km-llama": {
+      "artifact": "translategemma-27b-q4km",
+      "template": "translategemma-text-input",
+      "engine": "llama-cpp-specialists",
+      "interface": "chat-completions",
+      "modalities": [
+        "text"
+      ],
+      "request_defaults": {
+        "max_output_tokens": 2048,
+        "reasoning": "off",
+        "sampling": {
+          "temperature": 0,
+          "top_k": 1,
+          "top_p": 1,
+          "min_p": 0,
+          "repeat_penalty": 1,
+          "presence_penalty": 0,
+          "seed": 17
+        }
+      },
+      "speculation": {
+        "method": "none",
+        "source": "none",
+        "max_draft_tokens": 0
+      },
+      "context_limit_tokens": 4096,
+      "compute": "gpu",
+      "compute_options": [
+        "gpu"
+      ],
+      "profiles": [
+        {
+          "min_memory_gib": 32,
+          "context_window_tokens": 4096,
+          "engine_config": {
+            "kind": "llama-server/v1",
+            "parallel": 1,
+            "kv_cache": "f16",
+            "flash_attention": "on",
+            "batch_tokens": 512,
+            "microbatch_tokens": 256,
+            "context_checkpoints": 0,
+            "prompt_cache_ram_mib": 0,
+            "gpu_layers": 99,
+            "controls": {
+              "cache_reuse": 0,
+              "reasoning_effort": "medium",
+              "preserve_reasoning": false,
+              "context_shift": false,
+              "cache_prompt": false,
+              "fit": "off",
+              "threads": 4,
+              "threads_batch": 4,
+              "load_mode": "mmap"
+            }
+          }
+        }
+      ],
+      "presentation": {
+        "display_name": "TranslateGemma 27B · llama.cpp",
+        "description": "The largest TranslateGemma option, offering the highest expected translation fidelity at the cost of speed and memory.",
+        "group": "specialist",
+        "section": "translation",
+        "memory_tier": "S"
+      }
+    },
+    "tiny-aya-global-q8-llama": {
+      "artifact": "tiny-aya-global-q8",
+      "template": "builtin",
+      "engine": "llama-cpp-specialists",
+      "interface": "chat-completions",
+      "modalities": [
+        "text"
+      ],
+      "request_defaults": {
+        "max_output_tokens": 2048,
+        "reasoning": "off",
+        "sampling": {
+          "temperature": 0,
+          "top_k": 1,
+          "top_p": 1,
+          "min_p": 0,
+          "repeat_penalty": 1,
+          "presence_penalty": 0,
+          "seed": 17
+        }
+      },
+      "speculation": {
+        "method": "none",
+        "source": "none",
+        "max_draft_tokens": 0
+      },
+      "context_limit_tokens": 8192,
+      "compute": "gpu",
+      "compute_options": [
+        "gpu"
+      ],
+      "profiles": [
+        {
+          "min_memory_gib": 32,
+          "context_window_tokens": 4096,
+          "engine_config": {
+            "kind": "llama-server/v1",
+            "parallel": 1,
+            "kv_cache": "f16",
+            "flash_attention": "on",
+            "batch_tokens": 512,
+            "microbatch_tokens": 256,
+            "context_checkpoints": 0,
+            "prompt_cache_ram_mib": 0,
+            "gpu_layers": 99,
+            "controls": {
+              "cache_reuse": 0,
+              "reasoning_effort": "medium",
+              "preserve_reasoning": false,
+              "context_shift": false,
+              "cache_prompt": false,
+              "fit": "off",
+              "threads": 4,
+              "threads_batch": 4,
+              "load_mode": "mmap"
+            }
+          }
+        }
+      ],
+      "presentation": {
+        "display_name": "Tiny Aya Global · llama.cpp",
+        "description": "The balanced Tiny Aya option for translation across language regions. Includes translation to and from English.",
+        "group": "specialist",
+        "section": "translation",
+        "memory_tier": "XS"
+      }
+    },
+    "tiny-aya-water-q8-llama": {
+      "artifact": "tiny-aya-water-q8",
+      "template": "builtin",
+      "engine": "llama-cpp-specialists",
+      "interface": "chat-completions",
+      "modalities": [
+        "text"
+      ],
+      "request_defaults": {
+        "max_output_tokens": 2048,
+        "reasoning": "off",
+        "sampling": {
+          "temperature": 0,
+          "top_k": 1,
+          "top_p": 1,
+          "min_p": 0,
+          "repeat_penalty": 1,
+          "presence_penalty": 0,
+          "seed": 17
+        }
+      },
+      "speculation": {
+        "method": "none",
+        "source": "none",
+        "max_draft_tokens": 0
+      },
+      "context_limit_tokens": 8192,
+      "compute": "gpu",
+      "compute_options": [
+        "gpu"
+      ],
+      "profiles": [
+        {
+          "min_memory_gib": 32,
+          "context_window_tokens": 4096,
+          "engine_config": {
+            "kind": "llama-server/v1",
+            "parallel": 1,
+            "kv_cache": "f16",
+            "flash_attention": "on",
+            "batch_tokens": 512,
+            "microbatch_tokens": 256,
+            "context_checkpoints": 0,
+            "prompt_cache_ram_mib": 0,
+            "gpu_layers": 99,
+            "controls": {
+              "cache_reuse": 0,
+              "reasoning_effort": "medium",
+              "preserve_reasoning": false,
+              "context_shift": false,
+              "cache_prompt": false,
+              "fit": "off",
+              "threads": 4,
+              "threads_batch": 4,
+              "load_mode": "mmap"
+            }
+          }
+        }
+      ],
+      "presentation": {
+        "display_name": "Tiny Aya Water · llama.cpp",
+        "description": "Tiny Aya focused on European and Asia-Pacific languages, including Swedish, German, French, Chinese, Japanese and Korean. Includes translation to and from English.",
+        "group": "specialist",
+        "section": "translation",
+        "memory_tier": "XS"
+      }
+    },
+    "tiny-aya-fire-q8-llama": {
+      "artifact": "tiny-aya-fire-q8",
+      "template": "builtin",
+      "engine": "llama-cpp-specialists",
+      "interface": "chat-completions",
+      "modalities": [
+        "text"
+      ],
+      "request_defaults": {
+        "max_output_tokens": 2048,
+        "reasoning": "off",
+        "sampling": {
+          "temperature": 0,
+          "top_k": 1,
+          "top_p": 1,
+          "min_p": 0,
+          "repeat_penalty": 1,
+          "presence_penalty": 0,
+          "seed": 17
+        }
+      },
+      "speculation": {
+        "method": "none",
+        "source": "none",
+        "max_draft_tokens": 0
+      },
+      "context_limit_tokens": 8192,
+      "compute": "gpu",
+      "compute_options": [
+        "gpu"
+      ],
+      "profiles": [
+        {
+          "min_memory_gib": 32,
+          "context_window_tokens": 4096,
+          "engine_config": {
+            "kind": "llama-server/v1",
+            "parallel": 1,
+            "kv_cache": "f16",
+            "flash_attention": "on",
+            "batch_tokens": 512,
+            "microbatch_tokens": 256,
+            "context_checkpoints": 0,
+            "prompt_cache_ram_mib": 0,
+            "gpu_layers": 99,
+            "controls": {
+              "cache_reuse": 0,
+              "reasoning_effort": "medium",
+              "preserve_reasoning": false,
+              "context_shift": false,
+              "cache_prompt": false,
+              "fit": "off",
+              "threads": 4,
+              "threads_batch": 4,
+              "load_mode": "mmap"
+            }
+          }
+        }
+      ],
+      "presentation": {
+        "display_name": "Tiny Aya Fire · llama.cpp",
+        "description": "Tiny Aya focused on South Asian languages, including Hindi, Bengali, Gujarati, Marathi, Tamil, Telugu and Nepali. Includes translation to and from English.",
+        "group": "specialist",
+        "section": "translation",
+        "memory_tier": "XS"
+      }
+    },
+    "tiny-aya-earth-q8-llama": {
+      "artifact": "tiny-aya-earth-q8",
+      "template": "builtin",
+      "engine": "llama-cpp-specialists",
+      "interface": "chat-completions",
+      "modalities": [
+        "text"
+      ],
+      "request_defaults": {
+        "max_output_tokens": 2048,
+        "reasoning": "off",
+        "sampling": {
+          "temperature": 0,
+          "top_k": 1,
+          "top_p": 1,
+          "min_p": 0,
+          "repeat_penalty": 1,
+          "presence_penalty": 0,
+          "seed": 17
+        }
+      },
+      "speculation": {
+        "method": "none",
+        "source": "none",
+        "max_draft_tokens": 0
+      },
+      "context_limit_tokens": 8192,
+      "compute": "gpu",
+      "compute_options": [
+        "gpu"
+      ],
+      "profiles": [
+        {
+          "min_memory_gib": 32,
+          "context_window_tokens": 4096,
+          "engine_config": {
+            "kind": "llama-server/v1",
+            "parallel": 1,
+            "kv_cache": "f16",
+            "flash_attention": "on",
+            "batch_tokens": 512,
+            "microbatch_tokens": 256,
+            "context_checkpoints": 0,
+            "prompt_cache_ram_mib": 0,
+            "gpu_layers": 99,
+            "controls": {
+              "cache_reuse": 0,
+              "reasoning_effort": "medium",
+              "preserve_reasoning": false,
+              "context_shift": false,
+              "cache_prompt": false,
+              "fit": "off",
+              "threads": 4,
+              "threads_batch": 4,
+              "load_mode": "mmap"
+            }
+          }
+        }
+      ],
+      "presentation": {
+        "display_name": "Tiny Aya Earth · llama.cpp",
+        "description": "Tiny Aya focused on West Asian and African languages, including Arabic, Persian, Turkish, Hebrew, Swahili, Amharic, Hausa and Yoruba. Includes translation to and from English.",
+        "group": "specialist",
+        "section": "translation",
+        "memory_tier": "XS"
+      }
+    }
+  },
+  "presentation": {
+    "groups": [
+      {
+        "id": "general",
+        "display_name": "General",
+        "description": "Recommended general-purpose presets. Select the models you want available."
+      },
+      {
+        "id": "specialist",
+        "display_name": "Specialist",
+        "description": "Recommended specialists by task. Compare their inputs, languages and resource needs to build your pipeline.",
+        "sections": [
+          {
+            "id": "extraction",
+            "display_name": "Extraction",
+            "description": "Turn text and document images into structured data or Markdown for use by other tools and models."
+          },
+          {
+            "id": "reranking",
+            "display_name": "Reranking",
+            "description": "Reorder search results by relevance to a query, helping tools and models select useful context."
+          },
+          {
+            "id": "translation",
+            "display_name": "Translation",
+            "description": "Translate text between languages. Choose by language coverage, expected fidelity, speed and memory use. For work focused on a particular language group, we recommend the matching Tiny Aya regional variant."
+          }
+        ]
+      },
+      {
+        "id": "other",
+        "display_name": "Other",
+        "description": "Additional presets and saved choices outside the curated recommendations. Review their intended use and limits."
+      }
+    ],
+    "fallback_group": "other",
+    "preset_order": [
+      "qwen3.8-27b-q4xl-splash",
+      "muse-glimmer-30b-q4xl-llama",
+      "gemma-4-26b-a4b-qat-ud-q4-k-xl-llama",
+      "gemma-4-31b-qat-ud-q4-k-xl-llama",
+      "qwen3.8-27b-q4xl-mtp",
+      "gemma-4-e2b-q4km-off",
+      "gemma-4-e4b-q4km-off",
+      "qwen3.5-4b-q4km-off",
+      "nuextract3-q4km-llama",
+      "ettin-reranker-150m-q8-crispembed",
+      "qwen3-reranker-0.6b-q8-llama",
+      "translategemma-4b-q5km-llama",
+      "translategemma-12b-q5km-llama",
+      "translategemma-27b-q4km-llama",
+      "tiny-aya-global-q8-llama",
+      "tiny-aya-water-q8-llama",
+      "tiny-aya-fire-q8-llama",
+      "tiny-aya-earth-q8-llama"
+    ]
+  }
+}

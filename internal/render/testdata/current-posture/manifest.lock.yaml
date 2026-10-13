@@ -1,0 +1,20 @@
+schema: temper-lock/v1
+entries:
+  qwen3.8-27b-gguf-24k:
+    repo: unsloth/Qwen3.8-27B-GGUF
+    revision: f1bfb127c64f7072bdd2cad55f258b9c8b2910fe
+    files:
+      - name: Qwen3.8-27B-Q4_K_M.gguf
+        sha256: 7e78da5d7e3ae28d178121f58646953305f3e5bd3cb46f4a75584e8b6c6fe169
+    patches:
+      - name: qwen38-sharp-template
+        sha256: 69da7ac41de69defd62c98aa553b4b0eadda9c4ed5698770c957521c9c7e055b
+    resolved: 2026-08-19
+
+  rerank-qwen3-0.6b:
+    repo: Voodisss/Qwen3-Reranker-0.6B-GGUF-llama_cpp
+    revision: eb9ad47d4e53c2a6abd6158b505f1539d1c5650c
+    files:
+      - name: Qwen3-Reranker-0.6B.Q8_0.gguf
+        sha256: 6ddab39a36c6c87fdb76f0e5f05657012d5dbc97034c0983c157f17ef9f34d55
+    resolved: 2026-08-19

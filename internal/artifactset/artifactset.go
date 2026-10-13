@@ -1,0 +1,547 @@
+// Package artifactset defines and verifies one immutable layout artifact set.
+package artifactset
+
+import (
+	"bytes"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"io/fs"
+	"math"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+
+	"github.com/temper-sh/temper/internal/lockfile"
+	"github.com/temper-sh/temper/internal/manifest"
+)
+
+const receiptSchema = "temper-artifact-set/v1"
+
+// ErrNotMaterialized means the immutable artifact-set directory is absent.
+var ErrNotMaterialized = errors.New("artifact set is not materialized")
+
+// ErrCacheMissing means a prepared reference no longer has its HF cache file.
+// Preparation can download that exact file again without replacing the receipt.
+var ErrCacheMissing = errors.New("HF cache model is missing; prepare the preset again")
+
+var ErrCacheChanged = errors.New("HF cache model changed; prepare the preset again to verify it")
+
+// ErrCacheRedirected means the recorded HF cache path now leads elsewhere,
+// usually because the cache moved and a link was left behind.
+var ErrCacheRedirected = errors.New("HF cache moved; prepare the preset again to relink it")
+
+// ErrContentMismatch means a full-byte audit found data that does not match
+// the SHA-256 selected by the lock.
+var ErrContentMismatch = errors.New("artifact content does not match lock")
+
+// File is one data file required by an artifact set.
+type File struct {
+	Path   string
+	SHA256 string
+}
+
+// Record is the persistent receipt metadata for one verified data file.
+type Record struct {
+	Path       string `json:"path"`
+	SHA256     string `json:"sha256"`
+	Size       int64  `json:"size"`
+	Source     string `json:"source,omitempty"`
+	ModifiedNS int64  `json:"modified_ns,omitempty"`
+}
+
+// Set is the exact artifact identity selected by one manifest layout and lock
+// entry. Its fields stay private so callers cannot weaken its invariants.
+type Set struct {
+	root        string
+	layoutID    string
+	digest      string
+	models      []string
+	modelTarget string
+	files       []File
+}
+
+// Inspection contains trusted local facts exposed only after the immutable
+// set passes receipt and shape admission.
+type Inspection struct {
+	ModelBytes int64
+}
+
+type receipt struct {
+	Schema      string   `json:"schema"`
+	Layout      string   `json:"layout"`
+	EntryDigest string   `json:"entry_digest"`
+	HFCache     string   `json:"hf_cache"`
+	Files       []Record `json:"files"`
+}
+
+// New binds a validated manifest layout to its corresponding lock entry.
+func New(root, layoutID string, layout manifest.Layout, entry lockfile.Entry, patches map[string]manifest.Patch) (Set, error) {
+	if entry.Repo != layout.Model.Repo {
+		return Set{}, fmt.Errorf("layout %q repo drift: manifest has %q, lock has %q", layoutID, layout.Model.Repo, entry.Repo)
+	}
+	selected := layout.ModelFiles()
+	if len(entry.Files) != len(selected) {
+		return Set{}, fmt.Errorf("layout %q selected model file set drift", layoutID)
+	}
+	models := make([]string, 0, len(selected))
+	files := make([]File, 0, len(selected)+1)
+	for index, name := range selected {
+		if entry.Files[index].Name != name {
+			return Set{}, fmt.Errorf("layout %q selected model file set drift at %q", layoutID, name)
+		}
+		model := filepath.ToSlash(filepath.Join("model", name))
+		models = append(models, model)
+		files = append(files, File{Path: model, SHA256: entry.Files[index].SHA256})
+	}
+	if (layout.Draft == nil) != (entry.Draft == nil) {
+		return Set{}, fmt.Errorf("layout %q selected draft drift", layoutID)
+	}
+	if layout.Draft != nil {
+		if layout.Draft.Repo != entry.Draft.Repo || len(layout.Draft.Files) != len(entry.Draft.Files) {
+			return Set{}, fmt.Errorf("layout %q selected draft drift", layoutID)
+		}
+		for i, name := range layout.Draft.Files {
+			if name != entry.Draft.Files[i].Name {
+				return Set{}, fmt.Errorf("layout %q selected draft file drift", layoutID)
+			}
+			draft := "draft/" + name
+			models = append(models, draft)
+			files = append(files, File{Path: draft, SHA256: entry.Draft.Files[i].SHA256})
+		}
+	}
+	if (layout.Projector == nil) != (entry.Projector == nil) {
+		return Set{}, fmt.Errorf("layout %q selected projector drift", layoutID)
+	}
+	if layout.Projector != nil {
+		if layout.Projector.Repo != entry.Projector.Repo || len(layout.Projector.Files) != 1 || len(entry.Projector.Files) != 1 || layout.Projector.Files[0] != entry.Projector.Files[0].Name {
+			return Set{}, fmt.Errorf("layout %q selected projector file drift", layoutID)
+		}
+		projector := "projector/" + layout.Projector.Files[0]
+		models = append(models, projector)
+		files = append(files, File{Path: projector, SHA256: entry.Projector.Files[0].SHA256})
+	}
+	if layout.ChatTemplate == "" {
+		if len(entry.Patches) != 0 {
+			return Set{}, fmt.Errorf("layout %q selected patch drift: manifest selects no patch", layoutID)
+		}
+	} else {
+		if len(entry.Patches) != 1 || entry.Patches[0].Name != layout.ChatTemplate {
+			return Set{}, fmt.Errorf("layout %q selected patch drift: manifest has %q", layoutID, layout.ChatTemplate)
+		}
+		definition, ok := patches[layout.ChatTemplate]
+		if !ok {
+			return Set{}, fmt.Errorf("layout %q selects undefined patch %q", layoutID, layout.ChatTemplate)
+		}
+		files = append(files, File{
+			Path:   filepath.ToSlash(filepath.Join("patches", layout.ChatTemplate, definition.File)),
+			SHA256: entry.Patches[0].SHA256,
+		})
+	}
+	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
+	modelTarget := "model"
+	if layout.ModelFormat() == "gguf" {
+		modelTarget = models[0]
+	}
+	return Set{root: root, layoutID: layoutID, digest: entry.Digest(), models: models, modelTarget: modelTarget, files: files}, nil
+}
+
+// Path returns the immutable artifact-set directory.
+func (s Set) Path() string {
+	return filepath.Join(s.root, "artifacts", "layouts", s.layoutID, s.digest)
+}
+
+// Digest returns the lock entry's content-derived artifact-set identity.
+func (s Set) Digest() string { return s.digest }
+
+// ModelPath is the exact GGUF file or complete snapshot directory passed to
+// the selected engine.
+func (s Set) ModelPath() string {
+	return filepath.Join(s.Path(), filepath.FromSlash(s.modelTarget))
+}
+
+// Files returns a defensive copy of the set's expected data files.
+func (s Set) Files() []File { return append([]File(nil), s.files...) }
+
+// RootRelativeFiles returns the stable paths reported by fetch.
+func (s Set) RootRelativeFiles() []string {
+	base := filepath.ToSlash(filepath.Join("artifacts", "layouts", s.layoutID, s.digest))
+	files := make([]string, 0, len(s.files)+1)
+	for _, file := range s.files {
+		files = append(files, base+"/"+file.Path)
+	}
+	files = append(files, base+"/receipt.json")
+	sort.Strings(files)
+	return files
+}
+
+// Receipt returns the canonical receipt for records produced while fetch
+// hashes and stages the set's data files.
+func (s Set) Receipt(records []Record, cacheRoot string) ([]byte, error) {
+	validated, err := s.validateRecords(records)
+	if err != nil {
+		return nil, err
+	}
+	value := receipt{
+		Schema:      receiptSchema,
+		Layout:      s.layoutID,
+		EntryDigest: s.digest,
+		HFCache:     cacheRoot,
+		Files:       validated,
+	}
+	if err := validateSources(value); err != nil {
+		return nil, err
+	}
+	data, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("encode artifact receipt: %w", err)
+	}
+	return append(data, '\n'), nil
+}
+
+// Verify proves that the canonical receipt identifies this immutable set and
+// that the local tree has exactly the recorded cache links, patches and sizes. Fetch
+// established the hashes before publishing the receipt; this routine avoids a
+// multi-gigabyte rehash on every apply.
+func (s Set) Verify() error {
+	_, err := s.Inspect()
+	return err
+}
+
+// CacheRoot returns the cache used when this exact set was prepared, including
+// when some cache files have since been removed. It never inspects other sets.
+func (s Set) CacheRoot() (string, error) {
+	r, err := readReceipt(s.Path(), s.layoutID, s.digest)
+	if err != nil {
+		return "", err
+	}
+	if _, err := s.validateRecords(r.Files); err != nil {
+		return "", err
+	}
+	return r.HFCache, nil
+}
+
+// Inspect performs routine receipt and shape verification and returns the
+// recorded model size established when fetch hashed and published the set.
+func (s Set) Inspect() (Inspection, error) { return s.inspect(false) }
+
+func (s Set) inspect(contentAudit bool) (Inspection, error) {
+	recorded, err := readReceipt(s.Path(), s.layoutID, s.digest)
+	if err != nil {
+		return Inspection{}, err
+	}
+	if _, err := s.validateRecords(recorded.Files); err != nil {
+		return Inspection{}, fmt.Errorf("artifact receipt: %w", err)
+	}
+	if err := verifyReceiptShape(s.Path(), recorded); err != nil && !(contentAudit && errors.Is(err, ErrCacheChanged)) {
+		return Inspection{}, err
+	}
+	sizes := make(map[string]int64, len(recorded.Files))
+	for _, file := range recorded.Files {
+		sizes[file.Path] = file.Size
+	}
+	var modelBytes int64
+	for _, model := range s.models {
+		size := sizes[model]
+		if size > math.MaxInt64-modelBytes {
+			return Inspection{}, errors.New("artifact model size exceeds supported range")
+		}
+		modelBytes += size
+	}
+	return Inspection{ModelBytes: modelBytes}, nil
+}
+
+func readReceipt(target, layoutID, digest string) (receipt, error) {
+	info, err := os.Lstat(target)
+	if errors.Is(err, fs.ErrNotExist) {
+		return receipt{}, fmt.Errorf("%w: %s", ErrNotMaterialized, target)
+	}
+	if err != nil {
+		return receipt{}, fmt.Errorf("inspect artifact set: %w", err)
+	}
+	if !info.IsDir() {
+		return receipt{}, errors.New("artifact set is not a regular directory")
+	}
+	receiptPath := filepath.Join(target, "receipt.json")
+	receiptInfo, err := os.Lstat(receiptPath)
+	if errors.Is(err, fs.ErrNotExist) {
+		return receipt{}, errors.New("artifact set has no regular receipt.json")
+	}
+	if err != nil {
+		return receipt{}, fmt.Errorf("inspect artifact receipt: %w", err)
+	}
+	if !receiptInfo.Mode().IsRegular() {
+		return receipt{}, errors.New("artifact set has no regular receipt.json")
+	}
+	const maxReceiptBytes = 16 << 20
+	if receiptInfo.Size() > maxReceiptBytes {
+		return receipt{}, errors.New("artifact receipt exceeds size limit")
+	}
+	file, err := os.Open(receiptPath)
+	if err != nil {
+		return receipt{}, fmt.Errorf("read artifact receipt: %w", err)
+	}
+	data, readErr := io.ReadAll(io.LimitReader(file, maxReceiptBytes+1))
+	closeErr := file.Close()
+	if err := errors.Join(readErr, closeErr); err != nil {
+		return receipt{}, fmt.Errorf("read artifact receipt: %w", err)
+	}
+	if len(data) > maxReceiptBytes {
+		return receipt{}, errors.New("artifact receipt exceeds size limit")
+	}
+	var recorded receipt
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&recorded); err != nil {
+		return receipt{}, fmt.Errorf("decode artifact receipt: %w", err)
+	}
+	if err := requireJSONEOF(decoder); err != nil {
+		return receipt{}, fmt.Errorf("decode artifact receipt: %w", err)
+	}
+	if recorded.Schema != receiptSchema || recorded.Layout != layoutID || recorded.EntryDigest != digest {
+		return receipt{}, errors.New("artifact receipt does not identify the requested immutable set")
+	}
+	if err := validateSources(recorded); err != nil {
+		return receipt{}, err
+	}
+	previous := ""
+	for _, entry := range recorded.Files {
+		if !fs.ValidPath(entry.Path) || strings.Contains(entry.Path, "\\") ||
+			(!strings.HasPrefix(entry.Path, "model/") && !strings.HasPrefix(entry.Path, "patches/") && !strings.HasPrefix(entry.Path, "draft/") && !strings.HasPrefix(entry.Path, "projector/")) ||
+			!validDigest(entry.SHA256) || entry.Size < 0 || entry.Path <= previous {
+			return receipt{}, fmt.Errorf("artifact receipt has invalid or noncanonical metadata for %q", entry.Path)
+		}
+		previous = entry.Path
+	}
+	canonical, err := json.MarshalIndent(recorded, "", "  ")
+	if err != nil {
+		return receipt{}, fmt.Errorf("artifact receipt: %w", err)
+	}
+	if !bytes.Equal(data, append(canonical, '\n')) {
+		return receipt{}, errors.New("artifact receipt is not in canonical form")
+	}
+	return recorded, nil
+}
+
+func verifyReceiptShape(target string, recorded receipt) error {
+	files := make(map[string]Record, len(recorded.Files))
+	for _, file := range recorded.Files {
+		files[file.Path] = file
+	}
+	if err := verifyShape(target, files); err != nil {
+		return fmt.Errorf("artifact set is malformed: %w", err)
+	}
+	return nil
+}
+
+func validateSources(r receipt) error {
+	if !filepath.IsAbs(r.HFCache) || filepath.Clean(r.HFCache) != r.HFCache {
+		return errors.New("artifact receipt requires an absolute HF cache root")
+	}
+	for _, file := range r.Files {
+		if strings.HasPrefix(file.Path, "patches/") {
+			if file.Source != "" || file.ModifiedNS != 0 {
+				return errors.New("template patches must remain in the Temper root")
+			}
+			continue
+		}
+		relative, err := filepath.Rel(r.HFCache, file.Source)
+		if !filepath.IsAbs(file.Source) || filepath.Clean(file.Source) != file.Source || err != nil || !filepath.IsLocal(relative) || relative == "." {
+			return fmt.Errorf("model %q requires a source inside its HF cache", file.Path)
+		}
+	}
+	return nil
+}
+
+// InspectContent performs routine inspection, then streams every data file
+// and compares its SHA-256 directly with the lock selection.
+func (s Set) InspectContent(ctx context.Context) (Inspection, error) {
+	if err := ctx.Err(); err != nil {
+		return Inspection{}, err
+	}
+	inspection, err := s.inspect(true)
+	if err != nil {
+		return Inspection{}, err
+	}
+	for _, expected := range s.files {
+		if err := ctx.Err(); err != nil {
+			return Inspection{}, err
+		}
+		actual, err := fileSHA256(ctx, filepath.Join(s.Path(), filepath.FromSlash(expected.Path)))
+		if err != nil {
+			return Inspection{}, fmt.Errorf("hash artifact file %q: %w", expected.Path, err)
+		}
+		if actual != expected.SHA256 {
+			return Inspection{}, fmt.Errorf("%w: %q has %s, lock requires %s", ErrContentMismatch, expected.Path, actual, expected.SHA256)
+		}
+	}
+	return inspection, nil
+}
+
+func (s Set) validateRecords(records []Record) ([]Record, error) {
+	if len(records) != len(s.files) {
+		return nil, errors.New("receipt has an unexpected file set")
+	}
+	expected := make(map[string]string, len(s.files))
+	for _, file := range s.files {
+		expected[file.Path] = file.SHA256
+	}
+	validated := append([]Record(nil), records...)
+	seen := make(map[string]bool, len(records))
+	for _, record := range validated {
+		hash, ok := expected[record.Path]
+		if !ok || record.SHA256 != hash || record.Size < 0 {
+			return nil, fmt.Errorf("receipt has invalid metadata for %q", record.Path)
+		}
+		if seen[record.Path] {
+			return nil, fmt.Errorf("receipt repeats %q", record.Path)
+		}
+		seen[record.Path] = true
+	}
+	sort.Slice(validated, func(i, j int) bool { return validated[i].Path < validated[j].Path })
+	return validated, nil
+}
+
+func verifyShape(target string, files map[string]Record) error {
+	expectedDirectories := map[string]bool{".": true}
+	for name := range files {
+		for directory := filepath.Dir(filepath.FromSlash(name)); directory != "."; directory = filepath.Dir(directory) {
+			expectedDirectories[directory] = true
+		}
+	}
+	seen := map[string]bool{}
+	var missing error
+	err := filepath.WalkDir(target, func(current string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		relative, err := filepath.Rel(target, current)
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			if !expectedDirectories[relative] {
+				return fmt.Errorf("unexpected directory %q", filepath.ToSlash(relative))
+			}
+			return nil
+		}
+		name := filepath.ToSlash(relative)
+		if name == "receipt.json" {
+			if !entry.Type().IsRegular() {
+				return errors.New("receipt.json is not a regular file")
+			}
+			seen[name] = true
+			return nil
+		}
+		record, ok := files[name]
+		if !ok {
+			return fmt.Errorf("unexpected file %q", name)
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		if record.Source != "" {
+			link, err := os.Readlink(current)
+			if err != nil || link != record.Source {
+				return fmt.Errorf("%q must be a symbolic link to its recorded HF cache file", name)
+			}
+			resolved, err := filepath.EvalSymlinks(record.Source)
+			if errors.Is(err, fs.ErrNotExist) {
+				missing = fmt.Errorf("%w: %s", ErrCacheMissing, record.Source)
+				seen[name] = true
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			if resolved != record.Source {
+				return fmt.Errorf("%w: %s", ErrCacheRedirected, record.Source)
+			}
+			info, err = os.Lstat(record.Source)
+			if err != nil {
+				return err
+			}
+			if info.ModTime().UnixNano() != record.ModifiedNS && missing == nil {
+				missing = fmt.Errorf("%w: %s", ErrCacheChanged, record.Source)
+			}
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("%q is not a regular file", name)
+		}
+		if info.Size() != record.Size {
+			return fmt.Errorf("%q size is %d, receipt records %d", name, info.Size(), record.Size)
+		}
+		seen[name] = true
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if !seen["receipt.json"] {
+		return errors.New("receipt.json is absent")
+	}
+	for name := range files {
+		if !seen[name] {
+			return fmt.Errorf("receipt file %q is absent", name)
+		}
+	}
+	return missing
+}
+
+func requireJSONEOF(decoder *json.Decoder) error {
+	var extra any
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return errors.New("multiple JSON values are not allowed")
+		}
+		return err
+	}
+	return nil
+}
+
+func validDigest(value string) bool {
+	if len(value) != 64 || strings.ToLower(value) != value {
+		return false
+	}
+	_, err := hex.DecodeString(value)
+	return err == nil
+}
+
+func fileSHA256(ctx context.Context, path string) (returnHash string, returnErr error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer func() {
+		if closeErr := file.Close(); returnErr == nil && closeErr != nil {
+			returnErr = closeErr
+		}
+	}()
+
+	hash := sha256.New()
+	buffer := make([]byte, 128<<10)
+	for {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
+		count, readErr := file.Read(buffer)
+		if count > 0 {
+			_, _ = hash.Write(buffer[:count])
+		}
+		if errors.Is(readErr, io.EOF) {
+			return hex.EncodeToString(hash.Sum(nil)), nil
+		}
+		if readErr != nil {
+			return "", readErr
+		}
+	}
+}
