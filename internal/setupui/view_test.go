@@ -33,7 +33,7 @@ func TestDownloadTableFitsAndPreservesFullFileNames(t *testing.T) {
 
 func TestDownloadsCardDoesNotRewrapTableBorders(t *testing.T) {
 	items := []Download{
-		{File: "Qwen3.5-4B-Q4_K_M.gguf", Size: "2.55 GiB", Status: "Download on Prepare"},
+		{File: "Qwen3.5-4B-Q4_K_M.gguf", Size: "2.55 GiB", Status: "Downloads on install"},
 		{File: "local/llama-cpp b10964", Size: "10.63 MiB", Status: "May download"},
 	}
 	for _, width := range []int{26, 40, 76, 96, 108} {

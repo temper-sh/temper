@@ -2,7 +2,9 @@ package setupui
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -141,7 +143,10 @@ func TestReviewArrowsReachDownloadsAndRetryWithoutSaving(t *testing.T) {
 		return setup.Plan{Configuration: &c, CanPrepare: true}, nil
 	}
 	m.Update(tea.WindowSizeMsg{Width: 28, Height: 18})
-	m.Update(tea.KeyPressMsg{Code: tea.KeyTab}) // Save, without activating.
+	m.Update(tea.KeyPressMsg{Code: tea.KeyTab}) // Back: installation is impossible.
+	if b := m.footerButtons()[m.action]; b.short != "Back" {
+		t.Fatalf("Tab focused %q, not Back, while installation is impossible", b.label)
+	}
 	m.Update(tea.KeyPressMsg{Code: tea.KeyUp})
 	if view := ansi.Strip(m.View().Content); m.focus != presetContentFocus || !strings.Contains(view, "▸ Downloads") {
 		t.Fatalf("Downloads cannot receive arrow focus:\n%s", view)
@@ -156,14 +161,22 @@ func TestReviewArrowsReachDownloadsAndRetryWithoutSaving(t *testing.T) {
 		t.Fatal("Enter did not expand Downloads")
 	}
 	m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
-	m.Update(tea.KeyPressMsg{Code: tea.KeyRight}) // Prepare.
+	for i := 0; i < 5 && m.footerButtons()[m.action].short != "Install"; i++ {
+		m.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
+	}
+	if b := m.footerButtons()[m.action]; b.label != "Can't install yet" || b.available {
+		t.Fatalf("the install button does not say it cannot run: %+v", b)
+	}
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if m.Decision.Action != "" || m.notice == "" {
-		t.Fatal("keyboard activation bypassed the preparation refusal")
+		t.Fatal("keyboard activation bypassed the installation refusal")
 	}
-	m.Update(tea.KeyPressMsg{Code: tea.KeyRight}) // Back.
-	m.Update(tea.KeyPressMsg{Code: tea.KeyRight}) // Cancel.
-	m.Update(tea.KeyPressMsg{Code: tea.KeyRight}) // Retry.
+	// Retry appears only after a failed check.
+	if slices.ContainsFunc(m.footerButtons(), func(b presetButton) bool { return b.target.key == "retry" }) {
+		t.Fatal("Retry offered without a failed check")
+	}
+	m.reviewErr = errors.New("catalog unreachable")
+	m.Update(tea.KeyPressMsg{Code: tea.KeyLeft}) // Wraps to Retry.
 	if view := ansi.Strip(m.View().Content); m.focus != presetFooterFocus || m.footerButtons()[m.action].target.key != "retry" || !strings.Contains(view, "Retry") {
 		t.Fatalf("Retry is not visible when focused:\n%s", view)
 	}

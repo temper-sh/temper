@@ -52,7 +52,7 @@ func TestPreviewInspectsHFCacheWithoutCreatingRootsOrHashingWeights(t *testing.T
 	if !plan.CanPrepare {
 		t.Fatalf("a missing download client refused cached weights: %v", plan.Refusals)
 	}
-	for _, want := range []string{"Cached in Hugging Face", cache, "No weight download on Prepare", "verifies cached weights"} {
+	for _, want := range []string{"Cached in Hugging Face", cache, "No weights to download", "verifies cached weights"} {
 		if !strings.Contains(strings.Join(plan.Lines(), "\n"), want) {
 			t.Fatalf("preview omitted %q", want)
 		}

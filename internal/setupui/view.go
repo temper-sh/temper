@@ -160,13 +160,13 @@ func downloadsBlock(section Section, width int, open, focused bool) (string, int
 }
 
 func downloadTable(downloads []Download, width int) string {
-	headers := []string{"File", "Size", "On Prepare"}
+	headers := []string{"File", "Size", "On install"}
 	// Reserve the four border columns and enough room for a size and status.
 	// Explicit widths keep long filenames from cropping the table's last cell.
 	columns := []int{width - 41, 13, 24}
 	narrow := width < 56
 	if narrow {
-		headers = []string{"File", "Prepare"}
+		headers = []string{"File", "Install"}
 		fileWidth := (width - 3) / 2
 		columns = []int{fileWidth, width - 3 - fileWidth}
 	}

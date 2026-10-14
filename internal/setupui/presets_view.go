@@ -165,7 +165,7 @@ func (m *PresetModel) presetContent(width int, compact bool) screenBody {
 			subtitle = "Include makes a preset available. Load on activation warms it up. Default is optional and does not imply loading."
 		}
 	} else if m.page == 2 {
-		title, subtitle = "Review your setup", "Check downloads, memory and your layouts. Save keeps your choices; Prepare also installs the missing files."
+		title, subtitle = "Review your setup", "Check downloads, memory and your layouts."
 	}
 	if !compact {
 		body.add(lipgloss.NewStyle().Foreground(nightCyan).Bold(true).Width(width).Render(title)+"\n"+
@@ -558,14 +558,18 @@ func (m *PresetModel) presetFooter(width int, compact bool) (string, []hitTarget
 	parts := []string{row()}
 	if !compact && m.field == "" && m.page == 2 {
 		detail := []string{
-			"Save choices only; no downloads or model starts.",
-			"Save and prepare missing files; no model starts.",
-			"Return to your layouts.",
-			"Leave without saving your changes.",
-			"Refresh the preview's download and machine checks.",
+			"Enter downloads what is missing, installs it and starts the default layout.",
+			"Enter saves your choices. Nothing is downloaded or started.",
+			"Enter returns to your layouts.",
+			"Enter leaves without saving.",
+			"Enter checks downloads and memory again.",
 		}[active]
-		if !definitions[active].available {
-			detail = "Unavailable until the preview and preparation checks pass."
+		switch {
+		case definitions[active].available:
+		case !m.reviewReady || m.loading:
+			detail = "Checking downloads and memory…"
+		case active == 0:
+			detail = "Can't install: " + strings.Join(m.plan.Refusals, "; ")
 		}
 		parts = append(parts, lipgloss.NewStyle().Foreground(nightMuted).Width(width).Render(detail))
 	}
@@ -585,7 +589,7 @@ func (m *PresetModel) presetFooter(width int, compact bool) (string, []hitTarget
 			}
 		}
 	} else if m.page == 2 {
-		help = strings.ReplaceAll(help, "Next", "Save")
+		help = strings.ReplaceAll(help, "Next", "Install")
 	} else if m.layout != "" {
 		help = strings.ReplaceAll(help, "Next", "Done")
 	} else if m.page == 1 {

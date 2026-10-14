@@ -68,8 +68,8 @@ func (c Command) Update(ctx context.Context, args []string, out, diagnostics io.
 	f.SetOutput(diagnostics)
 	rootArg := f.String("root", "", "configuration root (default ~/.temper)")
 	softwareOnly := f.Bool("software", false, "keep models and settings; change only router and engine releases")
-	prepare := f.Bool("prepare", false, "prepare updated material after saving")
-	dry := f.Bool("dry-run", false, "show old → new without saving, storing the catalog or preparing")
+
+	dry := f.Bool("dry-run", false, "show old → new without saving, storing the catalog, installing or restarting")
 	jsonOutput := f.Bool("json", false, "emit JSON")
 	if err := f.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -177,15 +177,15 @@ func (c Command) Update(ctx context.Context, args []string, out, diagnostics io.
 	if err != nil {
 		return fail(diagnostics, err)
 	}
-	if *prepare && !plan.CanPrepare {
-		return fail(diagnostics, fmt.Errorf("cannot prepare: %s", strings.Join(plan.Refusals, "; ")))
+	if !*dry && !plan.CanPrepare {
+		return fail(diagnostics, fmt.Errorf("cannot install the update: %s", strings.Join(plan.Refusals, "; ")))
 	}
 	nextRev, changed, err := setup.SaveConfiguration(ctx, root, next, rev, *dry)
 	if err != nil {
 		return fail(diagnostics, err)
 	}
 	var prepared []string
-	if *prepare && !*dry {
+	if changed && !*dry {
 		progress := diagnostics
 		if *jsonOutput {
 			progress = io.Discard
@@ -197,9 +197,15 @@ func (c Command) Update(ctx context.Context, args []string, out, diagnostics io.
 			prepared = append(prepared, id)
 		}
 	}
+	result := map[string]any{"schema": "temper-update-result/v1", "catalog_date": view.Document.Date,
+		"presets": results, "software": sortedResolutions(resolutions), "revision": nextRev, "changed": changed, "dry_run": *dry, "prepared": prepared}
 	if *jsonOutput {
-		return c.configurationOutput(out, diagnostics, map[string]any{"schema": "temper-update-result/v1", "catalog_date": view.Document.Date,
-			"presets": results, "software": sortedResolutions(resolutions), "revision": nextRev, "changed": changed, "dry_run": *dry, "prepared": prepared})
+		restarted := len(prepared) == 0 || c.restartAfterUpdate(ctx, root, next, true, out, result)
+		_ = c.configurationOutput(out, diagnostics, result)
+		if !restarted {
+			return 1
+		}
+		return 0
 	}
 	fmt.Fprintf(out, "Catalog of %s\n", view.Document.Date)
 	for _, r := range results {
@@ -218,11 +224,12 @@ func (c Command) Update(ctx context.Context, args []string, out, diagnostics io.
 	printResolutions(out, resolutions)
 	switch {
 	case *dry:
-		fmt.Fprintln(out, "Dry run: nothing was saved or installed.")
+		fmt.Fprintln(out, "Dry run: nothing was saved, installed or restarted.")
 	case len(prepared) > 0:
-		fmt.Fprintf(out, "Installed %s.\n", count(len(prepared), "preset", "presets"))
-	case changed:
-		fmt.Fprintln(out, "Saved. To install the new files, run: temper configure --resume --prepare")
+		fmt.Fprintf(out, "Installed the update for %s.\n", count(len(prepared), "preset", "presets"))
+		if !c.restartAfterUpdate(ctx, root, next, false, out, result) {
+			return 1
+		}
 	default:
 		fmt.Fprintln(out, "Everything is up to date.")
 	}

@@ -17,6 +17,7 @@ import (
 	"github.com/temper-sh/temper/internal/catalog/distribution"
 	"github.com/temper-sh/temper/internal/hfcache"
 	"github.com/temper-sh/temper/internal/machine"
+	"github.com/temper-sh/temper/internal/managed"
 	"github.com/temper-sh/temper/internal/preset"
 	"github.com/temper-sh/temper/internal/setup"
 	"github.com/temper-sh/temper/internal/software/adapter/upstreamrelease"
@@ -49,6 +50,9 @@ type Command struct {
 	Newest  NewestCatalog
 	Resolve SoftwareResolver
 	Effects preset.Effects
+	// Start activates a saved layout after an install; nil uses the managed
+	// router. Tests replace it so they never reach launchd.
+	Start func(ctx context.Context, root, layout string) (*managed.Job, *managed.Status, error)
 }
 
 func New(detect func(context.Context) (machine.Facts, error), effects preset.Effects) Command {
@@ -105,6 +109,95 @@ func newSoftwareResolver() SoftwareResolver {
 		}
 		return catalog.ResolveSoftware(ctx, d, id, choice, latest, true)
 	}
+}
+
+func (c Command) start(ctx context.Context, root, layout string) (*managed.Job, *managed.Status, error) {
+	if c.Start != nil {
+		return c.Start(ctx, root, layout)
+	}
+	return c.activate(ctx, root, layout, "", false)
+}
+
+// layoutToStart picks the layout an install starts: the one the root runs
+// now, else "default", else the only saved layout. Empty means none.
+func layoutToStart(root string, configuration setup.Configuration) string {
+	if state, err := (managed.FileStore{Root: root}).Read(); err == nil {
+		if job := knownJob(state); job != nil {
+			if _, ok := configuration.Layouts[job.Layout]; ok {
+				return job.Layout
+			}
+		}
+	}
+	if l, ok := configuration.Layouts["default"]; ok && len(l.Presets) > 0 {
+		return "default"
+	}
+	if len(configuration.Layouts) == 1 {
+		for id, l := range configuration.Layouts {
+			if len(l.Presets) > 0 {
+				return id
+			}
+		}
+	}
+	return ""
+}
+
+// startAfterInstall starts the layout to use after preparing material and
+// reports it. It returns false when the layout did not start.
+func (c Command) startAfterInstall(ctx context.Context, root string, configuration setup.Configuration, jsonOutput bool, out io.Writer, result map[string]any) bool {
+	id := layoutToStart(root, configuration)
+	if id == "" {
+		if ids, _ := savedLayouts(root, ""); len(ids) > 0 && !jsonOutput {
+			fmt.Fprintf(out, "Start a layout with: temper layout activate %s\n", strings.Join(ids, " | "))
+		}
+		return true
+	}
+	before, status, err := c.start(ctx, root, id)
+	started := map[string]any{"id": id}
+	if status != nil {
+		started["status"] = status
+	}
+	if err != nil {
+		started["error"] = err.Error()
+	}
+	result["layout"] = started
+	if !jsonOutput {
+		if err != nil {
+			fmt.Fprintf(out, "Layout %s did not start: %v\nStart it later with: temper layout activate %s\n", id, err, id)
+		} else if status != nil {
+			c.renderLayoutResult(out, root, "activate", id, false, before, *status)
+		}
+	}
+	return err == nil
+}
+
+// restartAfterUpdate restarts the running layout so it uses the update. A
+// stopped root stays stopped. It returns false when the restart failed.
+func (c Command) restartAfterUpdate(ctx context.Context, root string, configuration setup.Configuration, jsonOutput bool, out io.Writer, result map[string]any) bool {
+	state, err := (managed.FileStore{Root: root}).Read()
+	job := knownJob(state)
+	if err != nil || job == nil {
+		return true
+	}
+	if _, ok := configuration.Layouts[job.Layout]; !ok {
+		return true
+	}
+	before, status, err := c.start(ctx, root, job.Layout)
+	restarted := map[string]any{"id": job.Layout}
+	if status != nil {
+		restarted["status"] = status
+	}
+	if err != nil {
+		restarted["error"] = err.Error()
+	}
+	result["layout"] = restarted
+	if !jsonOutput {
+		if err != nil {
+			fmt.Fprintf(out, "Layout %s still runs the previous version: %v\nRestart it later with: temper layout activate %s\n", job.Layout, err, job.Layout)
+		} else if status != nil {
+			c.renderLayoutResult(out, root, "restart", job.Layout, false, before, *status)
+		}
+	}
+	return err == nil
 }
 
 func (c Command) verb() string {

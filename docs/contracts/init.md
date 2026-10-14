@@ -71,19 +71,22 @@ to load on activation must fit together.
 You can edit, rename or remove **Default**, or add another layout, such as
 **Helper** for small models. The same presets can be reused in several layouts.
 
-## Review and prepare
+## Review and install
 
 Open **Review** to see each model's license, downloads, disk requirements, and
 estimated memory use. Model downloads can be many gigabytes; existing compatible
 downloads are reused and verified.
 
-Choose **Prepare installation** to save your choices and install the required
-files. This does not start a model. **Save configuration** saves the choices
-without downloading; **Cancel** leaves them unsaved.
+Choose **Install and start** to save your choices, install the required files
+and start the Default layout. **Save without installing** saves the choices
+without downloading; **Cancel** leaves them unsaved. When installation is not
+possible, for example because the disk is too full, the first button says so
+and the reason appears below the buttons.
 
 ## Activate, inspect and stop
 
-After preparation, start the Default layout:
+After installation the Default layout is running. To start it again later,
+for example after restarting your Mac:
 
 ```sh
 temper layout activate default
@@ -114,15 +117,14 @@ temper configure
 ```
 
 The same wizard lets you add presets, edit layouts, or change the default.
-Review and prepare any missing files, then activate the layout to use the
-changes. Saving alone does not change a running service.
+Review and install any missing files; the running layout then restarts with
+the changes. Saving alone does not change a running service.
 
 To get the newest presets and software for the presets you saved:
 
 ```sh
 temper update --dry-run   # show old → new for each saved preset
-temper update             # save the result
-temper configure --resume --prepare
+temper update             # save, install and restart the running layout
 ```
 
 `temper update` downloads the newest catalog and rebuilds each saved preset

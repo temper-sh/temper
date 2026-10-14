@@ -39,7 +39,7 @@ func (d Download) Action() string {
 	if d.Kind == "software" {
 		return "May download"
 	}
-	return "Download on Prepare"
+	return "Downloads on install"
 }
 
 type PresetPlan struct {
@@ -370,12 +370,12 @@ func (p Plan) WeightSummary() string {
 		}
 	}
 	if needed == 0 && cached > 0 {
-		return "Weights: " + DownloadSize(cached) + " cached in Hugging Face. No weight download on Prepare."
+		return "Weights: " + DownloadSize(cached) + " cached in Hugging Face. No weights to download."
 	}
 	if cached > 0 {
-		return "Weights: " + DownloadSize(needed) + " to download on Prepare; " + DownloadSize(cached) + " cached in Hugging Face."
+		return "Weights: " + DownloadSize(needed) + " to download on install; " + DownloadSize(cached) + " cached in Hugging Face."
 	}
-	return "Weights: " + DownloadSize(needed) + " to download on Prepare."
+	return "Weights: " + DownloadSize(needed) + " to download on install."
 }
 
 // Section groups the same disclosure for terminal blocks and plain CLI output.

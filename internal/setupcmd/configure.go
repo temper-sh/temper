@@ -346,6 +346,7 @@ func (c Command) Configure(ctx context.Context, args []string, in io.Reader, out
 				}
 				candidate.Presets[key] = setup.Preset{Name: display, Choices: choices, Lock: lock}
 			}
+
 			printResolutions(diagnostics, resolutions)
 		}
 	}
@@ -383,14 +384,26 @@ func (c Command) Configure(ctx context.Context, args []string, in io.Reader, out
 			prepared = append(prepared, id)
 		}
 	}
+	result := map[string]any{"schema": "temper-configuration-result/v1", "revision": nextRev, "changed": changed, "dry_run": *dry, "plan": plan, "prepared": prepared, "software": sortedResolutions(resolutions)}
+	if len(prepared) > 0 {
+		if !*jsonOutput {
+			fmt.Fprintf(out, "Installed %s.\n", count(len(prepared), "preset", "presets"))
+		}
+		started := c.startAfterInstall(ctx, root, candidate, *jsonOutput, out, result)
+		if *jsonOutput {
+			_ = c.configurationOutput(out, diagnostics, result)
+		}
+		if !started {
+			return 1
+		}
+		return 0
+	}
 	if *jsonOutput {
-		return c.configurationOutput(out, diagnostics, map[string]any{"schema": "temper-configuration-result/v1", "revision": nextRev, "changed": changed, "dry_run": *dry, "plan": plan, "prepared": prepared, "software": sortedResolutions(resolutions)})
+		return c.configurationOutput(out, diagnostics, result)
 	}
 	switch {
 	case *dry:
 		fmt.Fprintln(out, "Dry run: nothing was saved or installed.")
-	case len(prepared) > 0:
-		fmt.Fprintf(out, "Installed %s.\n", count(len(prepared), "preset", "presets"))
 	case changed:
 		fmt.Fprintln(out, "Saved your choices. To install them, run: temper configure --resume --prepare")
 	default:

@@ -169,7 +169,7 @@ func (p Plan) configurationSections() []Section {
 			sections = append(sections, m.WiredMemory.Section())
 		}
 	}
-	downloads := []string{p.WeightSummary(), "Save downloads no weights. Prepare fetches missing files and verifies cached weights.", "Remaining installation allowance: " + DownloadSize(p.RemainingDiskBytes) + "; free: " + Size(p.FreeDiskBytes), "Software closures and weights count once across selected presets."}
+	downloads := []string{p.WeightSummary(), "Install downloads missing files and verifies cached weights; saving alone downloads nothing.", "Remaining installation allowance: " + DownloadSize(p.RemainingDiskBytes) + "; free: " + Size(p.FreeDiskBytes), "Software closures and weights count once across selected presets."}
 	if p.HFCache != nil {
 		downloads = append(downloads, "Hugging Face cache checked: "+p.HFCache.Root)
 	}

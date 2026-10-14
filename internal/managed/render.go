@@ -47,9 +47,11 @@ type Job struct {
 type Rendered struct {
 	Job    Job
 	Config []byte
+	// LauncherSource is the running Temper binary Publish copies to Job.Launcher.
+	LauncherSource string
 }
 type ResolveExecutable func(catalog.Lock, string, string) (string, error)
-type Launcher struct{ Path, SHA256 string }
+type Launcher struct{ Path, SHA256, Source string }
 
 // Render composes fully rendered presets, binding each command to its own exact
 // executable. The router is shared only when its closure identity agrees.
@@ -178,7 +180,7 @@ func Render(root, listen string, c setup.Configuration, l setup.LayoutPlan, reso
 	if err := job.Validate(root); err != nil {
 		return Rendered{}, err
 	}
-	return Rendered{Job: job, Config: raw}, nil
+	return Rendered{Job: job, Config: raw, LauncherSource: launcher.Source}, nil
 }
 
 func jobLabel(root string) string {

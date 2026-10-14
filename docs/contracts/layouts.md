@@ -69,7 +69,11 @@ The activation journal is `ROOT/managed/activation.json` with
 binds router bytes, launch commands, listener and the Temper launch helper's
 binary digest. The owned label derives from the absolute root. launchd is
 bootstrapped explicitly in the user's GUI domain; no login agent or automatic
-crash restart is installed. Rerender/reapply after replacing the Temper binary.
+crash restart is installed. Activation copies the running Temper binary to
+`ROOT/managed/launchers/<sha256>/temper` and launches engines through that copy,
+so replacing the installed binary (for example `brew upgrade`) does not break a
+running layout. `temper update` or a new activation moves the layout to the
+new binary and removes older copies.
 
 An engine launch writes its PID, process group, start identity, exact executable
 and argv before exec replaces the launcher. Recorded groups permit cleanup after

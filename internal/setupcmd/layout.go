@@ -48,7 +48,7 @@ func (c Command) Layout(ctx context.Context, args []string, out, diagnostics io.
 	f := flag.NewFlagSet("temper layout "+operation, flag.ContinueOnError)
 	f.SetOutput(diagnostics)
 	rootArg := f.String("root", "", "configuration root (default ~/.temper)")
-	listen := f.String("listen", "127.0.0.1:8080", "loopback endpoint for an explicitly managed router")
+	listen := f.String("listen", "", "loopback endpoint (default: the running layout's, else 127.0.0.1:8080)")
 	dry := f.Bool("dry-run", false, "inspect proposed transition without effects")
 	jsonOutput := f.Bool("json", false, "print one JSON document for scripts")
 	if err := f.Parse(args); err != nil {
@@ -60,11 +60,14 @@ func (c Command) Layout(ctx context.Context, args []string, out, diagnostics io.
 	if f.NArg() != 0 {
 		return fail(diagnostics, errors.New("unexpected layout arguments"))
 	}
-	host, port, err := net.SplitHostPort(*listen)
-	n, e := strconv.Atoi(port)
-	if err != nil || e != nil || host != "127.0.0.1" || n < 1024 || n > 65535 {
-		return fail(diagnostics, errors.New("listen requires 127.0.0.1 and a port between 1024 and 65535"))
+	if *listen != "" {
+		host, port, err := net.SplitHostPort(*listen)
+		n, e := strconv.Atoi(port)
+		if err != nil || e != nil || host != "127.0.0.1" || n < 1024 || n > 65535 {
+			return fail(diagnostics, errors.New("listen requires 127.0.0.1 and a port between 1024 and 65535"))
+		}
 	}
+	var err error
 	home := ""
 	if *rootArg == "" {
 		home, err = c.Home()
@@ -82,163 +85,213 @@ func (c Command) Layout(ctx context.Context, args []string, out, diagnostics io.
 	if err = datadir.Check(root); err != nil {
 		return fail(diagnostics, err)
 	}
-	store := managed.FileStore{Root: root}
-	state, err := store.Read()
-	if err != nil {
-		return fail(diagnostics, err)
+	var before *managed.Job
+	var status *managed.Status
+	switch operation {
+	case "activate":
+		before, status, err = c.activate(ctx, root, id, *listen, *dry)
+	case "status":
+		before, status, err = c.layoutStatus(ctx, root)
+	default:
+		before, status, err = c.stopLayout(ctx, root, *dry)
 	}
-	var rendered managed.Rendered
-	var desired *managed.Job
-	var configurationRevision string
-	selected := setup.EmptyConfiguration()
-	if operation == "activate" {
-		configuration, revision, err := setup.ReadConfiguration(root)
-		if err != nil {
-			return fail(diagnostics, err)
-		}
-		configurationRevision = revision
-		if _, ok := configuration.Layouts[id]; !ok {
-			return fail(diagnostics, fmt.Errorf("unknown saved layout %q", id))
-		}
-		facts, err := c.Detect(ctx)
-		if err != nil {
-			return fail(diagnostics, err)
-		}
-		free, err := c.Disk(root)
-		if err != nil {
-			return fail(diagnostics, err)
-		}
-		// Activation assesses only this layout: unrelated installed alternatives
-		// do not become a simultaneous memory requirement or activation gate.
-		selected.Layouts[id] = configuration.Layouts[id]
-		for _, p := range selected.Layouts[id].Presets {
-			selected.Presets[p] = configuration.Presets[p]
-		}
-		plan, err := setup.BuildConfiguration(root, facts, free, selected, setup.Material{})
-		if err != nil {
-			return fail(diagnostics, err)
-		}
-		for _, p := range plan.Presets {
-			if len(p.Refusals) > 0 {
-				return fail(diagnostics, fmt.Errorf("preset %s cannot activate: %v", p.Preset, p.Refusals))
-			}
-		}
-		if len(plan.Layouts[0].Refusals) > 0 {
-			return fail(diagnostics, fmt.Errorf("layout cannot activate: %v", plan.Layouts[0].Refusals))
-		}
-		resolve := func(lock catalog.Lock, pkg, relative string) (string, error) {
-			return preset.Executable(root, lock, pkg, relative)
-		}
-		launcher, err := managed.ReadLauncher()
-		if err != nil {
-			return fail(diagnostics, err)
-		}
-		rendered, err = managed.Render(root, *listen, selected, plan.Layouts[0], resolve, launcher)
-		if err != nil {
-			return fail(diagnostics, fmt.Errorf("prepared inputs unavailable; run configure --resume --prepare: %w", err))
-		}
-		desired = &rendered.Job
-		if !*dry {
-			for _, p := range selected.Presets {
-				if err = preset.Verify(ctx, root, p.Lock, c.Effects.Software); err != nil {
-					return fail(diagnostics, err)
-				}
-			}
-		}
-	}
-	job := desired
-	if job == nil {
-		job = state.Current
-		if job == nil {
-			job = state.Desired
-		}
-	}
-	report := func(status managed.Status, before *managed.Job) {
+	if status != nil {
 		if *jsonOutput {
 			_ = writeJSON(out, status)
-			return
-		}
-		layout := id
-		if layout == "" {
-			if job := status.State.Current; job != nil {
-				layout = job.Layout
-			} else if job := status.State.Desired; job != nil {
-				layout = job.Layout
-			}
-		}
-		saved, defaultPreset := savedLayouts(root, layout)
-		renderLayout(out, layoutReport{Operation: operation, Dry: *dry, Before: before, Status: status, Default: defaultPreset, Saved: saved})
-	}
-	if job == nil {
-		if operation == "status" || operation == "stop" {
-			report(managed.Status{State: state}, nil)
-			return 0
-		}
-		return fail(diagnostics, errors.New("no managed job"))
-	}
-	before := state.Current
-	if before == nil {
-		before = state.Desired
-	}
-	controller := managed.Launchd{Root: root, Label: job.Label, Listen: job.Listen}
-	if state.Current != nil {
-		controller.Label = state.Current.Label
-		controller.Listen = state.Current.Listen
-	}
-	if desired != nil && state.Current != nil && desired.Listen != state.Current.Listen {
-		return fail(diagnostics, errors.New("stop the current layout before changing its listener"))
-	}
-	if operation == "status" {
-		status, err := managed.Inspect(ctx, store, controller)
-		report(status, before)
-		if err != nil {
-			return fail(diagnostics, err)
-		}
-		return 0
-	}
-	if !*dry {
-		if err = datadir.Ensure(root); err != nil {
-			return fail(diagnostics, err)
-		}
-		unlock, err := setup.LockRoot(root)
-		if err != nil {
-			return fail(diagnostics, err)
-		}
-		defer unlock()
-		state, err = store.Read()
-		if err != nil {
-			return fail(diagnostics, err)
-		}
-		if state.Current != nil {
-			controller.Label, controller.Listen = state.Current.Label, state.Current.Listen
-			if desired != nil && desired.Listen != state.Current.Listen {
-				return fail(diagnostics, errors.New("active listener changed during preflight; stop it before changing listeners"))
-			}
-		}
-		if desired != nil {
-			_, revision, err := setup.ReadConfiguration(root)
-			if err != nil {
-				return fail(diagnostics, err)
-			}
-			if revision != configurationRevision {
-				return fail(diagnostics, errors.New("configuration changed during activation preflight; review and retry"))
-			}
-			if err = managed.Publish(ctx, rendered); err != nil {
-				return fail(diagnostics, err)
-			}
-			for _, p := range selected.Layouts[id].Presets {
-				if err = preset.PrepareState(root, selected.Presets[p].Lock); err != nil {
-					return fail(diagnostics, err)
-				}
-			}
+		} else {
+			c.renderLayoutResult(out, root, operation, id, *dry, before, *status)
 		}
 	}
-	status, err := managed.Reconcile(ctx, store, controller, desired, *dry)
-	report(status, before)
 	if err != nil {
 		return fail(diagnostics, err)
 	}
 	return 0
+}
+
+// renderLayoutResult prints one layout command's outcome in plain words.
+func (c Command) renderLayoutResult(out io.Writer, root, operation, id string, dry bool, before *managed.Job, status managed.Status) {
+	layout := id
+	if job := knownJob(status.State); layout == "" && job != nil {
+		layout = job.Layout
+	}
+	saved, defaultPreset := savedLayouts(root, layout)
+	renderLayout(out, layoutReport{Operation: operation, Dry: dry, Before: before, Status: status, Default: defaultPreset, Saved: saved})
+}
+
+// knownJob is the job a root's activation state names: current, else desired.
+func knownJob(state managed.State) *managed.Job {
+	if state.Current != nil {
+		return state.Current
+	}
+	return state.Desired
+}
+
+// controllerFor addresses the router a root runs now, or the job it wants.
+func controllerFor(root string, job *managed.Job, state managed.State) managed.Launchd {
+	controller := managed.Launchd{Root: root, Label: job.Label, Listen: job.Listen}
+	if state.Current != nil {
+		controller.Label, controller.Listen = state.Current.Label, state.Current.Listen
+	}
+	return controller
+}
+
+// activate renders one saved layout and reconciles the managed router to it.
+// Without listen it keeps the running layout's listener, else 127.0.0.1:8080.
+// before is the job known before the change; a refusal before reconciling
+// returns no status.
+func (c Command) activate(ctx context.Context, root, id, listen string, dry bool) (*managed.Job, *managed.Status, error) {
+	store := managed.FileStore{Root: root}
+	state, err := store.Read()
+	if err != nil {
+		return nil, nil, err
+	}
+	before := knownJob(state)
+	if listen == "" {
+		listen = "127.0.0.1:8080"
+		if state.Current != nil {
+			listen = state.Current.Listen
+		}
+	}
+	configuration, configurationRevision, err := setup.ReadConfiguration(root)
+	if err != nil {
+		return before, nil, err
+	}
+	if _, ok := configuration.Layouts[id]; !ok {
+		return before, nil, fmt.Errorf("unknown saved layout %q", id)
+	}
+	facts, err := c.Detect(ctx)
+	if err != nil {
+		return before, nil, err
+	}
+	free, err := c.Disk(root)
+	if err != nil {
+		return before, nil, err
+	}
+	// Activation assesses only this layout: unrelated installed alternatives
+	// do not become a simultaneous memory requirement or activation gate.
+	selected := setup.EmptyConfiguration()
+	selected.Layouts[id] = configuration.Layouts[id]
+	for _, p := range selected.Layouts[id].Presets {
+		selected.Presets[p] = configuration.Presets[p]
+	}
+	plan, err := setup.BuildConfiguration(root, facts, free, selected, setup.Material{})
+	if err != nil {
+		return before, nil, err
+	}
+	for _, p := range plan.Presets {
+		if len(p.Refusals) > 0 {
+			return before, nil, fmt.Errorf("preset %s cannot activate: %v", p.Preset, p.Refusals)
+		}
+	}
+	if len(plan.Layouts[0].Refusals) > 0 {
+		return before, nil, fmt.Errorf("layout cannot activate: %v", plan.Layouts[0].Refusals)
+	}
+	resolve := func(lock catalog.Lock, pkg, relative string) (string, error) {
+		return preset.Executable(root, lock, pkg, relative)
+	}
+	launcher, err := managed.ReadLauncher(root)
+	if err != nil {
+		return before, nil, err
+	}
+	rendered, err := managed.Render(root, listen, selected, plan.Layouts[0], resolve, launcher)
+	if err != nil {
+		return before, nil, fmt.Errorf("prepared inputs unavailable; run configure --resume --prepare: %w", err)
+	}
+	desired := &rendered.Job
+	if !dry {
+		for _, p := range selected.Presets {
+			if err = preset.Verify(ctx, root, p.Lock, c.Effects.Software); err != nil {
+				return before, nil, err
+			}
+		}
+	}
+	controller := controllerFor(root, desired, state)
+	if state.Current != nil && desired.Listen != state.Current.Listen {
+		return before, nil, errors.New("stop the current layout before changing its listener")
+	}
+	if !dry {
+		if err = datadir.Ensure(root); err != nil {
+			return before, nil, err
+		}
+		unlock, err := setup.LockRoot(root)
+		if err != nil {
+			return before, nil, err
+		}
+		defer unlock()
+		if state, err = store.Read(); err != nil {
+			return before, nil, err
+		}
+		if state.Current != nil {
+			controller.Label, controller.Listen = state.Current.Label, state.Current.Listen
+			if desired.Listen != state.Current.Listen {
+				return before, nil, errors.New("active listener changed during preflight; stop it before changing listeners")
+			}
+		}
+		if _, revision, err := setup.ReadConfiguration(root); err != nil {
+			return before, nil, err
+		} else if revision != configurationRevision {
+			return before, nil, errors.New("configuration changed during activation preflight; review and retry")
+		}
+		if err = managed.Publish(ctx, rendered); err != nil {
+			return before, nil, err
+		}
+		for _, p := range selected.Layouts[id].Presets {
+			if err = preset.PrepareState(root, selected.Presets[p].Lock); err != nil {
+				return before, nil, err
+			}
+		}
+	}
+	status, err := managed.Reconcile(ctx, store, controller, desired, dry)
+	if err == nil && !dry {
+		// Only this job's launcher copy is in use now.
+		_ = managed.PruneLaunchers(root, desired.LauncherSHA256)
+	}
+	return before, &status, err
+}
+
+func (c Command) layoutStatus(ctx context.Context, root string) (*managed.Job, *managed.Status, error) {
+	store := managed.FileStore{Root: root}
+	state, err := store.Read()
+	if err != nil {
+		return nil, nil, err
+	}
+	job := knownJob(state)
+	if job == nil {
+		return nil, &managed.Status{State: state}, nil
+	}
+	status, err := managed.Inspect(ctx, store, controllerFor(root, job, state))
+	return job, &status, err
+}
+
+func (c Command) stopLayout(ctx context.Context, root string, dry bool) (*managed.Job, *managed.Status, error) {
+	store := managed.FileStore{Root: root}
+	state, err := store.Read()
+	if err != nil {
+		return nil, nil, err
+	}
+	job := knownJob(state)
+	if job == nil {
+		return nil, &managed.Status{State: state}, nil
+	}
+	controller := controllerFor(root, job, state)
+	if !dry {
+		if err = datadir.Ensure(root); err != nil {
+			return job, nil, err
+		}
+		unlock, err := setup.LockRoot(root)
+		if err != nil {
+			return job, nil, err
+		}
+		defer unlock()
+		if state, err = store.Read(); err != nil {
+			return job, nil, err
+		}
+		if state.Current != nil {
+			controller.Label, controller.Listen = state.Current.Label, state.Current.Listen
+		}
+	}
+	status, err := managed.Reconcile(ctx, store, controller, nil, dry)
+	return job, &status, err
 }
 
 func helpFlag(arg string) bool { return arg == "help" || arg == "--help" || arg == "-h" }

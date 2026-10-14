@@ -2,6 +2,7 @@ package setupui
 
 import (
 	"github.com/temper-sh/temper/internal/catalog"
+	"github.com/temper-sh/temper/internal/setup"
 	"slices"
 	"strconv"
 
@@ -24,11 +25,21 @@ func (m *PresetModel) footerButtons() []presetButton {
 		return []presetButton{button("Apply", "Apply", "apply", true), button("Cancel", "Cancel", "cancel-edit", true)}
 	}
 	if m.page == 2 {
-		var buttons []presetButton
-		for i, label := range []string{"Save configuration", "Prepare installation", "Back", "Cancel"} {
-			buttons = append(buttons, presetButton{label, []string{"Save", "Prepare", "Back", "Cancel"}[i], m.actionAvailable(i), hitTarget{kind: hitReview, index: i}})
+		install := "Install and start"
+		switch {
+		case m.reviewReady && !m.loading && !m.plan.CanPrepare:
+			install = "Can't install yet"
+		case m.reviewReady && !m.loading && m.plan.RemainingDownloadBytes > 0:
+			install += " · " + setup.DownloadSize(m.plan.RemainingDownloadBytes)
 		}
-		return append(buttons, button("Retry preview", "Retry", "retry", true))
+		var buttons []presetButton
+		for i, label := range []string{install, "Save without installing", "Back", "Cancel"} {
+			buttons = append(buttons, presetButton{label, []string{"Install", "Save", "Back", "Cancel"}[i], m.actionAvailable(i), hitTarget{kind: hitReview, index: i}})
+		}
+		if m.reviewErr != nil {
+			buttons = append(buttons, button("Retry check", "Retry", "retry", true))
+		}
+		return buttons
 	}
 	back, next, short := "← Back", "Next: Layouts →", "Next →"
 	if m.page == 0 {
@@ -60,6 +71,11 @@ func (m *PresetModel) footerButtons() []presetButton {
 	return buttons
 }
 
+// installRefused is true once the review check finished and refuses install.
+func (m *PresetModel) installRefused() bool {
+	return m.reviewReady && !m.loading && !m.plan.CanPrepare
+}
+
 func (m *PresetModel) navigationButton(back bool) int {
 	if m.field != "" {
 		if back {
@@ -68,7 +84,8 @@ func (m *PresetModel) navigationButton(back bool) int {
 		return 0
 	}
 	if m.page == 2 {
-		if back {
+		// Install, unless the finished check says it cannot run: then Back.
+		if back || m.installRefused() {
 			return 2
 		}
 		return 0

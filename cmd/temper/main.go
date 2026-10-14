@@ -276,7 +276,7 @@ func usage(writer io.Writer) {
 	fmt.Fprintln(writer, "  temper init [--root PATH] [--preset ID] [--prepare] [--dry-run]")
 	fmt.Fprintln(writer, "  temper layout activate ID [--root PATH] [--listen 127.0.0.1:PORT] [--dry-run]")
 	fmt.Fprintln(writer, "  temper layout status|stop [--root PATH] [--dry-run]")
-	fmt.Fprintln(writer, "  temper update [--root PATH] [--software] [--prepare] [--dry-run] [--json]")
+	fmt.Fprintln(writer, "  temper update [--root PATH] [--software] [--dry-run] [--json]")
 	fmt.Fprintln(writer, "  temper configure [--root PATH] [--software stable|latest] [--resume --prepare]")
 	fmt.Fprintln(writer, "  temper configure [--root PATH] [--show --json | --file FILE --revision SHA256]")
 	fmt.Fprintln(writer, "  temper version")

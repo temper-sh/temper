@@ -26,6 +26,10 @@ func (m *PresetModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.action = 0
 				m.focusArea(presetFooterFocus)
 			}
+			// Enter must never land on an install that cannot run.
+			if m.focus == presetFooterFocus && m.action == 0 && m.installRefused() {
+				m.action = 2
+			}
 		}
 		return m, nil
 	case tea.MouseClickMsg:
@@ -274,8 +278,10 @@ func (m *PresetModel) startPreview() tea.Cmd {
 	}
 }
 
+// Review actions: 0 install and start, 1 save without installing, 2 back,
+// 3 cancel.
 func (m *PresetModel) actionAvailable(index int) bool {
-	return index >= 2 || m.reviewReady && !m.loading && (index == 0 || m.plan.CanPrepare)
+	return index >= 2 || m.reviewReady && !m.loading && (index == 1 || m.plan.CanPrepare)
 }
 
 func (m *PresetModel) finish() tea.Cmd {
@@ -288,15 +294,15 @@ func (m *PresetModel) finish() tea.Cmd {
 		return tea.Quit
 	}
 	if !m.actionAvailable(m.action) {
-		m.notice = "Review must complete before saving."
-		if m.reviewReady && m.action == 1 {
-			m.notice = "Preparation unavailable; review the reasons above."
+		m.notice = "Wait until the check finishes."
+		if m.reviewReady && m.action == 0 {
+			m.notice = "Installation is not possible yet; see the reasons above."
 		}
 		return nil
 	}
-	action := "save"
+	action := "prepare"
 	if m.action == 1 {
-		action = "prepare"
+		action = "save"
 	}
 	m.Decision = PresetDecision{Configuration: m.draft, Action: action}
 	return tea.Quit

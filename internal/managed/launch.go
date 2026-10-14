@@ -25,17 +25,50 @@ type launchSpec struct {
 	Arguments                  []string
 }
 
-func ReadLauncher() (Launcher, error) {
-	path, err := os.Executable()
+// ReadLauncher names the copy of this Temper binary that a layout under root
+// launches engines through. The copy lives in the root, so replacing the
+// installed binary (for example brew upgrade) cannot break a running layout;
+// Publish writes it.
+func ReadLauncher(root string) (Launcher, error) {
+	source, err := os.Executable()
 	if err != nil {
 		return Launcher{}, err
 	}
-	path, err = filepath.EvalSymlinks(path)
+	source, err = filepath.EvalSymlinks(source)
 	if err != nil {
 		return Launcher{}, err
 	}
-	digest, err := executableDigest(path)
-	return Launcher{Path: path, SHA256: digest}, err
+	digest, err := executableDigest(source)
+	if err != nil {
+		return Launcher{}, err
+	}
+	return Launcher{Path: launcherPath(root, digest), SHA256: digest, Source: source}, nil
+}
+
+func launcherPath(root, digest string) string {
+	return filepath.Join(root, "managed", "launchers", digest, "temper")
+}
+
+// PruneLaunchers removes launcher copies other than keep's. Call it only after
+// the job that uses keep is current, so no running router needs another copy.
+func PruneLaunchers(root, keep string) error {
+	parent := filepath.Join(root, "managed", "launchers")
+	entries, err := os.ReadDir(parent)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if entry.Name() == keep || !digestPattern.MatchString(entry.Name()) {
+			continue
+		}
+		if err := os.RemoveAll(filepath.Join(parent, entry.Name())); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func executableDigest(path string) (string, error) {

@@ -3,6 +3,8 @@ package managed
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -69,7 +71,37 @@ func (s FileStore) Save(ctx context.Context, state State) error {
 	return writeAtomic(ctx, filepath.Join(s.Root, "managed", "activation.json"), append(raw, '\n'))
 }
 
+// publishLauncher copies the running binary to the job's launcher path once.
+// A present copy must already have the job's digest.
+func publishLauncher(ctx context.Context, rendered Rendered) error {
+	path, digest := rendered.Job.Launcher, rendered.Job.LauncherSHA256
+	if existing, err := executableDigest(path); err == nil {
+		if existing != digest {
+			return errors.New("managed launcher copy was edited")
+		}
+		return nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	if rendered.LauncherSource == "" {
+		return errors.New("managed launcher copy is missing; activate the layout again")
+	}
+	raw, err := os.ReadFile(rendered.LauncherSource)
+	if err != nil {
+		return err
+	}
+	sum := sha256.Sum256(raw)
+	if hex.EncodeToString(sum[:]) != digest {
+		return errors.New("Temper executable changed during activation; activate again")
+	}
+	return writeAtomicMode(ctx, path, raw, 0o755)
+}
+
 func writeAtomic(ctx context.Context, path string, raw []byte) error {
+	return writeAtomicMode(ctx, path, raw, 0o600)
+}
+
+func writeAtomicMode(ctx context.Context, path string, raw []byte, mode os.FileMode) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -91,6 +123,9 @@ func writeAtomic(ctx context.Context, path string, raw []byte) error {
 	}
 	defer os.Remove(f.Name())
 	if _, err = f.Write(raw); err == nil {
+		err = f.Chmod(mode)
+	}
+	if err == nil {
 		err = f.Sync()
 	}
 	closeErr := f.Close()
@@ -115,6 +150,9 @@ func writeAtomic(ctx context.Context, path string, raw []byte) error {
 }
 
 func Publish(ctx context.Context, rendered Rendered) error {
+	if err := publishLauncher(ctx, rendered); err != nil {
+		return err
+	}
 	for _, p := range rendered.Job.Processes {
 		if p.Record == "" {
 			continue

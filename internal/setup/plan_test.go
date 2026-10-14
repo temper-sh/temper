@@ -200,11 +200,11 @@ func TestInspectedModelSetReducesRemainingDiskAndDownloadAllowance(t *testing.T)
 	if without.CanPrepare {
 		t.Fatal("absent model received disk credit")
 	}
-	if summary := without.WeightSummary(); summary != "Weights: 4 B to download on Prepare." {
+	if summary := without.WeightSummary(); summary != "Weights: 4 B to download on install." {
 		t.Fatalf("absent weights not disclosed: %s", summary)
 	}
 	for _, item := range without.Downloads {
-		if item.Cached || item.Kind == "model" && item.Action() != "Download on Prepare" {
+		if item.Cached || item.Kind == "model" && item.Action() != "Downloads on install" {
 			t.Fatalf("absent file presented as reusable: %+v", item)
 		}
 	}
@@ -231,7 +231,7 @@ func TestInspectedModelSetReducesRemainingDiskAndDownloadAllowance(t *testing.T)
 	if !strings.Contains(strings.Join(remaining.Lines(), "\n"), "Remaining installation allowance") {
 		t.Fatal("preview omitted remaining allowance")
 	}
-	if summary := remaining.WeightSummary(); summary != "Weights: 4 B cached in Hugging Face. No weight download on Prepare." {
+	if summary := remaining.WeightSummary(); summary != "Weights: 4 B cached in Hugging Face. No weights to download." {
 		t.Fatalf("cached weights not disclosed: %s", summary)
 	}
 	for _, item := range remaining.Downloads {
@@ -312,7 +312,7 @@ func TestTemplateVariantsCountWeightsOnceAndCreditOtherInstalledComposition(t *t
 		t.Fatal("new template must still be downloaded")
 	}
 	for _, item := range remaining.Downloads {
-		if item.Kind == "template" && (item.Cached || item.Action() != "Download on Prepare") {
+		if item.Kind == "template" && (item.Cached || item.Action() != "Downloads on install") {
 			t.Fatalf("new template incorrectly reported as cached: %+v", item)
 		}
 		if item.Kind == "model" && !item.Cached {
@@ -328,7 +328,7 @@ func TestWeightSummarySeparatesMissingWeightsFromTemplatesAndSoftware(t *testing
 		{Name: "chat.jinja", Bytes: 3 << 10, Kind: "template"},
 		{Name: "engine", Bytes: 33 << 20, Kind: "software"},
 	}}
-	if got := plan.WeightSummary(); got != "Weights: 3.00 GiB to download on Prepare; 2.00 GiB cached in Hugging Face." {
+	if got := plan.WeightSummary(); got != "Weights: 3.00 GiB to download on install; 2.00 GiB cached in Hugging Face." {
 		t.Fatalf("partial cache transfer disclosure = %s", got)
 	}
 }

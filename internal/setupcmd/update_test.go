@@ -59,7 +59,14 @@ func decodeUpdate(t *testing.T, output string) (updateResult, map[string]presetU
 }
 
 func TestUpdateRebuildsFromTheNewestCatalogAndKeepsChoices(t *testing.T) {
-	c := fixtureCommand(t)
+	// Update installs what changed; nothing runs, so nothing restarts.
+	var started []string
+	c := installableCommand(t, &started, nil)
+	defer func() {
+		if len(started) != 0 {
+			t.Errorf("update started a stopped root: %v", started)
+		}
+	}()
 	root := filepath.Join(t.TempDir(), "root")
 	if code, _, err := configureRun(c, "--root", root, "--preset", extraction, "--preset", compactLayout,
 		"--context", extraction+"=4096", "--compute", extraction+"=cpu"); code != 0 {
@@ -109,7 +116,14 @@ func TestUpdateRebuildsFromTheNewestCatalogAndKeepsChoices(t *testing.T) {
 }
 
 func TestUpdateSoftwareKeepsSettingsAndMarksUntestedCombinations(t *testing.T) {
-	c := fixtureCommand(t)
+	// Update installs what changed; nothing runs, so nothing restarts.
+	var started []string
+	c := installableCommand(t, &started, nil)
+	defer func() {
+		if len(started) != 0 {
+			t.Errorf("update started a stopped root: %v", started)
+		}
+	}()
 	root := filepath.Join(t.TempDir(), "root")
 	if code, _, err := configureRun(c, "--root", root, "--preset", extraction); code != 0 {
 		t.Fatal(err)

@@ -68,8 +68,10 @@ func renderLayout(out io.Writer, r layoutReport) {
 	}
 	o := r.Status.Observed
 	switch {
-	case o.Exists && o.Ready && r.Operation == "activate" && r.Before != nil && r.Before.Generation == job.Generation:
+	case o.Exists && o.Ready && (r.Operation == "activate" || r.Operation == "restart") && r.Before != nil && r.Before.Generation == job.Generation:
 		fmt.Fprintf(out, "Layout %s is already running at %s\n", layoutName(job), baseURL(job))
+	case o.Exists && o.Ready && r.Operation == "restart":
+		fmt.Fprintf(out, "Restarted layout %s at %s\n", layoutName(job), baseURL(job))
 	case o.Exists && o.Ready && r.Operation == "activate":
 		fmt.Fprintf(out, "Started layout %s at %s\n", layoutName(job), baseURL(job))
 	case o.Exists && o.Ready:

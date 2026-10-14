@@ -346,7 +346,7 @@ func TestPresetReviewScrollAndDownloadDisclosureKeepActionsVisible(t *testing.T)
 		m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
 	}
 	view = ansi.Strip(m.View().Content)
-	if m.view.YOffset() == 0 || !strings.Contains(view, "Save configuration") || !strings.Contains(view, "• Review") {
+	if m.view.YOffset() == 0 || !strings.Contains(view, "Save without installing") || !strings.Contains(view, "• Review") {
 		t.Fatalf("review scrolling hid actions:\n%s", view)
 	}
 	offset := m.view.YOffset()
@@ -387,12 +387,12 @@ func TestPresetFormsKeepInvalidValueAndAcceptPastedNames(t *testing.T) {
 func TestPresetPreviewCannotCommitWhilePendingOrAfterResize(t *testing.T) {
 	m := populatedPresetEditor(t)
 	m.page, m.loading, m.reviewReady = 2, true, false
-	clickPresetText(t, m, "Save configuration")
+	clickPresetText(t, m, "Save without installing")
 	if m.Decision.Action != "" {
 		t.Fatal("pending preview allowed saving")
 	}
 	m.loading, m.reviewReady = false, true
-	x, y := textPosition(t, m.View().Content, "Prepare installation")
+	x, y := textPosition(t, m.View().Content, "Save without installing")
 	m.Update(tea.WindowSizeMsg{Width: 20, Height: 6})
 	m.Update(tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft})
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
@@ -426,7 +426,7 @@ func TestPresetPreviewBackDiscardsStaleResultAndRetries(t *testing.T) {
 		t.Fatal("cancelled preview replaced the current review")
 	}
 	m.Update(second())
-	clickPresetText(t, m, "Save configuration")
+	clickPresetText(t, m, "Save without installing")
 	if m.Decision.Action != "save" || len(m.Decision.Configuration.Layouts) != 0 {
 		t.Fatal("current preview did not save the latest choices")
 	}

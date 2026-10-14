@@ -36,8 +36,10 @@ from source.
 
 In the wizard, choose your presets. The **Default** layout includes them all,
 with models loading only when requested. Review the downloads and memory
-estimates, then choose **Prepare installation**. Model downloads can be many
-gigabytes. Once preparation finishes, start the layout:
+estimates, then choose **Install and start**. Model downloads can be many
+gigabytes. When the install finishes, Temper starts the layout and prints its
+address and model IDs. To start it again later, for example after restarting
+your Mac:
 
 ```sh
 temper layout activate default
@@ -97,10 +99,9 @@ temper layout stop     # Stop serving and unload its models
 
 Saved choices stay unchanged until you run `temper update` or edit them.
 `temper update` downloads the newest catalog and shows, for each saved preset,
-what would change (old → new); your context and compute choices stay. Add
-`--dry-run` to only look, or `--software` to change only the router and engine
-releases. Run `temper configure --resume --prepare`, then activate the layout
-again, to use the result.
+what changes (old → new); your context and compute choices stay. It then
+installs the new files and restarts the running layout. Add `--dry-run` to only
+look, or `--software` to change only the router and engine releases.
 
 By default Temper uses the software releases the catalog tested. To follow the
 newest upstream releases instead, run `temper configure --software latest`;
