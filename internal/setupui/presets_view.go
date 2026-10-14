@@ -210,6 +210,9 @@ func (m *PresetModel) presetContent(width int, compact bool) screenBody {
 				label = "Fixed pair limit "
 			}
 			details := metadata.Foreground(colorMuted).Render(label) + metadata.Foreground(colorNumber).Render(tokenCount(record.Window())+" tokens")
+			if p.MemoryBytes > 0 {
+				details += metadata.Foreground(colorMuted).Render(" · Memory at least ") + metadata.Foreground(colorNumber).Render(setup.Size(p.MemoryBytes))
+			}
 			if template := record.TemplateID(); record.Interface == "chat-completions" && template != catalog.BuiltinTemplate {
 				name := lock.Records.Templates[template].Presentation.DisplayName
 				if name == "" {
@@ -540,8 +543,8 @@ func (m *PresetModel) presetFooter(width int, compact bool) (string, []hitTarget
 			label = button.short
 		}
 		fg := buttonColor(button)
-		if !button.available {
-			label += " ×"
+		if !button.available && fg != colorWarn {
+			label += " ×" // The refused install already says it cannot run.
 		}
 		style := lipgloss.NewStyle().Padding(0, 1).Foreground(fg).Background(colorSurface)
 		if m.focus == presetFooterFocus && i == active {

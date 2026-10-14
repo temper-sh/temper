@@ -265,7 +265,7 @@ func optionCard(option Option, mark string, focused bool, width int) string {
 
 func infoBlock(title string, lines []string, width int) string {
 	heading, border := colorText, colorBorder
-	if title == "Attention" || title == "Preparation unavailable" {
+	if title == "Attention" || title == "Installation is not possible yet" {
 		heading, border = colorWarn, colorWarn
 	} else if title == "Preview error" {
 		heading, border = colorDanger, colorDanger

@@ -80,15 +80,7 @@ func BuildConfiguration(root string, facts machine.Facts, free int64, c Configur
 			if err != nil {
 				return p, err
 			}
-			estimate := one.ModelBytes
-			if one.Budget.Status == budget.StatusFits || one.Budget.Status == budget.StatusExceeded {
-				estimate = max(estimate, (one.Budget.RequiredMiB-budget.OSFloorMiB)*MiB)
-			}
-			for _, x := range lock.Records.Presets {
-				if x.Config().Splash != nil {
-					estimate = max(estimate, x.Config().Splash.MaxMemoryBytes)
-				}
-			}
+			estimate := one.MemoryBytes
 			if err = add(&total, estimate); err != nil {
 				return p, err
 			}
@@ -158,7 +150,7 @@ func (p Plan) configurationSections() []Section {
 		if def == "" {
 			def = "none"
 		}
-		lines := []string{"Included: " + strings.Join(l.Layout.Presets, ", "), "Load on activation: " + strings.Join(l.Layout.Startup, ", "), "Default model: " + def, fmt.Sprintf("Startup memory allowance: %s; largest on-demand preset: %s. Uses weights and declared caps; unmeasured KV and runtime overhead remain unknown.", Size(l.StartupBytes), Size(l.LargestPresetBytes)), fmt.Sprintf("Idle unload after %d seconds; preload does not pin residency.", l.Layout.IdleSeconds)}
+		lines := []string{"Included: " + strings.Join(l.Layout.Presets, ", "), "Load on activation: " + strings.Join(l.Layout.Startup, ", "), "Default model: " + def, LayoutMemory(l) + " Counts weights and declared caps; KV cache and runtime overhead are not measured.", fmt.Sprintf("Idle unload after %d seconds; preload does not pin residency.", l.Layout.IdleSeconds)}
 		if !l.AllFit {
 			lines = append(lines, "Competing on-demand models use exclusive swapping; a request finishes before eviction.")
 		}
@@ -169,14 +161,31 @@ func (p Plan) configurationSections() []Section {
 			sections = append(sections, m.WiredMemory.Section())
 		}
 	}
-	downloads := []string{p.WeightSummary(), "Install downloads missing files and verifies cached weights; saving alone downloads nothing.", "Remaining installation allowance: " + DownloadSize(p.RemainingDiskBytes) + "; free: " + Size(p.FreeDiskBytes), "Software closures and weights count once across selected presets."}
+	var splash int64
+	for _, m := range p.Presets {
+		splash += m.RuntimeDiskEstimateBytes
+	}
+	disk := "Disk space still needed: " + DownloadSize(p.RemainingDiskBytes) + " to install"
+	if splash > 0 {
+		disk += ", plus about " + Size(splash) + " when Splash first starts"
+	}
+	disk += "; free: " + Size(p.FreeDiskBytes)
+	downloads := []string{p.WeightSummary(), "Install downloads missing files and verifies cached weights; saving alone downloads nothing.", disk, "Files shared by several presets are counted once."}
 	if p.HFCache != nil {
 		downloads = append(downloads, "Hugging Face cache checked: "+p.HFCache.Root)
 	}
 	sections = append(sections, Section{Title: "Downloads", Lines: downloads, Downloads: p.Downloads})
 
 	if len(p.Refusals) > 0 {
-		sections = append(sections, Section{Title: "Preparation unavailable", Lines: p.Refusals, Warning: true})
+		sections = append(sections, Section{Title: "Installation is not possible yet", Lines: p.Refusals, Warning: true})
 	}
 	return sections
+}
+
+// LayoutMemory says what a layout needs at start and at most for one preset.
+func LayoutMemory(l LayoutPlan) string {
+	if l.StartupBytes == 0 {
+		return "Memory: nothing loads at start; the largest preset needs at least " + Size(l.LargestPresetBytes) + " when used."
+	}
+	return "Memory: at least " + Size(l.StartupBytes) + " at start; the largest preset needs at least " + Size(l.LargestPresetBytes) + "."
 }

@@ -43,13 +43,17 @@ func (d Download) Action() string {
 }
 
 type PresetPlan struct {
-	Preset                   string             `json:"preset"`
-	RuntimeDiskEstimateBytes int64              `json:"runtime_disk_estimate_bytes,omitempty"`
-	Lock                     catalog.Lock       `json:"-"`
-	ModelBytes               int64              `json:"model_bytes"`
-	Budget                   budget.Prediction  `json:"memory_prediction"`
-	WiredMemory              *WiredMemoryAdvice `json:"wired_memory_advice,omitempty"`
-	Refusals                 []string           `json:"refusals,omitempty"`
+	Preset                   string       `json:"preset"`
+	RuntimeDiskEstimateBytes int64        `json:"runtime_disk_estimate_bytes,omitempty"`
+	Lock                     catalog.Lock `json:"-"`
+	ModelBytes               int64        `json:"model_bytes"`
+	// MemoryBytes is a lower bound for running the preset: its weights, or its
+	// predicted engine allocation or declared memory cap when larger. KV cache
+	// and runtime overhead are not measured.
+	MemoryBytes int64              `json:"memory_bytes"`
+	Budget      budget.Prediction  `json:"memory_prediction"`
+	WiredMemory *WiredMemoryAdvice `json:"wired_memory_advice,omitempty"`
+	Refusals    []string           `json:"refusals,omitempty"`
 }
 
 type Plan struct {
@@ -158,6 +162,15 @@ func Assess(locked catalog.Lock, facts machine.Facts) (PresetPlan, error) {
 		gpuMinimumMiB++
 	}
 	result.WiredMemory = wiredMemoryAdvice(max(gpuMinimumMiB, result.Budget.RequiredMiB), facts, result.Budget)
+	result.MemoryBytes = result.ModelBytes
+	if result.Budget.Status == budget.StatusFits || result.Budget.Status == budget.StatusExceeded {
+		result.MemoryBytes = max(result.MemoryBytes, (result.Budget.RequiredMiB-budget.OSFloorMiB)*MiB)
+	}
+	for _, x := range locked.Records.Presets {
+		if x.Config().Splash != nil {
+			result.MemoryBytes = max(result.MemoryBytes, x.Config().Splash.MaxMemoryBytes)
+		}
+	}
 	return result, nil
 }
 

@@ -19,6 +19,7 @@ import (
 type PresetOption struct {
 	ID, Name, Model, Weights, Engine, Description, AssessmentURL, Tier, Details, Unavailable string
 	ModelBytes                                                                               int64
+	MemoryBytes                                                                              int64 // lower bound for running it on this Mac
 	// Group and Section place the preset in a tab and under a heading.
 	Group, Section string
 	// Choices are the user's saved settings for this preset.

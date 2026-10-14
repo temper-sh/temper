@@ -131,8 +131,8 @@ rm -rf ~/.temper
 `~/.temper` holds two things you chose: `configuration.json` (your presets and
 layouts) and `catalog/` (the verified catalogs). Everything else there is
 cache that Temper can rebuild: installed engines and the router (about 30–300
-MB per release), a prepared model copy for Splash presets (about 16 GB per
-version), model links and rendered settings. Old releases are not removed
+MB per release), a prepared model copy for Splash presets (about 16–20 GB per
+version; the review shows the estimate), model links and rendered settings. Old releases are not removed
 automatically; with no layout running, deleting `~/.temper` and running
 `temper init` again is safe.
 

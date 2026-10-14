@@ -40,7 +40,7 @@ func (m *PresetModel) reviewLayouts(body *screenBody, width int) {
 			if assessment.ID != id || len(layout.Presets) == 0 {
 				continue
 			}
-			details = append(details, fmt.Sprintf("Est. memory: %s at activation · %s largest preset", setup.Size(assessment.StartupBytes), setup.Size(assessment.LargestPresetBytes)))
+			details = append(details, setup.LayoutMemory(assessment))
 			if !assessment.AllFit {
 				details = append(details, "Competing models swap on demand; active requests finish before eviction.")
 			}

@@ -228,7 +228,7 @@ func TestInspectedModelSetReducesRemainingDiskAndDownloadAllowance(t *testing.T)
 			t.Fatal("verified model remains in download list")
 		}
 	}
-	if !strings.Contains(strings.Join(remaining.Lines(), "\n"), "Remaining installation allowance") {
+	if !strings.Contains(strings.Join(remaining.Lines(), "\n"), "Disk space still needed") {
 		t.Fatal("preview omitted remaining allowance")
 	}
 	if summary := remaining.WeightSummary(); summary != "Weights: 4 B cached in Hugging Face. No weights to download." {
