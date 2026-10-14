@@ -27,15 +27,15 @@ func (m *PresetModel) View() tea.View {
 	}
 	compact := m.height < 18 || m.width < 50
 	left := (m.width - width) / 2
-	brand := lipgloss.NewStyle().Foreground(nightBlue).Bold(true).Render("TEMPER") +
-		lipgloss.NewStyle().Foreground(nightMuted).Render("  /  Guided setup")
+	brand := lipgloss.NewStyle().Foreground(colorText).Bold(true).Render("TEMPER") +
+		lipgloss.NewStyle().Foreground(colorMuted).Render("  /  Guided setup")
 	if width >= 40 {
-		progress := lipgloss.NewStyle().Foreground(nightPurple).Render(fmt.Sprintf("%d / 3", m.page+1))
+		progress := lipgloss.NewStyle().Foreground(colorNumber).Render(fmt.Sprintf("%d / 3", m.page+1))
 		brand += strings.Repeat(" ", width-lipgloss.Width(brand)-lipgloss.Width(progress)) + progress
 	}
 	header := brand
 	if !compact && m.input.Machine != "" {
-		header += "\n" + lipgloss.NewStyle().Foreground(nightMuted).Width(width).Render(m.input.Machine) + "\n"
+		header += "\n" + lipgloss.NewStyle().Foreground(colorMuted).Width(width).Render(m.input.Machine) + "\n"
 	}
 	header += "\n" + stepTabs([]string{"Presets", "Layouts", "Review"}, m.page, width)
 	if m.page == 0 && m.field == "" {
@@ -71,7 +71,7 @@ func (m *PresetModel) View() tea.View {
 		if m.view.TotalLineCount() > m.view.Height() {
 			label = fmt.Sprintf(" %.0f%% · trackpad / PgUp/PgDown ", m.view.ScrollPercent()*100)
 		}
-		foot = lipgloss.NewStyle().Foreground(nightMuted).Render(strings.Repeat("─", max(0, width-lipgloss.Width(label)))+label) + "\n" + foot
+		foot = lipgloss.NewStyle().Foreground(colorMuted).Render(strings.Repeat("─", max(0, width-lipgloss.Width(label)))+label) + "\n" + foot
 	}
 	bodyTop := lipgloss.Height(header)
 	for _, target := range body.targets {
@@ -94,12 +94,12 @@ func (m *PresetModel) View() tea.View {
 		m.hitTargets = append(m.hitTargets, target)
 	}
 	content := header + "\n" + m.view.View() + "\n" + foot
-	content = lipgloss.NewStyle().Foreground(nightText).Background(nightBackground).
+	content = lipgloss.NewStyle().Foreground(colorText).Background(colorBackground).
 		Width(m.width).Height(m.height).PaddingLeft(left).PaddingRight(m.width - width - left).Render(content)
 	v := tea.NewView(content)
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
-	v.BackgroundColor, v.ForegroundColor = nightBackground, nightText
+	v.BackgroundColor, v.ForegroundColor = colorBackground, colorText
 	return v
 }
 
@@ -131,11 +131,11 @@ func (m *PresetModel) filters(width int) (string, []hitTarget) {
 	var targets []hitTarget
 	x := 0
 	for i, label := range labels {
-		style := lipgloss.NewStyle().Padding(0, padding).Foreground(nightMuted)
+		style := lipgloss.NewStyle().Padding(0, padding).Foreground(colorMuted)
 		if m.groups()[i].ID == m.group {
-			style = style.Foreground(nightCyan).Background(nightSurface).Bold(true)
+			style = style.Foreground(colorText).Background(colorSurface).Bold(true)
 			if m.focus == presetFilterFocus {
-				style = style.Foreground(nightBackground).Background(nightBlue)
+				style = inverted(style, colorText, colorSurface)
 			}
 		}
 		button := style.Render(label)
@@ -146,7 +146,7 @@ func (m *PresetModel) filters(width int) (string, []hitTarget) {
 	row := strings.Join(buttons, strings.Repeat(" ", gap))
 	count := fmt.Sprintf("%d selected", len(m.draft.Presets))
 	if remaining := width - lipgloss.Width(row) - len(count); remaining > 0 {
-		row += strings.Repeat(" ", remaining) + lipgloss.NewStyle().Foreground(nightGreen).Render(count)
+		row += strings.Repeat(" ", remaining) + lipgloss.NewStyle().Foreground(colorNumber).Render(count)
 	}
 	return lipgloss.NewStyle().Margin(margin, 0).Render(row), targets
 }
@@ -168,8 +168,8 @@ func (m *PresetModel) presetContent(width int, compact bool) screenBody {
 		title, subtitle = "Review your setup", "Check downloads, memory and your layouts."
 	}
 	if !compact {
-		body.add(lipgloss.NewStyle().Foreground(nightCyan).Bold(true).Width(width).Render(title)+"\n"+
-			lipgloss.NewStyle().Foreground(nightMuted).Width(width).Render(subtitle), false)
+		body.add(lipgloss.NewStyle().Foreground(colorText).Bold(true).Width(width).Render(title)+"\n"+
+			lipgloss.NewStyle().Foreground(colorMuted).Width(width).Render(subtitle), false)
 	}
 	switch m.page {
 	case 0:
@@ -181,8 +181,8 @@ func (m *PresetModel) presetContent(width int, compact bool) screenBody {
 			section, hasSection := m.section(p.Section)
 			newTask := hasSection && (i == 0 || p.Section != rows[i-1].Section)
 			if newTask {
-				body.add(lipgloss.NewStyle().Foreground(nightCyan).Bold(true).Width(width).Render(section.DisplayName)+"\n"+
-					lipgloss.NewStyle().Foreground(nightMuted).Width(width).Render(section.Description), false)
+				body.add(lipgloss.NewStyle().Foreground(colorText).Bold(true).Width(width).Render(section.DisplayName)+"\n"+
+					lipgloss.NewStyle().Foreground(colorMuted).Width(width).Render(section.Description), false)
 			}
 			if i == 0 || newTask || p.Tier != rows[i-1].Tier || (p.Unavailable == "") != (rows[i-1].Unavailable == "") {
 				group := catalog.MemoryTier(p.Tier).Label()
@@ -192,7 +192,7 @@ func (m *PresetModel) presetContent(width int, compact bool) screenBody {
 				if p.Unavailable != "" {
 					group = "Unavailable on this machine · " + group
 				}
-				body.add(lipgloss.NewStyle().Foreground(nightPurple).Bold(true).Width(width).Render(group), false)
+				body.add(lipgloss.NewStyle().Foreground(colorText).Bold(true).Width(width).Render(group), false)
 			}
 			mark, lock := "[ ]", p.Lock
 			if selected, ok := m.draft.Presets[p.ID]; ok {
@@ -200,22 +200,22 @@ func (m *PresetModel) presetContent(width int, compact bool) screenBody {
 			}
 			_, record := presetRecord(lock)
 			focused := m.focus == presetContentFocus && i == m.cursor
-			background := nightBackground
+			background := colorBackground
 			if focused {
-				background = nightSurface
+				background = colorSurface
 			}
 			metadata := lipgloss.NewStyle().Background(background)
 			label := "Context "
 			if record.Interface == "reranking" && !record.ContextConfigurable() {
 				label = "Fixed pair limit "
 			}
-			details := metadata.Foreground(nightPurple).Render(label + tokenCount(record.Window()) + " tokens")
+			details := metadata.Foreground(colorMuted).Render(label) + metadata.Foreground(colorNumber).Render(tokenCount(record.Window())+" tokens")
 			if template := record.TemplateID(); record.Interface == "chat-completions" && template != catalog.BuiltinTemplate {
 				name := lock.Records.Templates[template].Presentation.DisplayName
 				if name == "" {
 					name = template
 				}
-				details += metadata.Foreground(nightMuted).Render(" · ") + metadata.Foreground(nightCyan).Render("Template "+name)
+				details += metadata.Foreground(colorMuted).Render(" · Template ") + metadata.Foreground(colorWeights).Render(name)
 			}
 			compute := ""
 			if len(record.ComputeOptions) > 1 {
@@ -224,7 +224,7 @@ func (m *PresetModel) presetContent(width int, compact bool) screenBody {
 				compute = "CPU only"
 			}
 			if compute != "" {
-				details = metadata.Foreground(nightCyan).Render(compute) + metadata.Foreground(nightMuted).Render(" · ") + details
+				details = metadata.Foreground(colorEngine).Render(compute) + metadata.Foreground(colorMuted).Render(" · ") + details
 			}
 			if len(lock.Records.Presets) == 0 {
 				details = ""
@@ -239,8 +239,8 @@ func (m *PresetModel) presetContent(width int, compact bool) screenBody {
 			if description != "" {
 				description += " · "
 			}
-			if license := licenseLink(lock.Records.Artifacts[record.Artifact]); license != "" {
-				description += metadata.Foreground(nightCyan).Render(license)
+			if license := licenseLink(lock.Records.Artifacts[record.Artifact], colorText); license != "" {
+				description += license
 			} else {
 				description = strings.TrimSuffix(description, " · ")
 			}
@@ -271,19 +271,40 @@ func (m *PresetModel) presetContent(width int, compact bool) screenBody {
 	return body
 }
 
-func licenseLink(artifact catalog.Artifact) string {
+// buttonColor gives a footer button the color of what it does: go forward
+// or install, remove, leave, or plain. An install that cannot run warns.
+func buttonColor(b presetButton) color.Color {
+	t := b.target
+	switch {
+	case !b.available && t.kind == hitReview && t.index == 0:
+		return colorWarn
+	case !b.available:
+		return colorMuted
+	case t.kind == hitNext, t.kind == hitReview && t.index == 0, t.key == "apply":
+		return colorGo
+	case t.key == "x":
+		return colorDanger
+	case t.kind == hitReview && t.index == 3, t.key == "cancel-edit", t.key == "back" && b.label == "Cancel":
+		return colorMuted
+	}
+	return colorText
+}
+
+// licenseLink draws the license as a link in the link color, then gives the
+// rest of the enclosing card or table cell its own color back. It toggles
+// only color and underline, so the enclosing background and boldness stay.
+func licenseLink(artifact catalog.Artifact, after color.Color) string {
 	if artifact.License == "" {
 		return ""
 	}
-	// Toggle only underline so the enclosing card or table keeps its colors and boldness.
 	return ansi.SetHyperlink(artifact.LicenseURL(), "") +
-		ansi.NewStyle().Underline(true).String() + artifact.License +
-		ansi.NewStyle().Underline(false).String() + ansi.ResetHyperlink()
+		ansi.NewStyle().ForegroundColor(colorLink).Underline(true).String() + artifact.License +
+		ansi.NewStyle().ForegroundColor(after).Underline(false).String() + ansi.ResetHyperlink()
 }
 
 func (p PresetOption) heading(background color.Color) string {
 	var parts []string
-	colors := []color.Color{nightBlue, nightCyan, nightPurple}
+	colors := []color.Color{colorModel, colorWeights, colorEngine}
 	style := lipgloss.NewStyle().Background(background).Bold(true)
 	for i, value := range []string{p.Model, weightsLabel(p.Weights), p.Engine} {
 		if value != "" {
@@ -293,7 +314,7 @@ func (p PresetOption) heading(background color.Color) string {
 	if len(parts) == 0 {
 		return p.Name
 	}
-	return strings.Join(parts, style.Foreground(nightMuted).Render(" · "))
+	return strings.Join(parts, style.Foreground(colorMuted).Render(" · "))
 }
 
 func weightsLabel(name string) string {
@@ -332,7 +353,12 @@ func (m *PresetModel) layoutCards(body *screenBody, width int) {
 			def = m.draft.Presets[l.Default].Name
 		}
 		focused := m.focus == presetContentFocus && i == m.cursor
-		card := optionCard(Option{Name: l.Name, Components: fmt.Sprintf("%d included · %d load on activation · idle %s", len(l.Presets), len(l.Startup), idleDuration(l.IdleSeconds)),
+		background := colorBackground
+		if focused {
+			background = colorSurface
+		}
+		name := lipgloss.NewStyle().Foreground(colorLayout).Background(background).Bold(true).Render(l.Name)
+		card := optionCard(Option{Name: name, Components: fmt.Sprintf("%d included · %d load on activation · idle %s", len(l.Presets), len(l.Startup), idleDuration(l.IdleSeconds)),
 			Description: "Presets: " + m.presetNames(l.Presets) + "\nDefault: " + def,
 			Details:     "Enter to edit presets, startup loading and default."}, "", focused, width)
 		top := body.addCard(card, focused)
@@ -361,10 +387,10 @@ func (m *PresetModel) membershipCards(body *screenBody, width int) {
 		body.add(infoBlock("Choose presets first", []string{"Return to Presets to select models for this layout. Empty layouts can be saved."}, width), false)
 	}
 	for i, id := range ids {
-		border, background := nightBorder, nightBackground
+		border, background := colorBorder, colorBackground
 		focused := m.focus == presetContentFocus && i == m.cursor
 		if focused {
-			border, background = nightBlue, nightSurface
+			border, background = colorText, colorSurface
 		}
 		inner := width - 2 - 2*padding
 		name := m.draft.Presets[id].Name
@@ -374,20 +400,20 @@ func (m *PresetModel) membershipCards(body *screenBody, width int) {
 				break
 			}
 		}
-		heading := lipgloss.NewStyle().Foreground(nightBlue).Background(background).Bold(true).Width(inner).Render(name)
+		heading := lipgloss.NewStyle().Foreground(colorModel).Background(background).Bold(true).Width(inner).Render(name)
 		included, startup, def := slices.Contains(l.Presets, id), slices.Contains(l.Startup, id), l.Default == id
 		var switches []string
 		var targets []hitTarget
 		x, y := 0, lipgloss.Height(heading)
 		for j, label := range []string{"Included", "Load on activation", "Default"} {
 			on := []bool{included, startup, def}[j]
-			mark, textColor := "[ ]", nightMuted
+			mark, textColor := "[ ]", colorMuted
 			if on {
-				mark, textColor = "[x]", []color.Color{nightGreen, nightCyan, nightPurple}[j]
+				mark, textColor = "[x]", colorGo
 			}
 			style := lipgloss.NewStyle().Foreground(textColor).Background(background)
 			if focused && j == m.control {
-				style = style.Foreground(nightBackground).Background(nightBlue).Bold(true)
+				style = inverted(style, textColor, background)
 			}
 			button := style.Render(mark + " " + label)
 			if x > 0 && x+3+lipgloss.Width(button) > inner {
@@ -403,7 +429,7 @@ func (m *PresetModel) membershipCards(body *screenBody, width int) {
 		}
 		content := heading + "\n" + strings.Join(switches, "")
 		if !included && (startup || def) {
-			content += "\n" + lipgloss.NewStyle().Foreground(nightAmber).Background(background).Width(inner).
+			content += "\n" + lipgloss.NewStyle().Foreground(colorWarn).Background(background).Width(inner).
 				Render("Include this preset or clear its startup/default choices before saving.")
 		}
 		card := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(border).Background(background).Padding(0, padding).Width(width).Render(content)
@@ -449,11 +475,11 @@ func (m *PresetModel) editContent(body *screenBody, width int) {
 	}
 	inner := width - 4
 	m.text.SetWidth(max(1, inner-3))
-	heading := lipgloss.NewStyle().Foreground(nightCyan).Bold(true).Width(inner).Render(title)
-	content := heading + "\n\n" + m.text.View() + "\n\n" + lipgloss.NewStyle().Foreground(nightMuted).Width(inner).Render(detail)
-	border := nightBorder
+	heading := lipgloss.NewStyle().Foreground(colorText).Bold(true).Width(inner).Render(title)
+	content := heading + "\n\n" + m.text.View() + "\n\n" + lipgloss.NewStyle().Foreground(colorMuted).Width(inner).Render(detail)
+	border := colorBorder
 	if m.focus == presetContentFocus {
-		border = nightBlue
+		border = colorText
 	}
 	top := body.add(lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(border).Padding(0, 1).Width(width).Render(content), false)
 	// Even a small viewport keeps the field, rather than its explanation, in view.
@@ -513,16 +539,13 @@ func (m *PresetModel) presetFooter(width int, compact bool) (string, []hitTarget
 		if width < 70 && (button.target.kind != hitNext || width < 40) {
 			label = button.short
 		}
-		style := lipgloss.NewStyle().Padding(0, 1).Foreground(nightCyan).Background(nightSurface)
+		fg := buttonColor(button)
 		if !button.available {
-			style = style.Foreground(nightMuted)
 			label += " ×"
 		}
+		style := lipgloss.NewStyle().Padding(0, 1).Foreground(fg).Background(colorSurface)
 		if m.focus == presetFooterFocus && i == active {
-			style = style.Foreground(nightBackground).Background(nightBlue).Bold(true)
-			if !button.available {
-				style = style.Background(nightAmber)
-			}
+			style = inverted(style, fg, colorSurface)
 		}
 		buttons[i] = style.Render(label)
 	}
@@ -571,7 +594,7 @@ func (m *PresetModel) presetFooter(width int, compact bool) (string, []hitTarget
 		case active == 0:
 			detail = "Can't install: " + strings.Join(m.plan.Refusals, "; ")
 		}
-		parts = append(parts, lipgloss.NewStyle().Foreground(nightMuted).Width(width).Render(detail))
+		parts = append(parts, lipgloss.NewStyle().Foreground(colorMuted).Width(width).Render(detail))
 	}
 	help := "↑↓ rows · ←→ controls · Enter/Space activate · Tab Next · Shift+Tab Back · PgUp/PgDown scroll · q cancel"
 	if compact {
@@ -602,9 +625,9 @@ func (m *PresetModel) presetFooter(width int, compact bool) (string, []hitTarget
 		}
 		help = strings.Join(lines, "\n")
 	}
-	parts = append(parts, lipgloss.NewStyle().Foreground(nightMuted).Width(width).Render(help))
+	parts = append(parts, lipgloss.NewStyle().Foreground(colorMuted).Width(width).Render(help))
 	if m.notice != "" {
-		parts = append([]string{lipgloss.NewStyle().Foreground(nightAmber).Render(ansi.Truncate(m.notice, width, "…"))}, parts...)
+		parts = append([]string{lipgloss.NewStyle().Foreground(colorWarn).Render(ansi.Truncate(m.notice, width, "…"))}, parts...)
 		for i := range targets {
 			targets[i].y++
 		}

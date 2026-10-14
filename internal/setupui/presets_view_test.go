@@ -145,9 +145,9 @@ func TestSavedLicenseStaysLinkedInSelectionAndResponsiveReview(t *testing.T) {
 				focus presetFocus
 				style uv.Style
 			}{
-				{0, presetContentFocus, uv.Style{Fg: nightCyan, Bg: nightSurface, Underline: uv.UnderlineSingle}},
-				{0, presetFilterFocus, uv.Style{Fg: nightCyan, Bg: nightBackground, Underline: uv.UnderlineSingle}},
-				{2, presetContentFocus, uv.Style{Fg: nightBlue, Bg: nightSurface, Underline: uv.UnderlineSingle, Attrs: uv.AttrBold}},
+				{0, presetContentFocus, uv.Style{Fg: colorLink, Bg: colorSurface, Underline: uv.UnderlineSingle}},
+				{0, presetFilterFocus, uv.Style{Fg: colorLink, Bg: colorBackground, Underline: uv.UnderlineSingle}},
+				{2, presetContentFocus, uv.Style{Fg: colorLink, Bg: colorSurface, Underline: uv.UnderlineSingle, Attrs: uv.AttrBold}},
 			} {
 				m.page, m.focus = screen.page, screen.focus
 				view := m.View().Content

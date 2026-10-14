@@ -23,15 +23,15 @@ func (m *PresetModel) reviewLayouts(body *screenBody, width int) {
 	}
 	slices.Sort(layoutIDs)
 	if len(layoutIDs) == 0 && len(c.Presets) == 0 {
-		body.add(lipgloss.NewStyle().Foreground(nightMuted).Width(width).Render("No presets or layouts selected."), false)
+		body.add(lipgloss.NewStyle().Foreground(colorMuted).Width(width).Render("No presets or layouts selected."), false)
 	}
 	for _, id := range layoutIDs {
 		layout := c.Layouts[id]
 		for _, preset := range layout.Presets {
 			included[preset] = true
 		}
-		title := lipgloss.NewStyle().Foreground(nightCyan).Bold(true).Width(width).Render(layout.Name)
-		content := lipgloss.NewStyle().Foreground(nightMuted).Render("No presets included.")
+		title := lipgloss.NewStyle().Foreground(colorLayout).Bold(true).Width(width).Render(layout.Name)
+		content := lipgloss.NewStyle().Foreground(colorMuted).Render("No presets included.")
 		if len(layout.Presets) > 0 {
 			content = reviewPresetTable(*c, layout.Presets, &layout, width)
 		}
@@ -45,7 +45,7 @@ func (m *PresetModel) reviewLayouts(body *screenBody, width int) {
 				details = append(details, "Competing models swap on demand; active requests finish before eviction.")
 			}
 		}
-		body.add(title+"\n"+content+"\n"+lipgloss.NewStyle().Foreground(nightMuted).Width(width).Render(strings.Join(details, " · ")), false)
+		body.add(title+"\n"+content+"\n"+lipgloss.NewStyle().Foreground(colorMuted).Width(width).Render(strings.Join(details, " · ")), false)
 	}
 	for id := range c.Presets {
 		if !included[id] {
@@ -54,7 +54,7 @@ func (m *PresetModel) reviewLayouts(body *screenBody, width int) {
 	}
 	if len(unassigned) > 0 {
 		slices.Sort(unassigned)
-		title := lipgloss.NewStyle().Foreground(nightCyan).Bold(true).Width(width).Render("Presets outside layouts")
+		title := lipgloss.NewStyle().Foreground(colorText).Bold(true).Width(width).Render("Presets outside layouts")
 		body.add(title+"\n"+reviewPresetTable(*c, unassigned, nil, width), false)
 	}
 	var notes []string
@@ -76,18 +76,18 @@ func (m *PresetModel) reviewLayouts(body *screenBody, width int) {
 		notes = append(notes, "Configuration: "+m.plan.Root)
 	}
 	if len(notes) > 0 {
-		body.add(lipgloss.NewStyle().Foreground(nightMuted).Width(width).Render(strings.Join(notes, "\n")), false)
+		body.add(lipgloss.NewStyle().Foreground(colorMuted).Width(width).Render(strings.Join(notes, "\n")), false)
 	}
 }
 
 func reviewPresetTable(c setup.Configuration, ids []string, layout *setup.Layout, width int) string {
 	headers := []string{"Model", "Weights", "Engine", "Context / out", "Load", "Default"}
 	columns := []int{width - 85, 22, 17, 15, 15, 9}
-	colors := []color.Color{nightBlue, nightCyan, nightPurple, nightCyan, nightGreen, nightPurple}
+	colors := []color.Color{colorModel, colorWeights, colorEngine, colorNumber, colorGo, colorGo}
 	if width < 100 {
 		headers = []string{"Preset", "Context / out", "Load", "Default"}
 		columns = []int{width - 44, 15, 15, 9}
-		colors = []color.Color{nightBlue, nightCyan, nightGreen, nightPurple}
+		colors = []color.Color{colorModel, colorNumber, colorGo, colorGo}
 	}
 	if width < 70 {
 		headers = []string{"Preset", "Settings"}
@@ -96,7 +96,7 @@ func reviewPresetTable(c setup.Configuration, ids []string, layout *setup.Layout
 			settingsWidth = 14
 		}
 		columns = []int{width - 3 - settingsWidth, settingsWidth}
-		colors = []color.Color{nightBlue, nightCyan}
+		colors = []color.Color{colorModel, colorNumber}
 	}
 	rows := make([][]string, 0, len(ids))
 	for _, id := range ids {
@@ -107,7 +107,7 @@ func reviewPresetTable(c setup.Configuration, ids []string, layout *setup.Layout
 		if model == "" {
 			model = selected.Name
 		}
-		model += "\nModel license:\n" + licenseLink(artifact)
+		model += "\nModel license:\n" + licenseLink(artifact, colorModel)
 		if weights == "" {
 			weights = preset.Artifact
 		}
@@ -141,19 +141,19 @@ func reviewPresetTable(c setup.Configuration, ids []string, layout *setup.Layout
 		rows = append(rows, row)
 	}
 	return table.New().Headers(headers...).Rows(rows...).Width(width).Wrap(true).
-		Border(lipgloss.NormalBorder()).BorderStyle(lipgloss.NewStyle().Foreground(nightBorder)).
+		Border(lipgloss.NormalBorder()).BorderStyle(lipgloss.NewStyle().Foreground(colorBorder)).
 		StyleFunc(func(row, col int) lipgloss.Style {
 			style := lipgloss.NewStyle().Padding(0, 1).Width(columns[col]).Foreground(colors[col])
 			if row == table.HeaderRow {
 				return style.Bold(true)
 			}
 			if rows[row][col] == "—" || rows[row][col] == "On request" {
-				style = style.Foreground(nightMuted)
+				style = style.Foreground(colorMuted)
 			} else if col == 0 || rows[row][col] == "Yes" {
 				style = style.Bold(true)
 			}
 			if row%2 == 0 {
-				style = style.Background(nightSurface)
+				style = style.Background(colorSurface)
 			}
 			return style
 		}).String()

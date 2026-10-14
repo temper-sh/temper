@@ -2,27 +2,38 @@ package setupui
 
 import (
 	"fmt"
+	"image/color"
 	"strings"
 
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
 )
 
-// Tokyo Night: https://github.com/enkia/tokyo-night-vscode-theme#color-palette.
-// Keep text brighter than the theme's comment color; borders can be subdued.
+// One color per meaning, used the same way on every page: the same kind of
+// thing always has the same color. Headings and plain text stay neutral. A
+// focused element inverts its own colors (see inverted) instead of taking a
+// focus hue. Palette "A-mid", chosen by the owner on 2026-10-14.
 var (
-	nightBackground = lipgloss.Color("#1a1b26")
-	nightSurface    = lipgloss.Color("#24283b")
-	nightText       = lipgloss.Color("#c0caf5")
-	nightMuted      = lipgloss.Color("#9aa5ce")
-	nightBorder     = lipgloss.Color("#414868")
-	nightBlue       = lipgloss.Color("#7aa2f7")
-	nightCyan       = lipgloss.Color("#7dcfff")
-	nightGreen      = lipgloss.Color("#9ece6a")
-	nightAmber      = lipgloss.Color("#e0af68")
-	nightRed        = lipgloss.Color("#f7768e")
-	nightPurple     = lipgloss.Color("#bb9af7")
+	colorBackground = lipgloss.Color("#1d1f28")
+	colorSurface    = lipgloss.Color("#2a2d3a")
+	colorBorder     = lipgloss.Color("#4a4f63")
+	colorText       = lipgloss.Color("#e8eaf2")
+	colorMuted      = lipgloss.Color("#a0a6ba")
+	colorLink       = lipgloss.Color("#70a9ff") // links
+	colorGo         = lipgloss.Color("#67e97b") // primary action, chosen, done, fits, cached
+	colorWarn       = lipgloss.Color("#ffc34f") // needs attention, unavailable, will download
+	colorDanger     = lipgloss.Color("#ff7082") // error, does not fit, remove
+	colorModel      = lipgloss.Color("#be95ff") // model names
+	colorWeights    = lipgloss.Color("#ffa175") // weights, quantization and templates
+	colorEngine     = lipgloss.Color("#3bedd2") // engines and compute
+	colorLayout     = lipgloss.Color("#ff83c4") // layouts
+	colorNumber     = lipgloss.Color("#72e1fe") // sizes, memory, tokens and counts
 )
+
+// inverted is the focused form of an element drawn in fg on bg.
+func inverted(style lipgloss.Style, fg, bg color.Color) lipgloss.Style {
+	return style.Foreground(bg).Background(fg).Bold(true)
+}
 
 type hitKind uint8
 
@@ -63,15 +74,15 @@ func stepTabs(labels []string, active, width int) string {
 	for i, label := range labels {
 		border := lipgloss.RoundedBorder()
 		border.BottomLeft, border.BottomRight = "┴", "┴"
-		style := lipgloss.NewStyle().Padding(0, padding).Foreground(nightMuted).
-			BorderForeground(nightBorder)
+		style := lipgloss.NewStyle().Padding(0, padding).Foreground(colorMuted).
+			BorderForeground(colorBorder)
 		switch {
 		case i == active:
 			border.Bottom, border.BottomLeft, border.BottomRight = " ", "┘", "└"
-			style = style.Foreground(nightBlue).Bold(true).BorderForeground(nightBlue)
+			style = inverted(style, colorText, colorBackground).BorderForeground(colorText)
 			label = "• " + label
 		case i < active:
-			style = style.Foreground(nightGreen)
+			style = style.Foreground(colorGo)
 			label = "✓ " + label
 		}
 		items[i] = style.Border(border).Render(label)
@@ -97,7 +108,7 @@ func stepTabs(labels []string, active, width int) string {
 		}
 	}
 	row := visible()
-	gap := lipgloss.NewStyle().Foreground(nightBorder).Render(strings.Repeat("─", max(0, width-lipgloss.Width(row))))
+	gap := lipgloss.NewStyle().Foreground(colorBorder).Render(strings.Repeat("─", max(0, width-lipgloss.Width(row))))
 	return lipgloss.JoinHorizontal(lipgloss.Bottom, row, gap)
 }
 
@@ -146,12 +157,12 @@ func downloadsBlock(section Section, width int, open, focused bool) (string, int
 	if open {
 		label = fmt.Sprintf("▾ Downloads (%d %s) · d collapse", len(section.Downloads), unit)
 	}
-	border := nightBorder
+	border := colorBorder
 	if focused {
-		border = nightBlue
+		border = colorText
 	}
-	heading := lipgloss.NewStyle().Foreground(nightCyan).Bold(true).Width(inner).Render(label)
-	content := heading + "\n" + lipgloss.NewStyle().Foreground(nightText).Width(inner).Render(strings.Join(section.Lines, "\n"))
+	heading := lipgloss.NewStyle().Foreground(colorText).Bold(true).Width(inner).Render(label)
+	content := heading + "\n" + lipgloss.NewStyle().Foreground(colorText).Width(inner).Render(strings.Join(section.Lines, "\n"))
 	if open {
 		content += "\n\n" + downloadTable(section.Downloads, inner)
 	}
@@ -179,20 +190,23 @@ func downloadTable(downloads []Download, width int) string {
 		rows = append(rows, row)
 	}
 	return table.New().Headers(headers...).Rows(rows...).Width(width).Wrap(true).
-		Border(lipgloss.NormalBorder()).BorderStyle(lipgloss.NewStyle().Foreground(nightBorder)).
+		Border(lipgloss.NormalBorder()).BorderStyle(lipgloss.NewStyle().Foreground(colorBorder)).
 		StyleFunc(func(row, col int) lipgloss.Style {
-			style := lipgloss.NewStyle().Padding(0, 1).Width(columns[col]).Foreground(nightText)
+			style := lipgloss.NewStyle().Padding(0, 1).Width(columns[col]).Foreground(colorText)
 			if row == table.HeaderRow {
-				return style.Foreground(nightCyan).Bold(true)
+				return style.Bold(true)
+			}
+			if col == 1 && !narrow {
+				style = style.Foreground(colorNumber)
 			}
 			if col == len(headers)-1 && row < len(downloads) {
 				switch downloads[row].Status {
 				case "Cached in Temper", "Cached in Hugging Face":
-					style = style.Foreground(nightGreen)
+					style = style.Foreground(colorGo)
 				case "May download":
-					style = style.Foreground(nightMuted)
+					style = style.Foreground(colorMuted)
 				default:
-					style = style.Foreground(nightAmber)
+					style = style.Foreground(colorWarn)
 				}
 			}
 			return style
@@ -204,12 +218,12 @@ func optionCard(option Option, mark string, focused bool, width int) string {
 	if name == "" {
 		name = option.ID
 	}
-	border, background, titleColor := nightBorder, nightBackground, nightBlue
+	border, background, titleColor := colorBorder, colorBackground, colorText
 	if focused {
-		border, background = nightBlue, nightSurface
+		border, background = colorText, colorSurface
 	}
 	if strings.Contains(mark, "[x]") || strings.Contains(mark, "(*)") {
-		titleColor = nightGreen
+		titleColor = colorGo
 	}
 	if mark != "" {
 		name = mark + " " + name
@@ -218,55 +232,55 @@ func optionCard(option Option, mark string, focused bool, width int) string {
 	title := lipgloss.NewStyle().Foreground(titleColor).Background(background).Bold(true)
 	heading := title.Width(inner).Render(name)
 	if option.Size != "" {
-		size := lipgloss.NewStyle().Foreground(nightMuted).Background(background).Render(option.Size)
+		size := lipgloss.NewStyle().Foreground(colorNumber).Background(background).Render(option.Size)
 		nameWidth := max(1, inner-lipgloss.Width(size)-2)
 		heading = lipgloss.JoinHorizontal(lipgloss.Top, title.Width(nameWidth).Render(name), "  ", size)
 	}
 	lines := []string{heading}
 	if option.Components != "" {
-		lines = append(lines, lipgloss.NewStyle().Foreground(nightCyan).Background(background).Width(inner).Render(option.Components))
+		lines = append(lines, lipgloss.NewStyle().Foreground(colorNumber).Background(background).Width(inner).Render(option.Components))
 	}
 	if option.Advice != nil {
 		warning := "! " + option.Advice.Title
 		if len(option.Advice.Lines) > 0 {
 			warning += "\n" + option.Advice.Lines[0]
 		}
-		lines = append(lines, lipgloss.NewStyle().Foreground(nightAmber).Background(background).Bold(true).Width(inner).Render(warning))
+		lines = append(lines, lipgloss.NewStyle().Foreground(colorWarn).Background(background).Bold(true).Width(inner).Render(warning))
 	}
 	if option.Description != "" {
-		lines = append(lines, "", lipgloss.NewStyle().Foreground(nightText).Background(background).Width(inner).Render(option.Description))
+		lines = append(lines, "", lipgloss.NewStyle().Foreground(colorText).Background(background).Width(inner).Render(option.Description))
 	}
 	if option.AssessmentURL != "" {
-		lines = append(lines, lipgloss.NewStyle().Foreground(nightCyan).Background(background).Width(inner).Render("Assessment: "+option.AssessmentURL))
+		lines = append(lines, lipgloss.NewStyle().Foreground(colorLink).Background(background).Width(inner).Render("Assessment: "+option.AssessmentURL))
 	}
 	if option.Details != "" {
-		lines = append(lines, "", lipgloss.NewStyle().Foreground(nightMuted).Background(background).Width(inner).Render(option.Details))
+		lines = append(lines, "", lipgloss.NewStyle().Foreground(colorMuted).Background(background).Width(inner).Render(option.Details))
 	}
 	if option.DisabledReason != "" {
-		lines = append(lines, lipgloss.NewStyle().Foreground(nightAmber).Background(background).Width(inner).Render("unavailable: "+option.DisabledReason))
+		lines = append(lines, lipgloss.NewStyle().Foreground(colorWarn).Background(background).Width(inner).Render("unavailable: "+option.DisabledReason))
 	}
 	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(border).
 		Background(background).Padding(0, 1).Width(width).Render(strings.Join(lines, "\n"))
 }
 
 func infoBlock(title string, lines []string, width int) string {
-	color := nightCyan
+	heading, border := colorText, colorBorder
 	if title == "Attention" || title == "Preparation unavailable" {
-		color = nightAmber
+		heading, border = colorWarn, colorWarn
 	} else if title == "Preview error" {
-		color = nightRed
+		heading, border = colorDanger, colorDanger
 	}
 	inner := width - 4
-	heading := lipgloss.NewStyle().Foreground(color).Bold(true).Width(inner).Render(title)
-	content := lipgloss.NewStyle().Foreground(nightText).Width(inner).Render(strings.Join(lines, "\n"))
-	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(nightBorder).
-		Padding(0, 1).Width(width).Render(heading + "\n" + content)
+	content := lipgloss.NewStyle().Foreground(heading).Bold(true).Width(inner).Render(title) + "\n" +
+		lipgloss.NewStyle().Foreground(colorText).Width(inner).Render(strings.Join(lines, "\n"))
+	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(border).
+		Padding(0, 1).Width(width).Render(content)
 }
 
 func warningBlock(title string, lines []string, width int) string {
 	inner := width - 4
-	heading := lipgloss.NewStyle().Foreground(nightAmber).Bold(true).Width(inner).Render("! " + title)
-	content := lipgloss.NewStyle().Foreground(nightText).Width(inner).Render(strings.Join(lines, "\n"))
-	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(nightAmber).
+	heading := lipgloss.NewStyle().Foreground(colorWarn).Bold(true).Width(inner).Render("! " + title)
+	content := lipgloss.NewStyle().Foreground(colorText).Width(inner).Render(strings.Join(lines, "\n"))
+	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(colorWarn).
 		Padding(0, 1).Width(width).Render(heading + "\n" + content)
 }
