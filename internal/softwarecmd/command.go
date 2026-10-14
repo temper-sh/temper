@@ -11,6 +11,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/temper-sh/temper/internal/clihelp"
 	"github.com/temper-sh/temper/internal/datadir"
 	"github.com/temper-sh/temper/internal/software"
 	"github.com/temper-sh/temper/internal/software/adapter"
@@ -72,7 +73,8 @@ func (c Command) runInstall(ctx context.Context, arguments []string, stdout, std
 	flags.Var(&requiredReceipts, "require-receipt", "canonical required base receipt (repeatable)")
 	dryRun := flags.Bool("dry-run", false, "inspect and plan without writing or invoking an installer")
 	jsonOutput := flags.Bool("json", false, "print the full report as one JSON document")
-	flags.Usage = func() { installUsage(stderr) }
+	flags.Usage = clihelp.Usage(stderr, clihelp.Help{Summary: "Install one exact software lock into a named installation.",
+		Usage: []string{"temper software install --root PATH --installation ID [--lock FILE] [--require-receipt FILE]... [--dry-run] [--json]"}}, flags)
 	if err := flags.Parse(arguments); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
@@ -137,7 +139,8 @@ func (c Command) runCheck(ctx context.Context, arguments []string, stdout, stder
 	var requiredReceipts pathList
 	flags.Var(&requiredReceipts, "require-receipt", "canonical required base receipt (repeatable)")
 	jsonOutput := flags.Bool("json", false, "print the full report as one JSON document")
-	flags.Usage = func() { checkUsage(stderr) }
+	flags.Usage = clihelp.Usage(stderr, clihelp.Help{Summary: "Check a named installation against its exact software lock. Exit 1 means it differs.",
+		Usage: []string{"temper software check --root PATH --installation ID [--lock FILE] [--require-receipt FILE]... [--json]"}}, flags)
 	if err := flags.Parse(arguments); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
@@ -208,7 +211,8 @@ func (c Command) runRemove(ctx context.Context, arguments []string, stdout, stde
 	lockPath := flags.String("lock", "software.lock.yaml", "path to the exact software lock")
 	dryRun := flags.Bool("dry-run", false, "inspect and plan without writing or invoking a remover")
 	jsonOutput := flags.Bool("json", false, "print the full report as one JSON document")
-	flags.Usage = func() { removeUsage(stderr) }
+	flags.Usage = clihelp.Usage(stderr, clihelp.Help{Summary: "Remove what a named installation installed; shared and system packages stay.",
+		Usage: []string{"temper software remove --root PATH --installation ID [--lock FILE] [--dry-run] [--json]"}}, flags)
 	if err := flags.Parse(arguments); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0

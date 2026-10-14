@@ -15,6 +15,7 @@ import (
 	"github.com/temper-sh/temper/internal/apply"
 	"github.com/temper-sh/temper/internal/artifactset"
 	"github.com/temper-sh/temper/internal/catalog"
+	"github.com/temper-sh/temper/internal/clihelp"
 	"github.com/temper-sh/temper/internal/datadir"
 	"github.com/temper-sh/temper/internal/fetch"
 	"github.com/temper-sh/temper/internal/fieldkitbinding"
@@ -75,6 +76,14 @@ func Runtime(ctx context.Context, args []string, stdout, stderr io.Writer, effec
 	statusFile := f.String("status-file", "", "new supervision status path")
 	dry := f.Bool("dry-run", false, "validate without effects")
 	jsonOutput := f.Bool("json", false, "print one JSON document for scripts")
+	f.Usage = clihelp.Usage(stderr, clihelp.Help{Summary: map[string]string{
+		"inspect": "Show which preset an execution lock runs.",
+		"prepare": "Install the lock's software and model files into an installation.",
+		"render":  "Check installed files and write the lock's engine settings.",
+		"paths":   "Show the installed model and Python paths of an installation.",
+		"serve":   "Serve one prepared installation in the foreground until stopped.",
+		"remove":  "Remove an installation's software.",
+	}[operation], Usage: []string{"temper execution " + operation + " --lock FILE [options]"}}, f)
 	if err := f.Parse(args[1:]); err != nil {
 		return parseFailure(err)
 	}

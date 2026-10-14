@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/temper-sh/temper/internal/catalog"
+	"github.com/temper-sh/temper/internal/clihelp"
 	"github.com/temper-sh/temper/internal/datadir"
 	"github.com/temper-sh/temper/internal/managed"
 	"github.com/temper-sh/temper/internal/preset"
@@ -47,10 +48,11 @@ func (c Command) Layout(ctx context.Context, args []string, out, diagnostics io.
 	}
 	f := flag.NewFlagSet("temper layout "+operation, flag.ContinueOnError)
 	f.SetOutput(diagnostics)
-	rootArg := f.String("root", "", "configuration root (default ~/.temper)")
-	listen := f.String("listen", "", "loopback endpoint (default: the running layout's, else 127.0.0.1:8080)")
-	dry := f.Bool("dry-run", false, "inspect proposed transition without effects")
+	rootArg := f.String("root", "", "`PATH` Temper folder (default ~/.temper)")
+	listen := f.String("listen", "", "`127.0.0.1:PORT` address to serve on (default: the running layout's, else 127.0.0.1:8080)")
+	dry := f.Bool("dry-run", false, "show what would happen; start or stop nothing")
 	jsonOutput := f.Bool("json", false, "print one JSON document for scripts")
+	f.Usage = clihelp.Usage(diagnostics, layoutHelp(operation), f)
 	if err := f.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
@@ -295,6 +297,17 @@ func (c Command) stopLayout(ctx context.Context, root string, dry bool) (*manage
 }
 
 func helpFlag(arg string) bool { return arg == "help" || arg == "--help" || arg == "-h" }
+
+func layoutHelp(operation string) clihelp.Help {
+	switch operation {
+	case "activate":
+		return clihelp.Help{Summary: "Start a saved layout, or restart it with your latest changes. It keeps running\nafter the command exits, until you stop it or restart your Mac.",
+			Usage: []string{"temper layout activate ID [--listen 127.0.0.1:PORT] [--dry-run] [--json]"}, Examples: []string{"temper layout activate default"}}
+	case "status":
+		return clihelp.Help{Summary: "Show which layout runs, where, and its model IDs.", Usage: []string{"temper layout status [--json]"}}
+	}
+	return clihelp.Help{Summary: "Stop the running layout and unload its models.", Usage: []string{"temper layout stop [--dry-run] [--json]"}}
+}
 
 func layoutUsage(w io.Writer) {
 	fmt.Fprintln(w, `usage:

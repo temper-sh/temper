@@ -271,27 +271,24 @@ func newSoftwareInvocationID() (string, error) {
 }
 
 func usage(writer io.Writer) {
-	fmt.Fprintf(writer, "temper %s — deterministic local-AI configuration\n\n", version)
-	fmt.Fprintln(writer, "everyday use:")
-	fmt.Fprintln(writer, "  temper init [--root PATH] [--preset ID] [--prepare] [--dry-run]")
-	fmt.Fprintln(writer, "  temper layout activate ID [--root PATH] [--listen 127.0.0.1:PORT] [--dry-run]")
-	fmt.Fprintln(writer, "  temper layout status|stop [--root PATH] [--dry-run]")
-	fmt.Fprintln(writer, "  temper update [--root PATH] [--software] [--dry-run] [--json]")
-	fmt.Fprintln(writer, "  temper configure [--root PATH] [--software stable|latest] [--resume --prepare]")
-	fmt.Fprintln(writer, "  temper configure [--root PATH] [--show --json | --file FILE --revision SHA256]")
-	fmt.Fprintln(writer, "  temper version")
-	fmt.Fprintln(writer, "  temper help")
-	fmt.Fprintln(writer, "")
-	fmt.Fprintln(writer, "tools:")
-	fmt.Fprintln(writer, "  temper machine facts")
-	fmt.Fprintln(writer, "  temper software <install|check|remove> [options]")
-	fmt.Fprintln(writer, "  temper catalog update|inspect|rollback --root ROOT [options]")
-	fmt.Fprintln(writer, "  temper catalog describe --catalog FILE --preset ID --description TEXT [--dry-run]")
-	fmt.Fprintln(writer, "  temper catalog compile (--catalog FILE | --root ROOT) --preset ID --target darwin/arm64 --out FILE [--software stable|latest] [--memory-gib N] [--dry-run]")
-	fmt.Fprintln(writer, "  temper execution configure --lock FILE --preset ID --context N --max-output N [--compute cpu|gpu] [--max-memory BYTES] --out FILE [--dry-run]")
-	fmt.Fprintln(writer, "  temper execution inspect --lock FILE")
-	fmt.Fprintln(writer, "  temper execution prepare|render|paths|remove --lock FILE --root PATH --installation ID [--dry-run]")
-	fmt.Fprintln(writer, "  temper execution serve --lock FILE --root PATH --installation ID --generation SHA256 --status-file FILE [--listen 127.0.0.1:PORT] [--dry-run]")
+	fmt.Fprintf(writer, "temper %s — run local AI models on your Mac\n\n", version)
+	fmt.Fprintln(writer, `Everyday commands:
+  temper init                 choose presets, install them and start the default layout
+  temper layout status        show what runs, where, and its model IDs
+  temper layout activate ID   start a saved layout, for example after a restart
+  temper layout stop          stop the running layout
+  temper update               get the newest presets and software, install and restart
+  temper configure            change your presets and layouts
+  temper version              print the version
+
+Tools for scripts and experiments:
+  temper catalog update|inspect|rollback|compile|describe
+  temper execution configure|inspect|prepare|render|paths|serve|remove
+  temper software install|check|remove
+  temper machine facts
+
+Add --help to any command for its options, and --json for one JSON document.
+Commands use ~/.temper unless you pass --root PATH.`)
 }
 
 func machineUsage(writer io.Writer) {

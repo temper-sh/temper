@@ -27,7 +27,7 @@ func TestRunInitHelpDoesNotInspectMachine(t *testing.T) {
 			return machine.Facts{}, nil
 		},
 	})
-	if exit != 0 || !strings.Contains(stderr.String(), "Usage of temper init:") || !strings.Contains(stderr.String(), "default ~/.temper") {
+	if exit != 0 || !strings.Contains(stderr.String(), "temper init --preset ID") || !strings.Contains(stderr.String(), "default ~/.temper") || strings.Contains(stderr.String(), "Usage of") {
 		t.Fatalf("exit=%d stdout=%q stderr=%q", exit, stdout.String(), stderr.String())
 	}
 }

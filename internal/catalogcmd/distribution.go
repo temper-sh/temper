@@ -3,7 +3,9 @@ package catalogcmd
 import (
 	"context"
 	"flag"
+
 	"fmt"
+	"github.com/temper-sh/temper/internal/clihelp"
 	"io"
 	"strings"
 	"time"
@@ -16,19 +18,24 @@ func runDistribution(ctx context.Context, args []string, stdout, stderr io.Write
 	verb := args[0]
 	f := flag.NewFlagSet("temper catalog "+verb, flag.ContinueOnError)
 	f.SetOutput(stderr)
-	root := f.String("root", "", "explicit Temper data root")
-	jsonOutput := f.Bool("json", false, "print the result as JSON")
+	root := f.String("root", "", "`PATH` Temper folder, for example ~/.temper")
+	jsonOutput := f.Bool("json", false, "print one JSON document for scripts")
 	var dry bool
 	var preset, sha string
 	if verb != "inspect" {
-		f.BoolVar(&dry, "dry-run", false, "validate and report without writes")
+		f.BoolVar(&dry, "dry-run", false, "show what would change; change nothing")
 	}
 	if verb == "inspect" {
-		f.StringVar(&preset, "preset", "", "explicit preset ID")
+		f.StringVar(&preset, "preset", "", "`ID` of one preset to show")
 	}
 	if verb == "rollback" {
-		f.StringVar(&sha, "snapshot", "", "exact retained catalog SHA-256")
+		f.StringVar(&sha, "snapshot", "", "`SHA256` of a kept catalog (see temper catalog inspect)")
 	}
+	f.Usage = clihelp.Usage(stderr, map[string]clihelp.Help{
+		"update":   {Summary: "Download and verify the newest signed catalog; keep the previous ones for rollback.", Usage: []string{"temper catalog update --root PATH [--dry-run] [--json]"}},
+		"inspect":  {Summary: "List the presets of the active catalog, or show one preset.", Usage: []string{"temper catalog inspect --root PATH [--preset ID] [--json]"}, Examples: []string{"temper catalog inspect --root ~/.temper"}},
+		"rollback": {Summary: "Make a kept catalog active again.", Usage: []string{"temper catalog rollback --root PATH --snapshot SHA256 [--dry-run] [--json]"}},
+	}[verb], f)
 	if err := f.Parse(args[1:]); err != nil {
 		return parseFailure(err)
 	}
@@ -47,6 +54,7 @@ func runDistribution(ctx context.Context, args []string, stdout, stderr io.Write
 			bounded, cancel := context.WithTimeout(ctx, 30*time.Second)
 			defer cancel()
 			result, err = distribution.Update(bounded, *root, dry, trust, source)
+			err = clihelp.Network("download the catalog", err)
 		} else {
 			result, err = distribution.Rollback(ctx, *root, sha, dry, trust)
 		}
@@ -79,7 +87,7 @@ func runDistribution(ctx context.Context, args []string, stdout, stderr io.Write
 		d := view.Active.Document
 		if preset != "" {
 			if _, ok := d.Presets[preset]; !ok {
-				return failed(stderr, fmt.Errorf("unknown preset %q", preset))
+				return failed(stderr, clihelp.UnknownID("preset", preset, sortedKeys(d.Presets), "temper catalog inspect --root "+*root))
 			}
 		}
 		if *jsonOutput {

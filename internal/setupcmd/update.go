@@ -15,6 +15,7 @@ import (
 
 	"github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/catalog/distribution"
+	"github.com/temper-sh/temper/internal/clihelp"
 	"github.com/temper-sh/temper/internal/preset"
 	"github.com/temper-sh/temper/internal/setup"
 	"github.com/temper-sh/temper/internal/software/catalogsource"
@@ -43,7 +44,7 @@ func newestCatalog(ctx context.Context, root string, dry bool) (catalog.View, er
 		snapshot, err = distribution.Read(root, trust)
 	}
 	if err != nil {
-		return catalog.View{}, err
+		return catalog.View{}, clihelp.Network("download the catalog", err)
 	}
 	return catalog.View{Document: snapshot.Document, Unavailable: snapshot.Unavailable}, nil
 }
@@ -66,11 +67,15 @@ func (c Command) Update(ctx context.Context, args []string, out, diagnostics io.
 	fail := c.fail
 	f := flag.NewFlagSet("temper update", flag.ContinueOnError)
 	f.SetOutput(diagnostics)
-	rootArg := f.String("root", "", "configuration root (default ~/.temper)")
-	softwareOnly := f.Bool("software", false, "keep models and settings; change only router and engine releases")
-
-	dry := f.Bool("dry-run", false, "show old → new without saving, storing the catalog, installing or restarting")
-	jsonOutput := f.Bool("json", false, "emit JSON")
+	rootArg := f.String("root", "", "`PATH` Temper folder (default ~/.temper)")
+	softwareOnly := f.Bool("software", false, "keep models and settings; change only the router and engine releases")
+	dry := f.Bool("dry-run", false, "show old → new; save, install and restart nothing")
+	jsonOutput := f.Bool("json", false, "print one JSON document for scripts")
+	f.Usage = clihelp.Usage(diagnostics, clihelp.Help{
+		Summary:  "Get the newest catalog, rebuild your saved presets from it, install what\nchanged and restart the running layout. Your context and compute choices stay.",
+		Usage:    []string{"temper update [--software] [--dry-run] [--json]"},
+		Examples: []string{"temper update --dry-run   # only look", "temper update"},
+	}, f)
 	if err := f.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0

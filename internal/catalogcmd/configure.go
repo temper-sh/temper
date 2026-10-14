@@ -9,6 +9,7 @@ import (
 	"os"
 
 	"github.com/temper-sh/temper/internal/catalog"
+	"github.com/temper-sh/temper/internal/clihelp"
 )
 
 func configureExecution(ctx context.Context, args []string, stdout, stderr io.Writer) int {
@@ -23,6 +24,8 @@ func configureExecution(ctx context.Context, args []string, stdout, stderr io.Wr
 	out := f.String("out", "", "new execution lock path")
 	dry := f.Bool("dry-run", false, "validate without writes")
 	jsonOutput := f.Bool("json", false, "print one JSON document for scripts")
+	f.Usage = clihelp.Usage(stderr, clihelp.Help{Summary: "Write a new execution lock with other context, output, compute or memory settings.\nSoftware, models and sampling stay frozen.",
+		Usage: []string{"temper execution configure --lock FILE --preset ID --context N --max-output N --out FILE [options]"}}, f)
 	if err := f.Parse(args); err != nil {
 		return parseFailure(err)
 	}

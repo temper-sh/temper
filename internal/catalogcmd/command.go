@@ -20,6 +20,7 @@ import (
 	"github.com/temper-sh/temper/internal/buildinfo"
 	"github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/catalog/distribution"
+	"github.com/temper-sh/temper/internal/clihelp"
 	"github.com/temper-sh/temper/internal/software"
 	"github.com/temper-sh/temper/internal/software/adapter/upstreamrelease"
 	publication "github.com/temper-sh/temper/internal/software/catalogpublication"
@@ -74,9 +75,11 @@ func compile(ctx context.Context, args []string, stdout, stderr io.Writer, reade
 	target := f.String("target", "", "portable target, currently darwin/arm64")
 	out := f.String("out", "", "new execution lock path")
 	dry := f.Bool("dry-run", false, "validate and report without writes")
-	jsonOutput := f.Bool("json", false, "print the execution-input contract as JSON")
+	jsonOutput := f.Bool("json", false, "print one JSON document for scripts")
 	softwareChoice := f.String("software", catalog.SoftwareStable, "software choice: stable (the catalog's tested releases) or latest")
-	memoryGiB := f.Int("memory-gib", 0, "select the profile a Mac with this much memory (GiB) uses; default: the smallest")
+	memoryGiB := f.Int("memory-gib", 0, "`GIB` use the profile a Mac with this much memory uses (default: the smallest)")
+	f.Usage = clihelp.Usage(stderr, clihelp.Help{Summary: "Compile one catalog preset into an exact execution lock for the execution commands.",
+		Usage: []string{"temper catalog compile (--catalog FILE | --root PATH) --preset ID --target darwin/arm64 --out FILE [options]"}}, f)
 	if err := f.Parse(args); err != nil {
 		return parseFailure(err)
 	}
@@ -248,7 +251,7 @@ func parseFailure(err error) int {
 func isHelp(arg string) bool { return arg == "help" || arg == "--help" || arg == "-h" }
 
 func failed(w io.Writer, err error) int {
-	fmt.Fprintf(w, "temper catalog/execution: %v\n", err)
+	fmt.Fprintf(w, "temper: %v\n", err)
 	return 1
 }
 func usage(w io.Writer) {

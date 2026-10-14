@@ -15,6 +15,7 @@ import (
 
 	"github.com/charmbracelet/x/term"
 	"github.com/temper-sh/temper/internal/catalog"
+	"github.com/temper-sh/temper/internal/clihelp"
 	"github.com/temper-sh/temper/internal/preset"
 	"github.com/temper-sh/temper/internal/setup"
 	"github.com/temper-sh/temper/internal/setupui"
@@ -25,23 +26,38 @@ func (c Command) Configure(ctx context.Context, args []string, in io.Reader, out
 	fail := c.fail
 	f := flag.NewFlagSet("temper "+c.verb(), flag.ContinueOnError)
 	f.SetOutput(diagnostics)
-	rootArg := f.String("root", "", "configuration root (default ~/.temper)")
-	path := f.String("catalog", "", "local catalog file, used as is, no signature check")
-	file := f.String("file", "", "complete configuration JSON to review and save")
-	revision := f.String("revision", "", "expected saved configuration revision")
-	show := f.Bool("show", false, "show current configuration and revision")
-	resume := f.Bool("resume", false, "review saved exact inputs offline")
-	prepare := f.Bool("prepare", false, "prepare selected exact material after saving")
-	dry := f.Bool("dry-run", false, "review without saving or preparing")
-	jsonOutput := f.Bool("json", false, "emit JSON")
-	softwareChoice := f.String("software", "", "stable (the catalog's tested releases) or latest, for every saved preset; default: the saved setting")
-	customID := f.String("as", "", "save one selected preset under a custom ID")
-	name := f.String("name", "", "custom preset display name")
+	rootArg := f.String("root", "", "`PATH` Temper folder (default ~/.temper)")
+	path := f.String("catalog", "", "`FILE` local catalog to use as is, without a signature check")
+	file := f.String("file", "", "`FILE` JSON configuration that replaces the saved one")
+	revision := f.String("revision", "", "`REVISION` the saved configuration's revision; scripted edits need it (see --show)")
+	show := f.Bool("show", false, "show the saved presets, layouts and revision")
+	resume := f.Bool("resume", false, "use the saved choices again, without reading a new catalog")
+	prepare := f.Bool("prepare", false, "download and install after saving, then start the layout")
+	dry := f.Bool("dry-run", false, "show what would change; save and install nothing")
+	jsonOutput := f.Bool("json", false, "print one JSON document for scripts")
+	softwareChoice := f.String("software", "", "`stable|latest` software for every saved preset: the releases the catalog tested, or the newest")
+	customID := f.String("as", "", "`ID` save the one selected preset under this ID")
+	name := f.String("name", "", "`NAME` display name for the one selected preset")
 	var selected, removed, contexts, computes stringsFlag
-	f.Var(&selected, "preset", "explicit catalog preset; repeat to select several")
-	f.Var(&removed, "remove-preset", "remove an unreferenced preset")
-	f.Var(&contexts, "context", "PRESET=TOKENS")
-	f.Var(&computes, "compute", "PRESET=cpu or PRESET=gpu")
+	f.Var(&selected, "preset", "`ID` catalog preset to select; repeat for several")
+	f.Var(&removed, "remove-preset", "`ID` saved preset to remove; no layout may use it")
+	f.Var(&contexts, "context", "`PRESET=TOKENS` context window of a selected preset")
+	f.Var(&computes, "compute", "`PRESET=cpu|gpu` compute of a selected preset")
+	help := clihelp.Help{
+		Summary: "Change your saved presets and layouts. Without options it opens the guided setup.",
+		Usage: []string{"temper configure", "temper configure --resume --prepare", "temper configure --show [--json]",
+			"temper configure --file FILE --revision REVISION", "temper configure --software stable|latest"},
+		Examples: []string{"temper configure --resume --prepare   # install saved choices and start the layout"},
+	}
+	if c.verb() == "init" {
+		help = clihelp.Help{
+			Summary: "Choose presets for this Mac, install them and start the default layout.\nWithout options it opens the guided setup.",
+			Usage:   []string{"temper init", "temper init --preset ID [--preset ID]... [--prepare] [--dry-run] [--json]"},
+			Examples: []string{"temper init", "temper init --preset qwen3.5-4b-q4km-off --prepare",
+				"temper catalog inspect --root ~/.temper   # list preset IDs"},
+		}
+	}
+	f.Usage = clihelp.Usage(diagnostics, help, f)
 	if err := f.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
@@ -324,7 +340,10 @@ func (c Command) Configure(ctx context.Context, args []string, in io.Reader, out
 					choices.Compute = catalog.ComputeDevice(device)
 				}
 				if _, ok := d.Presets[id]; !ok {
-					return fail(diagnostics, fmt.Errorf("preset %q is not available: %s", id, unavailableReason(view, id, "not in this catalog")))
+					if reason := unavailableReason(view, id, ""); reason != "" {
+						return fail(diagnostics, fmt.Errorf("preset %q is not available: %s", id, reason))
+					}
+					return fail(diagnostics, clihelp.UnknownID("preset", id, slices.Collect(maps.Keys(d.Presets)), "temper catalog inspect --root "+root))
 				}
 				lock, err := build(id, choices)
 				if err != nil {
