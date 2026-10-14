@@ -170,6 +170,10 @@ func runWithDependencies(ctx context.Context, arguments []string, stdout, stderr
 			})
 		}
 		return catalogcmd.Run(ctx, arguments, stdout, stderr)
+	case "cleanup":
+		command := setupcmd.New(deps.detectFacts, deps.presetEffects())
+		command.CacheRoot, command.Remover = deps.cacheRoot, softwareOperations{deps.newSoftware}
+		return command.Cleanup(ctx, arguments[1:], stdout, stderr)
 	case "layout":
 		command := setupcmd.New(deps.detectFacts, deps.presetEffects())
 		command.Name = "layout"
@@ -279,6 +283,7 @@ func usage(writer io.Writer) {
   temper layout stop          stop the running layout
   temper update               get the newest presets and software, install and restart
   temper configure            change your presets and layouts
+  temper cleanup              remove old engine releases and caches nothing uses
   temper version              print the version
 
 Tools for scripts and experiments:

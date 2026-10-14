@@ -15,7 +15,9 @@ import (
 
 	"github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/catalog/distribution"
+	"github.com/temper-sh/temper/internal/cleanup"
 	"github.com/temper-sh/temper/internal/clihelp"
+	"github.com/temper-sh/temper/internal/managed"
 	"github.com/temper-sh/temper/internal/preset"
 	"github.com/temper-sh/temper/internal/setup"
 	"github.com/temper-sh/temper/internal/software/catalogsource"
@@ -234,6 +236,11 @@ func (c Command) Update(ctx context.Context, args []string, out, diagnostics io.
 		fmt.Fprintf(out, "Installed the update for %s.\n", count(len(prepared), "preset", "presets"))
 		if !c.restartAfterUpdate(ctx, root, next, false, out, result) {
 			return 1
+		}
+		if state, err := (managed.FileStore{Root: root}).Read(); err == nil {
+			if plan, err := cleanup.Build(root, next, state, ""); err == nil && len(plan.Remove) > 0 {
+				fmt.Fprintf(out, "Old releases and caches use %s; remove them with: temper cleanup\n", setup.DownloadSize(plan.Bytes()))
+			}
 		}
 	default:
 		fmt.Fprintln(out, "Everything is up to date.")

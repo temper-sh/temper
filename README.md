@@ -132,9 +132,10 @@ rm -rf ~/.temper
 layouts) and `catalog/` (the verified catalogs). Everything else there is
 cache that Temper can rebuild: installed engines and the router (about 30–300
 MB per release), a prepared model copy for Splash presets (about 16–20 GB per
-version; the review shows the estimate), model links and rendered settings. Old releases are not removed
-automatically; with no layout running, deleting `~/.temper` and running
-`temper init` again is safe.
+version; the review shows the estimate), model links and rendered settings.
+`temper cleanup` removes old releases and caches that no saved preset and no
+running layout uses (`--dry-run` shows them first). Deleting `~/.temper` with
+no layout running and running `temper init` again is also safe.
 
 Model files stay in the Hugging Face cache (usually `~/.cache/huggingface/hub`),
 because other tools can use them too. List them with `hf cache ls` and remove

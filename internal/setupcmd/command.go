@@ -15,6 +15,7 @@ import (
 	"github.com/temper-sh/temper/internal/buildinfo"
 	"github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/catalog/distribution"
+	"github.com/temper-sh/temper/internal/cleanup"
 	"github.com/temper-sh/temper/internal/hfcache"
 	"github.com/temper-sh/temper/internal/machine"
 	"github.com/temper-sh/temper/internal/managed"
@@ -53,6 +54,8 @@ type Command struct {
 	// Start activates a saved layout after an install; nil uses the managed
 	// router. Tests replace it so they never reach launchd.
 	Start func(ctx context.Context, root, layout string) (*managed.Job, *managed.Status, error)
+	// Remover releases software installations for temper cleanup.
+	Remover cleanup.Remover
 }
 
 func New(detect func(context.Context) (machine.Facts, error), effects preset.Effects) Command {
