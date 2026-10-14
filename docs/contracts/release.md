@@ -154,9 +154,9 @@ require that distribution identity.
 
 The `Homebrew` workflow runs after the signed release has been published. It
 can also prepare or publish a bottle for an existing release through
-`workflow_dispatch`; its `publish` input defaults to false. For 0.1.0 the
-release workflow also calls it with `publish: false`: review the built bottle,
-then publish it with `workflow_dispatch`. It:
+`workflow_dispatch`; its `publish` input defaults to false there. The release
+workflow calls it with `publish: true`, so a release publishes its bottle and
+formula without a manual step (0.1.0 reviewed its first bottle by hand). It:
 
 1. checks out the current default branch as the maintained tap;
 2. verifies the named release exists, is public and contains the direct ZIP;

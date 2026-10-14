@@ -18,8 +18,7 @@ jobs:
     uses: ./.github/workflows/homebrew.yml
     with:
       tag: ${{ github.ref_name }}
-      # First release: build and review the bottle; publish it by hand.
-      publish: false
+      publish: true
 
   release:
     runs-on: macos-15
