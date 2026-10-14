@@ -33,7 +33,7 @@ func document() catalog.Document {
 		Engines:   map[string]catalog.Engine{"llama-b10936": {Adapter: "llama-server/v1", Supply: supply("llama-cpp"), Interfaces: []string{"chat-completions"}, Modalities: []string{"text"}}},
 		Presets: map[string]catalog.Preset{"qwen-32k": {Artifact: "qwen-q4", Template: "template", Engine: "llama-b10936", Interface: "chat-completions", Modalities: []string{"text"},
 			Compute: catalog.ComputeGPU, ComputeOptions: []catalog.ComputeDevice{catalog.ComputeGPU, catalog.ComputeCPU},
-			RequestDefaults: catalog.RequestDefaults{MaxOutputTokens: 4096, Reasoning: "off", Sampling: engine.SamplingDefaults{Temperature: 0, TopK: 1, TopP: 1, MinP: 0, RepeatPenalty: 1, PresencePenalty: 0, Seed: 17}},
+			RequestDefaults: catalog.RequestDefaults{MaxOutputTokens: 4096, Reasoning: "off", Sampling: engine.SamplingDefaults{Temperature: 0, TopK: 1, TopP: 1, MinP: 0, RepeatPenalty: 1, PresencePenalty: 0, Seed: seed(17)}},
 			Speculation:     catalog.Speculation{Method: "mtp", Source: "embedded", MaxDraftTokens: 3},
 			Profiles: []catalog.Profile{{MinMemoryGiB: 32, ContextWindowTokens: 32768, EngineConfig: catalog.EngineConfig{LlamaConfig: catalog.LlamaConfig{Kind: "llama-server/v1", Parallel: 1, KVCache: "q8", FlashAttention: "on", BatchTokens: 512, MicrobatchTokens: 512, ContextCheckpoints: 16, PromptCacheRAMMiB: 0, GPULayers: 99,
 				Controls: engine.LlamaServerControls{CacheReuse: 16, ReasoningEffort: "medium", PreserveReasoning: true, ContextShift: false, CachePrompt: true, Fit: "off", Threads: 4, ThreadsBatch: 4, LoadMode: "mmap"}}}}},
@@ -452,5 +452,39 @@ func TestUnselectedLayoutDoesNotEnterLock(t *testing.T) {
 	}
 	if err := got.Validate(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func seed(n int) *int { return &n }
+
+// Without a catalog seed the engine picks a random one, so asking again gives
+// a new answer; a seeded preset stays repeatable.
+func TestSeedIsPassedOnlyWhenThePresetFixesOne(t *testing.T) {
+	for _, tc := range []struct {
+		seed *int
+		want string
+	}{{seed(17), "--seed 17"}, {nil, ""}} {
+		d := document()
+		p := d.Presets["qwen-32k"]
+		p.RequestDefaults.Sampling.Seed = tc.seed
+		d.Presets["qwen-32k"] = p
+		l := compile(t, d)
+		projection, err := l.Projections()
+		if err != nil {
+			t.Fatal(err)
+		}
+		bundle, err := render.Build(render.Inputs{Manifest: projection.Manifest, Lock: projection.Artifacts, Mode: l.Preset, Root: "/root"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var config string
+		for _, a := range bundle.Artifacts {
+			if a.Path == "llama-swap/config.yaml" {
+				config = string(a.Data)
+			}
+		}
+		if got := strings.Contains(config, "--seed"); got != (tc.want != "") || tc.want != "" && !strings.Contains(config, tc.want) {
+			t.Errorf("seed %v: rendered command:\n%s", tc.seed, config)
+		}
 	}
 }

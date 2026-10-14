@@ -68,7 +68,7 @@ func buildSplash(r Request) (Command, error) {
 	if err := s.Validate(); err != nil {
 		return Command{}, err
 	}
-	if s.Temperature > 2 || s.TopK < 1 || s.TopK > 32 || s.MinP != 0 || s.RepeatPenalty != 1 || s.PresencePenalty != 0 || s.Seed < 0 {
+	if s.Temperature > 2 || s.TopK < 1 || s.TopK > 32 || s.MinP != 0 || s.RepeatPenalty != 1 || s.PresencePenalty != 0 || s.Seed != nil && *s.Seed < 0 {
 		return Command{}, errors.New("Splash supports temperature up to 2, top_k 1–32, a nonnegative seed, and neutral penalties")
 	}
 	target, draft := filepath.Join(c.AssemblyPath, "target"), filepath.Join(c.AssemblyPath, "draft")
@@ -100,6 +100,15 @@ func buildSplash(r Request) (Command, error) {
 			EnvironmentAssignment{Name: "SPLASH_CRASH_TRACE", Value: "0"},
 		),
 		CheckEndpoint: "/health", UseModelName: r.LayoutID, ContextWindow: r.Window,
-		DefaultParameters: map[string]any{"temperature": s.Temperature, "top_k": s.TopK, "top_p": s.TopP, "seed": s.Seed},
+		DefaultParameters: splashDefaults(*s),
 	})
+}
+
+// splashDefaults are Splash's request defaults; a seed only when one is set.
+func splashDefaults(s SamplingDefaults) map[string]any {
+	defaults := map[string]any{"temperature": s.Temperature, "top_k": s.TopK, "top_p": s.TopP}
+	if s.Seed != nil {
+		defaults["seed"] = *s.Seed
+	}
+	return defaults
 }

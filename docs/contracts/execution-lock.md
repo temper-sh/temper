@@ -196,7 +196,9 @@ arbitrary pairing is correct or faster.
 `llama-server/v1` exposes explicit cache, reasoning, context shift, fitting,
 thread, load-mode and sampling controls. `checkpoint_min_step` maps to
 `--checkpoint-min-step`: omitted uses the engine default, zero removes the
-minimum, and negative values refuse. KV `q4`, `q8`, and `f16` map to `q4_0`,
+minimum, and negative values refuse. The sampling `seed` is optional: set, it
+maps to `--seed` for repeatable runs; omitted, the engine picks a random seed,
+so asking again gives a new answer. KV `q4`, `q8`, and `f16` map to `q4_0`,
 `q8_0`, and `f16` for both K and V. Output allowance supplies `--predict` with
 these controls; explicit API request values can override server defaults.
 

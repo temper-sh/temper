@@ -104,10 +104,10 @@ func llamaServerCommand(options llamaServerOptions) (Command, error) {
 		} {
 			groups = append(groups, []commandWord{knownWord(pair.name), knownWord(strconv.FormatFloat(pair.value, 'g', -1, 64))})
 		}
-		groups = append(groups,
-			[]commandWord{knownWord("--top-k"), knownWord(strconv.Itoa(s.TopK))},
-			[]commandWord{knownWord("--seed"), knownWord(strconv.Itoa(s.Seed))},
-		)
+		groups = append(groups, []commandWord{knownWord("--top-k"), knownWord(strconv.Itoa(s.TopK))})
+		if s.Seed != nil {
+			groups = append(groups, []commandWord{knownWord("--seed"), knownWord(strconv.Itoa(*s.Seed))})
+		}
 	}
 	return commandFromLaunch(launchSpec{
 		executable:     knownWord("llama-server"),

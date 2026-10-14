@@ -81,7 +81,9 @@ type SamplingDefaults struct {
 	MinP            float64 `yaml:"min_p" json:"min_p"`
 	RepeatPenalty   float64 `yaml:"repeat_penalty" json:"repeat_penalty"`
 	PresencePenalty float64 `yaml:"presence_penalty" json:"presence_penalty"`
-	Seed            int     `yaml:"seed" json:"seed"`
+	// Seed fixes generation for repeatable runs. Without one the engine
+	// picks a random seed, so asking again gives a new answer.
+	Seed *int `yaml:"seed,omitempty" json:"seed,omitempty"`
 }
 
 // RapidMLXTuning is the typed Rapid-MLX-only tuning variant.

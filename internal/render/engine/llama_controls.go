@@ -35,7 +35,7 @@ func (s SamplingDefaults) Validate() error {
 			return errors.New("llama-server sampling values must be finite")
 		}
 	}
-	if s.Temperature < 0 || s.TopK < 0 || s.TopP <= 0 || s.TopP > 1 || s.MinP < 0 || s.MinP > 1 || s.RepeatPenalty <= 0 || s.Seed < 0 {
+	if s.Temperature < 0 || s.TopK < 0 || s.TopP <= 0 || s.TopP > 1 || s.MinP < 0 || s.MinP > 1 || s.RepeatPenalty <= 0 || s.Seed != nil && *s.Seed < 0 {
 		return errors.New("llama-server sampling defaults are out of range")
 	}
 	return nil
