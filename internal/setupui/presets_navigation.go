@@ -64,6 +64,12 @@ func (m *PresetModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.field != "" {
 				return m, m.activateShortcut("cancel-edit")
 			}
+			if m.page == 0 && m.layout == "" {
+				// Esc goes back; the first screen has nothing behind it, and one key
+				// must not drop every choice.
+				m.notice = "To leave without saving, press q or choose Cancel."
+				return m, nil
+			}
 			return m, m.back()
 		case "up", "down":
 			delta := 1

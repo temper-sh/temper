@@ -195,7 +195,7 @@ selection, first remove it from layouts that use it.
 | Arrow keys | Move between rows and controls. |
 | Enter or Space | Activate a button or toggle a checkbox. |
 | Tab / Shift+Tab | Focus the forward / back action; Enter confirms it. |
-| Esc | Go back or cancel the current form. |
+| Esc | Go back, or cancel the current form. On the first screen it does not leave; press q or choose Cancel. |
 | PgUp / PgDown | Scroll long cards and reviews. |
 
 Mouse clicks and trackpad scrolling also work. On the preset screen, the first

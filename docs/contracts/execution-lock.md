@@ -32,8 +32,9 @@ Changing settings requires a new output path. Dry runs create no files.
 meaning, removes a required field or changes the reader rules gets
 `temper-catalog/v2` under a new URL; additions stay in v1.
 
-Top level: `schema`, `platform` (`apple-silicon`), `date` (`YYYY-MM-DD`, the
-day the publisher produced the snapshot), `runtime.router`, `artifacts`,
+Top level: `schema`, `platform` (`apple-silicon`), `date` (`YYYY-MM-DD`, when
+the catalog content last changed; the publisher refuses a date before the
+previous catalog's or in the future), `runtime.router`, `artifacts`,
 `templates`, `engines`, `presets` and `presentation`.
 
 - **Artifacts** pin model files: `sources` (each `hub`, `repo`, 40-character

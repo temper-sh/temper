@@ -231,3 +231,17 @@ func TestPresetContextAndFormButtonsAreReachableInNarrowTerminal(t *testing.T) {
 		t.Fatalf("Context is not focused after returning from the form:\n%s", view)
 	}
 }
+
+func TestEscOnTheFirstScreenKeepsTheChoices(t *testing.T) {
+	m := populatedPresetEditor(t)
+	m.page, m.layout, m.field = 0, "", ""
+	selected := len(m.draft.Presets)
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	if m.Decision.Action != "" || len(m.draft.Presets) != selected || !strings.Contains(m.notice, "press q") {
+		t.Fatalf("Esc left the wizard or dropped choices: %q %d", m.Decision.Action, len(m.draft.Presets))
+	}
+	m.Update(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	if m.Decision.Action != "cancel" {
+		t.Fatal("q no longer leaves")
+	}
+}
