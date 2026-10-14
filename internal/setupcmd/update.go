@@ -186,8 +186,12 @@ func (c Command) Update(ctx context.Context, args []string, out, diagnostics io.
 	}
 	var prepared []string
 	if *prepare && !*dry {
+		progress := diagnostics
+		if *jsonOutput {
+			progress = io.Discard
+		}
 		for _, id := range slices.Sorted(maps.Keys(next.Presets)) {
-			if err := preset.Prepare(ctx, root, next.Presets[id].Lock, c.Effects, diagnostics); err != nil {
+			if err := preset.Prepare(ctx, root, next.Presets[id].Lock, c.Effects, progress); err != nil {
 				return fail(diagnostics, fmt.Errorf("configuration saved; preset %s preparation incomplete, resume with temper configure --resume --prepare: %w", id, err))
 			}
 			prepared = append(prepared, id)
@@ -199,20 +203,29 @@ func (c Command) Update(ctx context.Context, args []string, out, diagnostics io.
 	}
 	fmt.Fprintf(out, "Catalog of %s\n", view.Document.Date)
 	for _, r := range results {
-		line := fmt.Sprintf("PRESET %s %s", r.ID, r.Status)
+		status := map[string]string{"updated": "updated", "unchanged": "no change", "kept": "kept as it was"}[r.Status]
 		if r.Reason != "" {
-			line += " (" + r.Reason + ")"
+			status += " (" + r.Reason + ")"
 		}
-		fmt.Fprintln(out, line)
+		fmt.Fprintf(out, "%s: %s\n", r.ID, status)
 		for _, change := range r.Changes {
-			fmt.Fprintln(out, "  "+change)
+			fmt.Fprintln(out, "  - "+change)
 		}
 		if r.Note != "" {
 			fmt.Fprintln(out, "  "+r.Note)
 		}
 	}
 	printResolutions(out, resolutions)
-	fmt.Fprintf(out, "RESULT update changed=%t dry_run=%t revision=%s\n", changed, *dry, nextRev)
+	switch {
+	case *dry:
+		fmt.Fprintln(out, "Dry run: nothing was saved or installed.")
+	case len(prepared) > 0:
+		fmt.Fprintf(out, "Installed %s.\n", count(len(prepared), "preset", "presets"))
+	case changed:
+		fmt.Fprintln(out, "Saved. To install the new files, run: temper configure --resume --prepare")
+	default:
+		fmt.Fprintln(out, "Everything is up to date.")
+	}
 	return 0
 }
 
@@ -234,12 +247,12 @@ func (c Command) rebuildSoftware(ctx context.Context, saved catalog.Lock, newest
 // printChanges shows one saved preset's old → new, as temper update does.
 func printChanges(out io.Writer, id string, old, next catalog.Lock) {
 	if sameLock(old, next) {
-		fmt.Fprintf(out, "PRESET %s unchanged\n", id)
+		fmt.Fprintf(out, "%s: no change\n", id)
 		return
 	}
-	fmt.Fprintf(out, "PRESET %s updated\n", id)
+	fmt.Fprintf(out, "%s: updated\n", id)
 	for _, change := range setup.Changes(old, next) {
-		fmt.Fprintln(out, "  "+change)
+		fmt.Fprintln(out, "  - "+change)
 	}
 }
 
@@ -254,9 +267,9 @@ func sameLock(a, b catalog.Lock) bool {
 func printResolutions(out io.Writer, resolutions map[string]catalog.Resolution) {
 	for _, r := range sortedResolutions(resolutions) {
 		if r.Reason != "" {
-			fmt.Fprintf(out, "SOFTWARE %s stable %s (latest unavailable: %s)\n", r.Package, r.Used, r.Reason)
+			fmt.Fprintf(out, "%s: using the tested release %s; the latest is unavailable (%s)\n", r.Package, r.Used, r.Reason)
 		} else {
-			fmt.Fprintf(out, "SOFTWARE %s latest %s\n", r.Package, r.Used)
+			fmt.Fprintf(out, "%s: using the latest release %s\n", r.Package, r.Used)
 		}
 	}
 }

@@ -121,8 +121,9 @@ func Installed(ctx context.Context, root string, set Installation) (bool, error)
 
 // Prepare installs and checks each exact software closure, then materializes
 // every layout's model files and Splash conversion. It starts no router or
-// inference engine. Already verified closures and sets are reused.
-func Prepare(ctx context.Context, root string, lock catalog.Lock, effects Effects, out io.Writer) error {
+// inference engine. Already verified closures and sets are reused. Progress
+// is one plain line per step; the software report stays with temper software.
+func Prepare(ctx context.Context, root string, lock catalog.Lock, effects Effects, progress io.Writer) error {
 	p, err := lock.Projections()
 	if err != nil {
 		return err
@@ -132,19 +133,31 @@ func Prepare(ctx context.Context, root string, lock catalog.Lock, effects Effect
 		return err
 	}
 	for _, set := range sets {
-		if err := effects.Software.Install(ctx, root, set.ID, set.Lock, out); err != nil {
+		name := set.Package
+		if unit, ok := set.Lock.Units[set.Lock.Selections[set.Package].RootUnit]; ok && unit.Version != "" {
+			name += " " + unit.Version
+		}
+		if installed, err := Installed(ctx, root, set); err == nil && installed {
+			fmt.Fprintf(progress, "%s is already installed\n", name)
+		} else {
+			fmt.Fprintf(progress, "Installing %s\n", name)
+		}
+		if err := effects.Software.Install(ctx, root, set.ID, set.Lock, io.Discard); err != nil {
 			return fmt.Errorf("install %s: %w", set.Package, err)
 		}
-		if err := effects.Software.Check(ctx, root, set.ID, set.Lock, out); err != nil {
+		if err := effects.Software.Check(ctx, root, set.ID, set.Lock, io.Discard); err != nil {
 			return fmt.Errorf("check %s: %w", set.Package, err)
 		}
 	}
+	name := DisplayName(lock)
 	for _, id := range slices.Sorted(maps.Keys(p.Manifest.Layouts)) {
 		layout := p.Manifest.Layouts[id]
+		fmt.Fprintf(progress, "Getting model files for %s\n", name)
 		if err := effects.Fetch(ctx, root, id, p.Manifest, p.Artifacts); err != nil {
 			return fmt.Errorf("fetch %s: %w", id, err)
 		}
 		if layout.Splash != nil {
+			fmt.Fprintf(progress, "Preparing the Splash files for %s\n", name)
 			material, err := splash.New(root, id, layout, p.Artifacts.Entries[id], p.Manifest.Patches)
 			if err != nil {
 				return err
@@ -159,6 +172,14 @@ func Prepare(ctx context.Context, root string, lock catalog.Lock, effects Effect
 		}
 	}
 	return nil
+}
+
+// DisplayName is the preset's catalog name, or its ID when it has none.
+func DisplayName(lock catalog.Lock) string {
+	if p, ok := lock.Records.Presets[lock.Preset]; ok && p.Presentation.DisplayName != "" {
+		return p.Presentation.DisplayName
+	}
+	return lock.Preset
 }
 
 // Verify reads exact installed software and artifact receipts before activation.

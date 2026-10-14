@@ -46,22 +46,22 @@ type Input struct {
 
 // Prediction is the fully explained result of one wall-model calculation.
 type Prediction struct {
-	Status               string
-	Reason               string
-	Holder               string
-	PhysicalMiB          int64
-	DeviceMiB            int64
-	Utilization          float64
-	AllocationMiB        int64
-	HolderMinimumMiB     int64
-	CoTenantsMiB         int64
-	OSFloorMiB           int64
-	RequiredMiB          int64
-	WiredLimitMiB        int64
-	SpareMiB             int64
-	WiredSource          string
-	SuggestedUtilization float64
-	HasSuggestion        bool
+	Status               string  `json:"status"`
+	Reason               string  `json:"reason"`
+	Holder               string  `json:"holder"`
+	PhysicalMiB          int64   `json:"physical_mib"`
+	DeviceMiB            int64   `json:"device_mib"`
+	Utilization          float64 `json:"utilization"`
+	AllocationMiB        int64   `json:"allocation_mib"`
+	HolderMinimumMiB     int64   `json:"holder_minimum_mib"`
+	CoTenantsMiB         int64   `json:"co_tenants_mib"`
+	OSFloorMiB           int64   `json:"os_floor_mib"`
+	RequiredMiB          int64   `json:"required_mib"`
+	WiredLimitMiB        int64   `json:"wired_limit_mib"`
+	SpareMiB             int64   `json:"spare_mib"`
+	WiredSource          string  `json:"wired_source"`
+	SuggestedUtilization float64 `json:"suggested_utilization"`
+	HasSuggestion        bool    `json:"has_suggestion"`
 }
 
 // Predict applies the bootstrap wall model to already-read, typed facts.

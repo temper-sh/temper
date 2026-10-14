@@ -147,8 +147,29 @@ func TestConfigureSavedPresetShowsOldToNew(t *testing.T) {
 		return catalog.View{Document: doc}, nil
 	}
 	code, output, diagnostics := configureRun(c, "--root", root, "--preset", extraction, "--revision", rev)
-	if code != 0 || !strings.Contains(output, "PRESET "+extraction+" updated\n  router llama-swap v262 → v263\n") {
+	if code != 0 || !strings.Contains(output, extraction+": updated\n  - router llama-swap v262 → v263\n") {
 		t.Fatalf("%d %s %s", code, output, diagnostics)
+	}
+}
+
+func TestConfigureJSONIsOneDocument(t *testing.T) {
+	c := fixtureCommand(t)
+	root := filepath.Join(t.TempDir(), "root")
+	if code, _, err := configureRun(c, "--root", root, "--preset", extraction); code != 0 {
+		t.Fatal(err)
+	}
+	_, rev, _ := setup.ReadConfiguration(root)
+	doc := newerRouter(t)
+	c.Catalog = func(context.Context, string, string, bool) (catalog.View, error) {
+		return catalog.View{Document: doc}, nil
+	}
+	// The edit has old → new changes to report; with --json they must not
+	// reach stdout ahead of the document.
+	code, output, diagnostics := configureRun(c, "--root", root, "--preset", extraction, "--revision", rev, "--json")
+	var result map[string]any
+	decoder := json.NewDecoder(strings.NewReader(output))
+	if code != 0 || decoder.Decode(&result) != nil || result["schema"] != "temper-configuration-result/v1" || decoder.More() {
+		t.Fatalf("stdout is not exactly one JSON document: %d %q %s", code, output, diagnostics)
 	}
 }
 

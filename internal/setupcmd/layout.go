@@ -50,7 +50,7 @@ func (c Command) Layout(ctx context.Context, args []string, out, diagnostics io.
 	rootArg := f.String("root", "", "configuration root (default ~/.temper)")
 	listen := f.String("listen", "127.0.0.1:8080", "loopback endpoint for an explicitly managed router")
 	dry := f.Bool("dry-run", false, "inspect proposed transition without effects")
-	_ = f.Bool("json", false, "emit structured status (the default)")
+	jsonOutput := f.Bool("json", false, "print one JSON document for scripts")
 	if err := f.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
@@ -153,11 +153,32 @@ func (c Command) Layout(ctx context.Context, args []string, out, diagnostics io.
 			job = state.Desired
 		}
 	}
+	report := func(status managed.Status, before *managed.Job) {
+		if *jsonOutput {
+			_ = writeJSON(out, status)
+			return
+		}
+		layout := id
+		if layout == "" {
+			if job := status.State.Current; job != nil {
+				layout = job.Layout
+			} else if job := status.State.Desired; job != nil {
+				layout = job.Layout
+			}
+		}
+		saved, defaultPreset := savedLayouts(root, layout)
+		renderLayout(out, layoutReport{Operation: operation, Dry: *dry, Before: before, Status: status, Default: defaultPreset, Saved: saved})
+	}
 	if job == nil {
 		if operation == "status" || operation == "stop" {
-			return c.configurationOutput(out, diagnostics, managed.Status{State: state})
+			report(managed.Status{State: state}, nil)
+			return 0
 		}
 		return fail(diagnostics, errors.New("no managed job"))
+	}
+	before := state.Current
+	if before == nil {
+		before = state.Desired
 	}
 	controller := managed.Launchd{Root: root, Label: job.Label, Listen: job.Listen}
 	if state.Current != nil {
@@ -169,7 +190,7 @@ func (c Command) Layout(ctx context.Context, args []string, out, diagnostics io.
 	}
 	if operation == "status" {
 		status, err := managed.Inspect(ctx, store, controller)
-		_ = c.configurationOutput(out, diagnostics, status)
+		report(status, before)
 		if err != nil {
 			return fail(diagnostics, err)
 		}
@@ -213,7 +234,7 @@ func (c Command) Layout(ctx context.Context, args []string, out, diagnostics io.
 		}
 	}
 	status, err := managed.Reconcile(ctx, store, controller, desired, *dry)
-	_ = c.configurationOutput(out, diagnostics, status)
+	report(status, before)
 	if err != nil {
 		return fail(diagnostics, err)
 	}
@@ -224,7 +245,7 @@ func helpFlag(arg string) bool { return arg == "help" || arg == "--help" || arg 
 
 func layoutUsage(w io.Writer) {
 	fmt.Fprintln(w, `usage:
-  temper layout activate ID [--root PATH] [--listen 127.0.0.1:PORT] [--dry-run]
-  temper layout status [--root PATH]
-  temper layout stop [--root PATH] [--dry-run]`)
+  temper layout activate ID [--root PATH] [--listen 127.0.0.1:PORT] [--dry-run] [--json]
+  temper layout status [--root PATH] [--json]
+  temper layout stop [--root PATH] [--dry-run] [--json]`)
 }

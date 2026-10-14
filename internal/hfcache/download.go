@@ -44,7 +44,8 @@ func Download(ctx context.Context, e Entry, cacheRoot string, diagnostics io.Wri
 	}
 	command := exec.CommandContext(ctx, path, args...)
 	command.Env = append(os.Environ(), "HF_HUB_DISABLE_TELEMETRY=1", "HF_HUB_DISABLE_UPDATE_CHECK=1")
-	// The cache lookup supplies the result. Do not parse progress or path output.
+	// The cache lookup supplies the result. Do not parse progress or path
+	// output; hf shows its own download progress on the diagnostics stream.
 	command.Stdout = io.Discard
 	command.Stderr = diagnostics
 	if err := runDownload(command); err != nil {
@@ -67,5 +68,5 @@ func downloadCommand(e Entry, cacheRoot string, lookPath func(string) (string, e
 	if err != nil {
 		return "", nil, err
 	}
-	return path, []string{"download", "--revision", e.Revision, "--cache-dir", cacheRoot, "--quiet", "--", e.Repo, e.Name}, nil
+	return path, []string{"download", "--revision", e.Revision, "--cache-dir", cacheRoot, "--", e.Repo, e.Name}, nil
 }

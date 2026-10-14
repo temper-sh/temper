@@ -71,7 +71,11 @@ func (c Command) Configure(ctx context.Context, args []string, in io.Reader, out
 		if len(selected)+len(removed)+len(contexts)+len(computes) > 0 || *file != "" || *prepare || *resume || *customID != "" || *name != "" {
 			return fail(diagnostics, errors.New("--show cannot be combined with edits"))
 		}
-		return c.configurationOutput(out, diagnostics, map[string]any{"revision": rev, "configuration": current})
+		if *jsonOutput {
+			return c.configurationOutput(out, diagnostics, map[string]any{"revision": rev, "configuration": current})
+		}
+		renderConfiguration(out, current, rev)
+		return 0
 	}
 	scripted := len(selected)+len(removed) > 0 || *file != ""
 	if *resume && scripted {
@@ -180,7 +184,9 @@ func (c Command) Configure(ctx context.Context, args []string, in io.Reader, out
 				if err != nil {
 					return fail(diagnostics, fmt.Errorf("preset %s: %w", id, err))
 				}
-				printChanges(out, id, saved.Lock, next)
+				if !*jsonOutput {
+					printChanges(out, id, saved.Lock, next)
+				}
 				saved.Lock = next
 				candidate.Presets[id] = saved
 			}
@@ -270,7 +276,7 @@ func (c Command) Configure(ctx context.Context, args []string, in io.Reader, out
 				return fail(diagnostics, err)
 			}
 			if decision.Action == "cancel" {
-				fmt.Fprintln(out, "Configuration canceled.")
+				fmt.Fprintln(out, "Canceled. Nothing was saved.")
 				return 0
 			}
 			candidate = decision.Configuration
@@ -335,7 +341,7 @@ func (c Command) Configure(ctx context.Context, args []string, in io.Reader, out
 				if *name != "" {
 					display = *name
 				}
-				if saved, ok := candidate.Presets[key]; ok {
+				if saved, ok := candidate.Presets[key]; ok && !*jsonOutput {
 					printChanges(out, key, saved.Lock, lock)
 				}
 				candidate.Presets[key] = setup.Preset{Name: display, Choices: choices, Lock: lock}
@@ -366,8 +372,12 @@ func (c Command) Configure(ctx context.Context, args []string, in io.Reader, out
 			ids = append(ids, id)
 		}
 		slices.Sort(ids)
+		progress := diagnostics
+		if *jsonOutput {
+			progress = io.Discard
+		}
 		for _, id := range ids {
-			if err := preset.Prepare(ctx, root, candidate.Presets[id].Lock, c.Effects, diagnostics); err != nil {
+			if err := preset.Prepare(ctx, root, candidate.Presets[id].Lock, c.Effects, progress); err != nil {
 				return fail(diagnostics, fmt.Errorf("configuration saved; preset %s preparation incomplete, resume with --resume --prepare: %w", id, err))
 			}
 			prepared = append(prepared, id)
@@ -376,7 +386,16 @@ func (c Command) Configure(ctx context.Context, args []string, in io.Reader, out
 	if *jsonOutput {
 		return c.configurationOutput(out, diagnostics, map[string]any{"schema": "temper-configuration-result/v1", "revision": nextRev, "changed": changed, "dry_run": *dry, "plan": plan, "prepared": prepared, "software": sortedResolutions(resolutions)})
 	}
-	fmt.Fprintf(out, "RESULT %s changed=%t dry_run=%t revision=%s\n", c.verb(), changed, *dry, nextRev)
+	switch {
+	case *dry:
+		fmt.Fprintln(out, "Dry run: nothing was saved or installed.")
+	case len(prepared) > 0:
+		fmt.Fprintf(out, "Installed %s.\n", count(len(prepared), "preset", "presets"))
+	case changed:
+		fmt.Fprintln(out, "Saved your choices. To install them, run: temper configure --resume --prepare")
+	default:
+		fmt.Fprintln(out, "Nothing changed.")
+	}
 	return 0
 }
 

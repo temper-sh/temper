@@ -37,7 +37,7 @@ func TestDownloadUsesOfficialHFWithExactScope(t *testing.T) {
 				}
 				return
 			}
-			want := []string{"download", "--revision", e.Revision, "--cache-dir", cache, "--quiet", "--", e.Repo, e.Name}
+			want := []string{"download", "--revision", e.Revision, "--cache-dir", cache, "--", e.Repo, e.Name}
 			if err != nil || path != "/tools/"+installed || !reflect.DeepEqual(args, want) {
 				t.Fatalf("command: %q %q %v", path, args, err)
 			}

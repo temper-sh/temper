@@ -51,7 +51,7 @@ func TestLatestFallsBackToStablePerItemAndSaysWhy(t *testing.T) {
 	c.Resolve = latestResolver(reader)
 	stable := guidedCatalog(t).Engines[guidedCatalog(t).Presets[compactLayout].Engine].Supply.Release.Version
 	code, output, diagnostics := configureRun(c, "--root", root, "--preset", compactLayout, "--software", "latest", "--dry-run")
-	if code != 0 || !strings.Contains(diagnostics, "SOFTWARE llama-cpp stable "+stable+" (latest unavailable:") || !strings.Contains(diagnostics, "SOFTWARE llama-swap latest v257") {
+	if code != 0 || !strings.Contains(diagnostics, "llama-cpp: using the tested release "+stable+"; the latest is unavailable (") || !strings.Contains(diagnostics, "llama-swap: using the latest release v257") {
 		t.Fatalf("fallback was not visible: code=%d %s %s", code, output, diagnostics)
 	}
 	if _, err := os.Lstat(root); !os.IsNotExist(err) {
