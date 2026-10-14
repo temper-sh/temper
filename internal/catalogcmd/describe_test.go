@@ -55,7 +55,7 @@ func TestDescriptionEditIsAtomicSecondRunCleanAndPreservesExecution(t *testing.T
 			const artifact = "qwen3.5-4b-q4km-off"
 			const custom = "My everyday assistant — I check its dates and quotations."
 			args := []string{"--catalog", path, "--preset", artifact, "--description", custom, "--assessment-url", "https://example.test/my-notes"}
-			if code, out, diag := describeRun(context.Background(), append(args, "--dry-run")...); code != 0 || !strings.Contains(out, "would-write") || !strings.Contains(out, custom) {
+			if code, out, diag := describeRun(context.Background(), append(args, "--dry-run")...); code != 0 || !strings.Contains(out, "Dry run: would update") || !strings.Contains(out, custom) {
 				t.Fatalf("dry edit: %d %s %s", code, out, diag)
 			}
 			raw, _ := os.ReadFile(path)
@@ -63,7 +63,7 @@ func TestDescriptionEditIsAtomicSecondRunCleanAndPreservesExecution(t *testing.T
 			if !bytes.Equal(raw, original) || len(entries) != 1 {
 				t.Fatal("dry edit wrote a file or changed the catalog")
 			}
-			if code, out, diag := describeRun(context.Background(), args...); code != 0 || !strings.Contains(out, "written") {
+			if code, out, diag := describeRun(context.Background(), args...); code != 0 || !strings.Contains(out, "Updated the description") {
 				t.Fatalf("edit: %d %s %s", code, out, diag)
 			}
 			raw, err = os.ReadFile(path)
@@ -120,14 +120,14 @@ func TestDescriptionEditIsAtomicSecondRunCleanAndPreservesExecution(t *testing.T
 			if !reflect.DeepEqual(restored, originalLock) {
 				t.Fatal("edit changed unrelated catalog facts")
 			}
-			if code, out, diag := describeRun(context.Background(), args...); code != 0 || !strings.Contains(out, "unchanged") {
+			if code, out, diag := describeRun(context.Background(), args...); code != 0 || !strings.Contains(out, "is unchanged") {
 				t.Fatalf("replay: %d %s %s", code, out, diag)
 			}
 			again, _ := os.ReadFile(path)
 			if !bytes.Equal(raw, again) {
 				t.Fatal("unchanged edit rewrote bytes")
 			}
-			if code, out, diag := describeRun(context.Background(), "--catalog", path, "--preset", artifact, "--description", "New automated suggestion", "--assessment-url", "https://example.test/new", "--if-empty"); code != 0 || !strings.Contains(out, "unchanged") {
+			if code, out, diag := describeRun(context.Background(), "--catalog", path, "--preset", artifact, "--description", "New automated suggestion", "--assessment-url", "https://example.test/new", "--if-empty"); code != 0 || !strings.Contains(out, "is unchanged") {
 				t.Fatalf("refresh: %d %s %s", code, out, diag)
 			}
 			again, _ = os.ReadFile(path)

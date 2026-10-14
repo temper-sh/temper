@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"os"
 
@@ -21,6 +22,7 @@ func configureExecution(ctx context.Context, args []string, stdout, stderr io.Wr
 	compute := f.String("compute", "", "cpu or gpu (default: retain selected device)")
 	out := f.String("out", "", "new execution lock path")
 	dry := f.Bool("dry-run", false, "validate without writes")
+	jsonOutput := f.Bool("json", false, "print one JSON document for scripts")
 	if err := f.Parse(args); err != nil {
 		return parseFailure(err)
 	}
@@ -66,5 +68,16 @@ func configureExecution(ctx context.Context, args []string, stdout, stderr io.Wr
 	if err != nil {
 		return failed(stderr, err)
 	}
-	return encode(stdout, stderr, map[string]any{"schema": "temper-execution-configuration/v1", "preset": *id, "settings": settings, "path": *out, "changed": changed, "dry_run": *dry})
+	if *jsonOutput {
+		return encode(stdout, stderr, map[string]any{"schema": "temper-execution-configuration/v1", "preset": *id, "settings": settings, "path": *out, "changed": changed, "dry_run": *dry})
+	}
+	switch {
+	case !changed:
+		fmt.Fprintf(stdout, "%s is already up to date.\n", *out)
+	case *dry:
+		fmt.Fprintf(stdout, "Dry run: would write the configured lock for %s to %s.\n", *id, *out)
+	default:
+		fmt.Fprintf(stdout, "Wrote the configured lock for %s to %s.\n", *id, *out)
+	}
+	return 0
 }

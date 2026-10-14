@@ -65,7 +65,7 @@ func TestExecutionComputeCLIConfiguresAndInspectsExactPlacement(t *testing.T) {
 		t.Fatal("compute configuration lost explicit settings")
 	}
 	var out, diagnostic bytes.Buffer
-	if catalogcmd.Runtime(context.Background(), []string{"inspect", "--lock", output}, &out, &diagnostic, catalogcmd.Effects{}) != 0 {
+	if catalogcmd.Runtime(context.Background(), []string{"inspect", "--lock", output, "--json"}, &out, &diagnostic, catalogcmd.Effects{}) != 0 {
 		t.Fatal(diagnostic.String())
 	}
 	if !strings.Contains(out.String(), `"compute": "cpu"`) {
@@ -81,7 +81,7 @@ func TestPresetConfigurationPreservesFrozenMaterialsAndContextIdentity(t *testin
 	before, _ := os.ReadFile(source)
 	base := readExecution(t, source)
 	args := []string{"configure", "--lock", source, "--preset", "splash-q4", "--context", "32768",
-		"--max-output", "4096", "--max-memory", "38654705664", "--out", output}
+		"--max-output", "4096", "--max-memory", "38654705664", "--out", output, "--json"}
 	run := func(args []string) string {
 		t.Helper()
 		var out, diagnostics bytes.Buffer

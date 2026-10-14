@@ -107,7 +107,15 @@ func compile(ctx context.Context, args []string, stdout, stderr io.Writer, reade
 	if *jsonOutput {
 		return encode(stdout, stderr, map[string]any{"schema": "temper-catalog-compilation/v1", "preset": *preset, "profile_min_memory_gib": l.Records.Presets[*preset].Profiles[0].MinMemoryGiB, "path": *out, "changed": changed, "dry_run": *dry})
 	}
-	fmt.Fprintf(stdout, "RESULT catalog-compile %s preset=%s profile=%dgib path=%q\n", status(changed, *dry), *preset, l.Records.Presets[*preset].Profiles[0].MinMemoryGiB, *out)
+	profile := l.Records.Presets[*preset].Profiles[0].MinMemoryGiB
+	switch {
+	case !changed:
+		fmt.Fprintf(stdout, "%s is already up to date (%s, profile for %d GiB Macs).\n", *out, *preset, profile)
+	case *dry:
+		fmt.Fprintf(stdout, "Dry run: would write the execution lock for %s (profile for %d GiB Macs) to %s.\n", *preset, profile, *out)
+	default:
+		fmt.Fprintf(stdout, "Wrote the execution lock for %s (profile for %d GiB Macs) to %s.\n", *preset, profile, *out)
+	}
 	return 0
 }
 
@@ -227,15 +235,6 @@ func sortedKeys[V any](m map[string]V) []string {
 	}
 	sort.Strings(keys)
 	return keys
-}
-func status(changed, dry bool) string {
-	if !changed {
-		return "unchanged"
-	}
-	if dry {
-		return "would-write"
-	}
-	return "written"
 }
 
 // parseFailure is the exit code for a flag error; asking for help succeeds.

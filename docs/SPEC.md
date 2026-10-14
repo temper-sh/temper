@@ -103,8 +103,8 @@ model, tool, or harness integration.
    purpose, cost, effects, and cleanup, then opts into a named package revision. Their
    local evidence may be shared with Labs for review; a run never becomes a
    catalog row by itself.
-3. **The AI agent driving either of the above**: first-class. Stable
-   RESULT lines, machine-parseable outcomes, an interpretive runbook
+3. **The AI agent driving either of the above**: first-class. One JSON
+   document per command with `--json`, machine-parseable outcomes, an interpretive runbook
    (AGENT.md's evidence model), consent gates that stay human, and a
    `conclude` channel so its analysis lands in the artifact, not a chat
    log.

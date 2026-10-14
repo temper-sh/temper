@@ -75,7 +75,7 @@ func runVerifyPublication(arguments []string, stdout, stderr io.Writer, trust pu
 			return 1
 		}
 	}
-	fmt.Fprintf(stdout, "RESULT catalog-publication verified channel=%s sequence=%d sha256=%s presets=%d\n", distribution.Channel, snapshot.Sequence, snapshot.SHA256, len(snapshot.Document.Presets))
+	fmt.Fprintf(stdout, "The %s channel publication is verified: sequence %d, %d presets (sha256 %s).\n", distribution.Channel, snapshot.Sequence, len(snapshot.Document.Presets), snapshot.SHA256)
 	return 0
 }
 
@@ -129,12 +129,12 @@ func runAvailability(arguments []string, stdout, stderr io.Writer) int {
 			presets++
 		}
 	}
-	fmt.Fprintf(stdout, "RESULT catalog-availability temper=%s presets=%d available=%d\n", *version, presets, len(available))
+	fmt.Fprintf(stdout, "Temper %s can use %d of %d presets.\n", *version, len(available), presets)
 	for _, id := range available {
-		fmt.Fprintf(stdout, "PRESET %s available\n", id)
+		fmt.Fprintf(stdout, "  available: %s\n", id)
 	}
 	for _, u := range unavailable {
-		fmt.Fprintf(stdout, "UNAVAILABLE %s %s reason=%q\n", u.Kind, u.ID, u.Reason)
+		fmt.Fprintf(stdout, "  unavailable %s %s: %s\n", u.Kind, u.ID, u.Reason)
 	}
 	return 0
 }

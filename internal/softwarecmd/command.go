@@ -16,7 +16,6 @@ import (
 	"github.com/temper-sh/temper/internal/software/adapter"
 	checkverb "github.com/temper-sh/temper/internal/software/check"
 	installverb "github.com/temper-sh/temper/internal/software/install"
-	"github.com/temper-sh/temper/internal/software/installplan"
 	softwarelock "github.com/temper-sh/temper/internal/software/lockfile"
 	"github.com/temper-sh/temper/internal/software/lockstore"
 	removeverb "github.com/temper-sh/temper/internal/software/remove"
@@ -72,6 +71,7 @@ func (c Command) runInstall(ctx context.Context, arguments []string, stdout, std
 	var requiredReceipts pathList
 	flags.Var(&requiredReceipts, "require-receipt", "canonical required base receipt (repeatable)")
 	dryRun := flags.Bool("dry-run", false, "inspect and plan without writing or invoking an installer")
+	jsonOutput := flags.Bool("json", false, "print the full report as one JSON document")
 	flags.Usage = func() { installUsage(stderr) }
 	if err := flags.Parse(arguments); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -87,40 +87,45 @@ func (c Command) runInstall(ctx context.Context, arguments []string, stdout, std
 		fmt.Fprintf(stderr, "temper software install: %v\n", err)
 		return 1
 	}
-	if err := c.install(ctx, installverb.Options{
+	result, err := c.install(ctx, installverb.Options{
 		Lock: lock, Root: *root, Installation: *installation,
 		RequiredReceiptPaths: append([]string(nil), requiredReceipts...), DryRun: *dryRun,
-	}, stdout); err != nil {
+	})
+	if err != nil {
 		fmt.Fprintf(stderr, "temper software install: %v\n", err)
 		return 1
+	}
+	if *jsonOutput {
+		_ = writeJSON(stdout, newInstallReport(result))
+	} else {
+		renderInstall(stdout, result)
 	}
 	return 0
 }
 
 // Install applies one exact lock to a named installation and writes the
-// same report lines as the command.
+// command's summary.
 func (c Command) Install(ctx context.Context, root, installation string, lock softwarelock.Document, out io.Writer) error {
-	return c.install(ctx, installverb.Options{Lock: lock, Root: root, Installation: installation}, out)
+	result, err := c.install(ctx, installverb.Options{Lock: lock, Root: root, Installation: installation})
+	if err == nil {
+		renderInstall(out, result)
+	}
+	return err
 }
 
-func (c Command) install(ctx context.Context, options installverb.Options, out io.Writer) error {
+func (c Command) install(ctx context.Context, options installverb.Options) (installverb.Result, error) {
 	if err := datadir.Open(options.Root, !options.DryRun); err != nil {
-		return err
+		return installverb.Result{}, err
 	}
 	target, err := c.detectTarget(ctx)
 	if err != nil {
-		return fmt.Errorf("detect host target: %w", err)
+		return installverb.Result{}, fmt.Errorf("detect host target: %w", err)
 	}
 	options.HostTarget = target
 	if options.InvocationID, err = c.newInvocationID(); err != nil {
-		return fmt.Errorf("create invocation identity: %w", err)
+		return installverb.Result{}, fmt.Errorf("create invocation identity: %w", err)
 	}
-	result, err := installverb.Run(ctx, options, c.adapters)
-	if err != nil {
-		return err
-	}
-	renderInstall(out, result)
-	return nil
+	return installverb.Run(ctx, options, c.adapters)
 }
 
 func (c Command) runCheck(ctx context.Context, arguments []string, stdout, stderr io.Writer) int {
@@ -131,6 +136,7 @@ func (c Command) runCheck(ctx context.Context, arguments []string, stdout, stder
 	lockPath := flags.String("lock", "software.lock.yaml", "path to the exact software lock")
 	var requiredReceipts pathList
 	flags.Var(&requiredReceipts, "require-receipt", "canonical required base receipt (repeatable)")
+	jsonOutput := flags.Bool("json", false, "print the full report as one JSON document")
 	flags.Usage = func() { checkUsage(stderr) }
 	if err := flags.Parse(arguments); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -146,15 +152,20 @@ func (c Command) runCheck(ctx context.Context, arguments []string, stdout, stder
 		fmt.Fprintf(stderr, "temper software check: %v\n", err)
 		return 1
 	}
-	exact, err := c.check(ctx, checkverb.Options{
+	result, err := c.check(ctx, checkverb.Options{
 		Lock: lock, Root: *root, Installation: *installation,
 		RequiredReceiptPaths: append([]string(nil), requiredReceipts...),
-	}, stdout)
+	})
 	if err != nil {
 		fmt.Fprintf(stderr, "temper software check: %v\n", err)
 		return 1
 	}
-	if !exact {
+	if *jsonOutput {
+		_ = writeJSON(stdout, newCheckReport(result))
+	} else {
+		renderCheck(stdout, result)
+	}
+	if !result.Exact() {
 		return 1
 	}
 	return 0
@@ -164,30 +175,29 @@ func (c Command) runCheck(ctx context.Context, arguments []string, stdout, stder
 var ErrNotExact = errors.New("installed software differs from its exact lock")
 
 // Check audits one named installation against its exact lock and writes the
-// same report lines as the command. Findings return ErrNotExact.
+// command's summary. Findings return ErrNotExact.
 func (c Command) Check(ctx context.Context, root, installation string, lock softwarelock.Document, out io.Writer) error {
-	exact, err := c.check(ctx, checkverb.Options{Lock: lock, Root: root, Installation: installation}, out)
-	if err == nil && !exact {
-		err = ErrNotExact
+	result, err := c.check(ctx, checkverb.Options{Lock: lock, Root: root, Installation: installation})
+	if err != nil {
+		return err
 	}
-	return err
+	renderCheck(out, result)
+	if !result.Exact() {
+		return ErrNotExact
+	}
+	return nil
 }
 
-func (c Command) check(ctx context.Context, options checkverb.Options, out io.Writer) (bool, error) {
+func (c Command) check(ctx context.Context, options checkverb.Options) (checkverb.Result, error) {
 	if err := datadir.Open(options.Root, false); err != nil {
-		return false, err
+		return checkverb.Result{}, err
 	}
 	target, err := c.detectTarget(ctx)
 	if err != nil {
-		return false, fmt.Errorf("detect host target: %w", err)
+		return checkverb.Result{}, fmt.Errorf("detect host target: %w", err)
 	}
 	options.HostTarget = target
-	result, err := checkverb.Run(ctx, options, c.adapters)
-	if err != nil {
-		return false, err
-	}
-	renderCheck(out, result)
-	return result.Exact(), nil
+	return checkverb.Run(ctx, options, c.adapters)
 }
 
 func (c Command) runRemove(ctx context.Context, arguments []string, stdout, stderr io.Writer) int {
@@ -197,6 +207,7 @@ func (c Command) runRemove(ctx context.Context, arguments []string, stdout, stde
 	installation := flags.String("installation", "", "stable installation identity")
 	lockPath := flags.String("lock", "software.lock.yaml", "path to the exact software lock")
 	dryRun := flags.Bool("dry-run", false, "inspect and plan without writing or invoking a remover")
+	jsonOutput := flags.Bool("json", false, "print the full report as one JSON document")
 	flags.Usage = func() { removeUsage(stderr) }
 	if err := flags.Parse(arguments); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -212,37 +223,42 @@ func (c Command) runRemove(ctx context.Context, arguments []string, stdout, stde
 		fmt.Fprintf(stderr, "temper software remove: %v\n", err)
 		return 1
 	}
-	if err := c.remove(ctx, removeverb.Options{Lock: lock, Root: *root, Installation: *installation, DryRun: *dryRun}, stdout); err != nil {
+	result, err := c.remove(ctx, removeverb.Options{Lock: lock, Root: *root, Installation: *installation, DryRun: *dryRun})
+	if err != nil {
 		fmt.Fprintf(stderr, "temper software remove: %v\n", err)
 		return 1
+	}
+	if *jsonOutput {
+		_ = writeJSON(stdout, newRemoveReport(result))
+	} else {
+		renderRemove(stdout, result)
 	}
 	return 0
 }
 
 // Remove releases one named installation of an exact lock and writes the
-// same report lines as the command.
+// command's summary.
 func (c Command) Remove(ctx context.Context, root, installation string, lock softwarelock.Document, out io.Writer) error {
-	return c.remove(ctx, removeverb.Options{Lock: lock, Root: root, Installation: installation}, out)
+	result, err := c.remove(ctx, removeverb.Options{Lock: lock, Root: root, Installation: installation})
+	if err == nil {
+		renderRemove(out, result)
+	}
+	return err
 }
 
-func (c Command) remove(ctx context.Context, options removeverb.Options, out io.Writer) error {
+func (c Command) remove(ctx context.Context, options removeverb.Options) (removeverb.Result, error) {
 	if err := datadir.Open(options.Root, !options.DryRun); err != nil {
-		return err
+		return removeverb.Result{}, err
 	}
 	target, err := c.detectTarget(ctx)
 	if err != nil {
-		return fmt.Errorf("detect host target: %w", err)
+		return removeverb.Result{}, fmt.Errorf("detect host target: %w", err)
 	}
 	options.HostTarget = target
 	if options.InvocationID, err = c.newInvocationID(); err != nil {
-		return fmt.Errorf("create invocation identity: %w", err)
+		return removeverb.Result{}, fmt.Errorf("create invocation identity: %w", err)
 	}
-	result, err := removeverb.Run(ctx, options, c.adapters)
-	if err != nil {
-		return err
-	}
-	renderRemove(out, result)
-	return nil
+	return removeverb.Run(ctx, options, c.adapters)
 }
 
 // readLock is the command edge's only file read: one regular lock file.
@@ -282,74 +298,6 @@ func validRequiredFlags(flags *flag.FlagSet, root, installation string, stderr i
 	return true
 }
 
-func renderInstall(writer io.Writer, result installverb.Result) {
-	status := changeStatus(result.Changed, result.DryRun)
-	fmt.Fprintf(writer, "RESULT software-install %s installation=%s packages=%d units=%d effects=%d claims=%d\n",
-		status, result.Installation, result.Packages, result.Units, result.Effects, result.Claims)
-	for _, row := range result.PackageRows {
-		fmt.Fprintf(writer, "PACKAGE %s method=%s adapter=%s root-unit=%s\n", row.ID, row.Method, row.Adapter, row.RootUnit)
-	}
-	for _, group := range result.Groups {
-		effect := "unchanged"
-		if group.ChangesProvider() {
-			effect = "install"
-			if group.EffectModel == installplan.EffectIsolated {
-				effect = "publish-isolated"
-			}
-		}
-		fmt.Fprintf(writer, "EFFECT %s %s units=%d\n", group.ID, effect, len(group.Units))
-		for _, unit := range group.Units {
-			claim := string(unit.ClaimAction)
-			if claim == "" {
-				claim = "none"
-			}
-			fmt.Fprintf(writer, "UNIT %s %s ownership=%s claim=%s\n", unit.ID, unit.Action, unit.Ownership, claim)
-		}
-	}
-}
-
-func renderCheck(writer io.Writer, result checkverb.Result) {
-	status := "findings"
-	if result.Exact() {
-		status = "exact"
-	}
-	receipt := valueOrNone(result.ReceiptSHA256)
-	fmt.Fprintf(writer, "RESULT software-check %s installation=%s packages=%d units=%d requirements=%d problems=%d receipt=%s\n",
-		status, result.Installation, result.Packages, len(result.Units), len(result.Requirements), result.ProblemCount(), receipt)
-	for _, requirement := range result.Requirements {
-		fmt.Fprintf(writer, "REQUIREMENT %s %s installation=%s receipt=%s\n",
-			requirement.SoftwareLockDigest, requirement.Status, valueOrNone(requirement.Installation), valueOrNone(requirement.ReceiptSHA256))
-	}
-	for _, unit := range result.Units {
-		fmt.Fprintf(writer, "UNIT %s %s adapter=%s scope=%s location=%s ownership=%s claim=%s\n",
-			unit.ID, unit.Status, unit.Adapter, unit.Scope, valueOrNone(unit.Location), unit.Ownership, valueOrNone(unit.Claim))
-	}
-	for _, finding := range result.Findings {
-		fmt.Fprintf(writer, "PROBLEM code=%s unit=%s requirement=%s detail=%q\n",
-			finding.Code, valueOrNone(finding.Unit), valueOrNone(finding.Requirement), finding.Detail)
-	}
-}
-
-func renderRemove(writer io.Writer, result removeverb.Result) {
-	status := changeStatus(result.Changed, result.DryRun)
-	fmt.Fprintf(writer, "RESULT software-remove %s installation=%s packages=%d units=%d effects=%d claims=%d\n",
-		status, result.Installation, result.Packages, result.Units, result.Effects, result.Claims)
-	for _, group := range result.Groups {
-		effect := "preserve"
-		if group.ChangesProvider() {
-			effect = "remove"
-		}
-		fmt.Fprintf(writer, "EFFECT %s %s units=%d\n", group.ID, effect, len(group.Units))
-		for _, unit := range group.Units {
-			claim := "none"
-			if unit.SharedClaim != "" {
-				claim = "release"
-			}
-			fmt.Fprintf(writer, "UNIT %s %s ownership=%s claim=%s\n", unit.ID, unit.Action, unit.Ownership, claim)
-		}
-	}
-}
-
 func changeStatus(changed, dryRun bool) string {
 	if !changed {
 		return "unchanged"
@@ -358,13 +306,6 @@ func changeStatus(changed, dryRun bool) string {
 		return "would-change"
 	}
 	return "changed"
-}
-
-func valueOrNone(value string) string {
-	if value == "" {
-		return "none"
-	}
-	return value
 }
 
 type pathList []string

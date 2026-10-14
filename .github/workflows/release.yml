@@ -212,13 +212,13 @@ jobs:
             --catalog internal/testfixture/testdata/catalog.json \
             --preset qwen3.8-27b-q4xl-mtp \
             --target darwin/arm64 --out "$inputs_root/execution.lock.json"
-          "$binary" execution inspect --lock "$inputs_root/execution.lock.json" \
+          "$binary" execution inspect --lock "$inputs_root/execution.lock.json" --json \
             > "$inputs_root/inspection.json"
           jq -e '.schema == "temper-execution/v1" and .preset == "qwen3.8-27b-q4xl-mtp"' \
             "$inputs_root/inspection.json"
           for operation in prepare render remove; do
             "$binary" execution "$operation" --lock "$inputs_root/execution.lock.json" \
-              --root "$inputs_root/installation" --installation release-smoke --dry-run \
+              --root "$inputs_root/installation" --installation release-smoke --dry-run --json \
               > "$inputs_root/$operation.json"
             jq -e --arg operation "$operation" \
               '.schema == "temper-execution-plan/v1" and .operation == $operation and .dry_run == true' \
@@ -234,7 +234,7 @@ jobs:
             --out "$inputs_root/configured.lock.json"
           "$binary" execution configure --lock "$inputs_root/execution.lock.json" \
             --preset qwen3.8-27b-q4xl-mtp --context 32768 --max-output 4096 \
-            --out "$inputs_root/configured.lock.json" > "$inputs_root/replay.json"
+            --out "$inputs_root/configured.lock.json" --json > "$inputs_root/replay.json"
           test "$(jq -r '.changed' "$inputs_root/replay.json")" = "false"
 
           # This binary must read what is published now: download the live

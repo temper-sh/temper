@@ -26,10 +26,10 @@ func Serve(ctx context.Context, runner Runner, options Options, supervision Supe
 		return err
 	}
 	invocation.Supervision = &supervision
-	fmt.Fprintf(stdout, "RESULT probe-serve starting installation=%s generation=%s listen=%s\n", options.Installation, options.Generation, options.Listen)
+	fmt.Fprintf(stdout, "Serving installation %s at http://%s/v1 (generation %s). Press Ctrl-C to stop.\n", options.Installation, options.Listen, options.Generation)
 	if err := runner.Run(ctx, invocation, stdout, stderr); err != nil {
 		return err
 	}
-	fmt.Fprintf(stdout, "RESULT probe-serve stopped installation=%s generation=%s listen=%s\n", options.Installation, options.Generation, options.Listen)
+	fmt.Fprintf(stdout, "Stopped serving installation %s.\n", options.Installation)
 	return nil
 }

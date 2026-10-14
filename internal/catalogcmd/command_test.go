@@ -97,7 +97,7 @@ func TestCompileSelectsTheProfileAMacOfThatMemoryUses(t *testing.T) {
 		args   []string
 		window int
 		label  string
-	}{{nil, 65536, "profile=32gib"}, {[]string{"--memory-gib", "48"}, 65536, "profile=32gib"}, {[]string{"--memory-gib", "64"}, 131072, "profile=64gib"}} {
+	}{{nil, 65536, "profile for 32 GiB Macs"}, {[]string{"--memory-gib", "48"}, 65536, "profile for 32 GiB Macs"}, {[]string{"--memory-gib", "64"}, 131072, "profile for 64 GiB Macs"}} {
 		out := filepath.Join(dir, fmt.Sprintf("lock-%d.json", len(tc.args)+tc.window))
 		args := append([]string{"catalog", "compile", "--catalog", source, "--preset", "qwen3.8-27b-q4xl-mtp", "--target", "darwin/arm64", "--out", out}, tc.args...)
 		if result := invoke(t, args...); !strings.Contains(result, tc.label) {

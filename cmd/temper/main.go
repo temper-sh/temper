@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -198,6 +199,10 @@ func runMachine(ctx context.Context, arguments []string, stdout, stderr io.Write
 		machineUsage(stdout)
 		return 0
 	}
+	jsonOutput := len(arguments) == 2 && arguments[1] == "--json"
+	if jsonOutput {
+		arguments = arguments[:1]
+	}
 	if len(arguments) != 1 || arguments[0] != "facts" {
 		if len(arguments) > 0 {
 			fmt.Fprintf(stderr, "temper machine: unknown command %q\n\n", strings.Join(arguments, " "))
@@ -214,15 +219,22 @@ func runMachine(ctx context.Context, arguments []string, stdout, stderr io.Write
 		fmt.Fprintf(stderr, "temper machine facts: %v\n", err)
 		return 1
 	}
-	data, err := machine.MarshalFacts(facts)
-	if err != nil {
+	if err := facts.Validate(); err != nil {
 		fmt.Fprintf(stderr, "temper machine facts: %v\n", err)
 		return 1
 	}
-	if _, err := stdout.Write(data); err != nil {
-		fmt.Fprintf(stderr, "temper machine facts: write output: %v\n", err)
-		return 1
+	if jsonOutput {
+		encoder := json.NewEncoder(stdout)
+		encoder.SetIndent("", "  ")
+		if err := encoder.Encode(facts); err != nil {
+			fmt.Fprintf(stderr, "temper machine facts: write output: %v\n", err)
+			return 1
+		}
+		return 0
 	}
+	fmt.Fprintf(stdout, "%s · %s · %d GiB memory\n", facts.HardwareModel, facts.Chip, facts.PhysicalMemoryBytes>>30)
+	fmt.Fprintf(stdout, "macOS %s (build %s)\n", facts.Target.DistributionVersion, facts.OSBuild)
+	fmt.Fprintf(stdout, "Metal can use %d MiB (%s); wired memory limit %d MiB (%s)\n", facts.MetalDeviceMemoryMiB, facts.MetalDeviceMemorySource, facts.WiredLimitMiB, facts.WiredLimitSource)
 	return 0
 }
 
@@ -283,7 +295,7 @@ func usage(writer io.Writer) {
 }
 
 func machineUsage(writer io.Writer) {
-	fmt.Fprintln(writer, "usage: temper machine facts")
+	fmt.Fprintln(writer, "usage: temper machine facts [--json]")
 }
 
 // readExecutingBinary reads this binary for the Field Kit binding identity.

@@ -95,7 +95,14 @@ func describe(ctx context.Context, args []string, out, diagnostics io.Writer) in
 			return failed(diagnostics, err)
 		}
 	}
-	fmt.Fprintf(out, "RESULT catalog-describe %s preset=%s path=%q\n", status(changed, *dry), id, *path)
+	switch {
+	case !changed:
+		fmt.Fprintf(out, "The description of %s is unchanged.\n", id)
+	case *dry:
+		fmt.Fprintf(out, "Dry run: would update the description of %s in %s.\n", id, *path)
+	default:
+		fmt.Fprintf(out, "Updated the description of %s in %s.\n", id, *path)
+	}
 	fmt.Fprintln(out, after.Presentation.Description)
 	if after.Presentation.AssessmentURL != "" {
 		fmt.Fprintln(out, "Assessment: "+after.Presentation.AssessmentURL)

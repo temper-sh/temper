@@ -114,8 +114,8 @@ packages are not. Adding a provider or transport therefore changes wiring at
 the composition root; it must not add provider switches to CLI verbs.
 
 `internal/softwarecmd` is the public command edge for the nested `temper
-software ...` surface. It owns flags, exit codes, stable `RESULT`/detail lines,
-and translation into the software use-case packages. The same install, check
+software ...` surface. It owns flags, exit codes, the plain summaries and
+`--json` reports, and translation into the software use-case packages. The same install, check
 and remove operations serve in-process callers (preset preparation and the
 execution commands) that already hold an exact lock; nothing re-enters the CLI.
 It does not own install, check, removal, or catalog policy.

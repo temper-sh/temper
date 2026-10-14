@@ -72,7 +72,7 @@ func TestExecutionPreparesRendersAndBindsExactMaterial(t *testing.T) {
 	parent := t.TempDir()
 	root := filepath.Join(parent, "root")
 	world := newExecutionWorld(t, parent)
-	base := []string{"--lock", world.lockPath, "--root", root, "--installation", "fixture"}
+	base := []string{"--lock", world.lockPath, "--root", root, "--installation", "fixture", "--json"}
 
 	var output, diagnostics bytes.Buffer
 	if code := catalogcmd.Runtime(context.Background(), append([]string{"prepare"}, base...), &output, &diagnostics, world.effects); code != 0 {
@@ -126,7 +126,8 @@ func TestExecutionPreparesRendersAndBindsExactMaterial(t *testing.T) {
 	if code := catalogcmd.Runtime(context.Background(), append([]string{"remove"}, base...), &output, &diagnostics, world.effects); code != 0 {
 		t.Fatalf("remove failed: %s", &diagnostics)
 	}
-	if !strings.HasPrefix(output.String(), "RESULT software-remove changed installation=fixture ") {
+	var removal map[string]any
+	if err := json.Unmarshal(output.Bytes(), &removal); err != nil || removal["schema"] != "temper-execution-removal/v1" || removal["installation"] != "fixture" {
 		t.Fatalf("remove output = %q", &output)
 	}
 }
@@ -205,9 +206,9 @@ func TestExecutionInspectionAndDryRunDoNotWriteOrInvokeEffects(t *testing.T) {
 		},
 	}
 	for _, args := range [][]string{
-		{"inspect", "--lock", lock},
-		{"paths", "--lock", lock, "--root", filepath.Join(parent, "installation"), "--installation", "fixture", "--dry-run"},
-		{"prepare", "--lock", lock, "--root", filepath.Join(parent, "installation"), "--installation", "fixture", "--dry-run"},
+		{"inspect", "--lock", lock, "--json"},
+		{"paths", "--lock", lock, "--root", filepath.Join(parent, "installation"), "--installation", "fixture", "--dry-run", "--json"},
+		{"prepare", "--lock", lock, "--root", filepath.Join(parent, "installation"), "--installation", "fixture", "--dry-run", "--json"},
 	} {
 		var out, diagnostics bytes.Buffer
 		code := catalogcmd.Runtime(context.Background(), args, &out, &diagnostics, effects)

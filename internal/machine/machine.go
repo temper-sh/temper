@@ -25,19 +25,19 @@ const (
 // carries exact host identity and the labeled memory values used by Temper's
 // wall model, but no serial number or other stable personal identifier.
 type Facts struct {
-	Schema                  string          `yaml:"schema"`
-	Target                  software.Target `yaml:"target"`
-	HardwareModel           string          `yaml:"hardware_model"`
-	Chip                    string          `yaml:"chip"`
-	OSBuild                 string          `yaml:"os_build"`
-	PhysicalMemoryBytes     int64           `yaml:"physical_memory_bytes"`
-	MetalDeviceMemoryMiB    int64           `yaml:"metal_device_memory_mib"`
-	MetalDeviceMemorySource string          `yaml:"metal_device_memory_source"`
-	WiredLimitMiB           int64           `yaml:"wired_limit_mib"`
-	WiredLimitSource        string          `yaml:"wired_limit_source"`
+	Schema                  string          `yaml:"schema" json:"schema"`
+	Target                  software.Target `yaml:"target" json:"target"`
+	HardwareModel           string          `yaml:"hardware_model" json:"hardware_model"`
+	Chip                    string          `yaml:"chip" json:"chip"`
+	OSBuild                 string          `yaml:"os_build" json:"os_build"`
+	PhysicalMemoryBytes     int64           `yaml:"physical_memory_bytes" json:"physical_memory_bytes"`
+	MetalDeviceMemoryMiB    int64           `yaml:"metal_device_memory_mib" json:"metal_device_memory_mib"`
+	MetalDeviceMemorySource string          `yaml:"metal_device_memory_source" json:"metal_device_memory_source"`
+	WiredLimitMiB           int64           `yaml:"wired_limit_mib" json:"wired_limit_mib"`
+	WiredLimitSource        string          `yaml:"wired_limit_source" json:"wired_limit_source"`
 	// The optional sysctl override is configuration, not the effective Metal
 	// budget. Zero means macOS chooses its default; nil means unavailable.
-	WiredLimitOverrideMiB *int64 `yaml:"wired_limit_override_mib,omitempty"`
+	WiredLimitOverrideMiB *int64 `yaml:"wired_limit_override_mib,omitempty" json:"wired_limit_override_mib,omitempty"`
 }
 
 // Validate enforces the canonical machine-facts schema without reading the

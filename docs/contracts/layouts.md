@@ -61,7 +61,8 @@ running generation. Stop and transitions refuse active requests or uncertain
 ownership. There is no force or automatic draining operation. Idle unload and
 later demand loading are normal; experiment `execution serve` retains fixed
 process lifetimes. All commands accept `--root`; mutating commands accept
-`--dry-run`. Service installation on the live stack remains an explicit action.
+`--dry-run`. They say in plain words which layout runs, its base URL, its
+model IDs and how to stop it; `--json` prints the status document instead. Service installation on the live stack remains an explicit action.
 
 The activation journal is `ROOT/managed/activation.json` with
 `temper-activation/v1`, `desired` and `current` frozen jobs. Each generation

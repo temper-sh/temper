@@ -2,10 +2,10 @@ package catalogcmd
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/temper-sh/temper/internal/catalog/distribution"
@@ -56,8 +56,20 @@ func runDistribution(ctx context.Context, args []string, stdout, stderr io.Write
 		if *jsonOutput {
 			return encode(stdout, stderr, result)
 		}
-		fmt.Fprintf(stdout, "RESULT catalog-%s %s sequence=%d sha256=%s previous_sha256=%s latest_sequence=%d latest_sha256=%s\n",
-			verb, status(result.Changed, dry), result.Active.Sequence, result.Active.SHA256, result.PreviousSHA256, result.Latest.Sequence, result.Latest.SHA256)
+		switch {
+		case !result.Changed && verb == "update":
+			fmt.Fprintf(stdout, "The catalog is up to date (sequence %d).\n", result.Active.Sequence)
+		case !result.Changed:
+			fmt.Fprintf(stdout, "Catalog sequence %d is already active.\n", result.Active.Sequence)
+		case dry && verb == "update":
+			fmt.Fprintf(stdout, "Dry run: would update the catalog to sequence %d. Nothing changed.\n", result.Active.Sequence)
+		case dry:
+			fmt.Fprintf(stdout, "Dry run: would roll the catalog back to sequence %d. Nothing changed.\n", result.Active.Sequence)
+		case verb == "update":
+			fmt.Fprintf(stdout, "Updated the catalog to sequence %d.\n", result.Active.Sequence)
+		default:
+			fmt.Fprintf(stdout, "Rolled the catalog back to sequence %d.\n", result.Active.Sequence)
+		}
 		return 0
 	case "inspect":
 		view, err := distribution.Inspect(*root, trust)
@@ -77,16 +89,23 @@ func runDistribution(ctx context.Context, args []string, stdout, stderr io.Write
 			}
 			return encode(stdout, stderr, result)
 		}
-		fmt.Fprintf(stdout, "RESULT catalog-inspect verified sequence=%d sha256=%s\n", view.Active.Sequence, view.Active.SHA256)
+		fmt.Fprintf(stdout, "Catalog sequence %d of %s (signature verified)\n", view.Active.Sequence, d.Date)
 		for _, id := range sortedKeys(d.Presets) {
 			if preset != "" && preset != id {
 				continue
 			}
 			p := d.Presets[id]
-			group, section := d.Placement(p.Presentation)
-			fmt.Fprintf(stdout, "PRESET %s name=%q engine=%s context=%d group=%s compute=%s choices=%v\n", id, p.Presentation.DisplayName, p.Engine, p.Window(), group.ID, p.Compute, p.ComputeOptions)
-			if section != nil {
-				fmt.Fprintf(stdout, "  Section: %s · %s\n", section.DisplayName, section.Description)
+			engine := p.Engine
+			if e, ok := d.Engines[p.Engine]; ok && e.Presentation.DisplayName != "" {
+				engine = e.Presentation.DisplayName
+			}
+			name := p.Presentation.DisplayName
+			if name == "" {
+				name = id
+			}
+			fmt.Fprintf(stdout, "\n%s\n  %s · %s · context %d tokens · %s\n", id, name, engine, p.Window(), strings.ToUpper(string(p.Compute)))
+			if _, section := d.Placement(p.Presentation); section != nil {
+				fmt.Fprintf(stdout, "  %s: %s\n", section.DisplayName, section.Description)
 			}
 			if p.Presentation.Description != "" {
 				fmt.Fprintln(stdout, "  "+p.Presentation.Description)
@@ -94,16 +113,16 @@ func runDistribution(ctx context.Context, args []string, stdout, stderr io.Write
 			if p.Presentation.AssessmentURL != "" {
 				fmt.Fprintln(stdout, "  Assessment: "+p.Presentation.AssessmentURL)
 			}
-			if preset != "" {
-				data, err := json.MarshalIndent(p, "  ", "  ")
-				if err != nil {
-					return failed(stderr, err)
-				}
-				fmt.Fprintln(stdout, string(data))
-			}
 		}
-		for _, snapshot := range view.Snapshots {
-			fmt.Fprintf(stdout, "SNAPSHOT sequence=%d sha256=%s active=%t latest=%t\n", snapshot.Sequence, snapshot.SHA256, snapshot.SHA256 == view.Active.SHA256, snapshot.SHA256 == view.Latest.SHA256)
+		if preset == "" && len(view.Snapshots) > 1 {
+			fmt.Fprintln(stdout, "\nKept catalogs (roll back with: temper catalog rollback --snapshot SHA256):")
+			for _, snapshot := range view.Snapshots {
+				state := ""
+				if snapshot.SHA256 == view.Active.SHA256 {
+					state = " (active)"
+				}
+				fmt.Fprintf(stdout, "  sequence %d  %s%s\n", snapshot.Sequence, snapshot.SHA256, state)
+			}
 		}
 		return 0
 	default:

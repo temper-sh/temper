@@ -52,13 +52,13 @@ func TestPublishCreatesKeepsAndAdvancesTheChannel(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "catalog", "v1")
 	first := source(t, nil)
 	code, stdout, stderr := publishRun(t, tool, seed, "--source", first, "--root", root, "--dry-run")
-	if code != 0 || !strings.HasPrefix(stdout, "RESULT catalog-publish would-publish platform=apple-silicon sequence=1 ") {
+	if code != 0 || !strings.HasPrefix(stdout, "Dry run: would publish apple-silicon catalog sequence 1 ") {
 		t.Fatalf("dry run: %d %q %q", code, stdout, stderr)
 	}
 	if _, err := os.Lstat(root); !os.IsNotExist(err) {
 		t.Fatalf("dry run wrote the tree: %v", err)
 	}
-	if code, stdout, stderr = publishRun(t, tool, seed, "--source", first, "--root", root); code != 0 || !strings.HasPrefix(stdout, "RESULT catalog-publish published platform=apple-silicon sequence=1 ") {
+	if code, stdout, stderr = publishRun(t, tool, seed, "--source", first, "--root", root); code != 0 || !strings.HasPrefix(stdout, "Published apple-silicon catalog sequence 1 ") {
 		t.Fatalf("publish: %d %q %q", code, stdout, stderr)
 	}
 	verify := func(src string) (int, string) {
@@ -66,10 +66,10 @@ func TestPublishCreatesKeepsAndAdvancesTheChannel(t *testing.T) {
 		code := runVerifyPublication([]string{"--root", root, "--source", src}, &out, &diagnostics, trust)
 		return code, out.String() + diagnostics.String()
 	}
-	if code, output := verify(first); code != 0 || !strings.Contains(output, "sequence=1") {
+	if code, output := verify(first); code != 0 || !strings.Contains(output, "is verified: sequence 1,") {
 		t.Fatalf("verify-publication: %d %s", code, output)
 	}
-	if code, stdout, _ = publishRun(t, tool, seed, "--source", first, "--root", root); code != 0 || !strings.HasPrefix(stdout, "RESULT catalog-publish unchanged platform=apple-silicon sequence=1 ") {
+	if code, stdout, _ = publishRun(t, tool, seed, "--source", first, "--root", root); code != 0 || !strings.HasPrefix(stdout, "Already published: apple-silicon catalog sequence 1 ") {
 		t.Fatalf("rerun: %d %q", code, stdout)
 	}
 
@@ -112,7 +112,7 @@ func TestPublishCreatesKeepsAndAdvancesTheChannel(t *testing.T) {
 		p := tree["presets"].(map[string]any)["qwen3.5-4b-q4km-off"].(map[string]any)["presentation"].(map[string]any)
 		p["description"] = "Reworded for the second publication."
 	})
-	if code, stdout, stderr = publishRun(t, tool, seed, "--source", second, "--root", root); code != 0 || !strings.HasPrefix(stdout, "RESULT catalog-publish published platform=apple-silicon sequence=3 ") {
+	if code, stdout, stderr = publishRun(t, tool, seed, "--source", second, "--root", root); code != 0 || !strings.HasPrefix(stdout, "Published apple-silicon catalog sequence 3 ") {
 		t.Fatalf("second publication: %d %q %q", code, stdout, stderr)
 	}
 	raw, _ = os.ReadFile(filepath.Join(channelDir, "channel.yaml"))
@@ -209,7 +209,7 @@ func TestAvailabilityReportsPresetsAVersionCanUse(t *testing.T) {
 		t.Fatalf("exit %d: %s", code, &stderr)
 	}
 	out := stdout.String()
-	if !strings.Contains(out, "PRESET qwen3.8-27b-q4xl-mtp available") || !strings.Contains(out, `UNAVAILABLE preset qwen3.8-27b-q4xl-splash reason="its engine \"splash\" is unavailable: needs Temper 0.2.0 or newer (this is 0.1.0)"`) {
+	if !strings.Contains(out, "available: qwen3.8-27b-q4xl-mtp") || !strings.Contains(out, `unavailable preset qwen3.8-27b-q4xl-splash: its engine "splash" is unavailable: needs Temper 0.2.0 or newer (this is 0.1.0)`) {
 		t.Fatalf("availability:\n%s", out)
 	}
 	stdout.Reset()

@@ -88,7 +88,7 @@ func TestPublishedPresetCompilesOfflineAndBindsExactPublication(t *testing.T) {
 	if locked.Preset != id {
 		t.Fatal("preset lost")
 	}
-	if out := run(args...); !strings.Contains(out, "unchanged") {
+	if out := run(args...); !strings.Contains(out, "already up to date") {
 		t.Fatal(out)
 	}
 	if err := os.WriteFile(lockPath, []byte("user-owned content"), 0600); err != nil {

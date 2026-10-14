@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/temper-sh/temper/internal/apply"
 	"github.com/temper-sh/temper/internal/artifactset"
@@ -73,6 +74,7 @@ func Runtime(ctx context.Context, args []string, stdout, stderr io.Writer, effec
 	listen := f.String("listen", "127.0.0.1:8080", "loopback listener")
 	statusFile := f.String("status-file", "", "new supervision status path")
 	dry := f.Bool("dry-run", false, "validate without effects")
+	jsonOutput := f.Bool("json", false, "print one JSON document for scripts")
 	if err := f.Parse(args[1:]); err != nil {
 		return parseFailure(err)
 	}
@@ -108,7 +110,12 @@ func Runtime(ctx context.Context, args []string, stdout, stderr io.Writer, effec
 	identity := map[string]any{"schema": "temper-execution/v1", "preset": l.Preset, "presets": sortedKeys(l.Records.Presets), "request_defaults": p.RequestDefaults,
 		"compute": l.Records.Presets[l.Preset].Compute, "compute_options": l.Records.Presets[l.Preset].ComputeOptions}
 	if operation == "inspect" {
-		return encode(stdout, stderr, identity)
+		if *jsonOutput {
+			return encode(stdout, stderr, identity)
+		}
+		fmt.Fprintf(stdout, "Execution lock for %s (%s)\n", l.Preset, strings.ToUpper(string(l.Records.Presets[l.Preset].Compute)))
+		fmt.Fprintf(stdout, "Presets: %s\n", strings.Join(sortedKeys(l.Records.Presets), ", "))
+		return 0
 	}
 	if *root == "" || *installation == "" {
 		return failed(stderr, errors.New("--root and --installation are required"))
@@ -156,7 +163,11 @@ func Runtime(ctx context.Context, args []string, stdout, stderr io.Writer, effec
 		}
 	}
 	if *dry {
-		return encode(stdout, stderr, map[string]any{"schema": "temper-execution-plan/v1", "operation": operation, "execution": identity, "root": resolved, "installation": *installation, "dry_run": true})
+		if *jsonOutput {
+			return encode(stdout, stderr, map[string]any{"schema": "temper-execution-plan/v1", "operation": operation, "execution": identity, "root": resolved, "installation": *installation, "dry_run": true})
+		}
+		fmt.Fprintf(stdout, "Dry run: would %s %s in %s (installation %s). Nothing changed.\n", operation, l.Preset, resolved, *installation)
+		return 0
 	}
 	if err := ctx.Err(); err != nil {
 		return failed(stderr, err)
@@ -197,12 +208,25 @@ func Runtime(ctx context.Context, args []string, stdout, stderr io.Writer, effec
 			}
 			interpreters[id] = executable
 		}
-		return encode(stdout, stderr, map[string]any{"schema": "temper-execution-paths/v1", "execution": identity, "models": models, "python": interpreters})
+		if *jsonOutput {
+			return encode(stdout, stderr, map[string]any{"schema": "temper-execution-paths/v1", "execution": identity, "models": models, "python": interpreters})
+		}
+		for _, id := range sortedKeys(models) {
+			fmt.Fprintf(stdout, "Model %s: %s\n", id, models[id])
+		}
+		for _, id := range sortedKeys(interpreters) {
+			fmt.Fprintf(stdout, "Python for %s: %s\n", id, interpreters[id])
+		}
+		return 0
 	}
 	if operation == "remove" {
-		if err := effects.Software.Remove(ctx, resolved, *installation, p.Software, stdout); err != nil {
+		if err := effects.Software.Remove(ctx, resolved, *installation, p.Software, io.Discard); err != nil {
 			return failed(stderr, err)
 		}
+		if *jsonOutput {
+			return encode(stdout, stderr, map[string]any{"schema": "temper-execution-removal/v1", "execution": identity, "root": resolved, "installation": *installation})
+		}
+		fmt.Fprintf(stdout, "Removed installation %s from %s.\n", *installation, resolved)
 		return 0
 	}
 	if operation == "serve" {
@@ -268,7 +292,12 @@ func Runtime(ctx context.Context, args []string, stdout, stderr io.Writer, effec
 	if err != nil {
 		return failed(stderr, fmt.Errorf("execution %s failed at binding: %w", operation, err))
 	}
-	return encode(stdout, stderr, map[string]any{"schema": "temper-execution-material/v1", "execution": identity, "generation": applied.Generation, "binding": string(binding)})
+	if *jsonOutput {
+		return encode(stdout, stderr, map[string]any{"schema": "temper-execution-material/v1", "execution": identity, "generation": applied.Generation, "binding": string(binding)})
+	}
+	verb := map[string]string{"prepare": "Prepared", "render": "Rendered"}[operation]
+	fmt.Fprintf(stdout, "%s %s in %s (installation %s, generation %s).\n", verb, l.Preset, resolved, *installation, applied.Generation)
+	return 0
 }
 
 func serve(ctx context.Context, effects Effects, root, installation, generation, listen, statusFile string, p catalog.Projections, stdout, stderr io.Writer) int {

@@ -54,11 +54,9 @@ The seed is one canonical standard-padded base64 Ed25519 seed on stdin, with
 an optional final LF or CRLF. The command has no key flag, key file or
 credential discovery. The derived key must match the production trust root.
 
-Success prints one line:
-
-```text
-RESULT catalog-publish <published|would-publish|unchanged> platform=<id> sequence=<n> sha256=<sha> presets=<n>
-```
+Success prints one line that says whether the platform's catalog was
+published, would be published (dry run) or was already published, with its
+sequence, preset count and SHA-256.
 
 ## Verify a publication
 
@@ -71,8 +69,8 @@ This checks the channel signature and schema; for every platform entry, the
 snapshot folder, its signature and its digest; and, for this Temper's
 platform, the full catalog with the client reader. `--source` also requires
 the published snapshot to be the source's exact bytes. It reads only local
-files and prints `RESULT catalog-publication verified` with the sequence,
-digest and preset count.
+files and prints one line with the verified sequence, preset count and
+digest.
 
 ## Availability
 

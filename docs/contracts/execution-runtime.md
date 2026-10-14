@@ -9,14 +9,17 @@ This development surface consumes an exact execution lock. It does not resolve
 updates or select software.
 
 ```
-temper execution configure --lock FILE --preset ID --context N --max-output N [--compute cpu|gpu] [--max-memory BYTES] --out FILE [--dry-run]
-temper execution inspect --lock FILE
-temper execution prepare --lock FILE --root PATH --installation ID
-temper execution render --lock FILE --root PATH --installation ID
-temper execution paths --lock FILE --root PATH --installation ID
+temper execution configure --lock FILE --preset ID --context N --max-output N [--compute cpu|gpu] [--max-memory BYTES] --out FILE [--dry-run] [--json]
+temper execution inspect --lock FILE [--json]
+temper execution prepare --lock FILE --root PATH --installation ID [--json]
+temper execution render --lock FILE --root PATH --installation ID [--json]
+temper execution paths --lock FILE --root PATH --installation ID [--json]
 temper execution serve --lock FILE --root PATH --installation ID --generation SHA256 --listen 127.0.0.1:PORT --status-file FILE
-temper execution remove --lock FILE --root PATH --installation ID
+temper execution remove --lock FILE --root PATH --installation ID [--json]
 ```
+
+Each command prints a short plain summary. Clients pass `--json` and read the
+one JSON document it prints on stdout; the documents below are those.
 
 `configure` derives one exact preset execution from a frozen lock. Only the
 context window, output allowance, supported CPU/GPU choice and optional Splash memory cap may change;

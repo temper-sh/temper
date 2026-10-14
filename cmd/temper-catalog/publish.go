@@ -46,7 +46,15 @@ func runPublish(ctx context.Context, arguments []string, stdin io.Reader, stdout
 		fmt.Fprintf(stderr, "temper-catalog publish: %v\n", err)
 		return 1
 	}
-	fmt.Fprintf(stdout, "RESULT catalog-publish %s platform=%s sequence=%d sha256=%s presets=%d\n", result.status, result.platform, result.sequence, result.sha256, result.presets)
+	what := fmt.Sprintf("%s catalog sequence %d (%d presets, sha256 %s)", result.platform, result.sequence, result.presets, result.sha256)
+	switch result.status {
+	case "unchanged":
+		fmt.Fprintf(stdout, "Already published: %s. Nothing changed.\n", what)
+	case "would-publish":
+		fmt.Fprintf(stdout, "Dry run: would publish %s. Nothing changed.\n", what)
+	default:
+		fmt.Fprintf(stdout, "Published %s.\n", what)
+	}
 	return 0
 }
 

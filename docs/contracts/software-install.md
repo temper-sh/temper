@@ -134,19 +134,17 @@ caller supplies exactly one canonical receipt for every required digest with
 provider state, canonical SHA-256, and lock binding before planning. Extra,
 missing, duplicate, or drifting requirements refuse.
 
-A completed success begins with:
+A completed success prints a one-line summary. With `--json` it prints one
+`temper-software-install/v1` document instead, in stable package,
+adapter/scope, then unit order:
 
-```text
-RESULT software-install changed|unchanged|would-change installation=<id> packages=<n> units=<n> effects=<n> claims=<n>
-```
-
-Stable detail lines follow in package, adapter/scope, then unit order:
-
-```text
-PACKAGE <id> method=<method> adapter=<adapter> root-unit=<unit-id>
-EFFECT <adapter>:<scope> install|publish-isolated|unchanged units=<n>
-UNIT <unit-id> add|preserve|replace ownership=temper-added|pre-existing claim=none|add|activate|preserve
-```
+- `status`: `changed`, `unchanged` or `would-change`; `installation`;
+- `counts`: `packages`, `units`, `effects`, `claims`;
+- `packages`: `id`, `method`, `adapter`, `root_unit`;
+- `effects`: `id` (`<adapter>:<scope>`), `effect` (`install`,
+  `publish-isolated` or `unchanged`) and `units`, each with `id`, `action`
+  (`add`, `preserve` or `replace`), `ownership` (`temper-added` or
+  `pre-existing`) and `claim` (`none`, `add`, `activate` or `preserve`).
 
 For a shared unit, `ownership` reports the registry's acquisition history; the
 claim—not that word—authorizes continued use or eventual removal.
@@ -154,8 +152,8 @@ claim—not that word—authorizes continued use or eventual removal.
 An adapter that needs privilege Temper cannot exercise returns a ready-to-paste
 `MANUAL ...` line and exit `1`; it never invokes `sudo`. Usage refusal is exit
 `2`. Another input, inspection, planning, provider, verification, concurrency,
-or filesystem refusal is exit `1`. Exit `0` means the `RESULT` line is valid.
-No `RESULT` line is emitted for a fatal refusal.
+or filesystem refusal is exit `1`. Exit `0` means the report is valid. No
+report is printed for a fatal refusal.
 
 Dry-run performs every parse, receipt/state read, provider inspection,
 comparison, and pure planning step, then stops. It creates neither the root,
@@ -384,18 +382,18 @@ installs, repairs, stages, claims, renews a lease, or writes. There is no
 `--dry-run`: every check invocation already has dry-run's no-mutation
 semantics.
 
-One completed report begins:
+One completed check prints a summary: a match, or each problem on its own
+line. With `--json` it prints one `temper-software-check/v1` document: `status`
+(`exact` or `findings`), `installation`, `receipt_sha256` (absent without a
+receipt) and `counts` (`packages`, `units`, `requirements`, `problems`). Required
+bases and desired units follow in stable digest and dependency order:
 
-```text
-RESULT software-check exact|findings installation=<id> packages=<n> units=<n> requirements=<n> problems=<n> receipt=<sha256|none>
-```
-
-Required bases and desired units follow in stable digest and dependency order:
-
-```text
-REQUIREMENT <software-lock-sha256> exact|missing|drifted installation=<id|none> receipt=<sha256|none>
-UNIT <unit-id> exact|missing|drifted|unclaimed|unreceipted adapter=<id> scope=<id> location=<absolute-path|none> ownership=temper-added|pre-existing|unknown claim=<sha256|none>
-```
+- `requirements`: `lock_digest`, `status` (`exact`, `missing` or `drifted`),
+  `installation` and `receipt_sha256` (each absent when none);
+- `units`: `id`, `status` (`exact`, `missing`, `drifted`, `unclaimed` or
+  `unreceipted`), `adapter`, `scope`, `location` (absent when none),
+  `ownership` (`temper-added`, `pre-existing` or `unknown`) and `claim`
+  (absent when none).
 
 The unit status is the first failed layer in provider → receipt → shared-claim
 order. `missing` means the provider explicitly observed absence. `drifted`
@@ -404,12 +402,9 @@ disagrees. `unreceipted` means provider state is exact but this installation
 has no receipt. `unclaimed` means an exact receipted shared unit has no matching
 active root-state claim. `exact` means every applicable layer agrees.
 
-Independent problems follow in stable requirement, unit, code, then detail
-order:
-
-```text
-PROBLEM code=<code> unit=<unit-id|none> requirement=<software-lock-sha256|none> detail=<quoted-string>
-```
+Independent `problems` follow in stable requirement, unit, code, then detail
+order, each with `code`, `unit` and `requirement` (absent when none) and
+`detail`.
 
 The first check slice defines these codes:
 
@@ -426,7 +421,7 @@ The first check slice defines these codes:
 An exact provider read reporting `Present: false` is a finding; a provider read
 that fails is fatal because no valid report can be completed. The desired lock
 and every present receipt/state document remain strict inputs: malformed,
-noncanonical, unreadable, or symlinked files refuse with no `RESULT` line.
+noncanonical, unreadable, or symlinked files refuse with no report.
 Omitting a required receipt path is a finding; naming a path that cannot be
 read is a fatal input failure. Exit `0` means `exact`, exit `1` means findings
 or fatal refusal, and exit `2` means CLI usage refusal.
@@ -444,18 +439,12 @@ temper software remove --root PATH --installation ID
 ```
 
 It accepts the exact lock used by the installation; it never resolves or
-substitutes software. A completed result begins:
-
-```text
-RESULT software-remove changed|unchanged|would-change installation=<id> packages=<n> units=<n> effects=<n> claims=<n>
-```
-
-Stable group and dependency-ordered details follow:
-
-```text
-EFFECT <adapter>:<scope> remove|preserve units=<n>
-UNIT <unit-id> remove|preserve ownership=temper-added|pre-existing claim=none|release
-```
+substitutes software. A completed result prints a one-line summary. With
+`--json` it prints one `temper-software-remove/v1` document: `status`
+(`changed`, `unchanged` or `would-change`), `installation`, `counts` and, in
+stable group and dependency order, `effects` with `id`, `effect` (`remove` or
+`preserve`) and `units` (`id`, `action` `remove` or `preserve`, `ownership`,
+`claim` `none` or `release`).
 
 With no receipt and no prepared remove operation or remaining claim for the
 installation, removal is an unchanged success. Otherwise the receipt must

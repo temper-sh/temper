@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -26,6 +27,45 @@ var commandTarget = software.Target{
 	OS: "darwin", Arch: "arm64", Distribution: "macos", DistributionVersion: "15.6",
 }
 
+// report is the subset of the --json reports these tests read.
+type report struct {
+	Schema       string `json:"schema"`
+	Status       string `json:"status"`
+	Installation string `json:"installation"`
+	Counts       struct {
+		Packages, Units, Effects, Claims, Requirements, Problems int
+	} `json:"counts"`
+	Packages []struct {
+		ID, Method, Adapter string
+		RootUnit            string `json:"root_unit"`
+	} `json:"packages"`
+	Effects []struct {
+		ID, Effect string
+		Units      []struct{ ID, Action, Ownership, Claim string } `json:"units"`
+	} `json:"effects"`
+	Units    []struct{ ID, Status, Adapter, Scope, Location, Ownership, Claim string } `json:"units"`
+	Problems []struct{ Code, Unit, Detail string }                                     `json:"problems"`
+}
+
+func decodeReport(t *testing.T, raw []byte) report {
+	t.Helper()
+	var r report
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	if err := decoder.Decode(&r); err != nil || decoder.More() {
+		t.Fatalf("stdout is not one JSON document (%v):\n%s", err, raw)
+	}
+	return r
+}
+
+// oneUnit returns the single unit of a report with exactly one effect group.
+func oneUnit(t *testing.T, r report) (string, struct{ ID, Action, Ownership, Claim string }) {
+	t.Helper()
+	if len(r.Effects) != 1 || len(r.Effects[0].Units) != 1 {
+		t.Fatalf("want one effect with one unit: %+v", r.Effects)
+	}
+	return r.Effects[0].Effect, r.Effects[0].Units[0]
+}
+
 func TestCommandRunsTheReleaseInstallCheckRemoveRoundTripAndCleanSecondRuns(t *testing.T) {
 	workspace := t.TempDir()
 	root := filepath.Join(workspace, "temper-root")
@@ -33,19 +73,22 @@ func TestCommandRunsTheReleaseInstallCheckRemoveRoundTripAndCleanSecondRuns(t *t
 	lockPath := writeSoftwareLock(t, workspace, releaseLock(t, archive))
 	reader := &memoryReader{content: map[string][]byte{archive.locator: archive.data}}
 	command := releaseCommand(t, reader, commandTarget)
-	arguments := []string{"--root", root, "--installation", "field-kit-base", "--lock", lockPath}
+	arguments := []string{"--root", root, "--installation", "field-kit-base", "--lock", lockPath, "--json"}
+	const unitID = "upstream-release:llama-cpp"
 
 	var stdout, stderr bytes.Buffer
 	exit := command.Run(context.Background(), append([]string{"install"}, append(arguments, "--dry-run")...), &stdout, &stderr)
 	if exit != 0 || stderr.Len() != 0 {
 		t.Fatalf("dry install exit = %d, stderr = %q", exit, stderr.String())
 	}
-	wantDry := "RESULT software-install would-change installation=field-kit-base packages=1 units=1 effects=1 claims=0\n" +
-		"PACKAGE llama-cpp method=release-artifact adapter=upstream-release root-unit=upstream-release:llama-cpp\n" +
-		"EFFECT upstream-release:llama-cpp publish-isolated units=1\n" +
-		"UNIT upstream-release:llama-cpp add ownership=temper-added claim=none\n"
-	if stdout.String() != wantDry {
-		t.Fatalf("dry install stdout:\n%s\nwant:\n%s", stdout.String(), wantDry)
+	dry := decodeReport(t, stdout.Bytes())
+	effect, unit := oneUnit(t, dry)
+	if dry.Schema != "temper-software-install/v1" || dry.Status != "would-change" || dry.Installation != "field-kit-base" ||
+		dry.Counts.Packages != 1 || dry.Counts.Units != 1 || dry.Counts.Effects != 1 || dry.Counts.Claims != 0 ||
+		len(dry.Packages) != 1 || dry.Packages[0].ID != "llama-cpp" || dry.Packages[0].Method != "release-artifact" ||
+		dry.Packages[0].Adapter != "upstream-release" || dry.Packages[0].RootUnit != unitID ||
+		effect != "publish-isolated" || unit.ID != unitID || unit.Action != "add" || unit.Ownership != "temper-added" || unit.Claim != "none" {
+		t.Fatalf("dry install report: %+v", dry)
 	}
 	if reader.opens != 0 {
 		t.Fatalf("dry install opened %d artifacts", reader.opens)
@@ -57,7 +100,7 @@ func TestCommandRunsTheReleaseInstallCheckRemoveRoundTripAndCleanSecondRuns(t *t
 	stdout.Reset()
 	stderr.Reset()
 	exit = command.Run(context.Background(), append([]string{"install"}, arguments...), &stdout, &stderr)
-	if exit != 0 || stderr.Len() != 0 || !strings.HasPrefix(stdout.String(), "RESULT software-install changed ") {
+	if exit != 0 || stderr.Len() != 0 || decodeReport(t, stdout.Bytes()).Status != "changed" {
 		t.Fatalf("install exit = %d, stdout = %q, stderr = %q", exit, stdout.String(), stderr.String())
 	}
 	if reader.opens != 1 {
@@ -70,10 +113,10 @@ func TestCommandRunsTheReleaseInstallCheckRemoveRoundTripAndCleanSecondRuns(t *t
 	if exit != 0 || stderr.Len() != 0 {
 		t.Fatalf("second install exit = %d, stderr = %q", exit, stderr.String())
 	}
-	if !strings.HasPrefix(stdout.String(), "RESULT software-install unchanged installation=field-kit-base packages=1 units=1 effects=0 claims=0\n") ||
-		!strings.Contains(stdout.String(), "EFFECT upstream-release:llama-cpp unchanged units=1\n") ||
-		!strings.Contains(stdout.String(), "UNIT upstream-release:llama-cpp preserve ownership=temper-added claim=none\n") {
-		t.Fatalf("second install stdout:\n%s", stdout.String())
+	second := decodeReport(t, stdout.Bytes())
+	effect, unit = oneUnit(t, second)
+	if second.Status != "unchanged" || second.Counts.Effects != 0 || effect != "unchanged" || unit.Action != "preserve" || unit.Ownership != "temper-added" {
+		t.Fatalf("second install report: %+v", second)
 	}
 	if reader.opens != 1 {
 		t.Fatalf("second install reopened an artifact: %d", reader.opens)
@@ -85,10 +128,18 @@ func TestCommandRunsTheReleaseInstallCheckRemoveRoundTripAndCleanSecondRuns(t *t
 	if exit != 0 || stderr.Len() != 0 {
 		t.Fatalf("check exit = %d, stderr = %q", exit, stderr.String())
 	}
-	if !strings.HasPrefix(stdout.String(), "RESULT software-check exact installation=field-kit-base packages=1 units=1 requirements=0 problems=0 receipt=") ||
-		!strings.Contains(stdout.String(), "UNIT upstream-release:llama-cpp exact adapter=upstream-release scope=llama-cpp location="+root) ||
-		!strings.Contains(stdout.String(), " ownership=temper-added claim=none\n") {
-		t.Fatalf("check stdout:\n%s", stdout.String())
+	check := decodeReport(t, stdout.Bytes())
+	if check.Status != "exact" || check.Counts.Problems != 0 || len(check.Units) != 1 || check.Units[0].ID != unitID ||
+		check.Units[0].Status != "exact" || check.Units[0].Scope != "llama-cpp" || !strings.HasPrefix(check.Units[0].Location, root) ||
+		check.Units[0].Ownership != "temper-added" {
+		t.Fatalf("check report: %+v", check)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	exit = command.Run(context.Background(), []string{"check", "--root", root, "--installation", "field-kit-base", "--lock", lockPath}, &stdout, &stderr)
+	if exit != 0 || stdout.String() != "Installation field-kit-base matches its lock (1 package).\n" {
+		t.Fatalf("plain check exit = %d, stdout = %q", exit, stdout.String())
 	}
 
 	stdout.Reset()
@@ -97,17 +148,17 @@ func TestCommandRunsTheReleaseInstallCheckRemoveRoundTripAndCleanSecondRuns(t *t
 	if exit != 0 || stderr.Len() != 0 {
 		t.Fatalf("remove exit = %d, stderr = %q", exit, stderr.String())
 	}
-	wantRemove := "RESULT software-remove changed installation=field-kit-base packages=1 units=1 effects=1 claims=0\n" +
-		"EFFECT upstream-release:llama-cpp remove units=1\n" +
-		"UNIT upstream-release:llama-cpp remove ownership=temper-added claim=none\n"
-	if stdout.String() != wantRemove {
-		t.Fatalf("remove stdout:\n%s\nwant:\n%s", stdout.String(), wantRemove)
+	removed := decodeReport(t, stdout.Bytes())
+	effect, unit = oneUnit(t, removed)
+	if removed.Schema != "temper-software-remove/v1" || removed.Status != "changed" || removed.Counts.Effects != 1 ||
+		effect != "remove" || unit.Action != "remove" || unit.Ownership != "temper-added" || unit.Claim != "none" {
+		t.Fatalf("remove report: %+v", removed)
 	}
 
 	stdout.Reset()
 	stderr.Reset()
-	exit = command.Run(context.Background(), append([]string{"remove"}, arguments...), &stdout, &stderr)
-	if exit != 0 || stderr.Len() != 0 || stdout.String() != "RESULT software-remove unchanged installation=field-kit-base packages=1 units=1 effects=0 claims=0\n" {
+	exit = command.Run(context.Background(), []string{"remove", "--root", root, "--installation", "field-kit-base", "--lock", lockPath}, &stdout, &stderr)
+	if exit != 0 || stderr.Len() != 0 || stdout.String() != "Nothing to remove from installation field-kit-base.\n" {
 		t.Fatalf("second remove exit = %d, stdout = %q, stderr = %q", exit, stdout.String(), stderr.String())
 	}
 }
@@ -121,15 +172,20 @@ func TestCommandReportsCheckFindingsOnStdoutAndExitOneWithoutCreatingARoot(t *te
 	var stdout, stderr bytes.Buffer
 
 	exit := command.Run(context.Background(), []string{
-		"check", "--root", root, "--installation", "field-kit-base", "--lock", lockPath,
+		"check", "--root", root, "--installation", "field-kit-base", "--lock", lockPath, "--json",
 	}, &stdout, &stderr)
 	if exit != 1 || stderr.Len() != 0 {
 		t.Fatalf("exit = %d, stderr = %q", exit, stderr.String())
 	}
-	if !strings.HasPrefix(stdout.String(), "RESULT software-check findings installation=field-kit-base packages=1 units=1 requirements=0 problems=1 receipt=none\n") ||
-		!strings.Contains(stdout.String(), "UNIT upstream-release:llama-cpp missing adapter=upstream-release scope=llama-cpp location=none ownership=unknown claim=none\n") ||
-		!strings.Contains(stdout.String(), "PROBLEM code=provider-missing") {
-		t.Fatalf("check findings stdout:\n%s", stdout.String())
+	r := decodeReport(t, stdout.Bytes())
+	if r.Status != "findings" || r.Counts.Problems != 1 || len(r.Units) != 1 || r.Units[0].Status != "missing" ||
+		r.Units[0].Location != "" || r.Units[0].Ownership != "unknown" || len(r.Problems) != 1 || r.Problems[0].Code != "provider-missing" {
+		t.Fatalf("check findings report: %+v", r)
+	}
+	stdout.Reset()
+	if exit = command.Run(context.Background(), []string{"check", "--root", root, "--installation", "field-kit-base", "--lock", lockPath}, &stdout, &stderr); exit != 1 ||
+		!strings.HasPrefix(stdout.String(), "Installation field-kit-base differs from its lock (1 problem):\n  - ") {
+		t.Fatalf("plain findings: %d %q", exit, stdout.String())
 	}
 	if _, err := os.Lstat(root); !os.IsNotExist(err) {
 		t.Fatalf("check created the root: %v", err)

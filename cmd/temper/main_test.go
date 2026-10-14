@@ -3,14 +3,13 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"gopkg.in/yaml.v3"
 
 	"github.com/temper-sh/temper/internal/budget"
 	"github.com/temper-sh/temper/internal/machine"
@@ -97,14 +96,14 @@ func TestRunMachineFactsPrintsCanonicalReadOnlyDocument(t *testing.T) {
 		WiredLimitMiB:           24576, WiredLimitSource: budget.WiredSourceMetal,
 	}
 	var stdout, stderr bytes.Buffer
-	exit := runWithDependencies(context.Background(), []string{"machine", "facts"}, &stdout, &stderr, dependencies{
+	exit := runWithDependencies(context.Background(), []string{"machine", "facts", "--json"}, &stdout, &stderr, dependencies{
 		detectFacts: func(context.Context) (machine.Facts, error) { return want, nil },
 	})
 	if exit != 0 || stderr.Len() != 0 {
 		t.Fatalf("exit = %d, stderr = %q", exit, stderr.String())
 	}
 	var got machine.Facts
-	err := yaml.Unmarshal(stdout.Bytes(), &got)
+	err := json.Unmarshal(stdout.Bytes(), &got)
 	if err != nil {
 		t.Fatal(err)
 	}
