@@ -7,8 +7,8 @@ lab-grade, disposable, machine-specific code does not land here, however well
 it worked once.
 
 For work involving Guild, agentic-research or harness integration, read the
-[shared engineering charter](../../guild/work/coordination/charter.md) and the
-relevant [coordination exchanges](../../guild/work/plan.md#dependencies-and-integration).
+[shared engineering charter](../../../guild/work/coordination/charter.md) and the
+relevant [coordination exchanges](../../../guild/work/plan.md#dependencies-and-integration).
 These describe common purpose and feedback; Temper's product boundaries and
 local plan remain authoritative.
 
@@ -19,7 +19,7 @@ local plan remain authoritative.
   evidence; Results explains it; Field Kit independently versions and executes
   frozen portable tests by composing Temper's public primitives.
 - Work arrives only two ways: an **accepted product handoff** from Labs
-  (`../labs/product-handoffs/`), or **product engineering planned in
+  (`../../labs/product-handoffs/`), or **product engineering planned in
   `docs/PLAN.md`**. Never consume moving Labs state, raw experiment output,
   or an unreviewed prototype.
 - Do not edit adjacent repositories unless the user explicitly asks for the
