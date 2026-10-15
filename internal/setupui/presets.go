@@ -112,7 +112,7 @@ func NewPresetModel(ctx context.Context, input PresetInput, preview func(context
 	styles := textinput.DefaultDarkStyles()
 	styles.Focused.Text = lipgloss.NewStyle().Foreground(colorText)
 	styles.Focused.Prompt = lipgloss.NewStyle().Foreground(colorMuted)
-	styles.Cursor.Color, styles.Cursor.Blink = colorText, false
+	styles.Cursor.Color, styles.Cursor.Blink = actionColors.Name[0], false
 	t.SetStyles(styles)
 	if ctx == nil {
 		ctx = context.Background()

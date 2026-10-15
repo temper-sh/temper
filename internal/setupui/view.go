@@ -9,25 +9,53 @@ import (
 	"charm.land/lipgloss/v2/table"
 )
 
-// One color per meaning, used the same way on every page: the same kind of
-// thing always has the same color. Headings and plain text stay neutral. A
-// focused element inverts its own colors (see inverted) instead of taking a
-// focus hue. Palette "A-mid", chosen by the owner on 2026-10-14.
+// family is one kind of element's set of matching colors. Each kind of
+// element has its own family, so a page shows a few clearly separate groups:
+// preset cards, main navigation, secondary navigation, actions, layouts and
+// the review. Inside a family the colors match; a preset card draws model,
+// weights and engine as one gradient and takes every accent from it.
+// Warnings stay amber and red everywhere.
+type family struct {
+	Name    [3]color.Color // a gradient: first, second, third
+	Accent  color.Color    // numbers and details
+	Link    color.Color
+	Check   color.Color // chosen and done marks
+	Border  color.Color // a focused element's border
+	Surface color.Color // a focused element's background
+}
+
+func shades(first, second, third, accent, link, check, border, surface string) family {
+	c := lipgloss.Color
+	return family{Name: [3]color.Color{c(first), c(second), c(third)}, Accent: c(accent), Link: c(link), Check: c(check), Border: c(border), Surface: c(surface)}
+}
+
+// A neutral base keeps the families apart. A focused element inverts its own
+// colors (see inverted).
 var (
-	colorBackground = lipgloss.Color("#1d1f28")
-	colorSurface    = lipgloss.Color("#2a2d3a")
-	colorBorder     = lipgloss.Color("#4a4f63")
-	colorText       = lipgloss.Color("#e8eaf2")
-	colorMuted      = lipgloss.Color("#a0a6ba")
-	colorLink       = lipgloss.Color("#70a9ff") // links
-	colorGo         = lipgloss.Color("#67e97b") // primary action, chosen, done, fits, cached
-	colorWarn       = lipgloss.Color("#ffc34f") // needs attention, unavailable, will download
-	colorDanger     = lipgloss.Color("#ff7082") // error, does not fit, remove
-	colorModel      = lipgloss.Color("#be95ff") // model names
-	colorWeights    = lipgloss.Color("#ffa175") // weights, quantization and templates
-	colorEngine     = lipgloss.Color("#3bedd2") // engines and compute
-	colorLayout     = lipgloss.Color("#ff83c4") // layouts
-	colorNumber     = lipgloss.Color("#72e1fe") // sizes, memory, tokens and counts
+	colorBackground = lipgloss.Color("#1b1c22")
+	colorSurface    = lipgloss.Color("#262833")
+	colorBorder     = lipgloss.Color("#43465a")
+	colorText       = lipgloss.Color("#eceef4")
+	colorMuted      = lipgloss.Color("#a3a7b7")
+	colorWarn       = lipgloss.Color("#ffc34f")
+	colorDanger     = lipgloss.Color("#ff7082")
+
+	// Preset cards: royal purple → indigo → blue for model, weights, engine.
+	presetColors = shades("#b996ff", "#9b94ff", "#7ea3ff", "#c6cbff", "#9fb8ff", "#9b94ff", "#9b94ff", "#262341")
+	// The TEMPER title above the step tabs.
+	colorBrand = lipgloss.Color("#ffffff")
+	// Main navigation: the step tabs. The current tab is yellow on dark and
+	// done tabs are green.
+	mainNavColors = shades("#1b1c23", "#ffb3d9", "#ffd1e8", "#ffb3d9", "#ff8fc8", "#009a54", "#e7ce54", "#33202c")
+	// Secondary navigation: group filters, group and section headings. The
+	// chosen filter is light text on green.
+	secondaryNavColors = shades("#eceef4", "#7fe0d6", "#a8eae3", "#009a54", "#4fd6c8", "#4fd6c8", "#4fd6c8", "#009a54")
+	// Actions: the footer buttons; the primary action first.
+	actionColors = shades("#ff9e6b", "#ffc9a8", "#ffe0cc", "#ffc9a8", "#ff9e6b", "#ff9e6b", "#ff9e6b", "#2e241f")
+	// Layout cards and the layout tables on Review: mint to sea green.
+	layoutColors = shades("#5fe3a1", "#6fe0b8", "#7fdcc9", "#b3f0cf", "#7fe0b8", "#5fe3a1", "#5fe3a1", "#1c2c27")
+	// Review downloads: sky blue.
+	reviewColors = shades("#5cc4ff", "#8fd4ff", "#b9e5ff", "#cdeaff", "#7cc9ff", "#5cc4ff", "#5cc4ff", "#1a2838")
 )
 
 // inverted is the focused form of an element drawn in fg on bg.
@@ -79,10 +107,10 @@ func stepTabs(labels []string, active, width int) string {
 		switch {
 		case i == active:
 			border.Bottom, border.BottomLeft, border.BottomRight = " ", "┘", "└"
-			style = inverted(style, colorText, colorBackground).BorderForeground(colorText)
+			style = style.Foreground(mainNavColors.Border).Background(mainNavColors.Name[0]).Bold(true).BorderForeground(mainNavColors.Border)
 			label = "• " + label
 		case i < active:
-			style = style.Foreground(colorGo)
+			style = style.Foreground(mainNavColors.Check)
 			label = "✓ " + label
 		}
 		items[i] = style.Border(border).Render(label)
@@ -159,9 +187,9 @@ func downloadsBlock(section Section, width int, open, focused bool) (string, int
 	}
 	border := colorBorder
 	if focused {
-		border = colorText
+		border = reviewColors.Border
 	}
-	heading := lipgloss.NewStyle().Foreground(colorText).Bold(true).Width(inner).Render(label)
+	heading := lipgloss.NewStyle().Foreground(reviewColors.Name[0]).Bold(true).Width(inner).Render(label)
 	content := heading + "\n" + lipgloss.NewStyle().Foreground(colorText).Width(inner).Render(strings.Join(section.Lines, "\n"))
 	if open {
 		content += "\n\n" + downloadTable(section.Downloads, inner)
@@ -194,36 +222,36 @@ func downloadTable(downloads []Download, width int) string {
 		StyleFunc(func(row, col int) lipgloss.Style {
 			style := lipgloss.NewStyle().Padding(0, 1).Width(columns[col]).Foreground(colorText)
 			if row == table.HeaderRow {
-				return style.Bold(true)
+				return style.Foreground(reviewColors.Name[0]).Bold(true)
 			}
 			if col == 1 && !narrow {
-				style = style.Foreground(colorNumber)
+				style = style.Foreground(reviewColors.Accent)
 			}
 			if col == len(headers)-1 && row < len(downloads) {
 				switch downloads[row].Status {
 				case "Cached in Temper", "Cached in Hugging Face":
-					style = style.Foreground(colorGo)
+					style = style.Foreground(reviewColors.Check)
 				case "May download":
 					style = style.Foreground(colorMuted)
 				default:
-					style = style.Foreground(colorWarn)
+					style = style.Foreground(reviewColors.Name[1])
 				}
 			}
 			return style
 		}).String()
 }
 
-func optionCard(option Option, mark string, focused bool, width int) string {
+func optionCard(option Option, mark string, focused bool, width int, colors family) string {
 	name := option.Name
 	if name == "" {
 		name = option.ID
 	}
 	border, background, titleColor := colorBorder, colorBackground, colorText
 	if focused {
-		border, background = colorText, colorSurface
+		border, background = colors.Border, colors.Surface
 	}
 	if strings.Contains(mark, "[x]") || strings.Contains(mark, "(*)") {
-		titleColor = colorGo
+		titleColor = colors.Check
 	}
 	if mark != "" {
 		name = mark + " " + name
@@ -232,13 +260,13 @@ func optionCard(option Option, mark string, focused bool, width int) string {
 	title := lipgloss.NewStyle().Foreground(titleColor).Background(background).Bold(true)
 	heading := title.Width(inner).Render(name)
 	if option.Size != "" {
-		size := lipgloss.NewStyle().Foreground(colorNumber).Background(background).Render(option.Size)
+		size := lipgloss.NewStyle().Foreground(colors.Accent).Background(background).Render(option.Size)
 		nameWidth := max(1, inner-lipgloss.Width(size)-2)
 		heading = lipgloss.JoinHorizontal(lipgloss.Top, title.Width(nameWidth).Render(name), "  ", size)
 	}
 	lines := []string{heading}
 	if option.Components != "" {
-		lines = append(lines, lipgloss.NewStyle().Foreground(colorNumber).Background(background).Width(inner).Render(option.Components))
+		lines = append(lines, lipgloss.NewStyle().Foreground(colors.Accent).Background(background).Width(inner).Render(option.Components))
 	}
 	if option.Advice != nil {
 		warning := "! " + option.Advice.Title
@@ -251,7 +279,7 @@ func optionCard(option Option, mark string, focused bool, width int) string {
 		lines = append(lines, "", lipgloss.NewStyle().Foreground(colorText).Background(background).Width(inner).Render(option.Description))
 	}
 	if option.AssessmentURL != "" {
-		lines = append(lines, lipgloss.NewStyle().Foreground(colorLink).Background(background).Width(inner).Render("Assessment: "+option.AssessmentURL))
+		lines = append(lines, lipgloss.NewStyle().Foreground(colors.Link).Background(background).Width(inner).Render("Assessment: "+option.AssessmentURL))
 	}
 	if option.Details != "" {
 		lines = append(lines, "", lipgloss.NewStyle().Foreground(colorMuted).Background(background).Width(inner).Render(option.Details))

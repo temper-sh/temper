@@ -113,12 +113,11 @@ func TestThreeCategoryTabsFitAndCanBeClickedInSmallTerminals(t *testing.T) {
 	}
 }
 
-func TestSavedLicenseStaysLinkedInSelectionAndResponsiveReview(t *testing.T) {
+func TestSavedLicenseStaysLinkedOnPresetCards(t *testing.T) {
 	for _, tc := range []struct {
-		name     string
-		width    int
-		assigned bool
-	}{{"wide layout", 120, true}, {"unassigned", 80, false}, {"narrow layout", 48, true}, {"wrapped license", 28, true}} {
+		name  string
+		width int
+	}{{"wide", 120}, {"medium", 80}, {"narrow", 48}, {"wrapped license", 28}} {
 		t.Run(tc.name, func(t *testing.T) {
 			m := presetEditor(t)
 			m.input.Presets[0].Description = "Local work."
@@ -133,11 +132,6 @@ func TestSavedLicenseStaysLinkedInSelectionAndResponsiveReview(t *testing.T) {
 				t.Fatal(err)
 			}
 			m.draft.Presets[choice.ID] = setup.Preset{Name: choice.Name, Lock: lock}
-			if tc.assigned {
-				m.draft.Layouts["work"] = setup.Layout{Name: "Work", Presets: []string{choice.ID}, IdleSeconds: 60}
-			}
-			m.plan = setup.Plan{Configuration: &m.draft, CanPrepare: true}
-			m.reviewReady = true
 			m.Update(tea.WindowSizeMsg{Width: tc.width, Height: 60})
 
 			for _, screen := range []struct {
@@ -145,9 +139,8 @@ func TestSavedLicenseStaysLinkedInSelectionAndResponsiveReview(t *testing.T) {
 				focus presetFocus
 				style uv.Style
 			}{
-				{0, presetContentFocus, uv.Style{Fg: colorLink, Bg: colorSurface, Underline: uv.UnderlineSingle}},
-				{0, presetFilterFocus, uv.Style{Fg: colorLink, Bg: colorBackground, Underline: uv.UnderlineSingle}},
-				{2, presetContentFocus, uv.Style{Fg: colorLink, Bg: colorSurface, Underline: uv.UnderlineSingle, Attrs: uv.AttrBold}},
+				{0, presetContentFocus, uv.Style{Fg: presetColors.Link, Bg: presetColors.Surface, Underline: uv.UnderlineSingle}},
+				{0, presetFilterFocus, uv.Style{Fg: presetColors.Link, Bg: colorBackground, Underline: uv.UnderlineSingle}},
 			} {
 				m.page, m.focus = screen.page, screen.focus
 				view := m.View().Content

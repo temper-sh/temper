@@ -8,6 +8,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
+	"github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/setup"
 )
 
@@ -30,7 +31,7 @@ func (m *PresetModel) reviewLayouts(body *screenBody, width int) {
 		for _, preset := range layout.Presets {
 			included[preset] = true
 		}
-		title := lipgloss.NewStyle().Foreground(colorLayout).Bold(true).Width(width).Render(layout.Name)
+		title := lipgloss.NewStyle().Foreground(layoutColors.Name[0]).Bold(true).Width(width).Render(layout.Name)
 		content := lipgloss.NewStyle().Foreground(colorMuted).Render("No presets included.")
 		if len(layout.Presets) > 0 {
 			content = reviewPresetTable(*c, layout.Presets, &layout, width)
@@ -81,14 +82,9 @@ func (m *PresetModel) reviewLayouts(body *screenBody, width int) {
 }
 
 func reviewPresetTable(c setup.Configuration, ids []string, layout *setup.Layout, width int) string {
-	headers := []string{"Model", "Weights", "Engine", "Context / out", "Load", "Default"}
-	columns := []int{width - 85, 22, 17, 15, 15, 9}
-	colors := []color.Color{colorModel, colorWeights, colorEngine, colorNumber, colorGo, colorGo}
-	if width < 100 {
-		headers = []string{"Preset", "Context / out", "Load", "Default"}
-		columns = []int{width - 44, 15, 15, 9}
-		colors = []color.Color{colorModel, colorNumber, colorGo, colorGo}
-	}
+	headers := []string{"Preset", "Context / out", "Load", "Default"}
+	columns := []int{width - 44, 15, 15, 9}
+	colors := []color.Color{layoutColors.Name[1], layoutColors.Accent, layoutColors.Check, layoutColors.Check}
 	if width < 70 {
 		headers = []string{"Preset", "Settings"}
 		settingsWidth := 20
@@ -96,25 +92,20 @@ func reviewPresetTable(c setup.Configuration, ids []string, layout *setup.Layout
 			settingsWidth = 14
 		}
 		columns = []int{width - 3 - settingsWidth, settingsWidth}
-		colors = []color.Color{colorModel, colorNumber}
+		colors = []color.Color{layoutColors.Name[1], layoutColors.Accent}
 	}
 	rows := make([][]string, 0, len(ids))
 	for _, id := range ids {
 		selected := c.Presets[id]
 		_, preset := presetRecord(selected.Lock)
-		artifact, engine := selected.Lock.Records.Artifacts[preset.Artifact], selected.Lock.Records.Engines[preset.Engine]
-		model, weights, engineName := artifact.Presentation.ModelName, weightsLabel(artifact.Presentation.WeightsName), engine.Presentation.DisplayName
-		if model == "" {
-			model = selected.Name
+		// One line per preset: the name the layout cards use, plus the device
+		// when the preset card shows it.
+		name := selected.Name
+		if len(preset.ComputeOptions) > 1 {
+			name += " · Compute " + strings.ToUpper(string(preset.Compute))
+		} else if preset.Compute == catalog.ComputeCPU {
+			name += " · CPU only"
 		}
-		model += "\nModel license:\n" + licenseLink(artifact, colorModel)
-		if weights == "" {
-			weights = preset.Artifact
-		}
-		if engineName == "" {
-			engineName = preset.Engine
-		}
-		engineName += "\nCompute " + strings.ToUpper(string(preset.Compute))
 		context := fmt.Sprintf("%d / %d", preset.Window(), preset.RequestDefaults.MaxOutputTokens)
 		load, defaultRoute := "—", "—"
 		if layout != nil {
@@ -126,17 +117,13 @@ func reviewPresetTable(c setup.Configuration, ids []string, layout *setup.Layout
 				defaultRoute = "Yes"
 			}
 		}
-		row := []string{model, weights, engineName, context, load, defaultRoute}
-		identity := strings.Join([]string{model, weights, engineName}, "\n")
-		if width < 100 {
-			row = []string{identity, context, load, defaultRoute}
-		}
+		row := []string{name, context, load, defaultRoute}
 		if width < 70 {
 			settings := "Context / out:\n" + context
 			if layout != nil {
 				settings += "\n" + load + "\nDefault: " + defaultRoute
 			}
-			row = []string{identity, settings}
+			row = []string{name, settings}
 		}
 		rows = append(rows, row)
 	}
