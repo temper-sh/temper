@@ -141,6 +141,15 @@ type RequestDefaults struct {
 	Sampling        engine.SamplingDefaults `yaml:"sampling" json:"sampling"`
 }
 
+// empty reports that no generation default is set. A 0.1.0 lock writes every
+// field, so its zero seed counts as no seed.
+func (r RequestDefaults) empty() bool {
+	if r.Sampling.Seed != nil && *r.Sampling.Seed == 0 {
+		r.Sampling.Seed = nil
+	}
+	return r == RequestDefaults{}
+}
+
 type Speculation struct {
 	DraftArtifact  string `yaml:"draft_artifact,omitempty" json:"draft_artifact,omitempty"`
 	Method         string `yaml:"method" json:"method"`
@@ -531,7 +540,7 @@ func (d Document) validatePreset(id string, p Preset) error {
 			return errors.New("requires an exact GGUF projector for llama-server image input")
 		}
 	}
-	if p.Interface == engine.InterfaceReranking && p.RequestDefaults != (RequestDefaults{}) {
+	if p.Interface == engine.InterfaceReranking && !p.RequestDefaults.empty() {
 		return errors.New("reranking cannot declare generation defaults")
 	}
 	if e.Family() == engine.Splash {

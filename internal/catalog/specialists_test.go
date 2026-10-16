@@ -170,6 +170,12 @@ func TestRerankersCompileWithoutGenerationAndRespectNativeControls(t *testing.T)
 		} else if !strings.Contains(args, "--reranking") || !strings.Contains(args, "--device none") {
 			t.Fatal("llama CPU reranking controls missing")
 		}
+		// A 0.1.0 lock writes every default, so its reranker carries seed 0.
+		p.RequestDefaults.Sampling.Seed = seed(0)
+		d.Presets[lock.Preset] = p
+		if err := d.Validate(); err != nil {
+			t.Fatalf("0.1.0 reranker defaults refused: %v", err)
+		}
 		p.RequestDefaults.MaxOutputTokens = 1
 		d.Presets[lock.Preset] = p
 		if d.Validate() == nil {
