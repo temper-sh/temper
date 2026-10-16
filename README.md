@@ -122,7 +122,9 @@ each start begins a new log.
 Model serving is accessible only from your Mac. Temper has no telemetry or
 background updater.
 
-Stop active layouts before upgrading with `brew upgrade temper-sh/temper/temper`.
+Upgrade with `brew upgrade temper-sh/temper/temper`. A running layout keeps
+working and moves to the new release when it next starts. When upgrading
+from 0.1.0, run `temper layout stop` first.
 
 ## Uninstall and disk space
 
@@ -153,7 +155,7 @@ PATH`; then pass `--root PATH` to every command.
 
 ## Compatibility
 
-Temper 0.1 promises two things across its releases: the published catalog
+Temper 0.2 promises two things across its releases: the published catalog
 files, and your `~/.temper` folder (`configuration.json`, the stored catalog
 and `temper-root.json`, which marks the folder's format). Command output, file
 formats inside the cache, and tool commands such as `catalog compile` may
