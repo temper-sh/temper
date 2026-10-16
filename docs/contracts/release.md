@@ -155,8 +155,11 @@ require that distribution identity.
 The `Homebrew` workflow runs after the signed release has been published. It
 can also prepare or publish a bottle for an existing release through
 `workflow_dispatch`; its `publish` input defaults to false there. The release
-workflow calls it with `publish: true`, so a release publishes its bottle and
-formula without a manual step (0.1.0 reviewed its first bottle by hand). It:
+workflow calls it with `publish: true` for a stable tag, so a release publishes
+its bottle and formula without a manual step (0.1.0 reviewed its first bottle
+by hand). A prerelease tag (one with `-`, such as `v0.2.0-alpha.1`) runs the
+same build and checks without publishing, so Homebrew users stay on the last
+stable release. It:
 
 1. checks out the current default branch as the maintained tap;
 2. verifies the named release exists, is public and contains the direct ZIP;

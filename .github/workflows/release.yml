@@ -18,7 +18,9 @@ jobs:
     uses: ./.github/workflows/homebrew.yml
     with:
       tag: ${{ github.ref_name }}
-      publish: true
+      # A prerelease (v0.2.0-alpha.1) still builds and checks its bottle, but
+      # the formula on the default branch keeps the last stable release.
+      publish: ${{ !contains(github.ref_name, '-') }}
 
   release:
     runs-on: macos-15
