@@ -20,6 +20,12 @@ Temper downloads models with the Hugging Face command-line tool `hf`, which you
 install yourself, for example with `brew install hf`. Temper installs the
 engines and the router it needs; it does not install `hf` or your chat app.
 
+We advise installing the [Pi](https://github.com/earendil-works/pi) coding
+agent before you set up Temper, so you can try your models as soon as the
+layout starts. Pi's own installer is
+`curl -fsSL https://pi.dev/install.sh | sh`. Temper does not configure Pi;
+add Temper's address to Pi as a local provider (see below).
+
 Install with [Homebrew](https://brew.sh/) and open the setup wizard:
 
 ```sh
