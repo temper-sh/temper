@@ -457,6 +457,19 @@ guidance kept the bootstrap pin tied to the downloaded signed archive and checke
 fresh setup plus unchanged replay. The local maintainer plan records delivery
 verification. Existing guidance was sufficient; no skill change is proposed.
 
+## Optional output defaults — 2026-10-16
+
+The data-modeling and unit-design guidance kept a required integer from standing
+in for a product need: an omitted cap now has one semantic meaning, with native
+translation owned by each adapter. The
+[output-default contract](contracts/execution-lock.md#settings-and-evidence)
+records Rapid's actual unsupported case instead of applying that restriction
+to every engine. Tests reproduced the rejected omission and coupled context
+bound, then covered lock/configuration round trips, rendered defaults and an
+explicit update from capped to uncapped settings. Full offline checks do not
+claim long-output model behavior. Existing guidance was sufficient; no skill
+change or additional abstraction was needed.
+
 ## Homebrew distribution — 2026-09-30
 
 Ruby guidance followed Homebrew's formula conventions. Reliable-effects guidance

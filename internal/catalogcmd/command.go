@@ -268,7 +268,7 @@ or start anything.`))
 
 func runtimeUsage(w io.Writer) {
 	fmt.Fprintln(w, strings.TrimSpace(`Usage:
-  temper execution configure --lock FILE --preset ID --context N --max-output N [--compute cpu|gpu] [--max-memory BYTES] --out FILE [--dry-run]
+  temper execution configure --lock FILE --preset ID --context N [--max-output N] [--compute cpu|gpu] [--max-memory BYTES] --out FILE [--dry-run]
   temper execution inspect --lock FILE
   temper execution prepare|render|paths|remove --lock FILE --root PATH --installation ID [--dry-run]
   temper execution serve --lock FILE --root PATH --installation ID --generation SHA256 --status-file FILE [--listen 127.0.0.1:PORT] [--dry-run]

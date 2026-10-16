@@ -91,6 +91,35 @@ func TestConfigurationTextReviewIncludesModelLicenseAndReadableURL(t *testing.T)
 	}
 }
 
+func TestConfigurationRoundTripAndReviewPreserveOmittedOutput(t *testing.T) {
+	c := composition(t)
+	selected := c.Presets[compactLayout]
+	lock := selected.Lock
+	preset := lock.Records.Presets[lock.Preset]
+	var err error
+	selected.Lock, err = catalog.ConfigureExecution(lock, lock.Preset, catalog.ExecutionSettings{ContextWindowTokens: preset.Window()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Presets[compactLayout] = selected
+	raw, err := c.Bytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err = setup.ParseConfiguration(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := setup.Plan{Configuration: &c}
+	var lines []string
+	for _, section := range p.Sections() {
+		lines = append(lines, section.Lines...)
+	}
+	if text := strings.Join(lines, "\n"); !strings.Contains(text, "output uses remaining context") || strings.Contains(text, "output allowance 0") {
+		t.Fatalf("review misrepresents the omitted cap: %s", text)
+	}
+}
+
 func TestConfigurationSaveIsAtomicRevisionCheckedAndRepeatable(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "root")
 	c := composition(t)

@@ -32,6 +32,7 @@ models:
       --spec-draft-n-max 3
       --chat-template-file '/temper/artifacts/layouts/coder/dc0bf13d38e973845242c06b8a09ac72b014da701f66e925d2f716ad8a417166/patches/sharp/template.jinja'
       --reasoning off
+      --predict 4096
     ttl: 7200
   "rerank-0.6b":
     name: "Reranker"

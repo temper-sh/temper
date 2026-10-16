@@ -74,7 +74,6 @@ func TestContextChoicesRefuseUnknownAndOutOfRangeWindows(t *testing.T) {
 	}{
 		{"unknown", "unknown", 65536, "unknown preset"},
 		{"negative", id, -1, "context"},
-		{"no input capacity", id, 4096, "context"},
 		{"above native maximum", id, layout.ContextLimitTokens + 1, "context"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

@@ -46,6 +46,7 @@ func TestBuildMapsLlamaServerSemanticsToAnExactCommand(t *testing.T) {
 		"--device none",
 		"--no-kv-offload",
 		"--no-op-offload",
+		"--predict 4096",
 	}
 	assertCommand(t, command, want, engine.Runtime{
 		Requirement:   engine.RuntimeRequirement{Package: "llama-cpp", RelativeExecutable: "llama-server"},
@@ -180,6 +181,7 @@ func TestBuildMapsVLLMMetalSemanticsToAnExactCommand(t *testing.T) {
 		"--host 127.0.0.1 --port ${PORT}",
 		"--served-model-name 'qwen'",
 		"--max-model-len 65536",
+		"--override-generation-config '{\"max_new_tokens\":null}'",
 		"--max-num-seqs 1",
 		"--max-num-batched-tokens 4096",
 		"--gpu-memory-utilization 0.9",

@@ -49,8 +49,8 @@ func CompilePreset(d Document, id string, memoryGiB, window int, target software
 		if limit == 0 {
 			limit = profile.ContextWindowTokens
 		}
-		if window <= p.RequestDefaults.MaxOutputTokens || window > limit {
-			return Lock{}, fmt.Errorf("preset %q context must be between %d and %d tokens (total input and output)", id, p.RequestDefaults.MaxOutputTokens+1, limit)
+		if window <= 0 || window > limit {
+			return Lock{}, fmt.Errorf("preset %q context must be between 1 and %d tokens (total input and output)", id, limit)
 		}
 		profile.ContextWindowTokens = window
 	}

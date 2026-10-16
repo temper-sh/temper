@@ -29,6 +29,47 @@ func readExecution(t *testing.T, path string) catalog.Lock {
 	return l
 }
 
+func TestConfigureWithoutMaxOutputClearsTheCapAndIsRepeatable(t *testing.T) {
+	root := t.TempDir()
+	source, output := filepath.Join(root, "capped.json"), filepath.Join(root, "remaining.json")
+	id := "nuextract3-q4km-llama"
+	invoke(t, "catalog", "compile", "--catalog", "../testfixture/testdata/catalog.json", "--preset", id, "--target", "darwin/arm64", "--out", source)
+	before, _ := os.ReadFile(source)
+	args := []string{"configure", "--lock", source, "--preset", id, "--context", "8192", "--out", output, "--json"}
+	for _, dry := range []bool{true, false, false} {
+		command := append([]string{}, args...)
+		if dry {
+			command = append(command, "--dry-run")
+		}
+		var out, diagnostics bytes.Buffer
+		if code := catalogcmd.Runtime(context.Background(), command, &out, &diagnostics, catalogcmd.Effects{}); code != 0 {
+			t.Fatal(diagnostics.String())
+		}
+		var response struct {
+			Settings map[string]any
+		}
+		if err := json.Unmarshal(out.Bytes(), &response); err != nil {
+			t.Fatal(err)
+		}
+		if _, present := response.Settings["max_output_tokens"]; present {
+			t.Fatal("configuration response invented an output default")
+		}
+		if dry {
+			if _, err := os.Stat(output); !os.IsNotExist(err) {
+				t.Fatal("dry run wrote a lock")
+			}
+		}
+	}
+	lock := readExecution(t, output)
+	if lock.Records.Presets[id].RequestDefaults.MaxOutputTokens != 0 {
+		t.Fatal("omitting --max-output retained the old cap")
+	}
+	after, _ := os.ReadFile(source)
+	if !bytes.Equal(before, after) {
+		t.Fatal("configuration modified the original lock")
+	}
+}
+
 func TestExecutionComputeCLIConfiguresAndInspectsExactPlacement(t *testing.T) {
 	root := t.TempDir()
 	source, output := filepath.Join(root, "gpu.json"), filepath.Join(root, "cpu.json")
@@ -145,7 +186,7 @@ func TestPresetConfigurationPreservesFrozenMaterialsAndContextIdentity(t *testin
 	}
 }
 
-func TestExecutionConfigurationRejectsUnboundedAndWrongPresetChanges(t *testing.T) {
+func TestExecutionConfigurationRejectsInvalidBoundsAndWrongPresetChanges(t *testing.T) {
 	raw, err := os.ReadFile("../testfixture/testdata/study-catalog.json")
 	if err != nil {
 		t.Fatal(err)
@@ -167,8 +208,8 @@ func TestExecutionConfigurationRejectsUnboundedAndWrongPresetChanges(t *testing.
 		}
 		for _, invalid := range []catalog.ExecutionSettings{
 			{ContextWindowTokens: 300000, MaxOutputTokens: 4096},
-			{ContextWindowTokens: 4096, MaxOutputTokens: 4096},
-			{ContextWindowTokens: 65536, MaxOutputTokens: 0},
+			{ContextWindowTokens: 0, MaxOutputTokens: 4096},
+			{ContextWindowTokens: 65536, MaxOutputTokens: -1},
 			{ContextWindowTokens: 65536, MaxOutputTokens: 4096, MaxMemoryBytes: -1},
 		} {
 			if _, err := catalog.ConfigureExecution(base, id, invalid); err == nil {

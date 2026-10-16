@@ -129,7 +129,16 @@ func (p Plan) configurationSections() []Section {
 		for _, x := range selected.Lock.Records.Presets {
 			artifact := selected.Lock.Records.Artifacts[x.Artifact]
 			lines = append(lines, "Model license: "+artifact.License+" · "+artifact.LicenseURL())
-			lines = append(lines, fmt.Sprintf("Compute %s. Context %d tokens (input + output); output allowance %d.", strings.ToUpper(string(x.Compute)), x.Window(), x.RequestDefaults.MaxOutputTokens))
+			context := fmt.Sprintf("Compute %s. Context %d tokens", strings.ToUpper(string(x.Compute)), x.Window())
+			if x.Interface == "chat-completions" {
+				context += " (input + output); "
+				if x.RequestDefaults.MaxOutputTokens > 0 {
+					context += fmt.Sprintf("output default %d", x.RequestDefaults.MaxOutputTokens)
+				} else {
+					context += "output uses remaining context"
+				}
+			}
+			lines = append(lines, context+".")
 			if x.Presentation.Description != "" {
 				lines = append(lines, x.Presentation.Description)
 			}

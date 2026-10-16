@@ -62,6 +62,9 @@ func buildLlamaServer(request Request) (Command, error) {
 	if request.Interface == InterfaceChatCompletions {
 		options.reasoning = request.Thinking
 		options.maxTokens = request.MaxTokens
+		if options.maxTokens == 0 {
+			options.maxTokens = -1
+		}
 		options.kv = "f16"
 		switch request.KVCache {
 		case "q4":
@@ -146,8 +149,8 @@ func validateLlamaServerRequest(request Request) error {
 
 	switch request.Interface {
 	case InterfaceChatCompletions:
-		if request.MaxTokens <= 0 || request.MaxTokens >= request.Window {
-			return errors.New("llama-server coder max tokens must be greater than zero and below window")
+		if request.MaxTokens < 0 {
+			return errors.New("llama-server max tokens must be nonnegative; zero uses remaining context")
 		}
 		if request.KVCache != "q4" && request.KVCache != "q8" && request.KVCache != "f16" {
 			return fmt.Errorf("llama-server KV cache %q must be q4, q8 or f16", request.KVCache)

@@ -34,7 +34,7 @@ type Request struct {
 	Interface         string
 	Modalities        []string
 	Window            int
-	MaxTokens         int
+	MaxTokens         int // Zero means no separate output cap; the adapter maps it to native behavior.
 	Thinking          string
 	Speculation       string
 	SpeculativeTokens int

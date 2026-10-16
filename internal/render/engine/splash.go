@@ -72,12 +72,17 @@ func buildSplash(r Request) (Command, error) {
 		return Command{}, errors.New("Splash supports temperature up to 2, top_k 1–32, a nonnegative seed, and neutral penalties")
 	}
 	target, draft := filepath.Join(c.AssemblyPath, "target"), filepath.Join(c.AssemblyPath, "draft")
+	maxTokens := r.MaxTokens
+	if maxTokens == 0 {
+		// Splash clamps its server default to context minus the rendered prompt.
+		maxTokens = r.Window
+	}
 	args := []string{"-I", "-B", "-u", "-c", SplashBootstrap, target, draft,
 		"--tokenizer", filepath.Join(c.AssemblyPath, "tokenizer"), "--model", c.ModelID,
 		"--served-model-name", r.LayoutID, "--host", "127.0.0.1", "--port", "${PORT}",
 		"--max-memory", strconv.FormatInt(c.MaxMemoryBytes, 10), "--max-context", strconv.Itoa(r.Window),
 		"--kv-format", c.KVCache, "--default-reasoning-effort", c.ReasoningEffort,
-		"--max-new-tokens", strconv.Itoa(r.MaxTokens), "--request-timeout", strconv.Itoa(c.RequestTimeoutSeconds), "--no-webui"}
+		"--max-new-tokens", strconv.Itoa(maxTokens), "--request-timeout", strconv.Itoa(c.RequestTimeoutSeconds), "--no-webui"}
 	var groups [][]commandWord
 	for _, arg := range args {
 		word := dataWord(arg)

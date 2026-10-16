@@ -75,10 +75,13 @@ func llamaServerCommand(options llamaServerOptions) (Command, error) {
 			}
 		}
 	}
-	if c := options.controls; c != nil {
-		if options.maxTokens > 0 {
-			groups = append(groups, []commandWord{knownWord("--predict"), knownWord(strconv.Itoa(options.maxTokens))})
+	if !options.reranking {
+		groups = append(groups, []commandWord{knownWord("--predict"), knownWord(strconv.Itoa(options.maxTokens))})
+		if options.maxTokens == -1 && options.controls == nil {
+			groups = append(groups, []commandWord{knownWord("--no-context-shift")})
 		}
+	}
+	if c := options.controls; c != nil {
 		if c.CheckpointMinStep != nil {
 			groups = append(groups, []commandWord{knownWord("--checkpoint-min-step"), knownWord(strconv.Itoa(*c.CheckpointMinStep))})
 		}
@@ -86,7 +89,8 @@ func llamaServerCommand(options llamaServerOptions) (Command, error) {
 			[]commandWord{knownWord("--cache-reuse"), knownWord(strconv.Itoa(c.CacheReuse))},
 			[]commandWord{knownWord("--reasoning-effort"), knownWord(c.ReasoningEffort)},
 			[]commandWord{knownWord(llamaBooleanFlag(c.PreserveReasoning, "--reasoning-preserve", "--no-reasoning-preserve"))},
-			[]commandWord{knownWord(llamaBooleanFlag(c.ContextShift, "--context-shift", "--no-context-shift"))},
+			// Without an output cap, stop at the context boundary instead of discarding history.
+			[]commandWord{knownWord(llamaBooleanFlag(c.ContextShift && options.maxTokens != -1, "--context-shift", "--no-context-shift"))},
 			[]commandWord{knownWord(llamaBooleanFlag(c.CachePrompt, "--cache-prompt", "--no-cache-prompt"))},
 			[]commandWord{knownWord("--fit"), knownWord(c.Fit)},
 			[]commandWord{knownWord("--threads"), knownWord(strconv.Itoa(c.Threads))},

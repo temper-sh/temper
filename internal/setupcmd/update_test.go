@@ -130,7 +130,7 @@ func TestUpdateSoftwareKeepsSettingsAndMarksUntestedCombinations(t *testing.T) {
 	}
 	next := newerRouter(t)
 	p := next.Presets[extraction]
-	p.RequestDefaults.MaxOutputTokens = 2048
+	p.RequestDefaults.MaxOutputTokens = 0
 	next.Presets[extraction] = p
 	c.Newest = newest(next)
 	code, output, diagnostics := updateRun(c, "--root", root, "--software", "--json")
@@ -146,6 +146,13 @@ func TestUpdateSoftwareKeepsSettingsAndMarksUntestedCombinations(t *testing.T) {
 	_, presets = decodeUpdate(t, output)
 	if got := presets[extraction]; code != 0 || got.Status != "updated" || got.Note != "" || !slices.Contains(got.Changes, "settings changed") {
 		t.Fatalf("full update after software update: %d %+v %s", code, got, diagnostics)
+	}
+	saved, _, err := setup.ReadConfiguration(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.Presets[extraction].Lock.Records.Presets[extraction].RequestDefaults.MaxOutputTokens != 0 {
+		t.Fatal("full update did not adopt the catalog's omitted output default")
 	}
 }
 

@@ -11,6 +11,8 @@ func vllmMetalCommand(options vllmMetalOptions) (Command, error) {
 		{knownWord("--host"), knownWord("127.0.0.1"), knownWord("--port"), portWord()},
 		{knownWord("--served-model-name"), dataWord(options.layoutID)},
 		{knownWord("--max-model-len"), knownWord(strconv.Itoa(options.window))},
+		// Clear only the model's output cap, retaining its other generation defaults.
+		{knownWord("--override-generation-config"), dataWord(`{"max_new_tokens":null}`)},
 		{knownWord("--max-num-seqs"), knownWord(strconv.Itoa(options.maxNumSeqs))},
 		{knownWord("--max-num-batched-tokens"), knownWord(strconv.Itoa(options.maxNumBatchedTokens))},
 		{knownWord("--gpu-memory-utilization"), knownWord(strconv.FormatFloat(options.gpuMemoryUtilization, 'g', -1, 64))},
@@ -45,6 +47,12 @@ func vllmMetalCommand(options vllmMetalOptions) (Command, error) {
 		config := fmt.Sprintf(`{"method":"mtp","num_speculative_tokens":%d}`, options.speculativeTokens)
 		groups = append(groups, []commandWord{knownWord("--speculative-config"), dataWord(config)})
 	}
+	var defaults map[string]any
+	if options.maxTokens > 0 {
+		// Router defaults preserve a caller's explicit allowance. A generation-config
+		// override in vLLM would instead become a ceiling even for explicit requests.
+		defaults = map[string]any{"max_tokens": options.maxTokens}
+	}
 	return commandFromLaunch(launchSpec{
 		executable:     knownWord("vllm"),
 		argumentGroups: groups,
@@ -58,7 +66,8 @@ func vllmMetalCommand(options vllmMetalOptions) (Command, error) {
 			EnvironmentAssignment{Name: "VLLM_METAL_USE_PAGED_ATTENTION", Value: "1"},
 			EnvironmentAssignment{Name: "VLLM_NO_USAGE_STATS", Value: "1"},
 		),
-		CheckEndpoint: "/health",
-		ContextWindow: options.window,
+		CheckEndpoint:     "/health",
+		ContextWindow:     options.window,
+		DefaultParameters: defaults,
 	})
 }

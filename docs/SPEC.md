@@ -24,6 +24,13 @@ translation, with language and evidence guidance in authored descriptions.
 [execution locks](contracts/execution-lock.md), and
 [configuration](contracts/layouts.md) own the current behavior.
 
+Output defaults are optional. Chat presets without an explicit cap use remaining
+context for generation, including reasoning. Context capacity and output defaults
+are independent settings; a test's output reserve does not become a product limit.
+The [output-default contract](contracts/execution-lock.md#settings-and-evidence)
+owns omission, request overrides and engine-specific support. Saved limits and
+historical measurements retain their producing settings.
+
 Pre-release schema aliases, migrations, historical hash shims and predicted
 machine-facts formats are unsupported. Historical signed publications and
 measurements retain their exact bytes and producing host. Older terminology

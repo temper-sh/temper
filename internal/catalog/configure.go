@@ -6,7 +6,7 @@ import "errors"
 // Software, weights, templates, sampling and speculation remain as recorded.
 type ExecutionSettings struct {
 	ContextWindowTokens int           `json:"context_window_tokens"`
-	MaxOutputTokens     int           `json:"max_output_tokens"`
+	MaxOutputTokens     int           `json:"max_output_tokens,omitempty"`
 	MaxMemoryBytes      int64         `json:"max_memory_bytes,omitempty"`
 	Compute             ComputeDevice `json:"compute,omitempty"`
 }
@@ -22,8 +22,8 @@ func ConfigureExecution(base Lock, id string, settings ExecutionSettings) (Lock,
 	if !ok {
 		return Lock{}, errors.New("preset does not match the source execution")
 	}
-	validOutput := p.Interface == "reranking" && settings.MaxOutputTokens == 0 || p.Interface == "chat-completions" && settings.MaxOutputTokens > 0
-	if !validOutput || settings.ContextWindowTokens <= settings.MaxOutputTokens || settings.ContextWindowTokens > p.ContextLimit() || settings.MaxMemoryBytes < 0 {
+	validOutput := p.Interface == "reranking" && settings.MaxOutputTokens == 0 || p.Interface == "chat-completions" && settings.MaxOutputTokens >= 0
+	if !validOutput || settings.ContextWindowTokens <= 0 || settings.ContextWindowTokens > p.ContextLimit() || settings.MaxMemoryBytes < 0 {
 		return Lock{}, errors.New("execution settings are outside the preset's bounds")
 	}
 	// Canonicalization clones nested records: modifying a derived execution must

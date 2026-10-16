@@ -14,6 +14,7 @@ type vllmMetalOptions struct {
 	layoutID             string
 	modelPath            string
 	window               int
+	maxTokens            int
 	thinking             string
 	maxNumSeqs           int
 	maxNumBatchedTokens  int
@@ -35,6 +36,7 @@ func buildVLLMMetal(request Request) (Command, error) {
 		layoutID:             request.LayoutID,
 		modelPath:            request.ModelPath,
 		window:               request.Window,
+		maxTokens:            request.MaxTokens,
 		thinking:             request.Thinking,
 		maxNumSeqs:           tuning.MaxNumSeqs,
 		maxNumBatchedTokens:  tuning.MaxNumBatchedTokens,

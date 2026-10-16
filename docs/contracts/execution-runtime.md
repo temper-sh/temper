@@ -9,7 +9,7 @@ This development surface consumes an exact execution lock. It does not resolve
 updates or select software.
 
 ```
-temper execution configure --lock FILE --preset ID --context N --max-output N [--compute cpu|gpu] [--max-memory BYTES] --out FILE [--dry-run] [--json]
+temper execution configure --lock FILE --preset ID --context N [--max-output N] [--compute cpu|gpu] [--max-memory BYTES] --out FILE [--dry-run] [--json]
 temper execution inspect --lock FILE [--json]
 temper execution prepare --lock FILE --root PATH --installation ID [--json]
 temper execution render --lock FILE --root PATH --installation ID [--json]
@@ -22,14 +22,17 @@ Each command prints a short plain summary. Clients pass `--json` and read the
 one JSON document it prints on stdout; the documents below are those.
 
 `configure` derives one exact preset execution from a frozen lock. Only the
-context window, output allowance, supported CPU/GPU choice and optional Splash memory cap may change;
+context window, optional output default, supported CPU/GPU choice and optional Splash memory cap may change;
 software, artifacts, templates, sampling and speculation remain frozen. It
-refuses context changes for CrispEmbed's fixed encoder limit; rerankers require
-a zero output allowance and carry no generation defaults. It
+refuses context changes for CrispEmbed's fixed encoder limit; rerankers carry
+no generation defaults. Omitting `--max-output`, or passing zero, removes the
+output cap in the derived lock. A positive value is an overridable default,
+independent of the context size. The
+[output-default contract](execution-lock.md#settings-and-evidence) describes engine support. It
 performs no machine detection, installation, model loading or upstream lookup.
 The source stays unchanged, existing different output is refused, and dry-run
 writes nothing. JSON `temper-execution-configuration/v1` returns `preset`, the
-explicit `settings` (`context_window_tokens`, `max_output_tokens`, optional
+explicit `settings` (`context_window_tokens`, optional `max_output_tokens`,
 `compute` and `max_memory_bytes`), `path`, `changed` and `dry_run`.
 
 `catalog compile --preset ID` compiles a current v1 catalog directly. A client

@@ -294,8 +294,8 @@ func (d Document) validateFields() error {
 
 		switch layout.Interface {
 		case "chat-completions":
-			if layout.MaxTokens <= 0 || layout.MaxTokens >= layout.Window {
-				problem("layout %q max_tokens must be greater than zero and below window", id)
+			if layout.MaxTokens < 0 {
+				problem("layout %q max_tokens must be nonnegative; omit it for remaining context", id)
 			}
 			if layout.Thinking != "on" && layout.Thinking != "off" {
 				problem("layout %q thinking %q must be on or off", id, layout.Thinking)

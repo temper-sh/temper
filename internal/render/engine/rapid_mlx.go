@@ -61,6 +61,9 @@ func validateRapidMLXRequest(request Request) error {
 	if err := validateChatRequest(request, RapidMLX, "mlx-safetensors", []string{"text"}, []string{"text", "image"}); err != nil {
 		return err
 	}
+	if request.MaxTokens == 0 {
+		return errors.New("rapid-mlx requires an explicit output default: its CLI cannot express remaining-context generation")
+	}
 	tuning := *request.RapidMLX
 	if tuning.PrefillStepSize < 0 || tuning.RequestTimeoutSeconds < 0 {
 		return errors.New("Rapid prefill and timeout must be nonnegative")

@@ -18,14 +18,14 @@ func configureExecution(ctx context.Context, args []string, stdout, stderr io.Wr
 	lockPath := f.String("lock", "", "frozen source execution lock")
 	id := f.String("preset", "", "explicit preset ID")
 	window := f.Int("context", 0, "total context window in tokens")
-	output := f.Int("max-output", 0, "output token allowance")
+	output := f.Int("max-output", 0, "optional output token default (omit or 0 to use remaining context)")
 	memory := f.Int64("max-memory", 0, "Splash engine memory limit in bytes")
 	compute := f.String("compute", "", "cpu or gpu (default: retain selected device)")
 	out := f.String("out", "", "new execution lock path")
 	dry := f.Bool("dry-run", false, "validate without writes")
 	jsonOutput := f.Bool("json", false, "print one JSON document for scripts")
 	f.Usage = clihelp.Usage(stderr, clihelp.Help{Summary: "Write a new execution lock with other context, output, compute or memory settings.\nSoftware, models and sampling stay frozen.",
-		Usage: []string{"temper execution configure --lock FILE --preset ID --context N --max-output N --out FILE [options]"}}, f)
+		Usage: []string{"temper execution configure --lock FILE --preset ID --context N --out FILE [--max-output N] [options]"}}, f)
 	if err := f.Parse(args); err != nil {
 		return parseFailure(err)
 	}
@@ -41,7 +41,7 @@ func configureExecution(ctx context.Context, args []string, stdout, stderr io.Wr
 		return failed(stderr, errors.New("--max-memory must be positive"))
 	}
 	if f.NArg() != 0 || *lockPath == "" || *id == "" || *out == "" {
-		return failed(stderr, errors.New("--lock, --preset, --context, --max-output and --out are required"))
+		return failed(stderr, errors.New("--lock, --preset, --context and --out are required"))
 	}
 	info, err := os.Lstat(*lockPath)
 	if err != nil {

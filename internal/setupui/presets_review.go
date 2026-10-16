@@ -83,7 +83,7 @@ func (m *PresetModel) reviewLayouts(body *screenBody, width int) {
 
 func reviewPresetTable(c setup.Configuration, ids []string, layout *setup.Layout, width int) string {
 	headers := []string{"Preset", "Context / out", "Load", "Default"}
-	columns := []int{width - 44, 15, 15, 9}
+	columns := []int{width - 48, 19, 15, 9}
 	colors := []color.Color{layoutColors.Name[1], layoutColors.Accent, layoutColors.Check, layoutColors.Check}
 	if width < 70 {
 		headers = []string{"Preset", "Settings"}
@@ -106,7 +106,14 @@ func reviewPresetTable(c setup.Configuration, ids []string, layout *setup.Layout
 		} else if preset.Compute == catalog.ComputeCPU {
 			name += " · CPU only"
 		}
-		context := fmt.Sprintf("%d / %d", preset.Window(), preset.RequestDefaults.MaxOutputTokens)
+		context := fmt.Sprintf("%d", preset.Window())
+		if preset.Interface == "chat-completions" {
+			output := "remaining"
+			if preset.RequestDefaults.MaxOutputTokens > 0 {
+				output = fmt.Sprint(preset.RequestDefaults.MaxOutputTokens)
+			}
+			context += " / " + output
+		}
 		load, defaultRoute := "—", "—"
 		if layout != nil {
 			load = "On request"

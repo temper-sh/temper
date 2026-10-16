@@ -135,7 +135,8 @@ func (e Engine) Family() string {
 }
 
 type RequestDefaults struct {
-	MaxOutputTokens int                     `yaml:"max_output_tokens" json:"max_output_tokens"`
+	// Zero leaves generation bounded by the remaining context, without a separate output cap.
+	MaxOutputTokens int                     `yaml:"max_output_tokens,omitempty" json:"max_output_tokens,omitempty"`
 	Reasoning       string                  `yaml:"reasoning" json:"reasoning"`
 	Sampling        engine.SamplingDefaults `yaml:"sampling" json:"sampling"`
 }

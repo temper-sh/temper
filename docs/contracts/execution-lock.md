@@ -28,9 +28,11 @@ Changing settings requires a new output path. Dry runs create no files.
 
 ## The catalog
 
-`temper-catalog/v1` is frozen for 0.1.x. A later change that alters a field's
-meaning, removes a required field or changes the reader rules gets
-`temper-catalog/v2` under a new URL; additions stay in v1.
+`temper-catalog/v1` preserves existing field meanings and accepted records.
+Incompatible field or reader changes get `temper-catalog/v2` under a new URL.
+Optional output limits extend the accepted v1 records: existing positive
+limits keep their meaning. Earlier readers mark uncapped chat presets
+unavailable, while retaining their saved presets and limits.
 
 Top level: `schema`, `platform` (`apple-silicon`), `date` (`YYYY-MM-DD`, when
 the catalog content last changed; the publisher refuses a date before the
@@ -145,16 +147,45 @@ count to zero. Compute selection changes what runs; allowed choices and
 inactive GPU tuning do not.
 
 `execution configure --compute cpu|gpu` selects among the retained choices,
-alongside the required context and output limits. Omitting it preserves the
+alongside the required context and optional output default. Omitting it preserves the
 current device. Weights and installed software remain reusable.
 
-The authored `context_window_tokens` counts input plus output. An explicit window
-must exceed `request_defaults.max_output_tokens` and remain within
+The authored `context_window_tokens` counts input plus output. A window must
+be positive and remain within
 `context_limit_tokens`, or the authored window if no separate ceiling is known.
 Setup accepts the authored default. It never infers fit from a larger machine.
 
-Reranking presets carry no generation defaults: output allowance is zero and
-reasoning/sampling are absent. Use `--max-output 0` when configuring one.
+`request_defaults.max_output_tokens` is optional. Omission or zero means no
+separate output cap: generation may use the context remaining after the rendered
+input, including reasoning tokens, and stops normally when the model finishes.
+A positive value supplies an overridable request default. It does not reserve
+that space in advance or constrain context edits; the engine's context boundary
+still applies. Negative values are invalid. A client's explicit request allowance
+takes precedence over the default, within the engine's request/context rules.
+
+`execution configure` takes the full desired context/output settings.
+Omitting `--max-output`, or passing `--max-output 0`, clears the old output
+default in the new lock. Explicit experimental allowances remain ordinary
+positive values. Changing a default does not change the conditions or claims
+of historical measurements.
+
+The adapters implement omission as follows:
+
+- llama.cpp uses `--predict -1` and disables context shifting, so reaching the
+  context boundary stops generation without discarding history. An explicit
+  output default retains the configured context-shift behavior.
+- Splash sets its native default to the configured window; its frontend clamps
+  omitted request allowances to the space remaining after tokenizing the input.
+- vLLM clears only `max_new_tokens` from the model's generation configuration
+  and uses its native remaining-context calculation. Explicit defaults are
+  passed through the router's defaults filter, preserving request overrides.
+- Rapid MLX's current adapter requires an explicit positive default because
+  its CLI cannot express remaining-context generation. Omitting the native flag
+  would impose the engine's finite default; a window-sized explicit default can
+  instead reject valid prompts. No shipped catalog preset uses this adapter.
+
+Reranking presets carry no generation defaults: output allowance is absent or
+zero and reasoning/sampling are absent. They need no `--max-output` argument.
 CrispEmbed reads its fixed sequence limit from the selected GGUF. Its preset
 window must equal the authored model limit; context overrides are refused and
 the picker disables that editor.
@@ -200,8 +231,9 @@ thread, load-mode and sampling controls. `checkpoint_min_step` maps to
 minimum, and negative values refuse. The sampling `seed` is optional: set, it
 maps to `--seed` for repeatable runs; omitted, the engine picks a random seed,
 so asking again gives a new answer. KV `q4`, `q8`, and `f16` map to `q4_0`,
-`q8_0`, and `f16` for both K and V. Output allowance supplies `--predict` with
-these controls; explicit API request values can override server defaults.
+`q8_0`, and `f16` for both K and V. The optional output default supplies
+`--predict` independently of that controls block; explicit API request values
+can override server defaults.
 
 `crispembed/v1` serves a complete GGUF text reranker with explicit positive
 `threads`, CPU placement and offline model loading. It installs the pinned

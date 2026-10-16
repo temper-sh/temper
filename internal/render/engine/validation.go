@@ -24,8 +24,8 @@ func validateChatRequest(request Request, engineName, artifactFormat string, all
 	if request.Window <= 0 {
 		return fmt.Errorf("%s window must be greater than zero", engineName)
 	}
-	if request.MaxTokens <= 0 || request.MaxTokens >= request.Window {
-		return fmt.Errorf("%s max tokens must be greater than zero and below window", engineName)
+	if request.MaxTokens < 0 {
+		return fmt.Errorf("%s max tokens must be nonnegative; zero uses remaining context", engineName)
 	}
 	if request.Thinking != "on" && request.Thinking != "off" {
 		return fmt.Errorf("%s thinking %q must be on or off", engineName, request.Thinking)
