@@ -13,6 +13,7 @@ import (
 	"github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/machine"
 	"github.com/temper-sh/temper/internal/presetcmd"
+	"github.com/temper-sh/temper/internal/setup"
 	"github.com/temper-sh/temper/internal/software"
 	"github.com/temper-sh/temper/internal/testfixture"
 	"github.com/temper-sh/temper/internal/userpreset"
@@ -163,5 +164,63 @@ func TestFieldsListTheSettingsOfTheOriginsEngineWithValues(t *testing.T) {
 	}
 	if out, _, code := run(t, c, root, "fields", "qwen3.8-27b-q4xl-splash"); code != 0 || !strings.Contains(out, "engine_config.max_memory_bytes") || strings.Contains(out, "engine_config.batch_tokens") {
 		t.Fatalf("fields of another engine: %s", out)
+	}
+}
+
+func TestPlanReviewsTheCompiledPresetAndSavesNothing(t *testing.T) {
+	c, root := command(t)
+	if _, diagnostics, code := run(t, c, root, "fork", mtp, "qwen-128k"); code != 0 {
+		t.Fatalf("fork: %s", diagnostics)
+	}
+	raw, err := os.ReadFile(userpreset.Path(root, "qwen-128k"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	edited := strings.Replace(string(raw), `"origin"`, `"changes": {"context_window_tokens": 131072}, "origin"`, 1)
+	if err := os.WriteFile(userpreset.Path(root, "qwen-128k"), []byte(edited), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var reviewed setup.Configuration
+	c.Plan = func(_ context.Context, planRoot string, next setup.Configuration) (setup.Plan, error) {
+		if planRoot != root {
+			t.Fatalf("planned root %s, want %s", planRoot, root)
+		}
+		reviewed = next
+		return setup.Plan{Root: planRoot, Configuration: &next, DownloadBytes: 42, CanPrepare: true,
+			Presets: []setup.PresetPlan{{Preset: "qwen-128k", Lock: next.Presets["qwen-128k"].Lock, ModelBytes: 40}}}, nil
+	}
+	out, diagnostics, code := run(t, c, root, "plan", "qwen-128k", "--json")
+	var document struct {
+		Schema, Preset string
+		Plan           struct {
+			CanPrepare    bool  `json:"can_prepare"`
+			DownloadBytes int64 `json:"download_bytes"`
+			Presets       map[string]struct {
+				ModelBytes int64 `json:"model_bytes"`
+			}
+		}
+	}
+	if code != 0 || json.Unmarshal([]byte(out), &document) != nil {
+		t.Fatalf("plan --json: %d %s %s", code, out, diagnostics)
+	}
+	if document.Schema != "temper-preset-plan/v1" || document.Preset != "qwen-128k" || !document.Plan.CanPrepare ||
+		document.Plan.DownloadBytes != 42 || document.Plan.Presets["qwen-128k"].ModelBytes != 40 {
+		t.Fatalf("plan --json: %s", out)
+	}
+	if len(reviewed.Presets) != 1 || reviewed.Presets["qwen-128k"].Lock.Records.Presets["qwen-128k"].Window() != 131072 {
+		t.Fatalf("the plan did not review the compiled fork: %+v", reviewed.Presets)
+	}
+	if len(reviewed.Layouts) != 0 {
+		t.Fatalf("the plan reviewed layouts: %+v", reviewed.Layouts)
+	}
+	out, _, code = run(t, c, root, "plan", "qwen-128k")
+	if code != 0 || strings.Contains(out, "Configuration: ") || !strings.Contains(out, "Plan only: nothing was saved or downloaded") {
+		t.Fatalf("plan: %s", out)
+	}
+	if _, err := os.Stat(filepath.Join(root, "configuration.json")); err == nil {
+		t.Fatal("plan saved a configuration")
+	}
+	if _, diagnostics, code := run(t, c, root, "plan", "missing"); code == 0 || !strings.Contains(diagnostics, "there is no") {
+		t.Fatalf("plan of a missing preset: %d %s", code, diagnostics)
 	}
 }

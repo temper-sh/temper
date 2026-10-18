@@ -157,7 +157,7 @@ func (c Command) Configure(ctx context.Context, args []string, in io.Reader, out
 		return fail(diagnostics, err)
 	}
 	preview := func(ctx context.Context, next setup.Configuration) (setup.Plan, error) {
-		return c.preview(ctx, root, next)
+		return c.Preview(ctx, root, next)
 	}
 	interactive := !scripted && !*resume
 	if interactive {
@@ -431,9 +431,9 @@ func (c Command) Configure(ctx context.Context, args []string, in io.Reader, out
 	return 0
 }
 
-// preview reviews a candidate configuration against this Mac and the
-// material already on disk.
-func (c Command) preview(ctx context.Context, root string, next setup.Configuration) (setup.Plan, error) {
+// Preview reviews a candidate configuration against this Mac and the
+// material already on disk. It saves and downloads nothing.
+func (c Command) Preview(ctx context.Context, root string, next setup.Configuration) (setup.Plan, error) {
 	facts, err := c.Detect(ctx)
 	if err != nil {
 		return setup.Plan{}, err

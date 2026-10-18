@@ -188,7 +188,11 @@ func runWithDependencies(ctx context.Context, arguments []string, stdout, stderr
 			fmt.Fprintf(stderr, "temper preset: %v\n", err)
 			return 1
 		}
-		return presetcmd.New(deps.detectFacts, hub).Run(ctx, arguments[1:], stdout, stderr)
+		command := presetcmd.New(deps.detectFacts, hub)
+		planner := setupcmd.New(deps.detectFacts, deps.presetEffects())
+		planner.CacheRoot = deps.cacheRoot
+		command.Plan = planner.Preview
+		return command.Run(ctx, arguments[1:], stdout, stderr)
 	case "software":
 		if deps.newSoftware == nil {
 			fmt.Fprintln(stderr, "temper software: command dependencies are unavailable")

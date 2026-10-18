@@ -33,6 +33,9 @@ type Command struct {
 	Catalog func(root string) (catalog.View, error)
 	Facts   func(context.Context) (machine.Facts, error)
 	Hub     Hub
+	// Plan is init's install review of a configuration: downloads, disk and
+	// refusals for this Mac. It saves and downloads nothing.
+	Plan func(ctx context.Context, root string, next setup.Configuration) (setup.Plan, error)
 }
 
 func New(facts func(context.Context) (machine.Facts, error), hub Hub) Command {
@@ -63,6 +66,8 @@ var help = map[string]clihelp.Help{
 		Usage: []string{"temper preset check [ID] [--memory-gib N] [--root PATH] [--json]"}},
 	"fields": {Summary: "List the settings a fork of this preset can change, with their current values.",
 		Usage: []string{"temper preset fields ID [--memory-gib N] [--root PATH] [--json]"}},
+	"plan": {Summary: "Show what installing your preset on this Mac would download, the disk it needs\nand whether Temper can install it here. Nothing is saved or downloaded.",
+		Usage: []string{"temper preset plan ID [--root PATH] [--json]"}},
 	"weights": {Summary: "Use other weights from Hugging Face in your preset; Temper fills their sizes and SHA-256.\nA fork keeps its model, so the weights must be another build of it (same_model_as).",
 		Usage:    []string{"temper preset weights ID REPO[@REVISION] FILE... [--weights-id ID] [--same-model-as ID] [--format FORMAT] [--license TEXT] [--root PATH] [--json]"},
 		Examples: []string{"temper preset weights qwen-q6 unsloth/Qwen3.8-27B-GGUF Qwen3.8-27B-Q6_K.gguf", "temper preset weights my-mlx mlx-community/Qwen3.8-27B-4bit '*.safetensors' config.json tokenizer.json --format mlx-safetensors"}},
@@ -74,7 +79,7 @@ var help = map[string]clihelp.Help{
 }
 
 // positional counts the arguments each operation takes before its flags.
-var positional = map[string][2]int{"fork": {2, 2}, "copy": {2, 2}, "check": {0, 1}, "fields": {1, 1}, "weights": {3, -1}, "template": {1, 3}}
+var positional = map[string][2]int{"fork": {2, 2}, "copy": {2, 2}, "check": {0, 1}, "fields": {1, 1}, "plan": {1, 1}, "weights": {3, -1}, "template": {1, 3}}
 
 func usage(w io.Writer) {
 	fmt.Fprintln(w, strings.TrimSpace(`Usage:
@@ -82,6 +87,7 @@ func usage(w io.Writer) {
   temper preset copy SOURCE ID [--name TEXT] [--memory-gib N]
   temper preset check [ID] [--memory-gib N]
   temper preset fields ID [--memory-gib N]
+  temper preset plan ID
   temper preset weights ID REPO[@REVISION] FILE... [options]
   temper preset template ID (REPO[@REVISION] FILE | --local FILE.jinja | builtin) [options]
 Your presets live in ROOT/presets.d, one ID.json file each; edit them by hand
@@ -171,6 +177,8 @@ func (c Command) Run(ctx context.Context, args []string, stdout, stderr io.Write
 		}
 	case "fields":
 		err = c.fields(ctx, values[0], o, stdout)
+	case "plan":
+		err = c.plan(ctx, values[0], o, stdout)
 	case "weights":
 		err = c.weights(ctx, values[0], values[1], values[2:], o, stdout)
 	case "template":
@@ -375,6 +383,50 @@ func (c Command) check(ctx context.Context, ids []string, o options, out io.Writ
 	}
 	fmt.Fprintln(out, "Your presets are not tested by the catalog: Temper makes no quality or speed claim for them.")
 	return invalid, nil
+}
+
+// plan reviews installing one of your presets on this Mac the way init
+// reviews catalog presets: downloads, disk and refusals. It saves nothing.
+func (c Command) plan(ctx context.Context, id string, o options, out io.Writer) error {
+	if c.Plan == nil {
+		return errors.New("install planning is unavailable")
+	}
+	view, err := c.view(o.root)
+	if err != nil {
+		return err
+	}
+	loaded, err := userpreset.Load(o.root, id, view)
+	if errors.Is(err, fs.ErrNotExist) {
+		err = fmt.Errorf("there is no %s", userpreset.Path(o.root, id))
+	}
+	if err != nil {
+		return err
+	}
+	memoryGiB, _, err := c.memory(ctx, o)
+	if err != nil {
+		return err
+	}
+	lock, err := catalog.CompilePreset(loaded.Document, id, memoryGiB, 0, target)
+	if err != nil {
+		return err
+	}
+	next := setup.EmptyConfiguration()
+	next.Presets[id] = setup.Preset{Name: lock.Records.Presets[id].Presentation.DisplayName, Lock: lock}
+	plan, err := c.Plan(ctx, o.root, next)
+	if err != nil {
+		return err
+	}
+	if o.json {
+		return encode(out, map[string]any{"schema": "temper-preset-plan/v1", "root": o.root, "preset": id, "plan": plan, "warnings": append([]string{}, loaded.Warnings...)})
+	}
+	for _, w := range loaded.Warnings {
+		fmt.Fprintln(out, "Warning: "+w)
+	}
+	for _, line := range plan.PresetLines() {
+		fmt.Fprintln(out, line)
+	}
+	fmt.Fprintln(out, "Plan only: nothing was saved or downloaded. Install it with temper execution prepare after catalog compile.")
+	return nil
 }
 
 func checkOne(root, id string, view catalog.View, memoryGiB int, facts *machine.Facts) checked {

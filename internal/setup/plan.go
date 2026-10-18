@@ -401,9 +401,19 @@ type Section struct {
 
 func (p Plan) Sections() []Section { return p.configurationSections() }
 
-func (p Plan) Lines() []string {
+func (p Plan) Lines() []string { return lines(p.Sections()) }
+
+// PresetLines reviews presets that are not being saved: the plan without the
+// saved configuration's introduction.
+func (p Plan) PresetLines() []string {
+	sections := p.Sections()
+	sections[0].Lines = sections[0].Lines[2:]
+	return lines(sections)
+}
+
+func lines(sections []Section) []string {
 	var lines []string
-	for _, section := range p.Sections() {
+	for _, section := range sections {
 		if section.Warning {
 			lines = append(lines, section.Title)
 		}

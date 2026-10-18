@@ -4,8 +4,9 @@ Status: direct-download release and Homebrew distribution contract, 2026-10-11.
 
 The direct-download distribution is one Developer ID-signed and Apple-notarized
 macOS ARM64 release asset. Homebrew supplies a source formula and ARM64 bottles
-through this repository's tap. Field Kit continues to pin the signed ZIP;
-Homebrew installation does not change its host identity.
+through this repository's tap. Field Kit uses the `temper` on the user's
+`PATH`, from Homebrew or the ZIP, and records its exact version and SHA-256 in
+each run.
 
 ## Version and target
 

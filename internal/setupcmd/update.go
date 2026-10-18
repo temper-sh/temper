@@ -180,7 +180,7 @@ func (c Command) Update(ctx context.Context, args []string, out, diagnostics io.
 		next.Presets[id] = setup.Preset{Name: saved.Name, Choices: saved.Choices, Lock: candidate}
 		results = append(results, result)
 	}
-	plan, err := c.preview(ctx, root, next)
+	plan, err := c.Preview(ctx, root, next)
 	if err != nil {
 		return fail(diagnostics, err)
 	}
