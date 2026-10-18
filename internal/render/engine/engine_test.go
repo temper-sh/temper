@@ -156,8 +156,17 @@ func TestBuildMapsRapidMLXSemanticsToAnExactCommand(t *testing.T) {
 		t.Fatalf("Build() lines =\n%q\nwant\n%q", command.Lines(), want)
 	}
 	runtime := command.Runtime()
-	if runtime.Requirement.Package != engine.RapidMLX || runtime.CheckEndpoint != "/health/ready" || runtime.ContextWindow != 131072 || !hasEnvironment(runtime, "HF_HUB_OFFLINE", "1") || !hasEnvironment(runtime, "RAPID_MLX_TELEMETRY", "0") || !hasEnvironment(runtime, "RAPID_MLX_DISABLE_VERSION_CHECK", "1") {
+	if runtime.Requirement.Package != engine.RapidMLX || runtime.CheckEndpoint != "/health/ready" || runtime.ContextWindow != 131072 || !hasEnvironment(runtime, "HF_HUB_OFFLINE", "1") || !hasEnvironment(runtime, "RAPID_MLX_TELEMETRY", "0") || !hasEnvironment(runtime, "RAPID_MLX_DISABLE_VERSION_CHECK", "1") || runtime.DefaultParameters != nil {
 		t.Fatalf("Build() runtime = %#v", runtime)
+	}
+	// With thinking on, the router asks the template to think unless the
+	// caller says otherwise.
+	request.Thinking, request.RapidMLX.ReasoningParser = "on", "qwen3"
+	if command, err = engine.Build(request); err != nil {
+		t.Fatal(err)
+	}
+	if got := command.Runtime().DefaultParameters; !reflect.DeepEqual(got, map[string]any{"chat_template_kwargs": map[string]any{"enable_thinking": true}}) {
+		t.Fatalf("thinking defaults = %#v", got)
 	}
 }
 

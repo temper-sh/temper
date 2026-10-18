@@ -54,6 +54,13 @@ func rapidMLXCommand(options rapidMLXOptions) (Command, error) {
 		config := fmt.Sprintf(`{"method":"mtp","num_speculative_tokens":%d}`, options.speculativeTokens)
 		groups = append(groups, []commandWord{knownWord("--speculative-config"), dataWord(config)})
 	}
+	var defaults map[string]any
+	if options.thinking == "on" {
+		// Rapid MLX has no server option that turns thinking on, so a
+		// template that thinks only when asked (Qwen3.5's small models) would
+		// not. A caller's own chat_template_kwargs still wins.
+		defaults = map[string]any{"chat_template_kwargs": map[string]any{"enable_thinking": true}}
+	}
 	return commandFromLaunch(launchSpec{
 		executable:     knownWord("rapid-mlx"),
 		argumentGroups: groups,
@@ -67,7 +74,8 @@ func rapidMLXCommand(options rapidMLXOptions) (Command, error) {
 			EnvironmentAssignment{Name: "RAPID_MLX_DISABLE_VERSION_CHECK", Value: "1"},
 			EnvironmentAssignment{Name: "RAPID_MLX_PREFIX_CACHE_AUTOLOAD", Value: "0"},
 		),
-		CheckEndpoint: "/health/ready",
-		ContextWindow: options.contextWindow,
+		CheckEndpoint:     "/health/ready",
+		ContextWindow:     options.contextWindow,
+		DefaultParameters: defaults,
 	})
 }
