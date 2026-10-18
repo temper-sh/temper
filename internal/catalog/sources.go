@@ -10,6 +10,9 @@ import (
 const (
 	HubHuggingFace = "huggingface"
 	HubModelScope  = "modelscope"
+	// HubLocal is a template file in the root's presets.d. Only user presets
+	// and their locks have it; a catalog never does.
+	HubLocal = "local"
 )
 
 // Source is one hub that serves an artifact's or template's exact files at a
@@ -45,6 +48,11 @@ func (s Source) problem() string {
 	switch {
 	case s.unusable != "":
 		return s.unusable
+	case s.Hub == HubLocal:
+		if s.Repo != "" || s.Revision != "" {
+			return "a local source has no repository or revision"
+		}
+		return ""
 	case s.Hub != HubHuggingFace && s.Hub != HubModelScope:
 		return fmt.Sprintf("unknown hub %q", s.Hub)
 	case !repoPattern.MatchString(s.Repo) || !revisionPattern.MatchString(s.Revision):
@@ -55,11 +63,21 @@ func (s Source) problem() string {
 
 // validateSources is the strict rule: every entry is usable, hubs do not
 // repeat, and there is a Hugging Face source, the only one 0.1.0 downloads.
-func validateSources(sources []Source) error {
+// A local source, where allowed, stands alone.
+func validateSources(sources []Source, local bool) error {
+	if len(sources) == 1 && sources[0].Hub == HubLocal {
+		if !local {
+			return errors.New("only templates have local files")
+		}
+		return sources[0].validLocal()
+	}
 	seen := map[string]bool{}
 	for _, s := range sources {
 		if problem := s.problem(); problem != "" {
 			return fmt.Errorf("source: %s", problem)
+		}
+		if s.Hub == HubLocal {
+			return errors.New("a local source stands alone")
 		}
 		if seen[s.Hub] {
 			return fmt.Errorf("source hub %q repeats", s.Hub)
@@ -71,6 +89,16 @@ func validateSources(sources []Source) error {
 	}
 	return nil
 }
+
+func (s Source) validLocal() error {
+	if problem := s.problem(); problem != "" {
+		return fmt.Errorf("source: %s", problem)
+	}
+	return nil
+}
+
+// local reports whether a template's file is in the root's presets.d.
+func (t Template) local() bool { return len(t.Sources) == 1 && t.Sources[0].Hub == HubLocal }
 
 // usableSources drops the entries this Temper cannot use.
 func usableSources(sources []Source) []Source {

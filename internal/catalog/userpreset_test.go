@@ -1,6 +1,8 @@
 package catalog_test
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -391,4 +393,49 @@ func withSetting(t *testing.T, p catalog.Preset, path, value string) catalog.Pre
 		t.Fatal(err)
 	}
 	return result
+}
+
+func TestLocalTemplateHashGoesIntoTheLockAndNeverIntoACatalog(t *testing.T) {
+	d := testfixture.MixedEngineCatalog(t)
+	text := `{"schema": "temper-preset/v1", "origin": "qwen3.8-27b-q4xl-mtp", "changes": {"template": "mine"},
+	  "templates": {"mine": {"sources": [{"hub": "local"}], "files": [{"path": "mine.jinja"}], "compatible_artifacts": ["qwen3.8-27b-q4xl"], "license": "own work"}}}`
+	u := userPreset(t, "qwen-mine", text)
+	if files := u.LocalTemplates(); files["mine"] != "mine.jinja" {
+		t.Fatalf("local templates = %v", files)
+	}
+	if _, _, err := catalog.ResolveUserPreset("qwen-mine", u, catalog.View{Document: d}); err == nil {
+		t.Fatal("a local template compiled before its file was read")
+	}
+	if err := u.ReadLocalTemplate("mine", []byte("{{ messages }}")); err != nil {
+		t.Fatal(err)
+	}
+	l, _ := compileUser(t, d, "qwen-mine", u)
+	record := l.Records.Templates["mine"]
+	sum := sha256.Sum256([]byte("{{ messages }}"))
+	if record.Files[0].SHA256 != hex.EncodeToString(sum[:]) || record.Files[0].Bytes != int64(len("{{ messages }}")) {
+		t.Fatalf("lock template = %+v", record)
+	}
+	raw, err := catalog.MarshalLock(l)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again, err := catalog.ParseLock(raw); err != nil || again.Records.Templates["mine"].Files[0].SHA256 != record.Files[0].SHA256 {
+		t.Fatalf("a lock with a local template does not read back: %v", err)
+	}
+	projection, err := l.Projections()
+	if err != nil || projection.Manifest.Patches["mine"].Source != "local:mine.jinja" {
+		t.Fatalf("prepare would not read the local file: %+v %v", projection.Manifest.Patches, err)
+	}
+	// A catalog source, and so the publisher, refuses a local template.
+	if _, err := catalog.ParseUserPreset("bad", []byte(strings.Replace(text, `"path": "mine.jinja"`, `"path": "mine.jinja", "bytes": 5`, 1))); err == nil {
+		t.Fatal("a local template with a size in the file was accepted")
+	}
+	published := d
+	published.Templates = map[string]catalog.Template{"mine": record}
+	for id, t := range d.Templates {
+		published.Templates[id] = t
+	}
+	if err := published.Validate(); err == nil || !strings.Contains(err.Error(), "local template") {
+		t.Fatalf("the publisher accepted a local template: %v", err)
+	}
 }

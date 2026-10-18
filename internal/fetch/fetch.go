@@ -288,12 +288,20 @@ func publish(ctx context.Context, materialization plan, source upstream.Reader, 
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if source == nil {
-			return errors.New("upstream reader is required to fetch an absent template")
-		}
-		reader, err := source.Open(ctx, materialization.patchSource.Repo, materialization.patchSource.Revision, materialization.patchSource.File)
-		if err != nil {
-			return fmt.Errorf("fetch patch %q: %w", materialization.patchID, err)
+		var reader io.ReadCloser
+		if materialization.patchSource.Local {
+			// A local template is read from the root and checked against the
+			// lock like a download: an edit after the compile is refused.
+			if reader, err = os.Open(materialization.patchSource.LocalPath(materialization.root)); err != nil {
+				return fmt.Errorf("read local template %q: %w", materialization.patchID, err)
+			}
+		} else {
+			if source == nil {
+				return errors.New("upstream reader is required to fetch an absent template")
+			}
+			if reader, err = source.Open(ctx, materialization.patchSource.Repo, materialization.patchSource.Revision, materialization.patchSource.File); err != nil {
+				return fmt.Errorf("fetch patch %q: %w", materialization.patchID, err)
+			}
 		}
 		data, readErr := io.ReadAll(io.LimitReader(reader, maxPatchSource+1))
 		closeErr := reader.Close()
@@ -313,6 +321,9 @@ func publish(ctx context.Context, materialization plan, source upstream.Reader, 
 		patchPath := filepath.ToSlash(filepath.Join("patches", materialization.patchID, materialization.patch.File))
 		expectedHash := materialization.entry.Patches[0].SHA256
 		size, err := writeBytes(ctx, stage, patchPath, expectedHash, final)
+		if err != nil && materialization.patchSource.Local {
+			return fmt.Errorf("%s is not the template this lock was compiled with; compile the preset again: %w", materialization.patchSource.LocalPath(materialization.root), err)
+		}
 		if err != nil {
 			return fmt.Errorf("fetch patch %q: %w", materialization.patchID, err)
 		}

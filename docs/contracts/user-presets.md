@@ -149,6 +149,36 @@ compile writes a new one.
   Face and selects it; `temper preset template ID builtin` selects the
   template inside the weights.
 
+### Your own template file
+
+```json
+{
+  "schema": "temper-preset/v1",
+  "origin": "qwen3.8-27b-q4xl-mtp",
+  "changes": { "template": "qwen-mine" },
+  "templates": {
+    "qwen-mine": {
+      "sources": [{ "hub": "local" }],
+      "files": [{ "path": "qwen-mine.jinja" }],
+      "compatible_artifacts": ["qwen3.8-27b-q4xl"],
+      "license": "your own file"
+    }
+  }
+}
+```
+
+- The `.jinja` file sits next to the preset in `presets.d`. Its name is a plain
+  file name, not a `.json` file, so it is never read as a preset.
+- A local template has no `bytes` or `sha256` in the preset file. Each compile
+  reads the file, applies its `transform` and records the size and SHA-256 in
+  the lock. Edit the file, compile, get a new lock.
+- `prepare` reads the file from the same root and needs no network for it. A
+  file edited after the compile stops `prepare` until you compile again, so a
+  lock never serves a template other than the one it names. A lock with a
+  local template prepares only in a root that has the file.
+- `temper preset template ID --local FILE.jinja` writes the record and selects
+  it.
+
 ## A copy
 
 ```json
@@ -202,7 +232,7 @@ exact commit. `HF_TOKEN` is used for gated repositories. `weights` and
 | `temper preset check [ID] [--memory-gib N]` | Reads and compiles one preset, or every file in `presets.d`. It shows a fork's changes from its origin, the build, the fit on this Mac and any warnings. It exits 1 when a preset is invalid; a preset that does not fit this Mac is still valid. |
 | `temper preset fields ID [--memory-gib N]` | Lists the settings a fork can change for that preset's engine, with current values. |
 | `temper preset weights ID REPO[@REVISION] FILE…` | Adds a weights record from Hugging Face and selects it. File names can be patterns, such as `'*.safetensors'`. In a copy, it also adds the weights to the copy's template. |
-| `temper preset template ID (REPO[@REVISION] FILE \| builtin)` | Adds a template record from Hugging Face and selects it, or selects the template inside the weights. |
+| `temper preset template ID (REPO[@REVISION] FILE \| --local FILE.jinja \| builtin)` | Adds a template record from Hugging Face or for your own file and selects it, or selects the template inside the weights. |
 | `temper catalog compile --root ROOT --preset ID …` | Compiles your preset when `presets.d` has it, else the catalog's. With `--json` the report adds `user_preset` and `warnings`. |
 
 The lock of a user preset is an ordinary execution lock (`temper-execution-lock/v1`)

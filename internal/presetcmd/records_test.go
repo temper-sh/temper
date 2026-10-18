@@ -131,3 +131,29 @@ func TestTemplateHelperHashesTheTemplateAsPrepared(t *testing.T) {
 		t.Fatal("builtin template was not chosen")
 	}
 }
+
+func TestLocalTemplateOptionNamesTheFileAndCompileReadsIt(t *testing.T) {
+	c, root := command(t)
+	if _, d, code := run(t, c, root, "fork", mtp, "qwen-mine"); code != 0 {
+		t.Fatal(d)
+	}
+	if _, diagnostics, code := run(t, c, root, "template", "qwen-mine", "--local", "qwen-mine.jinja"); code == 0 || !strings.Contains(diagnostics, "qwen-mine.jinja") {
+		t.Fatalf("a missing local file was accepted: %s", diagnostics)
+	}
+	if err := os.WriteFile(userpreset.Dir(root)+"/qwen-mine.jinja", []byte(templateText), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if out, diagnostics, code := run(t, c, root, "template", "qwen-mine", "--local", "qwen-mine.jinja"); code != 0 || !strings.Contains(out, "Each compile reads the file again") {
+		t.Fatalf("local template: %d %s %s", code, out, diagnostics)
+	}
+	record := read(t, root, "qwen-mine").Templates["qwen-mine-template"]
+	if record.Sources[0].Hub != catalog.HubLocal || record.Files[0].Path != "qwen-mine.jinja" || record.Files[0].SHA256 != "" {
+		t.Fatalf("local record: %+v", record)
+	}
+	if out, _, code := run(t, c, root, "check", "qwen-mine"); code != 0 || !strings.Contains(out, `template "froggeric-qwen38" → "qwen-mine-template"`) {
+		t.Fatalf("check: %s", out)
+	}
+	if _, diagnostics, code := run(t, c, root, "template", "qwen-mine", "--local", "other.json"); code == 0 || !strings.Contains(diagnostics, "not a .json file") {
+		t.Fatalf("a .json template name was accepted: %s", diagnostics)
+	}
+}

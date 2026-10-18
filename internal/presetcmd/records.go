@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"path"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -142,7 +143,7 @@ func (c Command) edit(root, id string, change func(*catalog.UserPreset, catalog.
 	if err != nil {
 		return u, err
 	}
-	loaded, err := userpreset.Resolve(id, next, view)
+	loaded, err := userpreset.Resolve(root, id, next, view)
 	if err != nil {
 		return u, err
 	}
@@ -236,8 +237,9 @@ func (c Command) template(ctx context.Context, values []string, o options, out i
 	defer cancel()
 	id := values[0]
 	builtin := len(values) == 2 && values[1] == catalog.BuiltinTemplate
-	if !builtin && len(values) != 3 {
-		return errors.New("give REPO[@REVISION] FILE, or builtin")
+	local := o.local != ""
+	if local && len(values) != 1 || !local && !builtin && len(values) != 3 {
+		return errors.New("give REPO[@REVISION] FILE, --local FILE.jinja, or builtin")
 	}
 	tid := o.recordID
 	if tid == "" {
@@ -245,7 +247,18 @@ func (c Command) template(ctx context.Context, values []string, o options, out i
 	}
 	var record catalog.Template
 	var commit string
-	if !builtin {
+	if local {
+		if !templatepatch.ValidLocalFile(o.local) {
+			return fmt.Errorf("%q must be a plain file name in %s, not a .json file", o.local, userpreset.Dir(o.root))
+		}
+		license := o.license
+		if license == "" {
+			license = "your own file"
+		}
+		// Temper reads the size and SHA-256 from the file at each compile.
+		record = catalog.Template{Transform: o.transform, License: license,
+			Sources: []catalog.Source{{Hub: catalog.HubLocal}}, Files: []catalog.File{{Path: o.local}}}
+	} else if !builtin {
 		if !catalog.ValidPresetID(tid) {
 			return fmt.Errorf("template ID %q is invalid; give one with --template-id", tid)
 		}
@@ -310,15 +323,22 @@ func (c Command) template(ctx context.Context, values []string, o options, out i
 	}
 	if o.json {
 		report := map[string]any{"schema": "temper-preset-write/v1", "preset": id, "form": form(u), "template": tid, "path": userpreset.Path(o.root, id)}
-		if builtin {
+		switch {
+		case builtin:
 			report["template"] = catalog.BuiltinTemplate
-		} else {
+		case local:
+			report["file"] = filepath.Join(userpreset.Dir(o.root), o.local)
+		default:
 			report["commit"] = commit
 		}
 		return encode(out, report)
 	}
 	if builtin {
 		fmt.Fprintf(out, "%s now uses the chat template inside its weights.\n", id)
+		return nil
+	}
+	if local {
+		fmt.Fprintf(out, "%s now uses template %s from %s. Each compile reads the file again and records its exact content in the lock.\n", id, tid, filepath.Join(userpreset.Dir(o.root), o.local))
 		return nil
 	}
 	fmt.Fprintf(out, "%s now uses template %s: %s from %s at %s.\n", id, tid, values[2], values[1], commit[:7])

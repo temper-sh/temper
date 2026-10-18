@@ -99,6 +99,13 @@ whose engine or router needs a newer Temper is refused with that reason.
 Runtime consumption is offline and needs no source catalog, clock or
 machine-specific path.
 
+A lock compiled from one of your [own presets](user-presets.md) may hold a
+template whose only source is `{"hub": "local"}`: a file in the root's
+`presets.d`. Its `files` record the file's prepared bytes and digest when the
+lock was compiled. Preparation reads the file from that root, needs no network
+for it, and refuses a file with other content. A catalog cannot have a local
+template; the publisher and every client refuse one.
+
 Temper compares two locks by what runs: consumed material, the template
 transform, exact software, request defaults and launch settings. One running
 Temper computes the comparison on both sides; it is never stored or printed.

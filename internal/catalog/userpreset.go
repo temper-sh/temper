@@ -2,6 +2,8 @@ package catalog
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +12,8 @@ import (
 	"slices"
 	"sort"
 	"strings"
+
+	templatepatch "github.com/temper-sh/temper/internal/patch"
 )
 
 // UserPresetSchema is the format of one file in a root's presets.d.
@@ -79,7 +83,16 @@ func ParseUserPreset(id string, data []byte) (UserPreset, error) {
 		}
 	}
 	for _, rid := range sortedIDs(u.Templates) {
-		if err := validateTemplate(rid, u.Templates[rid]); err != nil {
+		t := u.Templates[rid]
+		if t.local() {
+			// Temper reads a local template's size and hash from its file at
+			// each compile, so the file holds neither.
+			if len(t.Files) != 1 || t.Files[0].Bytes != 0 || t.Files[0].SHA256 != "" {
+				return UserPreset{}, fmt.Errorf("templates[%q]: a local template names one file and no bytes or sha256; Temper reads them from the file", rid)
+			}
+			t.Files = []File{{Path: t.Files[0].Path, Bytes: 1, SHA256: strings.Repeat("0", 64)}}
+		}
+		if err := validateTemplate(rid, t); err != nil {
 			return UserPreset{}, fmt.Errorf("templates[%q]: %w", rid, err)
 		}
 	}
@@ -87,6 +100,31 @@ func ParseUserPreset(id string, data []byte) (UserPreset, error) {
 		u.Preset.Speculation = Speculation{Method: "none", Source: "none"}
 	}
 	return u, nil
+}
+
+// LocalTemplates maps each local template record of the file to its file name.
+func (u UserPreset) LocalTemplates() map[string]string {
+	files := map[string]string{}
+	for id, t := range u.Templates {
+		if t.local() {
+			files[id] = t.Files[0].Path
+		}
+	}
+	return files
+}
+
+// ReadLocalTemplate gives a local template record the size and SHA-256 of
+// its file's content as prepared, after its transform.
+func (u *UserPreset) ReadLocalTemplate(id string, content []byte) error {
+	t := u.Templates[id]
+	final, err := templatepatch.Apply(t.Transform, content)
+	if err != nil {
+		return fmt.Errorf("templates[%q]: %w", id, err)
+	}
+	sum := sha256.Sum256(final)
+	t.Files = []File{{Path: t.Files[0].Path, Bytes: int64(len(final)), SHA256: hex.EncodeToString(sum[:])}}
+	u.Templates[id] = t
+	return nil
 }
 
 // MarshalUserPreset writes one presets.d file.

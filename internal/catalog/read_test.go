@@ -216,3 +216,16 @@ func TestRecordedReleaseMustComeFromItsSource(t *testing.T) {
 		t.Fatalf("foreign download location accepted: %v", err)
 	}
 }
+
+func TestClientsDoNotUseALocalTemplateFromACatalog(t *testing.T) {
+	value := tree(t)
+	templates := value["templates"].(map[string]any)
+	var id string
+	for id = range templates {
+		break
+	}
+	templates[id].(map[string]any)["sources"] = []any{map[string]any{"hub": "local"}}
+	if reason := unavailable(read(t, value, buildinfo.DevVersion), "template", id); !strings.Contains(reason, "local template") {
+		t.Fatalf("a catalog's local template stayed available: %q", reason)
+	}
+}

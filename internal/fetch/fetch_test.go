@@ -576,3 +576,39 @@ func readLock(t *testing.T, path string) lockfile.Document {
 	}
 	return document
 }
+
+func TestLocalTemplatePreparesWithoutNetworkAndRefusesAnEditedFile(t *testing.T) {
+	directory := t.TempDir()
+	manifestPath, lockPath, _ := writeInputs(t, directory, true, "weights")
+	raw, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	local := strings.Replace(string(raw), "source: hf://patches/templates@"+patchRevision+"/chat.jinja?transform", "source: local:mine.jinja?transform", 1)
+	if err := os.WriteFile(manifestPath, []byte(local), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	prepare := func(root, template string) error {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Join(root, "presets.d"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "presets.d", "mine.jinja"), []byte(template), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		// The source serves only the weights: a template download fails.
+		source := &fakeSource{files: map[string]string{"owner/model@" + modelRevision + "/nested/model.gguf": "weights"}}
+		_, err := runFetch(context.Background(), fetch.Options{Manifest: readManifest(t, manifestPath), Lock: readLock(t, lockPath), Root: root, Layout: "coder"}, source)
+		return err
+	}
+	root := filepath.Join(directory, "root")
+	if err := prepare(root, "before\n"+oldGuard+"\nafter\n"); err != nil {
+		t.Fatal(err)
+	}
+	entry := readLock(t, lockPath).Entries["coder"]
+	assertFile(t, filepath.Join(root, "artifacts", "layouts", "coder", entry.Digest(), "patches", "stable-template", "chat.jinja"), "before\n"+newGuard+"\nafter\n")
+	err = prepare(filepath.Join(directory, "fresh"), "edited after the compile\n"+oldGuard+"\n")
+	if err == nil || !strings.Contains(err.Error(), "compile the preset again") {
+		t.Fatalf("an edited local template was prepared: %v", err)
+	}
+}

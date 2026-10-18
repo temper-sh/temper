@@ -101,6 +101,9 @@ func (t Template) HuggingFace() Source { return huggingFace(t.Sources) }
 func (t Template) source() string {
 	hf := t.HuggingFace()
 	source := "hf://" + hf.Repo + "@" + hf.Revision + "/" + t.Files[0].Path
+	if t.local() {
+		source = "local:" + t.Files[0].Path
+	}
 	if t.Transform != "" {
 		source += "?transform=" + t.Transform
 	}
@@ -304,6 +307,11 @@ func (d Document) Validate() error {
 	if err := d.validateRecords(); err != nil {
 		return err
 	}
+	for id, t := range d.Templates {
+		if t.local() {
+			return fmt.Errorf("template %q: a catalog cannot have a local template file", id)
+		}
+	}
 	return d.validatePresentation()
 }
 
@@ -365,7 +373,7 @@ func validateRouter(r Router) error {
 }
 
 func validateArtifact(id string, a Artifact) error {
-	if err := validateMaterial(id, a.Sources, a.Files, a.License); err != nil {
+	if err := validateMaterial(id, a.Sources, a.Files, a.License, false); err != nil {
 		return err
 	}
 	if a.Format == "safetensors" && len(a.Files) == 2 && a.Files[0].Path == "config.json" && a.Files[1].Path == "model.safetensors" {
@@ -390,7 +398,7 @@ func validateArtifact(id string, a Artifact) error {
 }
 
 func validateTemplate(id string, t Template) error {
-	if err := validateMaterial(id, t.Sources, t.Files, t.License); err != nil {
+	if err := validateMaterial(id, t.Sources, t.Files, t.License, true); err != nil {
 		return err
 	}
 	if len(t.Files) != 1 || len(t.CompatibleArtifacts) == 0 {
@@ -571,14 +579,14 @@ func (d Document) validatePreset(id string, p Preset) error {
 	return nil
 }
 
-func validateMaterial(id string, sources []Source, files []File, license string) error {
+func validateMaterial(id string, sources []Source, files []File, license string, local bool) error {
 	if !idPattern.MatchString(id) || strings.TrimSpace(license) == "" || len(files) == 0 {
 		return errors.New("needs a stable id, files and a license")
 	}
 	if !plainText(license) {
 		return errors.New("license must be plain text")
 	}
-	if err := validateSources(sources); err != nil {
+	if err := validateSources(sources, local); err != nil {
 		return err
 	}
 	seen := map[string]bool{}

@@ -66,13 +66,15 @@ var help = map[string]clihelp.Help{
 	"weights": {Summary: "Use other weights from Hugging Face in your preset; Temper fills their sizes and SHA-256.\nA fork keeps its model, so the weights must be another build of it (same_model_as).",
 		Usage:    []string{"temper preset weights ID REPO[@REVISION] FILE... [--weights-id ID] [--same-model-as ID] [--format FORMAT] [--license TEXT] [--root PATH] [--json]"},
 		Examples: []string{"temper preset weights qwen-q6 unsloth/Qwen3.8-27B-GGUF Qwen3.8-27B-Q6_K.gguf", "temper preset weights my-mlx mlx-community/Qwen3.8-27B-4bit '*.safetensors' config.json tokenizer.json --format mlx-safetensors"}},
-	"template": {Summary: "Use another chat template in your preset: a file from Hugging Face, or builtin\nfor the template inside the weights. Temper fills its size and SHA-256.",
-		Usage:    []string{"temper preset template ID REPO[@REVISION] FILE [--template-id ID] [--transform NAME] [--license TEXT] [--root PATH] [--json]", "temper preset template ID builtin [--root PATH] [--json]"},
-		Examples: []string{"temper preset template qwen-next froggeric/Qwen-Fixed-Chat-Templates chat_template.jinja"}},
+	"template": {Summary: "Use another chat template in your preset: a file from Hugging Face, your own file\nnext to the preset in ROOT/presets.d, or builtin for the template inside the weights.",
+		Usage: []string{"temper preset template ID REPO[@REVISION] FILE [--template-id ID] [--transform NAME] [--license TEXT] [--root PATH] [--json]",
+			"temper preset template ID --local FILE.jinja [--template-id ID] [--transform NAME] [--license TEXT] [--root PATH] [--json]",
+			"temper preset template ID builtin [--root PATH] [--json]"},
+		Examples: []string{"temper preset template qwen-next froggeric/Qwen-Fixed-Chat-Templates chat_template.jinja", "temper preset template qwen-mine --local qwen-mine.jinja"}},
 }
 
 // positional counts the arguments each operation takes before its flags.
-var positional = map[string][2]int{"fork": {2, 2}, "copy": {2, 2}, "check": {0, 1}, "fields": {1, 1}, "weights": {3, -1}, "template": {2, 3}}
+var positional = map[string][2]int{"fork": {2, 2}, "copy": {2, 2}, "check": {0, 1}, "fields": {1, 1}, "weights": {3, -1}, "template": {1, 3}}
 
 func usage(w io.Writer) {
 	fmt.Fprintln(w, strings.TrimSpace(`Usage:
@@ -81,7 +83,7 @@ func usage(w io.Writer) {
   temper preset check [ID] [--memory-gib N]
   temper preset fields ID [--memory-gib N]
   temper preset weights ID REPO[@REVISION] FILE... [options]
-  temper preset template ID (REPO[@REVISION] FILE | builtin) [options]
+  temper preset template ID (REPO[@REVISION] FILE | --local FILE.jinja | builtin) [options]
 Your presets live in ROOT/presets.d, one ID.json file each; edit them by hand
 and check them with temper preset check. catalog compile --root ROOT --preset ID
 builds a lock from them. Every command takes --root PATH (default ~/.temper)
@@ -94,7 +96,7 @@ type options struct {
 	name      string
 	memoryGiB int
 	// weights and template records
-	recordID, sameModelAs, format, license, transform string
+	recordID, sameModelAs, format, license, transform, local string
 }
 
 func (c Command) Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
@@ -135,6 +137,7 @@ func (c Command) Run(ctx context.Context, args []string, stdout, stderr io.Write
 		f.StringVar(&o.recordID, "template-id", "", "`ID` for the template record (default: ID-template)")
 		f.StringVar(&o.transform, "transform", "", "`NAME` a Temper template transform to apply")
 		f.StringVar(&o.license, "license", "", "`TEXT` license (default: the one the repository card declares)")
+		f.StringVar(&o.local, "local", "", "`FILE.jinja` your own template file in ROOT/presets.d, read again at each compile")
 	}
 	if operation == "copy" || operation == "check" || operation == "fields" {
 		f.IntVar(&o.memoryGiB, "memory-gib", 0, "`GIB` build the profile a Mac with this much memory uses (default: this Mac's)")
@@ -237,7 +240,7 @@ func create(root, id string, u catalog.UserPreset, view catalog.View, memoryGiB 
 	if err != nil {
 		return err
 	}
-	loaded, err := userpreset.Resolve(id, raw, view)
+	loaded, err := userpreset.Resolve(root, id, raw, view)
 	if err != nil {
 		return err
 	}

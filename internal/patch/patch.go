@@ -8,11 +8,16 @@ import (
 	"fmt"
 	"net/url"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
 
 const Qwen38PrefixStabilityV1 = "qwen38-prefix-stability-v1"
+
+// LocalFolder holds a root's local template files, next to the user presets
+// that use them.
+const LocalFolder = "presets.d"
 const TranslateGemmaTextInputV1 = "translategemma-text-input-v1"
 
 var (
@@ -26,8 +31,21 @@ type Source struct {
 	Revision  string
 	File      string
 	Transform string
+	// Local names a file in the root's LocalFolder instead of a hub file.
+	Local bool
 }
 
+// LocalPath is where a local source's file is in root.
+func (s Source) LocalPath(root string) string { return filepath.Join(root, LocalFolder, s.File) }
+
+// ValidLocalFile reports whether name can be a local template file: a plain
+// file name in the folder, never one Temper reads as a preset.
+func ValidLocalFile(name string) bool {
+	return namePattern.MatchString(name) && !strings.HasPrefix(name, ".") && !strings.HasSuffix(name, ".json")
+}
+
+// ParseSource reads hf://owner/repo@commit/path or local:FILE, each with an
+// optional ?transform=ID.
 func ParseSource(value string) (Source, error) {
 	if strings.Contains(value, "%") {
 		return Source{}, errors.New("patch source must use an unescaped canonical URL")
@@ -35,6 +53,13 @@ func ParseSource(value string) (Source, error) {
 	parsed, err := url.Parse(value)
 	if err != nil {
 		return Source{}, fmt.Errorf("parse patch source: %w", err)
+	}
+	if parsed.Scheme == "local" {
+		if !ValidLocalFile(parsed.Opaque) {
+			return Source{}, errors.New("a local template must be a plain file name in presets.d, not a .json file")
+		}
+		transform, err := parseTransform(parsed.RawQuery)
+		return Source{File: parsed.Opaque, Transform: transform, Local: true}, err
 	}
 	if parsed.Scheme != "hf" || parsed.Opaque != "" || parsed.User != nil || parsed.Fragment != "" || !namePattern.MatchString(parsed.Host) {
 		return Source{}, errors.New("patch source must be hf://owner/repo@commit/path")
@@ -56,32 +81,39 @@ func ParseSource(value string) (Source, error) {
 		return Source{}, errors.New("patch source has an invalid repository, commit, or file path")
 	}
 
-	query, err := url.ParseQuery(parsed.RawQuery)
+	transform, err := parseTransform(parsed.RawQuery)
 	if err != nil {
-		return Source{}, fmt.Errorf("parse patch source query: %w", err)
+		return Source{}, err
 	}
-	if len(query) > 1 {
-		return Source{}, errors.New("patch source only supports the transform query parameter")
-	}
-	var transform string
-	if values, ok := query["transform"]; ok {
-		if len(values) != 1 || !idPattern.MatchString(values[0]) {
-			return Source{}, errors.New("patch source transform must be one stable id")
-		}
-		transform = values[0]
-		if transform != Qwen38PrefixStabilityV1 && transform != TranslateGemmaTextInputV1 {
-			return Source{}, fmt.Errorf("unsupported patch transform %q", transform)
-		}
-	} else if len(query) != 0 {
-		return Source{}, errors.New("patch source only supports the transform query parameter")
-	}
-
 	return Source{
 		Repo:      parsed.Host + "/" + repository,
 		Revision:  revision,
 		File:      file,
 		Transform: transform,
 	}, nil
+}
+
+func parseTransform(raw string) (string, error) {
+	query, err := url.ParseQuery(raw)
+	if err != nil {
+		return "", fmt.Errorf("parse patch source query: %w", err)
+	}
+	if len(query) > 1 {
+		return "", errors.New("patch source only supports the transform query parameter")
+	}
+	var transform string
+	if values, ok := query["transform"]; ok {
+		if len(values) != 1 || !idPattern.MatchString(values[0]) {
+			return "", errors.New("patch source transform must be one stable id")
+		}
+		transform = values[0]
+		if transform != Qwen38PrefixStabilityV1 && transform != TranslateGemmaTextInputV1 {
+			return "", fmt.Errorf("unsupported patch transform %q", transform)
+		}
+	} else if len(query) != 0 {
+		return "", errors.New("patch source only supports the transform query parameter")
+	}
+	return transform, nil
 }
 
 func Apply(transform string, source []byte) ([]byte, error) {

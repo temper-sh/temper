@@ -104,6 +104,10 @@ func Read(data []byte, client string) (View, error) {
 			continue
 		}
 		t.Sources = usableSources(t.Sources)
+		if t.local() {
+			unavailable("template", id, "a catalog cannot have a local template file")
+			continue
+		}
 		if err := validateTemplate(id, t); err != nil {
 			unavailable("template", id, err.Error())
 			continue

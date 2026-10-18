@@ -53,6 +53,18 @@ func Read(root, id string) ([]byte, error) {
 	return readFile(Path(root, id))
 }
 
+// readTemplate reads a local template; preparation reads at most 16 MiB.
+func readTemplate(path string) ([]byte, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() || info.Size() > 16<<20 {
+		return nil, fmt.Errorf("%s must be a regular file of at most 16 MiB", path)
+	}
+	return os.ReadFile(path)
+}
+
 func readFile(path string) ([]byte, error) {
 	info, err := os.Stat(path)
 	if err != nil {
@@ -144,14 +156,24 @@ func Load(root, id string, view catalog.View) (Loaded, error) {
 	if err != nil {
 		return Loaded{}, err
 	}
-	return Resolve(id, raw, view)
+	return Resolve(root, id, raw, view)
 }
 
-// Resolve parses and resolves one preset file's bytes.
-func Resolve(id string, raw []byte, view catalog.View) (Loaded, error) {
+// Resolve parses and resolves one preset file's bytes. Its local template
+// files are read now, so the lock records their exact content.
+func Resolve(root, id string, raw []byte, view catalog.View) (Loaded, error) {
 	u, err := catalog.ParseUserPreset(id, raw)
 	if err != nil {
 		return Loaded{}, err
+	}
+	for template, file := range u.LocalTemplates() {
+		content, err := readTemplate(filepath.Join(Dir(root), file))
+		if err != nil {
+			return Loaded{}, fmt.Errorf("templates[%q]: %w", template, err)
+		}
+		if err := u.ReadLocalTemplate(template, content); err != nil {
+			return Loaded{}, err
+		}
 	}
 	d, warnings, err := catalog.ResolveUserPreset(id, u, view)
 	if err != nil {
