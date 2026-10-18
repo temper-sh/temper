@@ -132,10 +132,11 @@ The larger alternatives are `translategemma-12b-q5km-llama` and
 `translategemma-27b-q4km-llama`. Keep input within the publisher's 2K-token
 limit; the 4,096-token server window also reserves space for output.
 Use valid language codes from the [official model card](https://huggingface.co/google/translategemma-4b-it#usage).
-Keep the selected `translategemma-text-input-v1` template: it preserves the
-publisher's prompt and adapts the input for llama.cpp. The embedded template
-alone does not initialize with the selected engine. Supply both language codes
-on every request; omitted codes default to English for engine initialization.
+The current presets use the embedded publisher template with llama.cpp's native
+text and language-code handling (b11485 or newer). Saved presets with
+`translategemma-text-input-v1` retain their compatible adapter. Supply both
+language codes on every request; omitted codes default to English for engine
+initialization.
 The presets use greedy decoding, F16 KV, one slot, four CPU threads,
 a 512-token batch and 256-token microbatch. Three paired 4B checks found no
 consistent benefit from microbatch 512, so 256 remains selected. This does not
