@@ -25,16 +25,26 @@ import (
 
 // MetadataProgram delegates GGUF interpretation and draft compatibility to the
 // selected release. It reads only the supplied local files and emits metadata.
-const MetadataProgram = `import base64,json,pathlib,sys
+const MetadataProgram = `import base64,json,pathlib,sys,tempfile
 p=pathlib.Path(sys.executable).resolve().parents[2]
 sys.path.insert(0,str(p))
 from install import gguf,families,upstream
 files=gguf.derived_files(pathlib.Path(sys.argv[1]))
-f= families.family_for(json.loads(files['config.json']))
-if f.draft.repo != sys.argv[3]: raise ValueError('catalog draft differs from Splash architecture selection: '+f.draft.repo)
-c=json.loads(pathlib.Path(sys.argv[2]).read_bytes())
-for k,v in f.draft.signature:
- if not upstream._same(upstream._config_value(c,k),v): raise ValueError('incompatible DFlash2 configuration: '+k)
+if hasattr(families,'family_for'):
+ f=families.family_for(json.loads(files['config.json']))
+ repo=f.draft.repo
+ c=json.loads(pathlib.Path(sys.argv[2]).read_bytes())
+ for k,v in f.draft.signature:
+  if not upstream._same(upstream._config_value(c,k),v): raise ValueError('incompatible DFlash2 configuration: '+k)
+else:
+ with tempfile.TemporaryDirectory(prefix='temper-splash-check-') as scratch:
+  scratch=pathlib.Path(scratch)
+  config,metadata=scratch/'config.json',scratch/'gguf-metadata.json'
+  config.write_bytes(files['config.json'])
+  metadata.write_text(json.dumps(gguf.scalar_metadata(gguf.Metadata(pathlib.Path(sys.argv[1])))))
+  f=upstream.check_model('gguf','none',config,gguf_metadata=metadata,draft=pathlib.Path(sys.argv[2]))
+  repo=f.draft_repo
+if repo != sys.argv[3]: raise ValueError('catalog draft differs from Splash architecture selection: '+repo)
 print(json.dumps({k:base64.b64encode(v).decode('ascii') for k,v in files.items()}))
 `
 
@@ -130,7 +140,8 @@ func (m Material) Verify() error {
 	})
 }
 
-// Derive reads metadata without loading a model or starting the native engine.
+// Derive reads metadata without loading a model. New releases use their native
+// model-check command to validate the target and draft configurations.
 func Derive(ctx context.Context, python, target, draftConfig, draftRepo string) (map[string][]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()

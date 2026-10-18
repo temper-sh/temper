@@ -299,6 +299,9 @@ func (l Lock) projections() (Projections, error) {
 		if c.Splash != nil {
 			m.Llama = nil
 			m.Splash = &manifest.SplashTuning{SplashConfig: c.Splash.SplashConfig, SoftwareSHA256: d.Engines[layout.Engine].Supply.Release.Artifact.SHA256}
+			if c.Kind != "splash/v1" {
+				m.Splash.Adapter = c.Kind
+			}
 		}
 		if layout.Speculation.DraftArtifact != "" {
 			draft := d.Artifacts[layout.Speculation.DraftArtifact]

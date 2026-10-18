@@ -421,6 +421,7 @@ var adapters = map[string]struct {
 }{
 	"llama-server/v1": {"llama-cpp", false, []string{engine.InterfaceChatCompletions, engine.InterfaceReranking}, []string{"text", "image"}},
 	"splash/v1":       {"splash", false, []string{engine.InterfaceChatCompletions}, []string{"text"}},
+	"splash/v2":       {"splash", false, []string{engine.InterfaceChatCompletions}, []string{"text"}},
 	"crispembed/v1":   {"crispembed", false, []string{engine.InterfaceReranking}, []string{"text"}},
 	"rapid-mlx/v1":    {"rapid-mlx", true, []string{engine.InterfaceChatCompletions}, []string{"text"}},
 	"vllm-metal/v1":   {"vllm-metal", true, []string{engine.InterfaceChatCompletions}, []string{"text"}},
@@ -626,7 +627,7 @@ func (l Preset) request(id string, profile Profile, a Artifact, modelPath, templ
 	} else if c.Splash != nil {
 		r.Engine, r.LlamaServer, r.NGL = engine.Splash, nil, nil
 		r.KVCache = c.Splash.KVCache
-		r.Splash = &engine.SplashTuning{SplashConfig: c.Splash.SplashConfig, ModelID: a.HuggingFace().Repo, AssemblyPath: "/prepared", StatePath: "/state"}
+		r.Splash = &engine.SplashTuning{SplashConfig: c.Splash.SplashConfig, Adapter: c.Kind, ModelID: a.HuggingFace().Repo, AssemblyPath: "/prepared", StatePath: "/state"}
 	} else if c.Python != nil {
 		r.LlamaServer, r.NGL, r.Sampling = nil, nil, nil
 		r.KVCache = ""

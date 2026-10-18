@@ -10,11 +10,88 @@ import (
 	"github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/manifest"
 	"github.com/temper-sh/temper/internal/render"
+	"github.com/temper-sh/temper/internal/runtimeconfig"
 
 	"gopkg.in/yaml.v3"
 )
 
 const splashLayout = "qwen3.8-27b-q4xl-splash"
+
+func TestSplashSourceAdapterSurvivesLockAndManifestRoundTrips(t *testing.T) {
+	doc := splashCatalog(t)
+	legacy := compileSplash(t, doc)
+	preset := doc.Presets[splashLayout]
+	preset.Profiles = slices.Clone(preset.Profiles)
+	software := doc.Engines[preset.Engine]
+	software.Adapter = "splash/v2"
+	doc.Engines[preset.Engine] = software
+	for i := range preset.Profiles {
+		config := *preset.Profiles[i].EngineConfig.Splash
+		preset.Profiles[i].EngineConfig.Splash = &config
+		preset.Profiles[i].EngineConfig.Kind = "splash/v2"
+		preset.Profiles[i].EngineConfig.Splash.Kind = "splash/v2"
+	}
+	doc.Presets[splashLayout] = preset
+	locked := compileSplash(t, doc)
+	if catalog.SameExecution(legacy, locked) {
+		t.Fatal("changed native interface did not invalidate execution")
+	}
+	raw, err := json.Marshal(locked)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var round catalog.Lock
+	if err := json.Unmarshal(raw, &round); err != nil {
+		t.Fatal(err)
+	}
+	projection, err := round.Projections()
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := yaml.Marshal(projection.Manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := manifest.Parse(encoded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Layouts[splashLayout].Splash.Adapter != "splash/v2" {
+		t.Fatal("source adapter was lost in the manifest")
+	}
+	bundle, err := render.Build(render.Inputs{Manifest: m, Lock: projection.Artifacts, Mode: locked.Preset, Root: "/temper path"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var native []string
+	for _, file := range bundle.Artifacts {
+		if file.Path != "runtime/requirements.json" {
+			continue
+		}
+		requirements, err := runtimeconfig.Parse(file.Data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, requirement := range requirements.Requirements {
+			if requirement.Role == "engine" {
+				native = requirement.Arguments
+			}
+			if requirement.Role == "frontend" && !slices.Contains(requirement.Arguments, "--max-cache-disk") {
+				t.Fatal("source frontend omitted the SSD cache policy")
+			}
+		}
+	}
+	if len(native) != 5 || native[0] != "serve-native" || strings.HasSuffix(native[1], "/target") || native[4] != "0" {
+		t.Fatalf("source engine needs one assembly root and disabled SSD cache: %q", native)
+	}
+	old, err := legacy.Projections()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if old.Manifest.Layouts[splashLayout].Splash.Adapter != "" {
+		t.Fatal("legacy manifest acquired a new adapter field")
+	}
+}
 
 func splashCatalog(t *testing.T) catalog.Document {
 	t.Helper()

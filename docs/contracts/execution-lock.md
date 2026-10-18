@@ -247,6 +247,12 @@ Splash's distinct typed configuration owns KV precision, memory cap, reasoning
 and request timeout. It selects a target GGUF and an exact DFlash2 sidecar
 (`config.json` plus `model.safetensors`). The release-owned architecture mapping
 checks their compatibility. Preparation includes the sidecar automatically.
+`splash/v1` preserves the Splash 1.1 frontend and native argument contract for
+saved executions. `splash/v2` uses Splash 1.3.2's single source-assembly root and
+package frontend, with native metadata-only target/draft validation. Its SSD
+prefix cache is disabled explicitly; ANE prefill and FP32 recurrent state use
+the selected release's defaults. Omitted output limits use remaining context;
+an explicit limit becomes a router request default that clients can override.
 
 The frozen test catalogs in `internal/testfixture/testdata/` exercise these
 contracts. Results and the cited studies own capability claims.

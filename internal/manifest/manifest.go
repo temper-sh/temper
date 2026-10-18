@@ -65,6 +65,7 @@ type Layout struct {
 
 type SplashTuning struct {
 	engine.SplashConfig `yaml:",inline"`
+	Adapter             string `yaml:"adapter,omitempty"`
 	SoftwareSHA256      string `yaml:"software_sha256"`
 }
 
@@ -356,6 +357,9 @@ func validateEngineTuning(id string, layout Layout, problem func(string, ...any)
 			return
 		}
 		if err := layout.Splash.SplashConfig.Validate(); err != nil {
+			problem("layout %q: %v", id, err)
+		}
+		if err := engine.ValidateSplashAdapter(layout.Splash.Adapter); err != nil {
 			problem("layout %q: %v", id, err)
 		}
 		if !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(layout.Splash.SoftwareSHA256) {

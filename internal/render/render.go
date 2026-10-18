@@ -146,7 +146,7 @@ func resolveMembers(document manifest.Document, lock lockfile.Document, mode man
 			}
 			if layout.Splash != nil {
 				assembly, state := splash.Paths(root, member.Layout, entry.Digest(), layout.Splash.SoftwareSHA256)
-				item.Splash = &engine.SplashTuning{SplashConfig: layout.Splash.SplashConfig, ModelID: layout.Model.Repo, AssemblyPath: assembly, StatePath: state}
+				item.Splash = &engine.SplashTuning{SplashConfig: layout.Splash.SplashConfig, Adapter: layout.Splash.Adapter, ModelID: layout.Model.Repo, AssemblyPath: assembly, StatePath: state}
 			}
 			if layout.ChatTemplate != "" {
 				patch := document.Patches[layout.ChatTemplate]

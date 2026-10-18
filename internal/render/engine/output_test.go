@@ -2,11 +2,50 @@ package engine_test
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/temper-sh/temper/internal/render/engine"
 )
+
+func TestSplashOutputDefaultsFollowTheSelectedFrontendContract(t *testing.T) {
+	for _, adapter := range []string{"", "splash/v1", "splash/v2"} {
+		for _, limit := range []int{0, 64} {
+			t.Run(fmt.Sprintf("%s/%d", adapter, limit), func(t *testing.T) {
+				request := engine.Request{
+					Engine: engine.Splash, LayoutID: "qwen", ModelPath: "/temper/model.gguf",
+					ArtifactFormat: "gguf", Interface: engine.InterfaceChatCompletions,
+					Modalities: []string{"text"}, Window: 4096, MaxTokens: limit, Thinking: "off", Speculation: "dflash2",
+					Sampling: &engine.SamplingDefaults{Temperature: 1, TopK: 20, TopP: .95, RepeatPenalty: 1},
+					Splash: &engine.SplashTuning{Adapter: adapter, ModelID: "owner/qwen", AssemblyPath: "/temper/prepared", StatePath: "/temper/state",
+						SplashConfig: engine.SplashConfig{KVCache: "int8", MaxMemoryBytes: 24 << 30, ReasoningEffort: "none", RequestTimeoutSeconds: 600}},
+				}
+				command, err := engine.Build(request)
+				if err != nil {
+					t.Fatal(err)
+				}
+				runtime := command.Runtime()
+				args := runtime.Requirement.Arguments
+				value, capped := runtime.DefaultParameters["max_tokens"]
+				if adapter == "splash/v2" {
+					if slices.Contains(args, "--max-new-tokens") || capped != (limit > 0) || capped && value != limit {
+						t.Fatalf("source frontend output default: argv=%q defaults=%v", args, runtime.DefaultParameters)
+					}
+				} else {
+					want := "4096"
+					if limit > 0 {
+						want = "64"
+					}
+					i := slices.Index(args, "--max-new-tokens")
+					if capped || i < 0 || i+1 >= len(args) || args[i+1] != want {
+						t.Fatalf("legacy frontend output default changed: argv=%q defaults=%v", args, runtime.DefaultParameters)
+					}
+				}
+			})
+		}
+	}
+}
 
 func TestLlamaOmittedOutputStopsAtContextWithoutShiftingHistory(t *testing.T) {
 	for _, controls := range []*engine.LlamaServerControls{

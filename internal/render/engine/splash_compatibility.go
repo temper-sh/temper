@@ -25,7 +25,7 @@ func SplashCompatibility(chip, macOS string) error {
 		minor, _ = strconv.Atoi(parts[1])
 	}
 	if generation < 3 || major < 26 || major == 26 && minor < 4 {
-		return errors.New("Splash 1.1.0 requires Apple M3 or newer and macOS 26.4 or later")
+		return errors.New("Splash requires Apple M3 or newer and macOS 26.4 or later")
 	}
 	return nil
 }

@@ -75,7 +75,7 @@ func (c EngineConfig) value() (any, error) {
 	}
 	base := c.LlamaConfig
 	base.Kind = ""
-	if base != (LlamaConfig{}) || c.Kind != "splash/v1" || c.Splash.Kind != c.Kind {
+	if base != (LlamaConfig{}) || (c.Kind != "splash/v1" && c.Kind != "splash/v2") || c.Splash.Kind != c.Kind {
 		return nil, errors.New("Splash engine_config cannot contain llama-server fields")
 	}
 	return c.Splash, nil
@@ -110,7 +110,7 @@ func (c *EngineConfig) UnmarshalYAML(node *yaml.Node) error {
 		return decode(raw, c.CrispEmbed)
 	case "llama-server/v1":
 		return decode(raw, &c.LlamaConfig)
-	case "splash/v1":
+	case "splash/v1", "splash/v2":
 		c.Kind = discriminator.Kind
 		c.Splash = &SplashConfig{}
 		return decode(raw, c.Splash)
