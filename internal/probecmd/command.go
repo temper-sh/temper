@@ -29,6 +29,8 @@ var generationPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 // Invocation is the complete, validated foreground process boundary.
 type Invocation struct {
+	// EnginePort is the port the router gives the served preset's engine.
+	EnginePort            int
 	PythonMultiprocessing bool
 	PythonCrashLogSHA256  string
 	Path                  string
@@ -97,6 +99,8 @@ func Plan(options Options) (Invocation, error) {
 		return Invocation{}, err
 	}
 
+	// Serving runs one preset, so its engine has the first port of the root's block.
+	enginePort := datadir.StartPort(root)
 	router := ""
 	enginePath := ""
 	frontendPath := ""
@@ -129,7 +133,7 @@ func Plan(options Options) (Invocation, error) {
 			args := append([]string{executable}, requirement.Arguments...)
 			for i, arg := range args {
 				if arg == "${PORT}" {
-					args[i] = "10001"
+					args[i] = strconv.Itoa(enginePort)
 				}
 			}
 			enginePath = python
@@ -144,7 +148,7 @@ func Plan(options Options) (Invocation, error) {
 			args := append([]string(nil), requirement.Arguments...)
 			for i, arg := range args {
 				if arg == "${PORT}" {
-					args[i] = "10001"
+					args[i] = strconv.Itoa(enginePort)
 				}
 			}
 			if requirement.Role == "frontend" {
@@ -160,6 +164,7 @@ func Plan(options Options) (Invocation, error) {
 		return Invocation{}, fmt.Errorf("rendered config: %w", err)
 	}
 	return Invocation{
+		EnginePort:            enginePort,
 		PythonMultiprocessing: pythonMultiprocessing,
 		PythonCrashLogSHA256:  pythonCrashLogSHA256,
 		Path:                  router,

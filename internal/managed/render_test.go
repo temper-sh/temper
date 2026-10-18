@@ -1,6 +1,7 @@
 package managed
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"github.com/temper-sh/temper/internal/testfixture"
 
 	"github.com/temper-sh/temper/internal/catalog"
+	"github.com/temper-sh/temper/internal/preset"
 	"github.com/temper-sh/temper/internal/setup"
 	"github.com/temper-sh/temper/internal/software"
 	"gopkg.in/yaml.v3"
@@ -190,5 +192,41 @@ func TestEachStartEmptiesTheRouterLog(t *testing.T) {
 	}
 	if err := emptyLog(j); err == nil {
 		t.Fatal("followed a symlinked log")
+	}
+}
+
+func TestEachRootRendersItsOwnStableEnginePorts(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	c := mixed(t)
+	l := setup.LayoutPlan{ID: "work", Layout: c.Layouts["work"], AllFit: false}
+	resolve := func(catalog.Lock, string, string) (string, error) { return "/software/bin", nil }
+	render := func(root string) (Rendered, int, string) {
+		t.Helper()
+		got, err := Render(root, "127.0.0.1:18080", c, l, resolve, fixtureLauncher)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var doc struct {
+			StartPort int `yaml:"startPort"`
+		}
+		if err = yaml.Unmarshal(got.Config, &doc); err != nil {
+			t.Fatal(err)
+		}
+		bundle, err := preset.Render(root, c.Presets["qwen3.8-27b-q4xl-mtp"].Lock)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got, doc.StartPort, string(bundle.Artifacts[0].Data)
+	}
+	main, mainPort, mainExecution := render(filepath.Join(home, ".temper"))
+	again, _, _ := render(filepath.Join(home, ".temper"))
+	run, runPort, runExecution := render(filepath.Join(home, "field-kit", "runs", "one", "temper"))
+	// The default root keeps its port and so its generation across upgrades.
+	if mainPort != 10001 || !strings.Contains(mainExecution, "startPort: 10001\n") || main.Job.Generation != again.Job.Generation {
+		t.Fatalf("default root moved or is unstable: port %d, generations %s %s", mainPort, main.Job.Generation, again.Job.Generation)
+	}
+	if runPort == mainPort || !strings.Contains(runExecution, fmt.Sprintf("startPort: %d\n", runPort)) || run.Job.Generation == main.Job.Generation {
+		t.Fatalf("two roots share engine ports: %d and %d", mainPort, runPort)
 	}
 }

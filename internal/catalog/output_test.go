@@ -57,7 +57,7 @@ func TestOmittedOutputLimitSurvivesCatalogLockAndManifest(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			bundle, err := render.Build(render.Inputs{Manifest: projection.Manifest, Lock: projection.Artifacts, Mode: lock.Preset, Root: "/output-test"})
+			bundle, err := render.Build(render.Inputs{StartPort: 10001, Manifest: projection.Manifest, Lock: projection.Artifacts, Mode: lock.Preset, Root: "/output-test"})
 			if err != nil {
 				t.Fatal(err)
 			}

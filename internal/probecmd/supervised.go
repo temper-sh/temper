@@ -488,6 +488,9 @@ func runSupervised(ctx context.Context, invocation Invocation, stdout, stderr io
 	if !listenerClosed(s.Listen) {
 		return errors.New("probe listener is occupied or cannot be inspected")
 	}
+	if err := EnginePortsFree(invocation.EnginePort, 1); err != nil {
+		return err
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}

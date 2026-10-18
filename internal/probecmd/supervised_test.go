@@ -344,12 +344,13 @@ func testSupervisedForeground(t *testing.T, separateGroup, withFrontend bool) {
 	}
 	listen := listener.Addr().String()
 	listener.Close()
+	enginePort := freePort(t)
 	statusPath := filepath.Join(parent, "status.json")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	done := make(chan error, 1)
 	var processOutput bytes.Buffer
-	inv := Invocation{Path: router, EnginePath: engine, Arguments: []string{"-test.run=^TestProbeProcessHelper$"},
+	inv := Invocation{Path: router, EnginePath: engine, EnginePort: enginePort, Arguments: []string{"-test.run=^TestProbeProcessHelper$"},
 		Environment: append(os.Environ(), "TEMPER_TEST_PROBE=router", "TEMPER_TEST_LISTEN="+listen, "TEMPER_TEST_ENGINE="+engine,
 			fmt.Sprintf("TEMPER_TEST_ENGINE_GROUP=%t", separateGroup)),
 		Supervision: &Supervision{StatusPath: statusPath, Root: parent, Installation: "fixture", Generation: strings.Repeat("b", 64), Listen: listen}}

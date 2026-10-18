@@ -11,6 +11,7 @@ import (
 	"sort"
 
 	"github.com/temper-sh/temper/internal/buildinfo"
+	"github.com/temper-sh/temper/internal/datadir"
 	"github.com/temper-sh/temper/internal/lockfile"
 	"github.com/temper-sh/temper/internal/manifest"
 	"github.com/temper-sh/temper/internal/render"
@@ -79,7 +80,7 @@ func CompilePreset(d Document, id string, memoryGiB, window int, target software
 	if err != nil {
 		return Lock{}, err
 	}
-	if _, err = render.Build(render.Inputs{Manifest: inputs.Manifest, Lock: inputs.Artifacts, Mode: id, Root: "/temper-compile-validation"}); err != nil {
+	if _, err = render.Build(render.Inputs{Manifest: inputs.Manifest, Lock: inputs.Artifacts, Mode: id, Root: "/temper-compile-validation", StartPort: datadir.DefaultStartPort}); err != nil {
 		return Lock{}, fmt.Errorf("compile runtime inputs: %w", err)
 	}
 	return locked, nil

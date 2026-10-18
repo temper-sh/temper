@@ -41,7 +41,7 @@ func TestLlamaExternalDraftSurvivesCompilationAndRendersTheLockedFile(t *testing
 			if draft == nil || draft.Repo != "example/Assistant" || draft.Files[0].Name != "draft/model.gguf" {
 				t.Fatal("draft identity lost in artifact projection")
 			}
-			bundle, err := render.Build(render.Inputs{Manifest: p.Manifest, Lock: p.Artifacts, Mode: locked.Preset, Root: "/temper path"})
+			bundle, err := render.Build(render.Inputs{StartPort: 10001, Manifest: p.Manifest, Lock: p.Artifacts, Mode: locked.Preset, Root: "/temper path"})
 			if err != nil {
 				t.Fatal(err)
 			}

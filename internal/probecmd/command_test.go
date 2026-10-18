@@ -5,10 +5,12 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/temper-sh/temper/internal/datadir"
 	"github.com/temper-sh/temper/internal/probecmd"
 	"github.com/temper-sh/temper/internal/runtimeconfig"
 	"github.com/temper-sh/temper/internal/software"
@@ -185,7 +187,8 @@ func TestPlanUsesReceiptedUVEngineFromItsExactEnvironment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if invocation.EnginePath != resolvedPython || strings.Join(invocation.EngineArguments, "|") != resolvedEngine+"|--no-telemetry|serve|--port|10001" {
+	port := strconv.Itoa(datadir.StartPort(fixture.root))
+	if invocation.EnginePath != resolvedPython || strings.Join(invocation.EngineArguments, "|") != resolvedEngine+"|--no-telemetry|serve|--port|"+port || strconv.Itoa(invocation.EnginePort) != port {
 		t.Fatalf("Python process identity = %q %q", invocation.EnginePath, invocation.EngineArguments)
 	}
 	if invocation.PythonCrashLogSHA256 != "8b69ee2f2cebdf3943155e195d5f31a06dbc5b14818e7b40aee9ba90206e3435" {
@@ -387,7 +390,8 @@ func TestSplashPlanResolvesBothProcessesFromOneExactRelease(t *testing.T) {
 	}
 	native, _ := filepath.EvalSymlinks(filepath.Join(payload, "engine/splash"))
 	frontend, _ := filepath.EvalSymlinks(filepath.Join(payload, "python/bin/python3.13"))
-	if inv.EnginePath != native || inv.FrontendPath != frontend || strings.Join(inv.FrontendArguments, " ") != "-I -B -c bootstrap --port 10001" || len(inv.EngineArguments) != 5 {
+	port := strconv.Itoa(datadir.StartPort(f.root))
+	if inv.EnginePath != native || inv.FrontendPath != frontend || strings.Join(inv.FrontendArguments, " ") != "-I -B -c bootstrap --port "+port || len(inv.EngineArguments) != 5 {
 		t.Fatalf("lost exact runtime identity: %+v", inv)
 	}
 	preparedPython, err := probecmd.InstalledExecutable(f.root, "field-kit-qwen", softwareLock(t, f.lockPath), "splash", "python/bin/python3.13")

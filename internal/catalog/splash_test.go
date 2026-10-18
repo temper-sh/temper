@@ -59,7 +59,7 @@ func TestSplashSourceAdapterSurvivesLockAndManifestRoundTrips(t *testing.T) {
 	if m.Layouts[splashLayout].Splash.Adapter != "splash/v2" {
 		t.Fatal("source adapter was lost in the manifest")
 	}
-	bundle, err := render.Build(render.Inputs{Manifest: m, Lock: projection.Artifacts, Mode: locked.Preset, Root: "/temper path"})
+	bundle, err := render.Build(render.Inputs{StartPort: 10001, Manifest: m, Lock: projection.Artifacts, Mode: locked.Preset, Root: "/temper path"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +149,7 @@ func TestSplashSelectionCarriesExactSidecarAndOfflineRuntime(t *testing.T) {
 	if _, err := manifest.Parse(encoded); err != nil {
 		t.Fatal(err)
 	}
-	bundle, err := render.Build(render.Inputs{Manifest: projection.Manifest, Lock: projection.Artifacts, Mode: locked.Preset, Root: "/temper path"})
+	bundle, err := render.Build(render.Inputs{StartPort: 10001, Manifest: projection.Manifest, Lock: projection.Artifacts, Mode: locked.Preset, Root: "/temper path"})
 	if err != nil {
 		t.Fatal(err)
 	}

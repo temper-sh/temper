@@ -99,8 +99,10 @@ effects and needs no dry-run flag.
 
 Supervised serving currently supports one preset on macOS. It verifies that the
 generation and its installed configuration bytes match the supplied execution
-lock and root before starting a process. Serving remains a foreground child of
-its caller. A new `--status-file` is
+lock and root before starting a process. The router gives the preset's engine
+the first port of the root's engine port block (see [Temper roots](init.md));
+serving refuses to start while another process listens there, and names it.
+Serving remains a foreground child of its caller. A new `--status-file` is
 reserved before starting the router; an existing path is refused. Atomic JSON
 snapshots (`temper-probe-status/v1`) bind the Temper PID, installation root,
 installation, generation, listener and router process group. They report exact

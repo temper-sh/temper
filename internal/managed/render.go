@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/temper-sh/temper/internal/catalog"
+	"github.com/temper-sh/temper/internal/datadir"
 	"github.com/temper-sh/temper/internal/preset"
 	"github.com/temper-sh/temper/internal/render"
 	"github.com/temper-sh/temper/internal/render/engine"
@@ -166,7 +167,10 @@ func Render(root, listen string, c setup.Configuration, l setup.LayoutPlan, reso
 			}
 		}
 	}
-	doc := map[string]any{"healthCheckTimeout": 660, "startPort": 10001, "globalTTL": l.Layout.IdleSeconds, "logToStdout": "both", "models": models, "routing": map[string]any{"router": map[string]any{"use": "group", "settings": map[string]any{"groups": groups}}}}
+	if len(models) > datadir.PortBlock {
+		return Rendered{}, fmt.Errorf("one layout holds at most %d presets", datadir.PortBlock)
+	}
+	doc := map[string]any{"healthCheckTimeout": 660, "startPort": datadir.StartPort(root), "globalTTL": l.Layout.IdleSeconds, "logToStdout": "both", "models": models, "routing": map[string]any{"router": map[string]any{"use": "group", "settings": map[string]any{"groups": groups}}}}
 	if len(l.Layout.Startup) > 0 {
 		doc["hooks"] = map[string]any{"on_startup": map[string]any{"preload": l.Layout.Startup}}
 	}

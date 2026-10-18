@@ -147,7 +147,7 @@ func Runtime(ctx context.Context, args []string, stdout, stderr io.Writer, effec
 		if err := supervision.Validate(); err != nil {
 			return failed(stderr, err)
 		}
-		bundle, err := render.Build(render.Inputs{Manifest: p.Manifest, Lock: p.Artifacts, Mode: l.Preset, Root: resolved})
+		bundle, err := render.Build(render.Inputs{Manifest: p.Manifest, Lock: p.Artifacts, Mode: l.Preset, Root: resolved, StartPort: datadir.StartPort(resolved)})
 		if err != nil {
 			return failed(stderr, err)
 		}

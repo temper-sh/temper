@@ -21,7 +21,7 @@ func TestCurrentPostureManifestRendersLegacySemanticsOrBetter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bundle, err := render.Build(render.Inputs{
+	bundle, err := render.Build(render.Inputs{StartPort: 10001,
 		Manifest: document,
 		Lock:     locked,
 		Mode:     "local",

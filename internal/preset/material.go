@@ -11,6 +11,7 @@ import (
 
 	"github.com/temper-sh/temper/internal/artifactset"
 	"github.com/temper-sh/temper/internal/catalog"
+	"github.com/temper-sh/temper/internal/datadir"
 	"github.com/temper-sh/temper/internal/fetch"
 	"github.com/temper-sh/temper/internal/probecmd"
 	"github.com/temper-sh/temper/internal/render"
@@ -224,7 +225,7 @@ func Render(root string, lock catalog.Lock) (render.Bundle, error) {
 	if err != nil {
 		return render.Bundle{}, err
 	}
-	return render.Build(render.Inputs{Root: root, Mode: lock.Preset, Manifest: p.Manifest, Lock: p.Artifacts})
+	return render.Build(render.Inputs{Root: root, StartPort: datadir.StartPort(root), Mode: lock.Preset, Manifest: p.Manifest, Lock: p.Artifacts})
 }
 
 func PrepareState(root string, lock catalog.Lock) error {

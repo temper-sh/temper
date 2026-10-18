@@ -161,7 +161,7 @@ func TestCompiledLockRunsWithoutSourceCatalog(t *testing.T) {
 	if len(software.Selections) != 2 || software.Target.OS != "darwin" || software.Target.Arch != "arm64" {
 		t.Fatalf("incomplete portable software projection: %+v", software)
 	}
-	bundle, err := render.Build(render.Inputs{Manifest: p.Manifest, Lock: p.Artifacts, Mode: l.Preset, Root: "/isolated root"})
+	bundle, err := render.Build(render.Inputs{StartPort: 10001, Manifest: p.Manifest, Lock: p.Artifacts, Mode: l.Preset, Root: "/isolated root"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +220,7 @@ func TestQ4KVCacheSurvivesLockAndManifestRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	parsed := projection.Manifest
-	bundle, err := render.Build(render.Inputs{Manifest: parsed, Lock: projection.Artifacts, Mode: locked.Preset, Root: "/isolated root"})
+	bundle, err := render.Build(render.Inputs{StartPort: 10001, Manifest: parsed, Lock: projection.Artifacts, Mode: locked.Preset, Root: "/isolated root"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -267,7 +267,7 @@ func TestCheckpointSpacingSurvivesLockExportAndRendering(t *testing.T) {
 			if !reflect.DeepEqual(got, test.spacing) {
 				t.Fatalf("checkpoint spacing lost or changed during export: %v", got)
 			}
-			bundle, err := render.Build(render.Inputs{Manifest: parsed, Lock: projection.Artifacts, Mode: locked.Preset, Root: "/isolated root"})
+			bundle, err := render.Build(render.Inputs{StartPort: 10001, Manifest: parsed, Lock: projection.Artifacts, Mode: locked.Preset, Root: "/isolated root"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -473,7 +473,7 @@ func TestSeedIsPassedOnlyWhenThePresetFixesOne(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		bundle, err := render.Build(render.Inputs{Manifest: projection.Manifest, Lock: projection.Artifacts, Mode: l.Preset, Root: "/root"})
+		bundle, err := render.Build(render.Inputs{StartPort: 10001, Manifest: projection.Manifest, Lock: projection.Artifacts, Mode: l.Preset, Root: "/root"})
 		if err != nil {
 			t.Fatal(err)
 		}

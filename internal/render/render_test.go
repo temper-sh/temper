@@ -106,7 +106,7 @@ func TestBuildV2RendersEverySelectedEngineThroughItsAdapter(t *testing.T) {
 			Files: append([]lockfile.File(nil), files...), Resolved: "2026-09-02",
 		}
 	}
-	bundle, err := render.Build(render.Inputs{
+	bundle, err := render.Build(render.Inputs{StartPort: 10001,
 		Manifest: document, Lock: locked, Mode: "large", Root: "/temper",
 	})
 	if err != nil {
@@ -206,7 +206,7 @@ func TestPreferredDoesNotImplyPreload(t *testing.T) {
 	mode := document.Modes["local"]
 	mode.Members.Resident[0].Preload = false
 	document.Modes["local"] = mode
-	bundle, err := render.Build(render.Inputs{
+	bundle, err := render.Build(render.Inputs{StartPort: 10001,
 		Manifest: document,
 		Lock:     parseLock(t),
 		Mode:     "local",
@@ -227,7 +227,7 @@ func TestBuildRefusesManifestLockDrift(t *testing.T) {
 	entry := locked.Entries["coder"]
 	entry.Repo = "org/Moved"
 	locked.Entries["coder"] = entry
-	_, err := render.Build(render.Inputs{Manifest: document, Lock: locked, Mode: "local", Root: "/temper"})
+	_, err := render.Build(render.Inputs{StartPort: 10001, Manifest: document, Lock: locked, Mode: "local", Root: "/temper"})
 	if err == nil || !strings.Contains(err.Error(), "repo drift") {
 		t.Fatalf("Build error = %v, want repo drift refusal", err)
 	}
@@ -235,7 +235,7 @@ func TestBuildRefusesManifestLockDrift(t *testing.T) {
 
 func buildFixture(t *testing.T, mode string) render.Bundle {
 	t.Helper()
-	bundle, err := render.Build(render.Inputs{
+	bundle, err := render.Build(render.Inputs{StartPort: 10001,
 		Manifest: parseManifest(t),
 		Lock:     parseLock(t),
 		Mode:     mode,

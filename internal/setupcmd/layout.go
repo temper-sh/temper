@@ -15,6 +15,7 @@ import (
 	"github.com/temper-sh/temper/internal/datadir"
 	"github.com/temper-sh/temper/internal/managed"
 	"github.com/temper-sh/temper/internal/preset"
+	"github.com/temper-sh/temper/internal/probecmd"
 	"github.com/temper-sh/temper/internal/setup"
 )
 
@@ -233,6 +234,13 @@ func (c Command) activate(ctx context.Context, root, id, listen string, dry bool
 			return before, nil, err
 		} else if revision != configurationRevision {
 			return before, nil, errors.New("configuration changed during activation preflight; review and retry")
+		}
+		if state.Current == nil {
+			// Nothing of this root runs, so a listener on its engine ports
+			// belongs to another program or another root.
+			if err = probecmd.EnginePortsFree(datadir.StartPort(root), len(desired.Presets)); err != nil {
+				return before, nil, err
+			}
 		}
 		if err = managed.Publish(ctx, rendered); err != nil {
 			return before, nil, err

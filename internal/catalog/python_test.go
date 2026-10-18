@@ -50,7 +50,7 @@ func TestStudyCompositionsCompileRenderAndKeepTheExactPythonClosure(t *testing.T
 				t.Fatal(err)
 			}
 			root := t.TempDir()
-			bundle, err := render.Build(render.Inputs{Manifest: projection.Manifest, Lock: projection.Artifacts, Mode: id, Root: root})
+			bundle, err := render.Build(render.Inputs{StartPort: 10001, Manifest: projection.Manifest, Lock: projection.Artifacts, Mode: id, Root: root})
 			if err != nil {
 				t.Fatal(err)
 			}

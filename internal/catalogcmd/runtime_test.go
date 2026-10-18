@@ -20,6 +20,7 @@ import (
 	"github.com/temper-sh/temper/internal/budget"
 	"github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/catalogcmd"
+	"github.com/temper-sh/temper/internal/datadir"
 	"github.com/temper-sh/temper/internal/fetch"
 	"github.com/temper-sh/temper/internal/hfcache"
 	"github.com/temper-sh/temper/internal/lockfile"
@@ -152,7 +153,7 @@ func TestExecutionServeRejectsWrongGenerationAndChangedBytesBeforeEffects(t *tes
 		t.Fatal(err)
 	}
 	root := filepath.Join(parent, "root")
-	bundle, err := render.Build(render.Inputs{Manifest: projections.Manifest, Lock: projections.Artifacts, Mode: locked.Preset, Root: root})
+	bundle, err := render.Build(render.Inputs{StartPort: datadir.StartPort(root), Manifest: projections.Manifest, Lock: projections.Artifacts, Mode: locked.Preset, Root: root})
 	if err != nil {
 		t.Fatal(err)
 	}

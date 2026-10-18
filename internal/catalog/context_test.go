@@ -45,7 +45,7 @@ func TestContextOverridePreservesWeightsAndUsesItsOwnExecutionIdentity(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := render.Build(render.Inputs{Manifest: p.Manifest, Lock: p.Artifacts, Mode: locked.Preset, Root: "/context-test"})
+	result, err := render.Build(render.Inputs{StartPort: 10001, Manifest: p.Manifest, Lock: p.Artifacts, Mode: locked.Preset, Root: "/context-test"})
 	if err != nil {
 		t.Fatal(err)
 	}

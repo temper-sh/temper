@@ -217,6 +217,12 @@ temper layout activate default --root "$HOME/.temper-writing"
 Each root has one active layout. To use a different local port, stop that
 layout first, then activate it with `--listen 127.0.0.1:18080`.
 
+Each root's engines use their own block of 32 local ports, so two roots can
+run at the same time: `~/.temper` starts at port 10001, and every other root at
+a block chosen from its folder path. When nothing from the root runs, `layout
+activate` stops if another process already listens on one of those ports, and
+names it.
+
 [Script preset and layout changes](layouts.md#script-preset-and-layout-changes)
 or read the [configuration and service reference](layouts.md) for exact behavior.
 [Catalog updates](../CATALOG.md) do not replace your saved choices.

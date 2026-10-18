@@ -57,10 +57,11 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	}
 
 	bundle, err := render.Build(render.Inputs{
-		Manifest: document,
-		Lock:     locked,
-		Mode:     options.Mode,
-		Root:     root,
+		Manifest:  document,
+		Lock:      locked,
+		Mode:      options.Mode,
+		Root:      root,
+		StartPort: datadir.StartPort(root),
 	})
 	if err != nil {
 		return Result{}, err
