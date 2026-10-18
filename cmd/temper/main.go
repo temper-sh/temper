@@ -17,6 +17,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/temper-sh/temper/internal/buildinfo"
 	"github.com/temper-sh/temper/internal/catalogcmd"
@@ -182,7 +183,12 @@ func runWithDependencies(ctx context.Context, arguments []string, stdout, stderr
 	case "machine":
 		return runMachine(ctx, arguments[1:], stdout, stderr, deps.detectFacts)
 	case "preset":
-		return presetcmd.New(deps.detectFacts).Run(ctx, arguments[1:], stdout, stderr)
+		hub, err := huggingface.New(huggingface.Config{Token: os.Getenv("HF_TOKEN"), HTTPClient: &http.Client{Timeout: 5 * time.Minute}})
+		if err != nil {
+			fmt.Fprintf(stderr, "temper preset: %v\n", err)
+			return 1
+		}
+		return presetcmd.New(deps.detectFacts, hub).Run(ctx, arguments[1:], stdout, stderr)
 	case "software":
 		if deps.newSoftware == nil {
 			fmt.Fprintln(stderr, "temper software: command dependencies are unavailable")
@@ -291,7 +297,7 @@ func usage(writer io.Writer) {
 
 Tools for scripts and experiments:
   temper catalog update|inspect|rollback|compile|describe
-  temper preset fork|copy|check|fields
+  temper preset fork|copy|check|fields|weights|template
   temper execution configure|inspect|prepare|render|paths|serve|remove
   temper software install|check|remove
   temper machine facts

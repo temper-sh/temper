@@ -59,7 +59,7 @@ func (c *Client) Open(ctx context.Context, repo, revision, file string) (io.Read
 		return nil, fmt.Errorf("download %s: %w", repo, err)
 	}
 	endpoint := c.baseURL + "/" + escapePath(repo) + "/resolve/" + revision + "/" + escapePath(file) + "?download=true"
-	request, err := c.request(ctx, http.MethodGet, endpoint)
+	request, err := c.request(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -74,8 +74,8 @@ func (c *Client) Open(ctx context.Context, repo, revision, file string) (io.Read
 	return response.Body, nil
 }
 
-func (c *Client) request(ctx context.Context, method, endpoint string) (*http.Request, error) {
-	request, err := http.NewRequestWithContext(ctx, method, endpoint, nil)
+func (c *Client) request(ctx context.Context, method, endpoint string, body io.Reader) (*http.Request, error) {
+	request, err := http.NewRequestWithContext(ctx, method, endpoint, body)
 	if err != nil {
 		return nil, fmt.Errorf("construct Hugging Face request: %w", err)
 	}

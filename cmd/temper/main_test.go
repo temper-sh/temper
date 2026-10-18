@@ -40,7 +40,7 @@ func TestEveryHelpRequestSucceedsWithoutEffects(t *testing.T) {
 		{"catalog", "compile", "--help"}, {"catalog", "describe", "--help"},
 		{"execution", "--help"}, {"execution", "configure", "--help"}, {"execution", "inspect", "--help"}, {"execution", "serve", "--help"},
 		{"machine", "--help"}, {"machine", "facts", "--help"},
-		{"preset", "--help"}, {"preset", "fork", "--help"}, {"preset", "copy", "--help"}, {"preset", "check", "--help"}, {"preset", "fields", "--help"},
+		{"preset", "--help"}, {"preset", "fork", "--help"}, {"preset", "copy", "--help"}, {"preset", "check", "--help"}, {"preset", "fields", "--help"}, {"preset", "weights", "--help"}, {"preset", "template", "--help"},
 	} {
 		var stdout, stderr bytes.Buffer
 		exit := runWithDependencies(context.Background(), args, &stdout, &stderr, dependencies{

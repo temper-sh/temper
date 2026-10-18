@@ -119,6 +119,12 @@ compile writes a new one.
 
 - A fork keeps its origin's model. Other weights are allowed when their record
   says `same_model_as` the origin's weights. Temper cannot verify that claim.
+- `temper preset weights qwen-q6 unsloth/Qwen3.8-27B-GGUF Qwen3.8-27B-Q6_K.gguf`
+  writes this record and the change. It reads the commit, the license and
+  each file's size and SHA-256 from Hugging Face; a small file without a
+  SHA-256 there is downloaded and hashed. Weights from the origin's
+  repository get `same_model_as` automatically; for another repository, add
+  `--same-model-as ID`.
 - `same_model_as` exists only in user files. It also lets a template accept the
   weights (see below).
 - Known cost: the origin's speculation may depend on its weights, such as MTP
@@ -137,7 +143,11 @@ compile writes a new one.
   whose `same_model_as` it lists. `builtin` accepts any weights. The lock's
   template record lists the weights it accepted.
 - A template record in a file has the catalog's shape. Its `transform` must be
-  one Temper knows.
+  one Temper knows. Its size and SHA-256 describe the template as prepared,
+  after the transform.
+- `temper preset template ID REPO FILE` writes a template record from Hugging
+  Face and selects it; `temper preset template ID builtin` selects the
+  template inside the weights.
 
 ## A copy
 
@@ -181,7 +191,9 @@ compile writes a new one.
 
 All take `--root PATH` (default `~/.temper`) and `--json` for one JSON
 document. They read the root's active catalog, so run `temper catalog update
---root PATH` first.
+--root PATH` first. The revision defaults to `main` and is recorded as its
+exact commit. `HF_TOKEN` is used for gated repositories. `weights` and
+`template` change a file only when the result still compiles.
 
 | Command | What it does |
 |---|---|
@@ -189,6 +201,8 @@ document. They read the root's active catalog, so run `temper catalog update
 | `temper preset copy SOURCE ID [--name TEXT] [--memory-gib N]` | Writes a copy of a catalog preset or of one of yours. |
 | `temper preset check [ID] [--memory-gib N]` | Reads and compiles one preset, or every file in `presets.d`. It shows a fork's changes from its origin, the build, the fit on this Mac and any warnings. It exits 1 when a preset is invalid; a preset that does not fit this Mac is still valid. |
 | `temper preset fields ID [--memory-gib N]` | Lists the settings a fork can change for that preset's engine, with current values. |
+| `temper preset weights ID REPO[@REVISION] FILE…` | Adds a weights record from Hugging Face and selects it. File names can be patterns, such as `'*.safetensors'`. In a copy, it also adds the weights to the copy's template. |
+| `temper preset template ID (REPO[@REVISION] FILE \| builtin)` | Adds a template record from Hugging Face and selects it, or selects the template inside the weights. |
 | `temper catalog compile --root ROOT --preset ID …` | Compiles your preset when `presets.d` has it, else the catalog's. With `--json` the report adds `user_preset` and `warnings`. |
 
 The lock of a user preset is an ordinary execution lock (`temper-execution-lock/v1`)
