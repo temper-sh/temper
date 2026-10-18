@@ -128,7 +128,11 @@ refused. The script is not vendored. vLLM Metal binds the same facts as `fronten
 admits only its CPython spawn worker and resource tracker from that frontend.
 The worker's fixed `VLLM::EngineCore` process title is accepted without changing
 its bound interpreter, PID, start time or group. Its `engine` and
-`resource-tracker` roles retain their own identities. Additional workers,
+`resource-tracker` roles retain their own identities. On a start with no
+cached information for the model type, the frontend first runs one exact
+model inspection child (`-m vllm.model_executor.models.registry`); like the
+router's inspection commands it is not a published role, and its identity
+stays bound until reaped. Additional workers,
 arbitrary Python children and replacements are refused. These are the selected
 single-worker launch shapes; broader worker topologies remain unsupported.
 

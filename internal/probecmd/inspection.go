@@ -58,3 +58,24 @@ func routerInspection(row processRow, rows []processRow, group int, invocation I
 	}
 	return false
 }
+
+// vLLM inspects a model type it has no cached information for in one
+// short-lived child of its frontend, then caches the result in the engine's
+// cache folder, so only a first start runs it. It is not a measured role; its
+// exact identity is retained for reaping and owned shutdown.
+func vllmModelInspection(row processRow, rows []processRow, invocation Invocation, known map[int]processRow) bool {
+	command := []string{"-m", "vllm.model_executor.models.registry"}
+	if !exactArguments(row.arguments, command) {
+		return false
+	}
+	if prior, ok := known[row.pid]; ok && exactArguments(prior.arguments, command) {
+		// The caller has already rechecked PID/start/group/executable/argv.
+		return true
+	}
+	for _, parent := range rows {
+		if parent.pid == row.ppid && parent.executable == invocation.FrontendPath && exactArguments(parent.arguments, invocation.FrontendArguments) {
+			return true
+		}
+	}
+	return false
+}

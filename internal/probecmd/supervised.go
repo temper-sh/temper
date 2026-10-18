@@ -263,6 +263,7 @@ func members(rows []processRow, group int, invocation Invocation, known map[int]
 				return nil, nil, errors.New("Splash frontend command differs from rendered selection")
 			}
 			role = "frontend"
+		case invocation.PythonMultiprocessing && row.executable == invocation.EnginePath && vllmModelInspection(row, rows, invocation, known):
 		case invocation.PythonMultiprocessing && row.executable == invocation.EnginePath:
 			role = pythonChildRole(row.arguments)
 			if role == "" {
