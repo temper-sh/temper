@@ -155,10 +155,11 @@ PATH`; then pass `--root PATH` to every command.
 
 ## Compatibility
 
-Temper 0.2 promises two things across its releases: the published catalog
-files, and your `~/.temper` folder (`configuration.json`, the stored catalog
-and `temper-root.json`, which marks the folder's format). Command output, file
-formats inside the cache, and tool commands such as `catalog compile` may
+Temper keeps these working across its releases: the published catalog files;
+your `~/.temper` folder (`configuration.json`, the stored catalog and
+`temper-root.json`, which marks the folder's format), since 0.2; and your own
+preset files in `presets.d` (`temper-preset/v1`), since 0.3. Command output,
+file formats inside the cache, and tool commands such as `catalog compile` may
 change in any release; scripts that use them should pin an exact Temper
 version.
 
@@ -177,6 +178,7 @@ You can contribute without writing code:
 
 - [Setup, layout management, and recovery](docs/contracts/init.md)
 - [Preset choices and their limitations](https://temper-sh.github.io/catalog/)
+- [Your own presets](docs/contracts/user-presets.md)
 - [Command reference](docs/contracts/)
 - [Contributing and building from source](docs/CODE.md)
 
