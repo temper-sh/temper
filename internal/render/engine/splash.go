@@ -69,8 +69,11 @@ func buildSplash(r Request) (Command, error) {
 	if r.Speculation != "dflash2" || r.SpeculativeTokens != 0 {
 		return Command{}, errors.New("Splash requires its DFlash2 sidecar; draft block size is engine-owned")
 	}
-	if (r.Thinking == "off") != (c.ReasoningEffort == "none") || r.Window > 262144 {
-		return Command{}, errors.New("Splash thinking and context limits disagree with the selected configuration")
+	if (r.Thinking == "off") != (c.ReasoningEffort == "none") {
+		return Command{}, errors.New("Splash reasoning off and reasoning_effort none go together")
+	}
+	if r.Window > 262144 {
+		return Command{}, errors.New("Splash context must be at most 262144 tokens")
 	}
 	if c.ModelID == "" || !filepath.IsAbs(c.AssemblyPath) || !filepath.IsAbs(c.StatePath) {
 		return Command{}, errors.New("Splash requires a model ID and absolute prepared-material/state paths")

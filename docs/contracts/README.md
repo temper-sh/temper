@@ -18,6 +18,7 @@ These pages explain individual commands and their exact behavior.
 | Task | Reference |
 |---|---|
 | Install, check or remove locked software | [`software`](software-install.md) |
+| Make your own presets from catalog presets | [`temper preset`](user-presets.md) |
 | Define and compile a preset | [Catalog records and execution locks](execution-lock.md) |
 | Prepare, serve and remove an execution lock | [Execution commands](execution-runtime.md) |
 

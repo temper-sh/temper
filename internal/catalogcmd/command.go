@@ -26,6 +26,7 @@ import (
 	publication "github.com/temper-sh/temper/internal/software/catalogpublication"
 	"github.com/temper-sh/temper/internal/software/catalogsource"
 	"github.com/temper-sh/temper/internal/software/catalogtrust"
+	"github.com/temper-sh/temper/internal/userpreset"
 )
 
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
@@ -71,14 +72,14 @@ func compile(ctx context.Context, args []string, stdout, stderr io.Writer, reade
 	f.SetOutput(stderr)
 	catalogPath := f.String("catalog", "", "local catalog file, used as is, no signature check")
 	root := f.String("root", "", "Temper root containing a verified active catalog")
-	preset := f.String("preset", "", "explicit catalog preset")
+	preset := f.String("preset", "", "explicit preset: a catalog preset, or with --root one of your presets in ROOT/presets.d")
 	target := f.String("target", "", "portable target, currently darwin/arm64")
 	out := f.String("out", "", "new execution lock path")
 	dry := f.Bool("dry-run", false, "validate and report without writes")
 	jsonOutput := f.Bool("json", false, "print one JSON document for scripts")
 	softwareChoice := f.String("software", catalog.SoftwareStable, "software choice: stable (the catalog's tested releases) or latest")
 	memoryGiB := f.Int("memory-gib", 0, "`GIB` use the profile a Mac with this much memory uses (default: the smallest)")
-	f.Usage = clihelp.Usage(stderr, clihelp.Help{Summary: "Compile one catalog preset into an exact execution lock for the execution commands.",
+	f.Usage = clihelp.Usage(stderr, clihelp.Help{Summary: "Compile one preset into an exact execution lock for the execution commands.\nWith --root, your presets in ROOT/presets.d come first.",
 		Usage: []string{"temper catalog compile (--catalog FILE | --root PATH) --preset ID --target darwin/arm64 --out FILE [options]"}}, f)
 	if err := f.Parse(args); err != nil {
 		return parseFailure(err)
@@ -87,9 +88,29 @@ func compile(ctx context.Context, args []string, stdout, stderr io.Writer, reade
 		usage(stderr)
 		return 2
 	}
-	d, err := readCompileCatalog(*catalogPath, *root, trust)
+	view, err := readCompileCatalog(*catalogPath, *root, trust)
 	if err != nil {
 		return failed(stderr, err)
+	}
+	d, user, warnings := view.Document, false, []string(nil)
+	if *root != "" {
+		// A user preset in the root's presets.d wins over a catalog preset
+		// with the same ID, with a warning.
+		if user, err = userpreset.Exists(*root, *preset); err != nil {
+			return failed(stderr, err)
+		}
+		if user {
+			loaded, err := userpreset.Load(*root, *preset, view)
+			if err != nil {
+				return failed(stderr, fmt.Errorf("your preset %s (%s): %w", *preset, userpreset.Path(*root, *preset), err))
+			}
+			d, warnings = loaded.Document, loaded.Warnings
+		}
+	}
+	if !*jsonOutput {
+		for _, warning := range warnings {
+			fmt.Fprintf(stderr, "temper: warning: %s\n", warning)
+		}
 	}
 	d, _, err = catalog.ResolveSoftware(ctx, d, *preset, *softwareChoice, &catalog.LatestReleases{Reader: reader}, false)
 	if err != nil {
@@ -108,7 +129,11 @@ func compile(ctx context.Context, args []string, stdout, stderr io.Writer, reade
 		return failed(stderr, err)
 	}
 	if *jsonOutput {
-		return encode(stdout, stderr, map[string]any{"schema": "temper-catalog-compilation/v1", "preset": *preset, "profile_min_memory_gib": l.Records.Presets[*preset].Profiles[0].MinMemoryGiB, "path": *out, "changed": changed, "dry_run": *dry})
+		report := map[string]any{"schema": "temper-catalog-compilation/v1", "preset": *preset, "profile_min_memory_gib": l.Records.Presets[*preset].Profiles[0].MinMemoryGiB, "path": *out, "changed": changed, "dry_run": *dry}
+		if user {
+			report["user_preset"], report["warnings"] = true, append([]string{}, warnings...)
+		}
+		return encode(stdout, stderr, report)
 	}
 	profile := l.Records.Presets[*preset].Profiles[0].MinMemoryGiB
 	switch {
@@ -122,20 +147,19 @@ func compile(ctx context.Context, args []string, stdout, stderr io.Writer, reade
 	return 0
 }
 
-func readCompileCatalog(path, root string, trust publication.TrustRoot) (catalog.Document, error) {
+func readCompileCatalog(path, root string, trust publication.TrustRoot) (catalog.View, error) {
 	if root != "" {
 		snapshot, err := distribution.Read(root, trust)
 		if err != nil {
-			return catalog.Document{}, err
+			return catalog.View{}, err
 		}
-		return snapshot.Document, nil
+		return catalog.View{Document: snapshot.Document, Unavailable: snapshot.Unavailable}, nil
 	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return catalog.Document{}, err
+		return catalog.View{}, err
 	}
-	view, err := catalog.Read(raw, buildinfo.Version)
-	return view.Document, err
+	return catalog.Read(raw, buildinfo.Version)
 }
 
 func inspectFile(path string, data []byte) (bool, error) {

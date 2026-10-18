@@ -28,6 +28,7 @@ import (
 	"github.com/temper-sh/temper/internal/managed"
 	"github.com/temper-sh/temper/internal/manifest"
 	"github.com/temper-sh/temper/internal/preset"
+	"github.com/temper-sh/temper/internal/presetcmd"
 	"github.com/temper-sh/temper/internal/probecmd"
 	"github.com/temper-sh/temper/internal/setupcmd"
 	"github.com/temper-sh/temper/internal/software/adapter"
@@ -180,6 +181,8 @@ func runWithDependencies(ctx context.Context, arguments []string, stdout, stderr
 		return command.Layout(ctx, arguments[1:], stdout, stderr)
 	case "machine":
 		return runMachine(ctx, arguments[1:], stdout, stderr, deps.detectFacts)
+	case "preset":
+		return presetcmd.New(deps.detectFacts).Run(ctx, arguments[1:], stdout, stderr)
 	case "software":
 		if deps.newSoftware == nil {
 			fmt.Fprintln(stderr, "temper software: command dependencies are unavailable")
@@ -288,6 +291,7 @@ func usage(writer io.Writer) {
 
 Tools for scripts and experiments:
   temper catalog update|inspect|rollback|compile|describe
+  temper preset fork|copy|check|fields
   temper execution configure|inspect|prepare|render|paths|serve|remove
   temper software install|check|remove
   temper machine facts
