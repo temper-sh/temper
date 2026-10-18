@@ -23,6 +23,8 @@ const UserPresetSchema = "temper-preset/v1"
 // user editing a file.
 var goTypes = regexp.MustCompile(` (in type|into) \*?[a-z]+\.[A-Za-z0-9_.]+`)
 
+var unknownField = regexp.MustCompile(`field (\S+) not found`)
+
 // UserPreset is the user's own preset. A fork names a catalog preset as its
 // origin and changes settings from the field table; a copy holds a complete
 // preset record. Records in the file come before the catalog's.
@@ -58,7 +60,7 @@ func ParseUserPreset(id string, data []byte) (UserPreset, error) {
 		return UserPreset{}, fmt.Errorf("%q is not a preset ID: use lowercase letters, digits, dots and dashes", id)
 	}
 	if err := decode(data, &u); err != nil {
-		return UserPreset{}, errors.New(goTypes.ReplaceAllString(strings.TrimPrefix(err.Error(), "decode catalog contract: "), ""))
+		return UserPreset{}, errors.New(plainDecodeError(err))
 	}
 	if u.Schema != UserPresetSchema {
 		return UserPreset{}, fmt.Errorf("schema must be %s", UserPresetSchema)
@@ -125,6 +127,23 @@ func (u *UserPreset) ReadLocalTemplate(id string, content []byte) error {
 	t.Files = []File{{Path: t.Files[0].Path, Bytes: int64(len(final)), SHA256: hex.EncodeToString(sum[:])}}
 	u.Templates[id] = t
 	return nil
+}
+
+// plainDecodeError says what the decoder found wrong in a user's file,
+// without the decoder's own vocabulary.
+func plainDecodeError(err error) string {
+	text := strings.TrimPrefix(err.Error(), "decode catalog contract: ")
+	text = strings.TrimPrefix(text, "yaml: unmarshal errors:\n")
+	text = strings.TrimPrefix(text, "yaml: ")
+	text = goTypes.ReplaceAllString(text, "")
+	text = unknownField.ReplaceAllString(text, "unknown field $1")
+	var lines []string
+	for _, line := range strings.Split(text, "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			lines = append(lines, line)
+		}
+	}
+	return "the file cannot be read: " + strings.Join(lines, "; ")
 }
 
 // MarshalUserPreset writes one presets.d file.
