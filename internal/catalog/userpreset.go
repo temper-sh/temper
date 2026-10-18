@@ -92,6 +92,9 @@ func ParseUserPreset(id string, data []byte) (UserPreset, error) {
 			if len(t.Files) != 1 || t.Files[0].Bytes != 0 || t.Files[0].SHA256 != "" {
 				return UserPreset{}, fmt.Errorf("templates[%q]: a local template names one file and no bytes or sha256; Temper reads them from the file", rid)
 			}
+			if !templatepatch.ValidLocalFile(t.Files[0].Path) {
+				return UserPreset{}, fmt.Errorf("templates[%q]: a local template is a plain file name in presets.d, not a .json file", rid)
+			}
 			t.Files = []File{{Path: t.Files[0].Path, Bytes: 1, SHA256: strings.Repeat("0", 64)}}
 		}
 		if err := validateTemplate(rid, t); err != nil {
@@ -172,6 +175,13 @@ func CopyOf(l Lock, name string) UserPreset {
 	}
 	p.Presentation.DisplayName, p.Presentation.AssessmentURL = name, ""
 	u := UserPreset{Schema: UserPresetSchema, Preset: &p, Artifacts: map[string]UserArtifact{}, Templates: d.Templates}
+	for id, t := range u.Templates {
+		if t.local() {
+			// The copy keeps reading the same file at each compile.
+			t.Files = []File{{Path: t.Files[0].Path}}
+			u.Templates[id] = t
+		}
+	}
 	for id, a := range d.Artifacts {
 		u.Artifacts[id] = UserArtifact{Artifact: a}
 	}
@@ -234,10 +244,19 @@ func ResolveUserPreset(id string, u UserPreset, view View) (Document, []string, 
 		Artifacts: map[string]Artifact{}, Templates: map[string]Template{}, Engines: map[string]Engine{p.Engine: e},
 		Presets: map[string]Preset{id: p}}
 	var warnings []string
+	// A file record with a catalog record's ID but other material: a copy
+	// keeps its own (with a warning); a fork changes records only through
+	// changes, so it may not replace one under the same ID.
+	var shadowed error
 	shadows := func(kind, rid string, file, record any, inCatalog bool) {
-		if inCatalog && canonicalRecord(file) != canonicalRecord(record) {
-			warnings = append(warnings, fmt.Sprintf("%s[%q] in this file differs from the catalog's %s with that ID; the file's is used", kind, rid, strings.TrimSuffix(kind, "s")))
+		if !inCatalog || runs(file) == runs(record) {
+			return
 		}
+		if u.Fork() {
+			shadowed = errors.Join(shadowed, fmt.Errorf("%s[%q] has a catalog record's ID but other files; a fork changes records through changes, so give it its own ID and select it there", kind, rid))
+			return
+		}
+		warnings = append(warnings, fmt.Sprintf("%s[%q] in this file differs from the catalog's %s with that ID; the file's is used", kind, rid, strings.TrimSuffix(kind, "s")))
 	}
 	for _, ref := range []string{p.Artifact, p.ProjectorArtifact, p.Speculation.DraftArtifact} {
 		if ref == "" {
@@ -272,6 +291,9 @@ func ResolveUserPreset(id string, u UserPreset, view View) (Document, []string, 
 		}
 		closure.Templates[p.Template] = t
 	}
+	if shadowed != nil {
+		return Document{}, nil, shadowed
+	}
 	if err := closure.validateRecords(); err != nil {
 		return Document{}, nil, err
 	}
@@ -288,15 +310,23 @@ func unavailable(view View, kind, id string) string {
 	return "is not in this catalog"
 }
 
-// canonicalRecord is a weights or template record as a lock holds it, with
-// its lists in order.
-func canonicalRecord(record any) string {
-	d := Document{Artifacts: map[string]Artifact{}, Templates: map[string]Template{}}
+// runs is what of a weights or template record reaches the engine: its
+// sources, format or transform and files, in order. License, presentation
+// and a template's accepted weights are left out.
+func runs(record any) string {
+	var value any
 	switch r := record.(type) {
 	case Artifact:
-		d.Artifacts["record"] = r
+		value = Artifact{Sources: r.Sources, Format: r.Format, Files: r.Files}
 	case Template:
-		d.Templates["record"] = r
+		value = Template{Sources: r.Sources, Transform: r.Transform, Files: r.Files}
+	}
+	d := Document{Artifacts: map[string]Artifact{}, Templates: map[string]Template{}}
+	switch v := value.(type) {
+	case Artifact:
+		d.Artifacts["record"] = v
+	case Template:
+		d.Templates["record"] = v
 	}
 	raw, _ := json.Marshal(canonicalDocument(d))
 	return string(raw)
@@ -363,6 +393,9 @@ func checkChanges(changes map[string]any, fields []Field, prefix string) error {
 		path := key
 		if prefix != "" {
 			path = prefix + "." + key
+		}
+		if strings.Contains(key, ".") {
+			return fmt.Errorf("changes.%s: nest the names instead of joining them with dots, for example {\"request_defaults\": {\"sampling\": {\"temperature\": 0.7}}}", path)
 		}
 		f, ok, group := field(fields, path)
 		switch {

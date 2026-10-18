@@ -101,25 +101,39 @@ func Create(root, id string, data []byte) error {
 		}
 		return err
 	}
-	return nil
+	return syncDir(Dir(root))
 }
 
 // Replace writes new contents only if the file still holds previous, so an
-// edit made in the meantime is never lost.
+// edit saved while Temper worked is not overwritten. The file is compared
+// once more just before the rename; an edit saved in that instant can still
+// be lost, because editors take no lock.
 func Replace(root, id string, previous, data []byte) error {
-	current, err := Read(root, id)
-	if err != nil {
-		return err
-	}
-	if !bytes.Equal(current, previous) {
-		return fmt.Errorf("%s changed while Temper read it; run the command again", Path(root, id))
-	}
 	temporary, err := write(root, data)
 	if err != nil {
 		return err
 	}
 	defer os.Remove(temporary)
-	return os.Rename(temporary, Path(root, id))
+	current, err := Read(root, id)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(current, previous) {
+		return fmt.Errorf("%s changed while Temper worked on it; run the command again", Path(root, id))
+	}
+	if err := os.Rename(temporary, Path(root, id)); err != nil {
+		return err
+	}
+	return syncDir(Dir(root))
+}
+
+func syncDir(path string) error {
+	d, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	return d.Sync()
 }
 
 func write(root string, data []byte) (string, error) {

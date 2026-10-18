@@ -157,3 +157,30 @@ func TestLocalTemplateOptionNamesTheFileAndCompileReadsIt(t *testing.T) {
 		t.Fatalf("a .json template name was accepted: %s", diagnostics)
 	}
 }
+
+func TestCopiesOfForksWithOwnRecordsCheckCleanly(t *testing.T) {
+	c, root := withHub(t)
+	for _, args := range [][]string{{"fork", mtp, "qwen-mine"}, {"fork", mtp, "qwen-q6"}, {"weights", "qwen-q6", "unsloth/Qwen3.8-27B-GGUF", "Qwen3.8-27B-Q6_K.gguf"}} {
+		if _, d, code := run(t, c, root, args...); code != 0 {
+			t.Fatal(args, d)
+		}
+	}
+	if err := os.WriteFile(userpreset.Dir(root)+"/qwen-mine.jinja", []byte(templateText), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, d, code := run(t, c, root, "template", "qwen-mine", "--local", "qwen-mine.jinja"); code != 0 {
+		t.Fatal(d)
+	}
+	for _, source := range []string{"qwen-mine", "qwen-q6"} {
+		if _, d, code := run(t, c, root, "copy", source, source+"-frozen"); code != 0 {
+			t.Fatalf("copy of %s: %s", source, d)
+		}
+		out, _, code := run(t, c, root, "check", source+"-frozen")
+		if code != 0 || strings.Contains(out, "Warning") {
+			t.Fatalf("copy of %s: %d %s", source, code, out)
+		}
+	}
+	if record := read(t, root, "qwen-mine-frozen").Templates["qwen-mine-template"]; record.Sources[0].Hub != catalog.HubLocal || record.Files[0].SHA256 != "" {
+		t.Fatalf("the copy stopped reading the local file: %+v", record)
+	}
+}

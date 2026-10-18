@@ -53,8 +53,10 @@ compile writes a new one.
   unavailable with the reason; your other presets stay available.
 - The file can hold weights records (`artifacts`) and template records
   (`templates`) in the catalog's shape. A reference finds the file's record
-  first, then the catalog's. `temper preset check` warns when a file record has
-  a catalog record's ID but different content.
+  first, then the catalog's. When a file record has a catalog record's ID but
+  other files, a copy uses its own and `temper preset check` warns; a fork
+  refuses it, because a fork changes records only through `changes`, under
+  their own IDs. License and display text do not count as other files.
 - The engine is always a catalog engine ID. Temper's engine adapters are tested
   with the engine builds the catalog publishes.
 - A new preset cannot take a catalog preset's ID: catalog IDs mean one thing.
@@ -80,7 +82,8 @@ compile writes a new one.
   edit that file, or copy it.
 - `name` is optional; the default is the origin's name plus "(yours)".
 - `changes` uses the names and nesting of the catalog's preset record and holds
-  only what you change. `engine_config` and `context_window_tokens` sit at the
+  only what you change. Names joined with dots, such as
+  `"request_defaults.sampling.temperature"`, are refused: nest them. `engine_config` and `context_window_tokens` sit at the
   top of `changes`, not inside `profiles`: they change the profile Temper
   selects for the Mac's memory, so a new profile in a later catalog gets them
   too.

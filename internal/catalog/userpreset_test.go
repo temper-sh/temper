@@ -203,11 +203,52 @@ func TestForkOfOtherWeightsAndTemplatesUsesTheAcceptanceRule(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	newerRecord := strings.Replace(string(record), next.Files[0].SHA256, strings.Repeat("e", 64), 1)
 	newer := userPreset(t, "qwen-next-template", `{"schema": "temper-preset/v1", "origin": "qwen3.8-27b-q4xl-mtp",
-	  "changes": {"template": "froggeric-qwen38"}, "templates": {"froggeric-qwen38": `+strings.Replace(string(record), next.Files[0].SHA256, strings.Repeat("e", 64), 1)+`}}`)
-	l, warnings := compileUser(t, d, "qwen-next-template", newer)
-	if l.Records.Templates["froggeric-qwen38"].Files[0].SHA256 != strings.Repeat("e", 64) || len(warnings) != 1 || !strings.Contains(warnings[0], `templates["froggeric-qwen38"]`) {
-		t.Fatalf("file template did not shadow the catalog's with a warning: %v", warnings)
+	  "changes": {"template": "froggeric-qwen38-next"}, "templates": {"froggeric-qwen38-next": `+newerRecord+`}}`)
+	if l, warnings := compileUser(t, d, "qwen-next-template", newer); l.Records.Templates["froggeric-qwen38-next"].Files[0].SHA256 != strings.Repeat("e", 64) || len(warnings) != 0 {
+		t.Fatalf("a newer template under its own ID: %v", warnings)
+	}
+}
+
+func TestAForkCannotReplaceARecordUnderItsCatalogID(t *testing.T) {
+	d := testfixture.MixedEngineCatalog(t)
+	other := d.Artifacts["gemma-4-e2b-q4km"]
+	record, err := json.Marshal(other)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// No change, but the origin's weights ID now names another model.
+	swap := userPreset(t, "qwen-swap", `{"schema": "temper-preset/v1", "origin": "qwen3.8-27b-q4xl-mtp", "artifacts": {"qwen3.8-27b-q4xl": `+string(record)+`}}`)
+	if _, _, err := catalog.ResolveUserPreset("qwen-swap", swap, catalog.View{Document: d}); err == nil || !strings.Contains(err.Error(), "a fork changes records through changes") {
+		t.Fatalf("a fork swapped its model under the origin's ID: %v", err)
+	}
+	// The same record, unchanged, is fine; so is other display text.
+	same := d.Artifacts["qwen3.8-27b-q4xl"]
+	same.License, same.Presentation = "restated", catalog.ArtifactPresentation{ModelName: "Mine"}
+	if record, err = json.Marshal(same); err != nil {
+		t.Fatal(err)
+	}
+	compileUser(t, d, "qwen-same", userPreset(t, "qwen-same", `{"schema": "temper-preset/v1", "origin": "qwen3.8-27b-q4xl-mtp", "artifacts": {"qwen3.8-27b-q4xl": `+string(record)+`}}`))
+	// A copy keeps its own record when the catalog's changes, with a warning.
+	origin, err := catalog.CompilePreset(d, mtp, 0, 0, target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := catalog.MarshalUserPreset(catalog.CopyOf(origin, ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	moved := d
+	moved.Artifacts = map[string]catalog.Artifact{}
+	for id, a := range d.Artifacts {
+		moved.Artifacts[id] = a
+	}
+	q4 := moved.Artifacts["qwen3.8-27b-q4xl"]
+	q4.Files = []catalog.File{{Path: q4.Files[0].Path, Bytes: q4.Files[0].Bytes, SHA256: strings.Repeat("9", 64)}}
+	moved.Artifacts["qwen3.8-27b-q4xl"] = q4
+	if _, warnings := compileUser(t, moved, "my-qwen", userPreset(t, "my-qwen", string(raw))); len(warnings) != 1 || !strings.Contains(warnings[0], `artifacts["qwen3.8-27b-q4xl"]`) {
+		t.Fatalf("a copy's own record did not warn: %v", warnings)
 	}
 }
 
@@ -222,6 +263,9 @@ func TestUserPresetRefusalsNameTheProblem(t *testing.T) {
 		"other engine":    {`{"schema": "temper-preset/v1", "origin": "qwen3.8-27b-q4xl-mtp", "changes": {"engine_config": {"max_memory_bytes": 1}}}`, "changes.engine_config.max_memory_bytes is not a setting"},
 		"type":            {`{"schema": "temper-preset/v1", "origin": "qwen3.8-27b-q4xl-mtp", "changes": {"engine_config": {"batch_tokens": "big"}}}`, "must be a whole number"},
 		"choice":          {`{"schema": "temper-preset/v1", "origin": "qwen3.8-27b-q4xl-mtp", "changes": {"engine_config": {"kv_cache": "q2"}}}`, "must be one of q4, q8, f16"},
+		"dotted key":      {`{"schema": "temper-preset/v1", "origin": "qwen3.8-27b-q4xl-mtp", "changes": {"request_defaults.sampling.temperature": 0.25}}`, "nest the names"},
+		"inner dotted":    {`{"schema": "temper-preset/v1", "origin": "qwen3.8-27b-q4xl-mtp", "changes": {"request_defaults": {"sampling.temperature": 0.25}}}`, "nest the names"},
+		"local name":      {`{"schema": "temper-preset/v1", "origin": "qwen3.8-27b-q4xl-mtp", "templates": {"mine": {"sources": [{"hub": "local"}], "files": [{"path": "a.jinja#b"}], "compatible_artifacts": ["qwen3.8-27b-q4xl"], "license": "own"}}}`, "plain file name"},
 		"removal":         {`{"schema": "temper-preset/v1", "origin": "qwen3.8-27b-q4xl-mtp", "changes": {"request_defaults": {"sampling": {"seed": null}}}}`, "cannot be removed"},
 		"engine rule":     {`{"schema": "temper-preset/v1", "origin": "qwen3.8-27b-q4xl-mtp", "changes": {"engine_config": {"microbatch_tokens": 99999}}}`, "ubatch must not exceed batch"},
 		"another model":   {`{"schema": "temper-preset/v1", "origin": "qwen3.8-27b-q4xl-mtp", "changes": {"artifact": "gemma-4-e2b-q4km"}}`, "a fork keeps its origin's model"},
