@@ -439,3 +439,23 @@ func TestLocalTemplateHashGoesIntoTheLockAndNeverIntoACatalog(t *testing.T) {
 		t.Fatalf("the publisher accepted a local template: %v", err)
 	}
 }
+
+func TestCopiesCompileOnEnginesThatHaveNoCatalogPreset(t *testing.T) {
+	study := qwenStudy(t)
+	for _, id := range []string{"rapid-mlx", "vllm-metal"} {
+		p := study.Presets[id]
+		p.Presentation.DisplayName = "study copy"
+		record, err := json.Marshal(map[string]any{"schema": "temper-preset/v1", "preset": p,
+			"artifacts": map[string]any{p.Artifact: study.Artifacts[p.Artifact]}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		// The catalog keeps the engine record and nothing that uses it.
+		engineOnly := study
+		engineOnly.Presets = map[string]catalog.Preset{"llama-q5": study.Presets["llama-q5"]}
+		l, _ := compileUser(t, engineOnly, "mine", userPreset(t, "mine", string(record)))
+		if l.Records.Presets["mine"].Engine != id || l.Records.Engines[id].Supply.Python == nil {
+			t.Fatalf("%s copy lost its engine", id)
+		}
+	}
+}
