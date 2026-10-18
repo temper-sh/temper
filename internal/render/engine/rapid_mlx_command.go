@@ -63,6 +63,8 @@ func rapidMLXCommand(options rapidMLXOptions) (Command, error) {
 			EnvironmentAssignment{Name: "PYTHONDONTWRITEBYTECODE", Value: "1"},
 			EnvironmentAssignment{Name: "PYTHONNOUSERSITE", Value: "1"},
 			EnvironmentAssignment{Name: "RAPID_MLX_TELEMETRY", Value: "0"},
+			// Rapid MLX 0.15.7 and newer check for new releases at start.
+			EnvironmentAssignment{Name: "RAPID_MLX_DISABLE_VERSION_CHECK", Value: "1"},
 			EnvironmentAssignment{Name: "RAPID_MLX_PREFIX_CACHE_AUTOLOAD", Value: "0"},
 		),
 		CheckEndpoint: "/health/ready",

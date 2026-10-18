@@ -156,7 +156,7 @@ func TestBuildMapsRapidMLXSemanticsToAnExactCommand(t *testing.T) {
 		t.Fatalf("Build() lines =\n%q\nwant\n%q", command.Lines(), want)
 	}
 	runtime := command.Runtime()
-	if runtime.Requirement.Package != engine.RapidMLX || runtime.CheckEndpoint != "/health/ready" || runtime.ContextWindow != 131072 || !hasEnvironment(runtime, "HF_HUB_OFFLINE", "1") || !hasEnvironment(runtime, "RAPID_MLX_TELEMETRY", "0") {
+	if runtime.Requirement.Package != engine.RapidMLX || runtime.CheckEndpoint != "/health/ready" || runtime.ContextWindow != 131072 || !hasEnvironment(runtime, "HF_HUB_OFFLINE", "1") || !hasEnvironment(runtime, "RAPID_MLX_TELEMETRY", "0") || !hasEnvironment(runtime, "RAPID_MLX_DISABLE_VERSION_CHECK", "1") {
 		t.Fatalf("Build() runtime = %#v", runtime)
 	}
 }
