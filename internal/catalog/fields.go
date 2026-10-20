@@ -117,6 +117,9 @@ var engineFields = map[string][]Field{
 // can change: the preset settings, then the engine's under engine_config.
 func Fields(kind string) []Field {
 	result := append([]Field(nil), presetFields...)
+	if kind == "llama-server/v1" {
+		result = append(result, Field{"request_defaults.reasoning_budget_tokens", FieldInteger, nil, "Default native thinking budget: -1 unrestricted, 0 immediate end, positive tokens; callers can override."})
+	}
 	for _, f := range engineFields[kind] {
 		f.Path = "engine_config." + f.Path
 		result = append(result, f)

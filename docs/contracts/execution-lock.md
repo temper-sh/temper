@@ -194,7 +194,30 @@ default in the new lock. Explicit experimental allowances remain ordinary
 positive values. Changing a default does not change the conditions or claims
 of historical measurements.
 
-The adapters implement omission as follows:
+`request_defaults.reasoning_budget_tokens` is an optional native thinking-token
+default for llama.cpp chat presets. Omission preserves existing behavior, `-1`
+means unrestricted thinking, `0` ends thinking immediately, and positive values
+bound thinking before the answer. Values must fit the native signed 32-bit
+counter. Values below `-1`, other engines and reranking are refused. This is
+independent of `reasoning` on/off, model-specific effort
+labels and the total output allowance. The selected llama.cpp build must support
+`--reasoning-budget` and its chat template must expose thinking delimiters;
+the Gemma defaults are verified against b11756. The field requires Temper 0.4.0.
+
+For a declared budget, Temper renders `--reasoning-budget -1` and supplies the
+default through llama-swap's `thinking_budget_tokens?` filter. The native alias
+is deliberate: llama.cpp prioritizes the caller's `reasoning_budget_tokens`,
+then `thinking_budget_tokens`, then the server default. Thus either explicit
+request field, including `-1` or `0`, overrides the preset. Temper does not force
+a budget over callers or inject a reasoning-budget message. Direct engine
+requests bypass the router default. With no declared budget, neither the flag
+nor the filter is added. User forks can edit the default; context/compute edits
+preserve it.
+
+Upstream contracts: [llama.cpp request parsing](https://github.com/ggml-org/llama.cpp/blob/d80619397c2ba5cf1366c29f7d43699ca3a159b9/tools/server/server-common.cpp)
+and [llama-swap default filters](https://github.com/mostlygeek/llama-swap/blob/d1e743fea64324c990e16e951ac2ea1678f02228/internal/server/filters.go).
+
+The adapters implement omission of the output cap as follows:
 
 - llama.cpp uses `--predict -1` and disables context shifting, so reaching the
   context boundary stops generation without discarding history. An explicit

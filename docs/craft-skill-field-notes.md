@@ -10,6 +10,29 @@ This is not a model-eval log, product evidence, or permission to change the
 skills repository. It creates no synthetic Temper work. A note may — and often
 should — conclude that no skill change is warranted.
 
+## Native reasoning budgets and Gemma adoption, 2026-10-20
+
+Data modeling kept omission, unrestricted thinking (`-1`) and immediate end
+(`0`) distinct, and separated thinking tokens from effort and total output.
+Review of the pinned native parser exposed a non-obvious override trap: a
+request's `-1` falls back to the server budget. Rendering keeps that server
+unrestricted and uses a router default on the lower-priority native alias,
+preserving callers using either spelling. The
+[contract](contracts/execution-lock.md#settings-and-evidence) records the upstream
+semantics; [tests](../internal/catalog/reasoning_budget_test.go) verify the
+resulting filter and command contract through catalog, lock, manifest and fork
+round trips without pretending to run inference.
+Validation also bounds the value to the native signed 32-bit counter; the
+largest value and the first overflow are covered at the serialization boundary.
+
+The two Gemma memory snapshots were built from the retained tested executions,
+then compared with the proposed presets. A separate engine pin kept the four
+existing observations applicable. The larger thinking-off capacity peaks remain
+paired with their own loaded samples and workload limits; lower short writing
+peaks do not replace them. Full offline Go tests, vet, affected-package race
+checks, all catalog assessments and a mixed-version layout render passed.
+Existing guidance was sufficient; **no skill change warranted**.
+
 ## Pi/PiG compaction targets, 2026-10-20
 
 Data modeling separated a chosen compaction target from actual model context,

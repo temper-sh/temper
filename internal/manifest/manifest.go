@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -43,24 +44,25 @@ type Patch struct {
 }
 
 type Layout struct {
-	CrispEmbed   *engine.CrispEmbedTuning `yaml:"crispembed,omitempty"`
-	Splash       *SplashTuning            `yaml:"splash,omitempty"`
-	Draft        *Model                   `yaml:"draft,omitempty"`
-	Projector    *Model                   `yaml:"projector,omitempty"`
-	DisplayName  string                   `yaml:"display_name"`
-	Model        Model                    `yaml:"model"`
-	Engine       string                   `yaml:"engine"`
-	Interface    string                   `yaml:"interface,omitempty"`
-	Modalities   []string                 `yaml:"modalities,omitempty"`
-	Window       int                      `yaml:"window"`
-	MaxTokens    int                      `yaml:"max_tokens,omitempty"`
-	Thinking     string                   `yaml:"thinking,omitempty"`
-	Speculation  *Speculation             `yaml:"speculation,omitempty"`
-	ChatTemplate string                   `yaml:"chat_template,omitempty"`
-	Llama        *LlamaTuning             `yaml:"llama,omitempty"`
-	RapidMLX     *RapidMLXTuning          `yaml:"rapid_mlx,omitempty"`
-	VLLMMetal    *VLLMMetalTuning         `yaml:"vllm_metal,omitempty"`
-	Sampling     *engine.SamplingDefaults `yaml:"sampling,omitempty"`
+	CrispEmbed            *engine.CrispEmbedTuning `yaml:"crispembed,omitempty"`
+	Splash                *SplashTuning            `yaml:"splash,omitempty"`
+	Draft                 *Model                   `yaml:"draft,omitempty"`
+	Projector             *Model                   `yaml:"projector,omitempty"`
+	DisplayName           string                   `yaml:"display_name"`
+	Model                 Model                    `yaml:"model"`
+	Engine                string                   `yaml:"engine"`
+	Interface             string                   `yaml:"interface,omitempty"`
+	Modalities            []string                 `yaml:"modalities,omitempty"`
+	Window                int                      `yaml:"window"`
+	MaxTokens             int                      `yaml:"max_tokens,omitempty"`
+	Thinking              string                   `yaml:"thinking,omitempty"`
+	ReasoningBudgetTokens *int                     `yaml:"reasoning_budget_tokens,omitempty"`
+	Speculation           *Speculation             `yaml:"speculation,omitempty"`
+	ChatTemplate          string                   `yaml:"chat_template,omitempty"`
+	Llama                 *LlamaTuning             `yaml:"llama,omitempty"`
+	RapidMLX              *RapidMLXTuning          `yaml:"rapid_mlx,omitempty"`
+	VLLMMetal             *VLLMMetalTuning         `yaml:"vllm_metal,omitempty"`
+	Sampling              *engine.SamplingDefaults `yaml:"sampling,omitempty"`
 }
 
 type SplashTuning struct {
@@ -353,6 +355,11 @@ func (d Document) validateFields() error {
 }
 
 func validateEngineTuning(id string, layout Layout, problem func(string, ...any)) {
+	if budget := layout.ReasoningBudgetTokens; budget != nil {
+		if layout.Engine != engine.LlamaServer || layout.TechnicalInterface() != engine.InterfaceChatCompletions || *budget < -1 || *budget > math.MaxInt32 {
+			problem("layout %q: reasoning_budget_tokens requires llama-server chat and a value from -1 to 2147483647", id)
+		}
+	}
 	switch layout.Engine {
 	case "crispembed":
 		if layout.CrispEmbed == nil {

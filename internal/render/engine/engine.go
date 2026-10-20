@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"math"
 )
 
 const (
@@ -23,28 +24,29 @@ const (
 // Request is the closed launch-family input. Common fields carry semantic
 // layout facts; exactly one selected engine owns a typed tuning block.
 type Request struct {
-	CrispEmbed        *CrispEmbedTuning
-	Engine            string
-	LayoutID          string
-	ModelPath         string
-	DraftModelPath    string
-	ProjectorPath     string
-	ArtifactFormat    string
-	KVCache           string
-	Interface         string
-	Modalities        []string
-	Window            int
-	MaxTokens         int // Zero means no separate output cap; the adapter maps it to native behavior.
-	Thinking          string
-	Speculation       string
-	SpeculativeTokens int
-	ChatTemplatePath  string
-	NGL               *int
-	LlamaServer       *LlamaServerTuning
-	RapidMLX          *RapidMLXTuning
-	VLLMMetal         *VLLMMetalTuning
-	Splash            *SplashTuning
-	Sampling          *SamplingDefaults
+	CrispEmbed            *CrispEmbedTuning
+	Engine                string
+	LayoutID              string
+	ModelPath             string
+	DraftModelPath        string
+	ProjectorPath         string
+	ArtifactFormat        string
+	KVCache               string
+	Interface             string
+	Modalities            []string
+	Window                int
+	MaxTokens             int // Zero means no separate output cap; the adapter maps it to native behavior.
+	Thinking              string
+	ReasoningBudgetTokens *int // Nil preserves the engine default; -1 is unrestricted.
+	Speculation           string
+	SpeculativeTokens     int
+	ChatTemplatePath      string
+	NGL                   *int
+	LlamaServer           *LlamaServerTuning
+	RapidMLX              *RapidMLXTuning
+	VLLMMetal             *VLLMMetalTuning
+	Splash                *SplashTuning
+	Sampling              *SamplingDefaults
 }
 
 // LlamaServerTuning is the typed llama.cpp-only tuning variant.
@@ -172,6 +174,11 @@ func (c Command) Runtime() Runtime {
 
 // Build dispatches one fresh request to its owned engine adapter.
 func Build(request Request) (Command, error) {
+	if budget := request.ReasoningBudgetTokens; budget != nil {
+		if request.Engine != LlamaServer || request.Interface != InterfaceChatCompletions || *budget < -1 || *budget > math.MaxInt32 {
+			return Command{}, errors.New("reasoning_budget_tokens requires llama-server chat and a value from -1 to 2147483647")
+		}
+	}
 	if request.Sampling != nil && request.Engine != LlamaServer && request.Engine != Splash {
 		return Command{}, errors.New("explicit sampling defaults currently require llama-server")
 	}

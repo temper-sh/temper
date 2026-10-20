@@ -62,6 +62,15 @@ func llamaServerCommand(options llamaServerOptions) (Command, error) {
 	if options.reasoning != "" {
 		groups = append(groups, []commandWord{knownWord("--reasoning"), knownWord(options.reasoning)})
 	}
+	var defaults map[string]any
+	if budget := options.reasoningBudgetTokens; budget != nil {
+		// Native request -1 falls back to the CLI budget. Keep that fallback
+		// unrestricted so callers can opt out of a finite preset default.
+		groups = append(groups, []commandWord{knownWord("--reasoning-budget"), knownWord("-1")})
+		// The native alias is lower priority than reasoning_budget_tokens.
+		// A router set-if-absent default on the alias respects either spelling.
+		defaults = map[string]any{"thinking_budget_tokens": *budget}
+	}
 	if options.ngl != nil {
 		groups = append(groups, []commandWord{knownWord("-ngl"), knownWord(strconv.Itoa(*options.ngl))})
 		if *options.ngl == 0 {
@@ -117,9 +126,10 @@ func llamaServerCommand(options llamaServerOptions) (Command, error) {
 		executable:     knownWord("llama-server"),
 		argumentGroups: groups,
 	}, Runtime{
-		Requirement:   RuntimeRequirement{Package: "llama-cpp", RelativeExecutable: "llama-server"},
-		CheckEndpoint: "/health",
-		ContextWindow: options.window,
+		Requirement:       RuntimeRequirement{Package: "llama-cpp", RelativeExecutable: "llama-server"},
+		CheckEndpoint:     "/health",
+		ContextWindow:     options.window,
+		DefaultParameters: defaults,
 	})
 }
 

@@ -141,9 +141,10 @@ func (e Engine) Family() string {
 
 type RequestDefaults struct {
 	// Zero leaves generation bounded by the remaining context, without a separate output cap.
-	MaxOutputTokens int                     `yaml:"max_output_tokens,omitempty" json:"max_output_tokens,omitempty"`
-	Reasoning       string                  `yaml:"reasoning" json:"reasoning"`
-	Sampling        engine.SamplingDefaults `yaml:"sampling" json:"sampling"`
+	MaxOutputTokens       int                     `yaml:"max_output_tokens,omitempty" json:"max_output_tokens,omitempty"`
+	Reasoning             string                  `yaml:"reasoning" json:"reasoning"`
+	ReasoningBudgetTokens *int                    `yaml:"reasoning_budget_tokens,omitempty" json:"reasoning_budget_tokens,omitempty"`
+	Sampling              engine.SamplingDefaults `yaml:"sampling" json:"sampling"`
 }
 
 // empty reports that no generation default is set. A 0.1.0 lock writes every
@@ -647,7 +648,8 @@ func (l Preset) request(id string, profile Profile, a Artifact, modelPath, templ
 	}
 	r := engine.Request{Engine: engine.LlamaServer, LayoutID: id, ModelPath: modelPath, ArtifactFormat: a.Format, KVCache: c.KVCache,
 		Interface: l.Interface, Modalities: l.Modalities, Window: profile.ContextWindowTokens, MaxTokens: l.RequestDefaults.MaxOutputTokens,
-		Thinking: l.RequestDefaults.Reasoning, Speculation: l.Speculation.Method, SpeculativeTokens: l.Speculation.MaxDraftTokens,
+		Thinking: l.RequestDefaults.Reasoning, ReasoningBudgetTokens: l.RequestDefaults.ReasoningBudgetTokens,
+		Speculation: l.Speculation.Method, SpeculativeTokens: l.Speculation.MaxDraftTokens,
 		ChatTemplatePath: templatePath, NGL: &ngl, Sampling: &l.RequestDefaults.Sampling,
 		LlamaServer: &engine.LlamaServerTuning{Parallel: c.Parallel, FlashAttention: c.FlashAttention, Batch: c.BatchTokens, UBatch: c.MicrobatchTokens,
 			ContextCheckpoints: &c.ContextCheckpoints, PromptCacheRAMMiB: &c.PromptCacheRAMMiB, Controls: &c.Controls}}

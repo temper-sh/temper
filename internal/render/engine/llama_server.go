@@ -6,26 +6,27 @@ import (
 )
 
 type llamaServerOptions struct {
-	modelPath          string
-	draftModelPath     string
-	projectorPath      string
-	chatTemplatePath   string
-	reranking          bool
-	parallel           int
-	window             int
-	contextCheckpoints *int
-	promptCacheRAMMiB  *int
-	flashAttention     string
-	kv                 string
-	batch              int
-	ubatch             int
-	specType           string
-	specDraftNMax      int
-	reasoning          string
-	maxTokens          int
-	ngl                *int
-	controls           *LlamaServerControls
-	sampling           *SamplingDefaults
+	modelPath             string
+	draftModelPath        string
+	projectorPath         string
+	chatTemplatePath      string
+	reranking             bool
+	parallel              int
+	window                int
+	contextCheckpoints    *int
+	promptCacheRAMMiB     *int
+	flashAttention        string
+	kv                    string
+	batch                 int
+	ubatch                int
+	specType              string
+	specDraftNMax         int
+	reasoning             string
+	reasoningBudgetTokens *int
+	maxTokens             int
+	ngl                   *int
+	controls              *LlamaServerControls
+	sampling              *SamplingDefaults
 }
 
 func buildLlamaServer(request Request) (Command, error) {
@@ -34,23 +35,24 @@ func buildLlamaServer(request Request) (Command, error) {
 	}
 
 	options := llamaServerOptions{
-		modelPath:          request.ModelPath,
-		draftModelPath:     request.DraftModelPath,
-		projectorPath:      request.ProjectorPath,
-		chatTemplatePath:   request.ChatTemplatePath,
-		reranking:          request.Interface == InterfaceReranking,
-		parallel:           request.LlamaServer.Parallel,
-		window:             request.Window,
-		contextCheckpoints: request.LlamaServer.ContextCheckpoints,
-		promptCacheRAMMiB:  request.LlamaServer.PromptCacheRAMMiB,
-		flashAttention:     request.LlamaServer.FlashAttention,
-		batch:              request.LlamaServer.Batch,
-		ubatch:             request.LlamaServer.UBatch,
-		specType:           request.Speculation,
-		specDraftNMax:      request.SpeculativeTokens,
-		ngl:                request.NGL,
-		controls:           request.LlamaServer.Controls,
-		sampling:           request.Sampling,
+		modelPath:             request.ModelPath,
+		draftModelPath:        request.DraftModelPath,
+		projectorPath:         request.ProjectorPath,
+		chatTemplatePath:      request.ChatTemplatePath,
+		reranking:             request.Interface == InterfaceReranking,
+		parallel:              request.LlamaServer.Parallel,
+		window:                request.Window,
+		contextCheckpoints:    request.LlamaServer.ContextCheckpoints,
+		promptCacheRAMMiB:     request.LlamaServer.PromptCacheRAMMiB,
+		flashAttention:        request.LlamaServer.FlashAttention,
+		batch:                 request.LlamaServer.Batch,
+		ubatch:                request.LlamaServer.UBatch,
+		specType:              request.Speculation,
+		specDraftNMax:         request.SpeculativeTokens,
+		ngl:                   request.NGL,
+		controls:              request.LlamaServer.Controls,
+		reasoningBudgetTokens: request.ReasoningBudgetTokens,
+		sampling:              request.Sampling,
 	}
 	if options.specType == "mtp" {
 		options.specType = "draft-mtp"

@@ -100,6 +100,14 @@ compile writes a new one.
   excluded engine versions or presentation, other than `name`. A different
   engine or model is a copy.
 
+For llama.cpp chat presets, a fork can also set
+`"changes": {"request_defaults": {"reasoning_budget_tokens": 1024}}`.
+Use `-1` for unrestricted thinking, `0` for immediate end, or a positive token
+count. This optional default requires Temper 0.4.0 and a compatible native
+engine/template; it is independent of effort and total output tokens. Explicit
+request budgets override it. See the
+[reasoning-budget contract](execution-lock.md#settings-and-evidence).
+
 ### Other weights of the same model
 
 ```json

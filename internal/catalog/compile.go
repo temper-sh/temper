@@ -273,7 +273,8 @@ func (l Lock) projections() (Projections, error) {
 		}
 		m := manifest.Layout{DisplayName: name, Model: manifest.Model{Repo: hf.Repo, Files: []string{a.Files[0].Path}, Format: a.Format}, Engine: d.Engines[layout.Engine].Family(), Interface: layout.Interface, Modalities: append([]string{}, layout.Modalities...), Window: layout.Window(), MaxTokens: layout.RequestDefaults.MaxOutputTokens, Thinking: layout.RequestDefaults.Reasoning,
 			Speculation: &manifest.Speculation{Method: layout.Speculation.Method, MaxTokens: layout.Speculation.MaxDraftTokens}, Sampling: &layout.RequestDefaults.Sampling,
-			Llama: &manifest.LlamaTuning{KV: c.KVCache, Parallel: c.Parallel, FlashAttention: c.FlashAttention, Batch: c.BatchTokens, UBatch: c.MicrobatchTokens, ContextCheckpoints: &c.ContextCheckpoints, PromptCacheRAMMiB: &c.PromptCacheRAMMiB, Controls: &c.Controls}}
+			ReasoningBudgetTokens: layout.RequestDefaults.ReasoningBudgetTokens,
+			Llama:                 &manifest.LlamaTuning{KV: c.KVCache, Parallel: c.Parallel, FlashAttention: c.FlashAttention, Batch: c.BatchTokens, UBatch: c.MicrobatchTokens, ContextCheckpoints: &c.ContextCheckpoints, PromptCacheRAMMiB: &c.PromptCacheRAMMiB, Controls: &c.Controls}}
 		entry := lockfile.Entry{Repo: hf.Repo, Revision: hf.Revision, Resolved: d.Date, Files: []lockfile.File{{Name: a.Files[0].Path, SHA256: a.Files[0].SHA256}}}
 		m.Model.Files, entry.Files = []string{}, []lockfile.File{}
 		for _, f := range a.Files {

@@ -364,6 +364,7 @@ func TestFieldTableNamesExactlyTheEngineSettingsTheCompilerReads(t *testing.T) {
 	seed := 1
 	p := testfixture.MixedEngineCatalog(t).Presets[mtp]
 	p.RequestDefaults.Sampling.Seed, p.RequestDefaults.MaxOutputTokens, p.Speculation.DraftArtifact = &seed, 1, "draft"
+	p.RequestDefaults.ReasoningBudgetTokens = &seed
 	known := presetLeaves(t, p)
 	for _, f := range catalog.Fields("llama-server/v1") {
 		if _, ok := known[f.Path]; !ok && !strings.HasPrefix(f.Path, "engine_config.") {
