@@ -141,7 +141,7 @@ func resolveMembers(document manifest.Document, lock lockfile.Document, mode man
 				Placement: placement.name,
 				ModelPath: set.ModelPath(),
 			}
-			if layout.Engine == engine.LlamaServer && layout.Draft != nil {
+			if (layout.Engine == engine.LlamaServer || layout.Engine == engine.RapidMLX) && layout.Draft != nil {
 				item.DraftPath = filepath.Join(set.Path(), "draft", layout.Draft.Files[0])
 			}
 			if layout.Projector != nil {

@@ -379,14 +379,11 @@ func validateArtifact(id string, a Artifact) error {
 	if a.Format == "safetensors" && len(a.Files) == 2 && a.Files[0].Path == "config.json" && a.Files[1].Path == "model.safetensors" {
 		return nil
 	}
+	if a.Format == "safetensors" && len(a.Files) == 1 && strings.HasSuffix(a.Files[0].Path, ".safetensors") {
+		return nil // A selected MTP sidecar; target snapshots are checked below.
+	}
 	if a.Format == "mlx-safetensors" || a.Format == "safetensors" {
-		config, weights, tokenizer := false, false, false
-		for _, f := range a.Files {
-			config = config || f.Path == "config.json"
-			weights = weights || strings.HasSuffix(f.Path, ".safetensors")
-			tokenizer = tokenizer || f.Path == "tokenizer.json"
-		}
-		if config && weights && tokenizer {
+		if completeSnapshot(a.Files) {
 			return nil
 		}
 		return errors.New("requires config, tokenizer and safetensors weights")
@@ -395,6 +392,16 @@ func validateArtifact(id string, a Artifact) error {
 		return errors.New("this executable slice requires one complete GGUF")
 	}
 	return nil
+}
+
+func completeSnapshot(files []File) bool {
+	config, weights, tokenizer := false, false, false
+	for _, f := range files {
+		config = config || f.Path == "config.json"
+		weights = weights || strings.HasSuffix(f.Path, ".safetensors")
+		tokenizer = tokenizer || f.Path == "tokenizer.json"
+	}
+	return config && weights && tokenizer
 }
 
 func validateTemplate(id string, t Template) error {
@@ -552,6 +559,9 @@ func (d Document) validatePreset(id string, p Preset) error {
 	if p.Interface == engine.InterfaceReranking && !p.RequestDefaults.empty() {
 		return errors.New("reranking cannot declare generation defaults")
 	}
+	if (e.Family() == engine.RapidMLX || e.Family() == engine.VLLMMetal) && !completeSnapshot(a.Files) {
+		return errors.New("target snapshot requires config, tokenizer and safetensors weights")
+	}
 	if e.Family() == engine.Splash {
 		draft, ok := d.Artifacts[p.Speculation.DraftArtifact]
 		if !ok || draft.Format != "safetensors" || p.Speculation.Method != "dflash2" || p.Speculation.Source != "artifact" || p.Speculation.MaxDraftTokens != 0 {
@@ -559,7 +569,11 @@ func (d Document) validatePreset(id string, p Preset) error {
 		}
 	} else if p.Speculation.Source == "artifact" {
 		draft, ok := d.Artifacts[p.Speculation.DraftArtifact]
-		if !ok || e.Family() != engine.LlamaServer || draft.Format != "gguf" || (p.Speculation.Method != "mtp" && p.Speculation.Method != "dflash" && p.Speculation.Method != "dflash2") {
+		if e.Family() == engine.RapidMLX {
+			if !ok || draft.Format != "safetensors" || len(draft.Files) != 1 || !strings.HasSuffix(draft.Files[0].Path, ".safetensors") || p.Speculation.Method != "mtp" {
+				return errors.New("Rapid MLX MTP requires one exact MLX safetensors sidecar")
+			}
+		} else if !ok || e.Family() != engine.LlamaServer || draft.Format != "gguf" || (p.Speculation.Method != "mtp" && p.Speculation.Method != "dflash" && p.Speculation.Method != "dflash2") {
 			return errors.New("requires an exact GGUF draft for llama-server MTP or DFlash")
 		}
 	} else if p.Speculation.DraftArtifact != "" {
@@ -641,6 +655,9 @@ func (l Preset) request(id string, profile Profile, a Artifact, modelPath, templ
 		r.KVCache = ""
 		if t := c.Python.RapidMLX; t != nil {
 			r.Engine = engine.RapidMLX
+			if l.Speculation.DraftArtifact != "" {
+				r.DraftModelPath = "/draft/model.safetensors"
+			}
 			r.RapidMLX = &engine.RapidMLXTuning{MaxNumSeqs: t.MaxNumSeqs, MaxConcurrentRequests: t.MaxConcurrentRequests, PrefillBatchSize: t.PrefillBatchSize, CompletionBatchSize: t.CompletionBatchSize, GPUMemoryUtilization: t.GPUMemoryUtilization, PrefixCache: t.PrefixCache, CacheMemoryMiB: t.CacheMemoryMiB, KVCacheDType: t.KVCacheDType, PFlash: t.PFlash, ReasoningParser: t.ReasoningParser}
 			r.RapidMLX.ToolCallParser, r.RapidMLX.PrefillStepSize, r.RapidMLX.RequestTimeoutSeconds = t.ToolCallParser, t.PrefillStepSize, t.RequestTimeoutSeconds
 		}

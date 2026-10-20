@@ -202,8 +202,8 @@ func validateVariant(request Request) error {
 	if request.ProjectorPath != "" && request.Engine != LlamaServer {
 		return errors.New("a GGUF projector path requires llama-server")
 	}
-	if request.DraftModelPath != "" && request.Engine != LlamaServer {
-		return errors.New("a GGUF draft path requires llama-server")
+	if request.DraftModelPath != "" && request.Engine != LlamaServer && request.Engine != RapidMLX {
+		return errors.New("a draft path requires llama-server or Rapid MLX")
 	}
 	selected := 0
 	for _, present := range []bool{

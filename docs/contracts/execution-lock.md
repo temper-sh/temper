@@ -55,6 +55,18 @@ previous catalog's or in the future), `runtime.router`, `artifacts`,
   Each profile is complete (`min_memory_gib`, `context_window_tokens`,
   `engine_config`); a Mac gets the profile with the highest `min_memory_gib`
   it meets, else the smallest.
+
+Rapid MLX can select an external MTP head with
+`speculation: {method: mtp, source: artifact, draft_artifact: ID, max_draft_tokens: 3}`.
+The draft record uses `format: safetensors` and exactly one pinned `.safetensors`
+file. The target remains a complete `mlx-safetensors` snapshot. This is a
+text-only composition; tokenizer/config files belong to the target.
+The draft has its own source revision and file hash, participates in installation,
+disk/memory planning and execution identity, and is passed as an exact local
+file in Rapid's `--speculative-config` `model` field. No implicit alias or
+unmanaged download resolves the head. This does not prove target/head
+compatibility, activation, quality or acceleration; those require runtime evidence.
+Existing embedded-MTP selections keep their command meaning.
 - **Version policy:** the router and engines may set `minimum_temper` and
   `exclude_versions`; presets may set `exclude_engine_versions`. A range uses
   `<`, `<=`, `>`, `>=` or `=` and a version; a comma joins at most one lower

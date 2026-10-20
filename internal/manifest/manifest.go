@@ -324,8 +324,20 @@ func (d Document) validateFields() error {
 			}
 		}
 
-		if layout.Engine != "splash" && layout.Engine != "llama-server" && (layout.Draft != nil || layout.Speculation != nil && (layout.Speculation.Method == "dflash" || layout.Speculation.Method == "dflash2")) {
-			problem("layout %q: external draft requires llama-server or Splash", id)
+		if layout.Draft != nil && layout.Engine != "splash" && layout.Engine != "llama-server" && layout.Engine != "rapid-mlx" {
+			problem("layout %q: external draft requires llama-server, Splash or Rapid MLX", id)
+		}
+		if layout.Engine != "splash" && layout.Engine != "llama-server" && layout.Speculation != nil && (layout.Speculation.Method == "dflash" || layout.Speculation.Method == "dflash2") {
+			problem("layout %q: DFlash requires llama-server or Splash", id)
+		}
+		if layout.Engine == "rapid-mlx" && layout.Draft != nil {
+			draft := layout.Draft
+			if !repoPattern.MatchString(draft.Repo) || draft.Format != "safetensors" || len(draft.Files) != 1 || !safeRelativePath(draft.Files[0]) || !strings.HasSuffix(draft.Files[0], ".safetensors") {
+				problem("layout %q Rapid MLX requires one complete MLX safetensors sidecar", id)
+			}
+			if layout.Speculation == nil || layout.Speculation.Method != "mtp" || !equalStringSlices(layout.Modalities, []string{"text"}) {
+				problem("layout %q Rapid MLX sidecar requires text-only MTP", id)
+			}
 		}
 		validateEngineTuning(id, layout, problem)
 	}

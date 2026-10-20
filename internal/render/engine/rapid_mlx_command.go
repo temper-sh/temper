@@ -1,7 +1,7 @@
 package engine
 
 import (
-	"fmt"
+	"encoding/json"
 	"strconv"
 )
 
@@ -51,8 +51,15 @@ func rapidMLXCommand(options rapidMLXOptions) (Command, error) {
 	if options.speculation == "none" {
 		groups = append(groups, []commandWord{knownWord("--no-spec-decode")})
 	} else {
-		config := fmt.Sprintf(`{"method":"mtp","num_speculative_tokens":%d}`, options.speculativeTokens)
-		groups = append(groups, []commandWord{knownWord("--speculative-config"), dataWord(config)})
+		config, err := json.Marshal(struct {
+			Method string `json:"method"`
+			Tokens int    `json:"num_speculative_tokens"`
+			Model  string `json:"model,omitempty"`
+		}{"mtp", options.speculativeTokens, options.draftModelPath})
+		if err != nil {
+			return Command{}, err
+		}
+		groups = append(groups, []commandWord{knownWord("--speculative-config"), dataWord(string(config))})
 	}
 	var defaults map[string]any
 	if options.thinking == "on" {

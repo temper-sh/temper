@@ -11,6 +11,7 @@ type rapidMLXOptions struct {
 	requestTimeoutSeconds int
 	layoutID              string
 	modelPath             string
+	draftModelPath        string
 	contextWindow         int
 	multimodal            bool
 	maxTokens             int
@@ -38,6 +39,7 @@ func buildRapidMLX(request Request) (Command, error) {
 		toolCallParser: tuning.ToolCallParser, prefillStepSize: tuning.PrefillStepSize, requestTimeoutSeconds: tuning.RequestTimeoutSeconds,
 		layoutID:              request.LayoutID,
 		modelPath:             request.ModelPath,
+		draftModelPath:        request.DraftModelPath,
 		contextWindow:         request.Window,
 		multimodal:            len(request.Modalities) == 2,
 		maxTokens:             request.MaxTokens,
@@ -63,6 +65,12 @@ func validateRapidMLXRequest(request Request) error {
 	}
 	if request.MaxTokens == 0 {
 		return errors.New("rapid-mlx requires an explicit output default: its CLI cannot express remaining-context generation")
+	}
+	if request.DraftModelPath != "" && (request.Speculation != "mtp" || len(request.Modalities) != 1) {
+		return errors.New("Rapid MLX sidecar requires text-only MTP speculation")
+	}
+	if err := validateCommandData(request.DraftModelPath); err != nil {
+		return err
 	}
 	tuning := *request.RapidMLX
 	if tuning.PrefillStepSize < 0 || tuning.RequestTimeoutSeconds < 0 {
