@@ -61,11 +61,11 @@ func (a WiredMemoryAdvice) Summary() string {
 
 func (a WiredMemoryAdvice) Section() Section {
 	lines := []string{a.Summary(),
-		fmt.Sprintf("Predicted requirement: %s; current GPU budget: %s (Metal recommended working set).", Size(a.RequiredMiB*MiB), Size(a.LimitMiB*MiB)),
+		fmt.Sprintf("Accounted requirement: %s; current GPU budget: %s (Metal recommended working set).", Size(a.RequiredMiB*MiB), Size(a.LimitMiB*MiB)),
 		"Temper reserves at least 4 GiB and 15% of RAM for macOS and other apps. This is recommendation policy, not a macOS maximum.",
 	}
 	if spare := a.LimitMiB - a.RequiredMiB; spare < 0 {
-		lines = append(lines, "The predicted budget exceeds the limit by "+Size(-spare*MiB)+".")
+		lines = append(lines, "The accounted memory exceeds the limit by "+Size(-spare*MiB)+".")
 	} else {
 		lines = append(lines, "Only "+Size(spare*MiB)+" remains below the wired limit.")
 	}
@@ -81,6 +81,6 @@ func (a WiredMemoryAdvice) Section() Section {
 			"The suggested limit leaves "+Size((a.PhysicalMiB-a.SuggestedLimitMiB)*MiB)+" outside the GPU allowance. Other apps may need more; watch Memory Pressure in Activity Monitor.",
 		)
 	}
-	lines = append(lines, "Raising the limit adds no physical RAM. Context and engine overhead remain unmeasured; this recommendation does not establish runtime fit.")
+	lines = append(lines, "Raising the limit adds no physical RAM. Catalog measurements or supported estimates are included, but unmeasured workloads and allocations remain; this recommendation does not establish runtime fit.")
 	return Section{Title: "Memory budget is tight", Lines: lines, Warning: true}
 }

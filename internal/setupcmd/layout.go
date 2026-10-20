@@ -13,11 +13,17 @@ import (
 	"github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/clihelp"
 	"github.com/temper-sh/temper/internal/datadir"
+	"github.com/temper-sh/temper/internal/harness"
 	"github.com/temper-sh/temper/internal/managed"
 	"github.com/temper-sh/temper/internal/preset"
 	"github.com/temper-sh/temper/internal/probecmd"
 	"github.com/temper-sh/temper/internal/setup"
 )
+
+type LayoutStatus struct {
+	managed.Status
+	Integrations []harness.Result `json:"integrations,omitempty"`
+}
 
 func (c Command) Layout(ctx context.Context, args []string, out, diagnostics io.Writer) int {
 	fail := c.fail
@@ -89,7 +95,7 @@ func (c Command) Layout(ctx context.Context, args []string, out, diagnostics io.
 		return fail(diagnostics, err)
 	}
 	var before *managed.Job
-	var status *managed.Status
+	var status *LayoutStatus
 	switch operation {
 	case "activate":
 		before, status, err = c.activate(ctx, root, id, *listen, *dry)
@@ -112,13 +118,31 @@ func (c Command) Layout(ctx context.Context, args []string, out, diagnostics io.
 }
 
 // renderLayoutResult prints one layout command's outcome in plain words.
-func (c Command) renderLayoutResult(out io.Writer, root, operation, id string, dry bool, before *managed.Job, status managed.Status) {
+func (c Command) renderLayoutResult(out io.Writer, root, operation, id string, dry bool, before *managed.Job, status LayoutStatus) {
 	layout := id
 	if job := knownJob(status.State); layout == "" && job != nil {
 		layout = job.Layout
 	}
 	saved, defaultPreset := savedLayouts(root, layout)
-	renderLayout(out, layoutReport{Operation: operation, Dry: dry, Before: before, Status: status, Default: defaultPreset, Saved: saved})
+	renderLayout(out, layoutReport{Operation: operation, Dry: dry, Before: before, Status: status.Status, Default: defaultPreset, Saved: saved})
+	for _, result := range status.Integrations {
+		fmt.Fprintf(out, "Harness %s: %s · %s\n", strings.Join(result.Harnesses, ", "), result.Status, result.Path)
+		if result.Error != "" {
+			fmt.Fprintln(out, "  "+result.Error)
+		}
+		if !dry && (result.Status == "updated" || result.Status == "unchanged") {
+			for _, id := range result.Harnesses {
+				switch id {
+				case "pi":
+					fmt.Fprintln(out, "Open /model in Pi to refresh.")
+				case "pig":
+					fmt.Fprintln(out, "Restart PiG if its picker has not refreshed.")
+				case "hermes":
+					fmt.Fprintln(out, "Start a new Hermes session and choose temper in its model picker.")
+				}
+			}
+		}
+	}
 }
 
 // knownJob is the job a root's activation state names: current, else desired.
@@ -138,11 +162,18 @@ func controllerFor(root string, job *managed.Job, state managed.State) managed.L
 	return controller
 }
 
+func (c Command) controller(root string, job *managed.Job, state managed.State) managed.Controller {
+	if c.Controller != nil {
+		return c.Controller(root, job, state)
+	}
+	return controllerFor(root, job, state)
+}
+
 // activate renders one saved layout and reconciles the managed router to it.
 // Without listen it keeps the running layout's listener, else 127.0.0.1:8080.
 // before is the job known before the change; a refusal before reconciling
 // returns no status.
-func (c Command) activate(ctx context.Context, root, id, listen string, dry bool) (*managed.Job, *managed.Status, error) {
+func (c Command) activate(ctx context.Context, root, id, listen string, dry bool) (*managed.Job, *LayoutStatus, error) {
 	store := managed.FileStore{Root: root}
 	state, err := store.Read()
 	if err != nil {
@@ -161,6 +192,19 @@ func (c Command) activate(ctx context.Context, root, id, listen string, dry bool
 	}
 	if _, ok := configuration.Layouts[id]; !ok {
 		return before, nil, fmt.Errorf("unknown saved layout %q", id)
+	}
+	var included []harness.Preset
+	for _, id := range configuration.Layouts[id].Presets {
+		p := configuration.Presets[id]
+		included = append(included, harness.Preset{ID: id, Name: p.Name, Lock: p.Lock})
+	}
+	models, err := harness.Models(included)
+	if err != nil {
+		return before, nil, err
+	}
+	integrations, err := harness.Prepare(root, configuration.Integrations, listen, models)
+	if err != nil {
+		return before, nil, fmt.Errorf("harness preflight: %w", err)
 	}
 	facts, err := c.Detect(ctx)
 	if err != nil {
@@ -208,7 +252,7 @@ func (c Command) activate(ctx context.Context, root, id, listen string, dry bool
 			}
 		}
 	}
-	controller := controllerFor(root, desired, state)
+	controller := c.controller(root, desired, state)
 	if state.Current != nil && desired.Listen != state.Current.Listen {
 		return before, nil, errors.New("stop the current layout before changing its listener")
 	}
@@ -225,7 +269,7 @@ func (c Command) activate(ctx context.Context, root, id, listen string, dry bool
 			return before, nil, err
 		}
 		if state.Current != nil {
-			controller.Label, controller.Listen = state.Current.Label, state.Current.Listen
+			controller = c.controller(root, desired, state)
 			if desired.Listen != state.Current.Listen {
 				return before, nil, errors.New("active listener changed during preflight; stop it before changing listeners")
 			}
@@ -251,15 +295,32 @@ func (c Command) activate(ctx context.Context, root, id, listen string, dry bool
 			}
 		}
 	}
-	status, err := managed.Reconcile(ctx, store, controller, desired, dry)
-	if err == nil && !dry {
-		// Only this job's launcher copy is in use now.
+	result, err := reconcileLayout(ctx, store, controller, desired, dry, integrations)
+	if !dry && result.Observed.Ready && result.State.Current != nil && result.State.Current.Generation == desired.Generation {
+		// Only this job's launcher copy is in use now, including when a harness
+		// synchronization failed after the service became ready.
 		_ = managed.PruneLaunchers(root, desired.LauncherSHA256)
 	}
-	return before, &status, err
+	return before, &result, err
 }
 
-func (c Command) layoutStatus(ctx context.Context, root string) (*managed.Job, *managed.Status, error) {
+func reconcileLayout(ctx context.Context, store managed.Store, controller managed.Controller, desired *managed.Job, dry bool, integrations harness.Plan) (LayoutStatus, error) {
+	status, err := managed.Reconcile(ctx, store, controller, desired, dry)
+	result := LayoutStatus{Status: status, Integrations: integrations.Results()}
+	if err == nil && !dry {
+		result.Integrations, err = integrations.Publish(ctx)
+		if err != nil {
+			err = fmt.Errorf("layout is running; harness synchronization failed: %w", err)
+		}
+	} else if err != nil {
+		for i := range result.Integrations {
+			result.Integrations[i].Status = "not-applied"
+		}
+	}
+	return result, err
+}
+
+func (c Command) layoutStatus(ctx context.Context, root string) (*managed.Job, *LayoutStatus, error) {
 	store := managed.FileStore{Root: root}
 	state, err := store.Read()
 	if err != nil {
@@ -267,13 +328,13 @@ func (c Command) layoutStatus(ctx context.Context, root string) (*managed.Job, *
 	}
 	job := knownJob(state)
 	if job == nil {
-		return nil, &managed.Status{State: state}, nil
+		return nil, &LayoutStatus{Status: managed.Status{State: state}}, nil
 	}
-	status, err := managed.Inspect(ctx, store, controllerFor(root, job, state))
-	return job, &status, err
+	status, err := managed.Inspect(ctx, store, c.controller(root, job, state))
+	return job, &LayoutStatus{Status: status}, err
 }
 
-func (c Command) stopLayout(ctx context.Context, root string, dry bool) (*managed.Job, *managed.Status, error) {
+func (c Command) stopLayout(ctx context.Context, root string, dry bool) (*managed.Job, *LayoutStatus, error) {
 	store := managed.FileStore{Root: root}
 	state, err := store.Read()
 	if err != nil {
@@ -281,9 +342,9 @@ func (c Command) stopLayout(ctx context.Context, root string, dry bool) (*manage
 	}
 	job := knownJob(state)
 	if job == nil {
-		return nil, &managed.Status{State: state}, nil
+		return nil, &LayoutStatus{Status: managed.Status{State: state}}, nil
 	}
-	controller := controllerFor(root, job, state)
+	controller := c.controller(root, job, state)
 	if !dry {
 		if err = datadir.Ensure(root); err != nil {
 			return job, nil, err
@@ -297,11 +358,11 @@ func (c Command) stopLayout(ctx context.Context, root string, dry bool) (*manage
 			return job, nil, err
 		}
 		if state.Current != nil {
-			controller.Label, controller.Listen = state.Current.Label, state.Current.Listen
+			controller = c.controller(root, job, state)
 		}
 	}
 	status, err := managed.Reconcile(ctx, store, controller, nil, dry)
-	return job, &status, err
+	return job, &LayoutStatus{Status: status}, err
 }
 
 func helpFlag(arg string) bool { return arg == "help" || arg == "--help" || arg == "-h" }

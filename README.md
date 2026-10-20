@@ -23,8 +23,9 @@ engines and the router it needs; it does not install `hf` or your chat app.
 We advise installing the [Pi](https://github.com/earendil-works/pi) coding
 agent before you set up Temper, so you can try your models as soon as the
 layout starts. Pi's own installer is
-`curl -fsSL https://pi.dev/install.sh | sh`. Temper does not configure Pi;
-add Temper's address to Pi as a local provider (see below).
+`curl -fsSL https://pi.dev/install.sh | sh`. Select Pi on the wizard's
+**Harnesses** screen to synchronize the active layout's models automatically.
+PiG and Hermes are supported too; see [Harness integrations](docs/contracts/harnesses.md).
 
 Install with [Homebrew](https://brew.sh/) and open the setup wizard:
 
@@ -41,7 +42,8 @@ Homebrew uses a prebuilt package (bottle) when available, otherwise it builds
 from source.
 
 In the wizard, choose your presets. The **Default** layout includes them all,
-with models loading only when requested. Review the downloads and memory
+with models loading only when requested. Choose any harness integrations,
+then review the downloads and memory
 estimates, then choose **Install and start**. Model downloads can be many
 gigabytes. When the install finishes, Temper starts the layout and prints its
 address and model IDs. To start it again later, for example after restarting
@@ -51,8 +53,9 @@ your Mac:
 temper layout activate default
 ```
 
-Connect your preferred chat or coding app, such as
-[pi](https://github.com/earendil-works/pi), using the OpenAI-compatible API
+In a selected Pi integration, open `/model` to refresh the picker; restart PiG
+if its picker has not refreshed. For Hermes, start a new session and choose
+`temper` in its model picker. Connect other chat or coding apps using the OpenAI-compatible API
 base URL `http://127.0.0.1:8080/v1` and an included preset's ID as the model name.
 You can optionally mark a preset as **Default** in the layout to use the model
 name `default`.

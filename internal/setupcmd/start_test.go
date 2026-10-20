@@ -93,7 +93,7 @@ func TestInstallSaysHowToRetryWhenTheLayoutDoesNotStart(t *testing.T) {
 	_, rev, _ := setup.ReadConfiguration(root)
 	code, output, _ := configureRun(c, "--root", root, "--file", file, "--revision", rev, "--prepare")
 	if code != 1 || !strings.Contains(output, "Installed 1 preset.") ||
-		!strings.Contains(output, "Layout default did not start: port 8080 is in use") ||
+		!strings.Contains(output, "Layout default activation incomplete: port 8080 is in use") ||
 		!strings.Contains(output, "temper layout activate default") {
 		t.Fatalf("%d\n%s", code, output)
 	}

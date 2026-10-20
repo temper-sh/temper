@@ -25,6 +25,9 @@ Check the model license, hardware requirements and memory guidance beside your c
 [Compare the available presets](https://temper-sh.github.io/catalog/) if you need help.
 Memory figures are estimates unless a matching measurement is shown.
 The size at the top right of each preset card is the total size of its model files.
+The memory review separates weights, supported context-cache estimates and
+unknown allocations. A weights-only estimate does not establish runtime fit.
+See [Memory estimates](memory-estimates.md) for supported caches and limits.
 
 The underlined license follows the description inline and links to an explanation
 or the publisher's terms.
@@ -71,6 +74,19 @@ to load on activation must fit together.
 You can edit, rename or remove **Default**, or add another layout, such as
 **Helper** for small models. The same presets can be reused in several layouts.
 
+## Connect a harness
+
+On **Harnesses**, select Pi, PiG or Hermes if you want Temper to keep its model
+picker in sync with the active layout. Detection never selects an app for you.
+Review the displayed configuration destination (`models.json` for Pi/PiG,
+`config.yaml` for Hermes); it is saved with your choices.
+Pi and PiG may share a file, in which case both see the entries.
+
+Activation updates the included chat models, including models loaded on demand.
+Saving alone does not change a harness file. Your app's default model, session
+and credentials stay under your control. See [Harness integrations](harnesses.md)
+for ownership, directory overrides, deselection and retry behavior.
+
 ## Review and install
 
 Open **Review** to see each model's license, downloads, disk requirements, and
@@ -99,8 +115,9 @@ In your chat or coding app, use:
 | OpenAI-compatible API base URL | `http://127.0.0.1:8080/v1` |
 | Model | An included preset's ID, or `default` if you selected a default model in the layout |
 
-Temper supplies the local model service; configure the connection in your
-preferred app.
+For a selected Pi integration, open `/model` to refresh its picker. Restart PiG
+if its picker has not refreshed. For Hermes, start a new session and choose
+`temper` in its model picker. Other apps can use the connection above.
 
 ```sh
 temper layout status

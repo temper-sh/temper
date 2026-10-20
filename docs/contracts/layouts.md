@@ -52,6 +52,11 @@ Preparation deduplicates verified weights by material identity and software by
 exact closure, independently of layout membership. Mixed engines and versions
 are separate exact inputs. Review counts downloads once and reports startup
 memory separately from individual on-demand requirements.
+The optional configuration `integrations` array records explicitly selected
+[harness destinations](harnesses.md) for Pi, PiG or Hermes. Activation preflights
+those files, then synchronizes them after service readiness. JSON activation results include an
+`integrations` array with each file's outcome. A file failure returns nonzero
+while preserving the successful service state; repeat activation to repair it.
 
 `temper layout activate ID`, `layout status` and `layout stop` operate on one
 active layout per root. Activation uses prepared exact inputs. Desired state is
@@ -84,8 +89,11 @@ TERM and resumes that exact router. This closes the request-admission race;
 idle keepalives can conservatively block stop. Interrupted holds resume only on
 the next mutation. There is no force signal or background recovery agent.
 
-Memory admission uses weights, declared engine caps and exact applicable context
-limits when available. It is a prediction, not a measured peak. The startup
+Memory admission uses an applicable catalog measurement before falling back to
+weight-file proxies, supported KV estimates, cache reserves and engine allocation
+envelopes. [The shared assessment](memory-estimates.md) identifies the basis,
+workload limits and unknown allocations without counting overlapping components
+twice. A measured peak does not guarantee use outside its workload. The startup
 set must pass together; available alternatives need only pass individually.
 CPU and GPU presets both count against physical RAM. GPU presets additionally
 count against the wired-memory allowance. The selected device belongs to each

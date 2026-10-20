@@ -332,22 +332,23 @@ func (c Command) copy(ctx context.Context, source, id string, o options, out io.
 }
 
 type checked struct {
-	ID          string           `json:"id"`
-	Form        string           `json:"form,omitempty"`
-	Origin      string           `json:"origin,omitempty"`
-	Name        string           `json:"name,omitempty"`
-	Valid       bool             `json:"valid"`
-	Error       string           `json:"error,omitempty"`
-	Warnings    []string         `json:"warnings"`
-	Changes     []catalog.Change `json:"changes,omitempty"`
-	Profile     int              `json:"profile_min_memory_gib,omitempty"`
-	Context     int              `json:"context_window_tokens,omitempty"`
-	Engine      string           `json:"engine,omitempty"`
-	Release     string           `json:"engine_release,omitempty"`
-	Fits        *bool            `json:"fits,omitempty"`
-	Refusals    []string         `json:"refusals,omitempty"`
-	MemoryBytes int64            `json:"memory_bytes,omitempty"`
-	ModelBytes  int64            `json:"model_bytes,omitempty"`
+	ID          string                `json:"id"`
+	Form        string                `json:"form,omitempty"`
+	Origin      string                `json:"origin,omitempty"`
+	Name        string                `json:"name,omitempty"`
+	Valid       bool                  `json:"valid"`
+	Error       string                `json:"error,omitempty"`
+	Warnings    []string              `json:"warnings"`
+	Changes     []catalog.Change      `json:"changes,omitempty"`
+	Profile     int                   `json:"profile_min_memory_gib,omitempty"`
+	Context     int                   `json:"context_window_tokens,omitempty"`
+	Engine      string                `json:"engine,omitempty"`
+	Release     string                `json:"engine_release,omitempty"`
+	Fits        *bool                 `json:"fits,omitempty"`
+	Refusals    []string              `json:"refusals,omitempty"`
+	MemoryBytes int64                 `json:"memory_bytes,omitempty"`
+	ModelBytes  int64                 `json:"model_bytes,omitempty"`
+	Memory      *setup.MemoryEstimate `json:"memory_estimate,omitempty"`
 }
 
 func (c Command) check(ctx context.Context, ids []string, o options, out io.Writer) (bool, error) {
@@ -466,8 +467,12 @@ func checkOne(root, id string, view catalog.View, memoryGiB int, facts *machine.
 			r.Warnings = append(r.Warnings, "could not estimate the fit on this Mac: "+err.Error())
 			return r
 		}
-		fits := len(plan.Refusals) == 0
-		r.Fits, r.Refusals, r.MemoryBytes, r.ModelBytes = &fits, plan.Refusals, plan.MemoryBytes, plan.ModelBytes
+		r.Memory = &plan.Memory
+		r.Refusals, r.MemoryBytes, r.ModelBytes = plan.Refusals, plan.MemoryBytes, plan.ModelBytes
+		if len(plan.Refusals) > 0 {
+			fits := false
+			r.Fits = &fits
+		}
 	}
 	return r
 }
@@ -499,10 +504,20 @@ func describe(out io.Writer, r checked) {
 	fmt.Fprintf(out, "  Builds for a %d GiB Mac: %d-token context, engine %s %s\n", r.Profile, r.Context, r.Engine, r.Release)
 	switch {
 	case r.Fits == nil:
-	case *r.Fits:
-		fmt.Fprintf(out, "  This Mac: fits; needs at least %s of memory\n", setup.Size(r.MemoryBytes))
+		if r.Memory != nil {
+			if r.Memory.Basis == "measured" {
+				fmt.Fprintln(out, "  This Mac: observed peak is within the budget; fit outside the measured workload is unknown")
+			} else {
+				fmt.Fprintln(out, "  This Mac: runtime fit unknown; accounted estimate is within the budget")
+			}
+		}
 	default:
 		fmt.Fprintf(out, "  This Mac: does not fit: %s\n", strings.Join(r.Refusals, "; "))
+	}
+	if r.Memory != nil {
+		for _, line := range r.Memory.Lines() {
+			fmt.Fprintln(out, "  "+line)
+		}
 	}
 	for _, w := range r.Warnings {
 		fmt.Fprintf(out, "  Warning: %s\n", w)

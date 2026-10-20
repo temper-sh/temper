@@ -174,7 +174,7 @@ func (c Command) Update(ctx context.Context, args []string, out, diagnostics io.
 			if sameLock(saved.Lock, candidate) {
 				result.Status = "unchanged"
 			} else if len(result.Changes) == 0 {
-				result.Changes = []string{"catalog descriptions changed"}
+				result.Changes = []string{"catalog metadata changed"}
 			}
 		}
 		next.Presets[id] = setup.Preset{Name: saved.Name, Choices: saved.Choices, Lock: candidate}

@@ -16,7 +16,7 @@ func (m *PresetModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.hitTargets = nil
 		return m, nil
 	case compositionPreview:
-		if m.page == 2 && msg.Seq == m.previewSeq {
+		if m.page == presetReviewPage && msg.Seq == m.previewSeq {
 			m.cancelPreview()
 			m.loading, m.reviewErr = false, msg.Err
 			m.reviewReady = msg.Err == nil
@@ -122,7 +122,7 @@ func (m *PresetModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.moveVertical(delta)
 		case "d", "s":
-			if m.page == 2 && key == "d" && m.contentRows() > 0 {
+			if m.page == presetReviewPage && key == "d" && m.contentRows() > 0 {
 				m.downloadsOpen = !m.downloadsOpen
 				m.focusDownloads = true
 			} else if m.page == 1 && m.layout != "" {
@@ -134,7 +134,7 @@ func (m *PresetModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.focusArea(presetContentFocus)
 			}
 		case "r":
-			if m.page == 2 {
+			if m.page == presetReviewPage {
 				return m, m.startPreview()
 			}
 			return m, m.activateShortcut(key)
@@ -235,11 +235,13 @@ func (m *PresetModel) advance() tea.Cmd {
 	} else if m.layout != "" {
 		return m.back()
 	} else if m.page == 1 {
+		m.page, m.cursor = presetHarnessPage, 0
+	} else if m.page == presetHarnessPage {
 		if err := m.draft.Validate(); err != nil {
 			m.notice = err.Error()
 			return nil
 		}
-		m.page, m.action, m.cursor = 2, 0, 0
+		m.page, m.action, m.cursor = presetReviewPage, 0, 0
 		m.focusArea(presetFooterFocus)
 		return m.startPreview()
 	}

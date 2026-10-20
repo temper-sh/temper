@@ -16,6 +16,7 @@ import (
 
 	"github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/huggingface"
+	"github.com/temper-sh/temper/internal/modelmemory"
 	templatepatch "github.com/temper-sh/temper/internal/patch"
 	"github.com/temper-sh/temper/internal/setup"
 	"github.com/temper-sh/temper/internal/userpreset"
@@ -191,6 +192,22 @@ func (c Command) weights(ctx context.Context, id, repository string, patterns []
 	}
 	record := catalog.UserArtifact{Artifact: catalog.Artifact{Format: format, Files: files, License: license,
 		Sources: []catalog.Source{{Hub: catalog.HubHuggingFace, Repo: repo, Revision: r.Commit}}}, SameModelAs: o.sameModelAs}
+	memoryWarning := ""
+	if format == "gguf" && len(files) == 1 {
+		metadataCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		stream, readErr := c.Hub.Open(metadataCtx, repo, r.Commit, files[0].Path)
+		if readErr == nil {
+			record.ContextMemory, readErr = modelmemory.ReadGGUF(stream)
+			_ = stream.Close()
+		}
+		cancel()
+		if readErr != nil {
+			memoryWarning = "Context-cache estimate unavailable: " + readErr.Error()
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	u, err := c.edit(o.root, id, func(u *catalog.UserPreset, view catalog.View) error {
 		if u.Artifacts == nil {
 			u.Artifacts = map[string]catalog.UserArtifact{}
@@ -226,9 +243,12 @@ func (c Command) weights(ctx context.Context, id, repository string, patterns []
 		total += f.Bytes
 	}
 	if o.json {
-		return encode(out, map[string]any{"schema": "temper-preset-write/v1", "preset": id, "form": form(u), "weights": wid, "repo": repo, "commit": r.Commit, "bytes": total, "path": userpreset.Path(o.root, id)})
+		return encode(out, map[string]any{"schema": "temper-preset-write/v1", "preset": id, "form": form(u), "weights": wid, "repo": repo, "commit": r.Commit, "bytes": total, "path": userpreset.Path(o.root, id), "context_memory": record.ContextMemory, "memory_warning": memoryWarning})
 	}
 	fmt.Fprintf(out, "%s now uses weights %s: %d file(s), %s, from %s at %s.\n", id, wid, len(files), setup.Size(total), repo, r.Commit[:7])
+	if memoryWarning != "" {
+		fmt.Fprintln(out, "Warning: "+memoryWarning)
+	}
 	return nil
 }
 

@@ -30,14 +30,14 @@ func (m *PresetModel) View() tea.View {
 	brand := lipgloss.NewStyle().Foreground(colorBrand).Bold(true).Render("TEMPER") +
 		lipgloss.NewStyle().Foreground(colorMuted).Render("  /  Guided setup")
 	if width >= 40 {
-		progress := lipgloss.NewStyle().Foreground(colorMuted).Render(fmt.Sprintf("%d / 3", m.page+1))
+		progress := lipgloss.NewStyle().Foreground(colorMuted).Render(fmt.Sprintf("%d / 4", m.page+1))
 		brand += strings.Repeat(" ", width-lipgloss.Width(brand)-lipgloss.Width(progress)) + progress
 	}
 	header := brand
 	if !compact && m.input.Machine != "" {
 		header += "\n" + lipgloss.NewStyle().Foreground(colorMuted).Width(width).Render(m.input.Machine) + "\n"
 	}
-	header += "\n" + stepTabs([]string{"Presets", "Layouts", "Review"}, m.page, width)
+	header += "\n" + stepTabs([]string{"Presets", "Layouts", "Harnesses", "Review"}, m.page, width)
 	if m.page == 0 && m.field == "" {
 		filters, targets := m.filters(width)
 		for _, target := range targets {
@@ -164,7 +164,9 @@ func (m *PresetModel) presetContent(width int, compact bool) screenBody {
 			title = m.draft.Layouts[m.layout].Name + " · Presets"
 			subtitle = "Include makes a preset available. Load on activation warms it up. Default is optional and does not imply loading."
 		}
-	} else if m.page == 2 {
+	} else if m.page == presetHarnessPage {
+		title, subtitle = "Connect your harnesses", "Choose which apps receive this root’s active models."
+	} else if m.page == presetReviewPage {
 		title, subtitle = "Review your setup", "Check downloads, memory and your layouts."
 	}
 	if !compact {
@@ -211,7 +213,11 @@ func (m *PresetModel) presetContent(width int, compact bool) screenBody {
 			}
 			details := metadata.Foreground(colorMuted).Render(label) + metadata.Foreground(presetColors.Accent).Render(tokenCount(record.Window())+" tokens")
 			if p.MemoryBytes > 0 {
-				details += metadata.Foreground(colorMuted).Render(" · Memory at least ") + metadata.Foreground(presetColors.Accent).Render(setup.Size(p.MemoryBytes))
+				label, limit := " · Memory estimate ", " · Total fit unknown"
+				if p.MemoryBasis == "measured" {
+					label, limit = " · Measured peak ", " · Observed workload"
+				}
+				details += metadata.Foreground(colorMuted).Render(label) + metadata.Foreground(presetColors.Accent).Render(setup.Size(p.MemoryBytes)) + metadata.Foreground(colorMuted).Render(limit)
 			}
 			if template := record.TemplateID(); record.Interface == "chat-completions" && template != catalog.BuiltinTemplate {
 				name := lock.Records.Templates[template].Presentation.DisplayName
@@ -265,7 +271,9 @@ func (m *PresetModel) presetContent(width int, compact bool) screenBody {
 		} else {
 			m.membershipCards(&body, width)
 		}
-	case 2:
+	case presetHarnessPage:
+		m.harnessCards(&body, width)
+	case presetReviewPage:
 		m.reviewContent(&body, width)
 	}
 	if m.notice != "" {
@@ -583,7 +591,7 @@ func (m *PresetModel) presetFooter(width int, compact bool) (string, []hitTarget
 		x += w + 1
 	}
 	parts := []string{row()}
-	if !compact && m.field == "" && m.page == 2 {
+	if !compact && m.field == "" && m.page == presetReviewPage {
 		detail := []string{
 			"Enter downloads what is missing, installs it and starts the default layout.",
 			"Enter saves your choices. Nothing is downloaded or started.",
@@ -615,11 +623,11 @@ func (m *PresetModel) presetFooter(width int, compact bool) (string, []hitTarget
 				help = "Arrows move · Enter apply\nTab Apply · ⇧Tab Cancel"
 			}
 		}
-	} else if m.page == 2 {
+	} else if m.page == presetReviewPage {
 		help = strings.ReplaceAll(help, "Next", "Install")
 	} else if m.layout != "" {
 		help = strings.ReplaceAll(help, "Next", "Done")
-	} else if m.page == 1 {
+	} else if m.page == presetHarnessPage {
 		help = strings.ReplaceAll(help, "Next", "Review")
 	}
 	if compact {

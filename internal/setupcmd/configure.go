@@ -215,6 +215,12 @@ func (c Command) Configure(ctx context.Context, args []string, in io.Reader, out
 			// Discovery happens once outside the terminal state machine. Customizing
 			// settings uses the same resolved software, without further network reads.
 			input := setupui.PresetInput{Machine: fmt.Sprintf("%s · %s RAM · %s free · catalog of %s", facts.Chip, setup.Size(facts.PhysicalMemoryBytes), setup.Size(free), d.Date), Configuration: candidate, NewConfiguration: rev == "", Groups: d.Groups()}
+			if c.Harnesses != nil {
+				input.Harnesses, err = c.Harnesses()
+				if err != nil {
+					return fail(diagnostics, fmt.Errorf("detect harnesses: %w", err))
+				}
+			}
 			input.Assess = func(lock catalog.Lock) (setup.PresetPlan, error) { return setup.Assess(lock, facts) }
 			unavailableOption := func(id string, p catalog.PresetPresentation, reason string) setupui.PresetOption {
 				group, section := d.Placement(p)
@@ -239,7 +245,7 @@ func (c Command) Configure(ctx context.Context, args []string, in io.Reader, out
 				a := d.Artifacts[p.Artifact]
 				e := d.Engines[p.Engine]
 				group, section := d.Placement(p.Presentation)
-				o := setupui.PresetOption{ID: id, Name: displayName(id, p), Model: a.Presentation.ModelName, Weights: a.Presentation.WeightsName, Engine: e.Presentation.DisplayName, Description: p.Presentation.Description, AssessmentURL: p.Presentation.AssessmentURL, Tier: p.Presentation.MemoryTier, Group: group.ID, Lock: lock, ModelBytes: one.ModelBytes, MemoryBytes: one.MemoryBytes, Unavailable: strings.Join(one.Refusals, "; ")}
+				o := setupui.PresetOption{ID: id, Name: displayName(id, p), Model: a.Presentation.ModelName, Weights: a.Presentation.WeightsName, Engine: e.Presentation.DisplayName, Description: p.Presentation.Description, AssessmentURL: p.Presentation.AssessmentURL, Tier: p.Presentation.MemoryTier, Group: group.ID, Lock: lock, ModelBytes: one.ModelBytes, MemoryBytes: one.MemoryBytes, MemoryBasis: one.Memory.Basis, Unavailable: strings.Join(one.Refusals, "; ")}
 				if section != nil {
 					o.Section = section.ID
 				}
@@ -262,7 +268,7 @@ func (c Command) Configure(ctx context.Context, args []string, in io.Reader, out
 					if err != nil {
 						return fail(diagnostics, err)
 					}
-					o := setupui.PresetOption{ID: id, Name: saved.Name, Choices: saved.Choices, Model: a.Presentation.ModelName, Weights: a.Presentation.WeightsName, Engine: e.Presentation.DisplayName, Description: p.Presentation.Description, Tier: p.Presentation.MemoryTier, Group: d.FallbackGroup(), Lock: saved.Lock, ModelBytes: one.ModelBytes, MemoryBytes: one.MemoryBytes, Unavailable: strings.Join(one.Refusals, "; "), Details: "Saved exact preset · catalog recommendation does not apply to customized settings"}
+					o := setupui.PresetOption{ID: id, Name: saved.Name, Choices: saved.Choices, Model: a.Presentation.ModelName, Weights: a.Presentation.WeightsName, Engine: e.Presentation.DisplayName, Description: p.Presentation.Description, Tier: p.Presentation.MemoryTier, Group: d.FallbackGroup(), Lock: saved.Lock, ModelBytes: one.ModelBytes, MemoryBytes: one.MemoryBytes, MemoryBasis: one.Memory.Basis, Unavailable: strings.Join(one.Refusals, "; "), Details: "Saved exact preset · catalog recommendation does not apply to customized settings"}
 					if index >= 0 {
 						o.Group, o.Section = input.Presets[index].Group, input.Presets[index].Section
 						input.Presets[index] = o

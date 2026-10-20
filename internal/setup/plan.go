@@ -47,10 +47,9 @@ type PresetPlan struct {
 	RuntimeDiskEstimateBytes int64        `json:"runtime_disk_estimate_bytes,omitempty"`
 	Lock                     catalog.Lock `json:"-"`
 	ModelBytes               int64        `json:"model_bytes"`
-	// MemoryBytes is a lower bound for running the preset: its weights, or its
-	// predicted engine allocation or declared memory cap when larger. KV cache
-	// and runtime overhead are not measured.
+	// MemoryBytes is the selected measured peak or fallback estimate for admission.
 	MemoryBytes int64              `json:"memory_bytes"`
+	Memory      MemoryEstimate     `json:"memory_estimate"`
 	Budget      budget.Prediction  `json:"memory_prediction"`
 	WiredMemory *WiredMemoryAdvice `json:"wired_memory_advice,omitempty"`
 	Refusals    []string           `json:"refusals,omitempty"`
@@ -80,8 +79,8 @@ type CachePlan struct {
 	FreeDiskBytes      int64  `json:"free_disk_bytes"`
 }
 
-// Assess evaluates a configuration using declared model sizes. Fits remains a
-// prediction: KV cache, runtime overhead and real task behavior are unmeasured.
+// Assess uses applicable measured peaks, otherwise supported allocation estimates.
+// Workload limits and unknowns remain explicit; admission is not a fit guarantee.
 func Assess(locked catalog.Lock, facts machine.Facts) (PresetPlan, error) {
 	if err := locked.Validate(); err != nil {
 		return PresetPlan{}, err
@@ -99,7 +98,6 @@ func Assess(locked catalog.Lock, facts machine.Facts) (PresetPlan, error) {
 		return PresetPlan{}, err
 	}
 	modelBytes := make(map[string]int64)
-	var onDemandBytes, onDemandGPU int64
 	for id, layout := range locked.Records.Presets {
 		var size int64
 		files := append([]catalog.File(nil), locked.Records.Artifacts[layout.Artifact].Files...)
@@ -128,31 +126,66 @@ func Assess(locked catalog.Lock, facts machine.Facts) (PresetPlan, error) {
 		if err := add(&result.ModelBytes, size); err != nil {
 			return PresetPlan{}, err
 		}
-		onDemandBytes = max(onDemandBytes, size)
-		if layout.Compute == catalog.ComputeGPU {
-			onDemandGPU = max(onDemandGPU, size)
+	}
+	p := locked.Records.Presets[locked.Preset]
+	fallbackReason := "no catalog memory measurement"
+	if measurement := p.Profiles[0].Memory; measurement != nil {
+		if applicable, reason := measurement.Applicable(locked, facts); applicable {
+			result.Memory = MemoryEstimate{
+				Basis: "measured", Status: "measured", Measurement: measurement,
+				WeightFileBytes: result.ModelBytes, ContextTokens: p.Window(),
+				AccountedBytes: measurement.PeakBytes,
+				Unknown:        []string{"memory outside the measured workload", measurement.Limitations},
+			}
+			result.Budget = budget.Prediction{Status: budget.StatusNotApplicable, Reason: "using the applicable catalog memory measurement"}
+		} else {
+			fallbackReason = reason
 		}
 	}
-	minimum := onDemandBytes
+	if result.Memory.Basis != "measured" {
+		result.Memory, err = estimateMemory(locked, result.ModelBytes)
+		if err != nil {
+			return PresetPlan{}, err
+		}
+		result.Memory.FallbackReason = fallbackReason
+		mode := projection.Manifest.Modes[locked.Preset]
+		result.Budget, err = PredictBudget(projection.Manifest, mode, observed, modelBytes)
+		if err != nil {
+			return PresetPlan{}, err
+		}
+		if result.Budget.Status == budget.StatusFits || result.Budget.Status == budget.StatusExceeded {
+			result.Memory.EngineEnvelopeBytes = max(int64(0), (result.Budget.RequiredMiB-budget.OSFloorMiB)*MiB)
+		}
+		core := result.ModelBytes
+		if result.Memory.KVCacheBytes != nil {
+			if err = add(&core, *result.Memory.KVCacheBytes); err != nil {
+				return PresetPlan{}, err
+			}
+		}
+		result.Memory.AccountedBytes = max(core, result.Memory.EngineEnvelopeBytes)
+		if err = add(&result.Memory.AccountedBytes, result.Memory.PromptCacheReserveBytes); err != nil {
+			return PresetPlan{}, err
+		}
+	}
+	result.MemoryBytes = result.Memory.AccountedBytes
+	minimum := result.MemoryBytes
 	if err := add(&minimum, budget.OSFloorMiB*MiB); err != nil {
 		return PresetPlan{}, err
 	}
 	if minimum > facts.PhysicalMemoryBytes {
-		result.Refusals = append(result.Refusals, fmt.Sprintf("model weights and the OS allowance need at least %s; this machine has %s", Size(minimum), Size(facts.PhysicalMemoryBytes)))
+		result.Memory.Status = "exceeds-budget"
+		result.Refusals = append(result.Refusals, fmt.Sprintf("%s memory and OS allowance need %s; this machine has %s", result.Memory.Basis, Size(minimum), Size(facts.PhysicalMemoryBytes)))
 	}
-	gpuMinimum := onDemandGPU
-	if gpuMinimum > 0 {
+	gpuMinimum := int64(0)
+	if p.Compute == catalog.ComputeGPU {
+		gpuMinimum = result.MemoryBytes - result.Memory.PromptCacheReserveBytes
 		if err := add(&gpuMinimum, budget.OSFloorMiB*MiB); err != nil {
 			return PresetPlan{}, err
 		}
 		if gpuMinimum > facts.WiredLimitMiB*MiB {
-			result.Refusals = append(result.Refusals, fmt.Sprintf("conservative full-model GPU allowance and OS allowance exceed the %s wired-memory limit", Size(facts.WiredLimitMiB*MiB)))
+			result.Memory.Status = "exceeds-budget"
+			result.Refusals = append(result.Refusals, fmt.Sprintf("%s GPU memory and OS allowance exceed the %s wired-memory limit", result.Memory.Basis, Size(facts.WiredLimitMiB*MiB)))
 		}
-	}
-	mode := projection.Manifest.Modes[locked.Preset]
-	result.Budget, err = PredictBudget(projection.Manifest, mode, observed, modelBytes)
-	if err != nil {
-		return PresetPlan{}, err
 	}
 	if result.Budget.Status == budget.StatusExceeded {
 		result.Refusals = append(result.Refusals, fmt.Sprintf("configured memory allocation exceeds the %s wired-memory limit (prediction)", Size(result.Budget.WiredLimitMiB*MiB)))
@@ -162,15 +195,6 @@ func Assess(locked catalog.Lock, facts machine.Facts) (PresetPlan, error) {
 		gpuMinimumMiB++
 	}
 	result.WiredMemory = wiredMemoryAdvice(max(gpuMinimumMiB, result.Budget.RequiredMiB), facts, result.Budget)
-	result.MemoryBytes = result.ModelBytes
-	if result.Budget.Status == budget.StatusFits || result.Budget.Status == budget.StatusExceeded {
-		result.MemoryBytes = max(result.MemoryBytes, (result.Budget.RequiredMiB-budget.OSFloorMiB)*MiB)
-	}
-	for _, x := range locked.Records.Presets {
-		if x.Config().Splash != nil {
-			result.MemoryBytes = max(result.MemoryBytes, x.Config().Splash.MaxMemoryBytes)
-		}
-	}
 	return result, nil
 }
 

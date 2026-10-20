@@ -43,6 +43,9 @@ previous catalog's or in the future), `runtime.router`, `artifacts`,
   `revision`; Hugging Face is required, other hubs are download-only
   mirrors), `format`, exact `files` (path, bytes, SHA-256) and `license`.
   `presentation` holds `model_name` and `weights_name`.
+  Optional [`context_memory`](memory-estimates.md) describes full-attention
+  geometry from that exact artifact. It survives lock compilation but does not
+  change executable identity. Missing geometry remains unknown.
 - **Templates** pin chat-template files the same way, may name a fixed
   `transform`, and list `compatible_artifacts`. A preset names one, or
   `builtin` for the template inside the model.
@@ -54,7 +57,10 @@ previous catalog's or in the future), `runtime.router`, `artifacts`,
   `context_limit_tokens`, `compute` with `compute_options`, and `profiles`.
   Each profile is complete (`min_memory_gib`, `context_window_tokens`,
   `engine_config`); a Mac gets the profile with the highest `min_memory_gib`
-  it meets, else the smallest.
+  it meets, else the smallest. Optional [`memory`](memory-estimates.md) retains
+  a reviewed loaded/peak observation with its tested execution and machine.
+  It survives locks without changing executable identity; changing runtime
+  settings can make the observation inapplicable.
 
 Rapid MLX can select an external MTP head with
 `speculation: {method: mtp, source: artifact, draft_artifact: ID, max_draft_tokens: 3}`.

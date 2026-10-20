@@ -60,10 +60,14 @@ func (m *PresetModel) reviewLayouts(body *screenBody, width int) {
 	}
 	var notes []string
 	if len(c.Presets) > 0 {
-		notes = append(notes, "Context / output: token limits; context includes input and output. Fit is not measured.",
-			"Memory estimates use weights and declared caps; KV and runtime overhead remain unmeasured.")
+		notes = append(notes, "Context / output: token limits; context includes input and output.",
+			"Memory uses applicable catalog measurements, otherwise estimates. Observed peaks apply to the tested workload; estimates can omit runtime allocations.")
 	}
 	for _, mode := range m.plan.Presets {
+		if mode.Memory.Basis != "" {
+			name := mode.Lock.Records.Presets[mode.Lock.Preset].Presentation.DisplayName
+			notes = append(notes, name+": "+mode.Memory.Lines()[0])
+		}
 		if mode.RuntimeDiskEstimateBytes > 0 {
 			_, preset := presetRecord(mode.Lock)
 			name := mode.Lock.Records.Artifacts[preset.Artifact].Presentation.ModelName

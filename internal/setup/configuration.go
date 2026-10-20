@@ -17,6 +17,7 @@ import (
 
 	"github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/datadir"
+	"github.com/temper-sh/temper/internal/harness"
 )
 
 const ConfigurationSchema = "temper-configuration/v1"
@@ -51,10 +52,11 @@ type Layout struct {
 // Configuration is the user's file. Software is one setting for every preset:
 // a layout runs one router.
 type Configuration struct {
-	Schema   string            `json:"schema"`
-	Software string            `json:"software"`
-	Presets  map[string]Preset `json:"presets"`
-	Layouts  map[string]Layout `json:"layouts"`
+	Schema       string              `json:"schema"`
+	Software     string              `json:"software"`
+	Presets      map[string]Preset   `json:"presets"`
+	Layouts      map[string]Layout   `json:"layouts"`
+	Integrations []harness.Selection `json:"integrations,omitempty"`
 }
 
 func EmptyConfiguration() Configuration {
@@ -70,6 +72,9 @@ func validName(s string) bool {
 }
 
 func (c Configuration) Validate() error {
+	if err := harness.Validate(c.Integrations); err != nil {
+		return err
+	}
 	if c.Schema != ConfigurationSchema || c.Presets == nil || c.Layouts == nil {
 		return errors.New("configuration requires temper-configuration/v1, presets and layouts")
 	}

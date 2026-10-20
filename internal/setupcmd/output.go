@@ -168,5 +168,13 @@ func renderConfiguration(out io.Writer, c setup.Configuration, revision string) 
 		fmt.Fprintln(out, line)
 	}
 	fmt.Fprintf(out, "Software: %s\n", c.Software)
+	if len(c.Integrations) == 0 {
+		fmt.Fprintln(out, "Harnesses: none")
+	} else {
+		fmt.Fprintln(out, "Harnesses (synchronized on activation):")
+		for _, selected := range c.Integrations {
+			fmt.Fprintf(out, "  %s  %s\n", selected.ID, selected.ModelsFile)
+		}
+	}
 	fmt.Fprintf(out, "Revision: %s (scripted edits pass it with --revision)\n", revision)
 }

@@ -227,12 +227,24 @@ document. They read the root's active catalog, so run `temper catalog update
 --root PATH` first. The revision defaults to `main` and is recorded as its
 exact commit. `HF_TOKEN` is used for gated repositories. `weights` and
 `template` change a file only when the result still compiles.
+For GGUF weights, the helper also reads a bounded header from the pinned file
+to obtain supported attention-cache geometry. Unsupported or missing metadata
+is reported as unknown; no full weight download is needed.
+
+`check` and setup share the [memory assessment](memory-estimates.md).
+`memory_estimate.basis` identifies a matching catalog measurement or an estimate.
+Measurements retain loaded/peak values and workload limits; changing the tested
+execution or machine falls back to estimation. Estimates separate KV payload,
+weight-file storage proxies, cache reserves, engine envelopes and unknowns.
+`fits` is omitted when total
+runtime fit is unknown and is `false` when admission refuses the preset;
+weights alone cannot produce `fits: true`.
 
 | Command | What it does |
 |---|---|
 | `temper preset fork ORIGIN ID [--name TEXT]` | Writes `presets.d/ID.json` with the origin and no changes yet. |
 | `temper preset copy SOURCE ID [--name TEXT] [--memory-gib N]` | Writes a copy of a catalog preset or of one of yours. |
-| `temper preset check [ID] [--memory-gib N]` | Reads and compiles one preset, or every file in `presets.d`. It shows a fork's changes from its origin, the build, the fit on this Mac and any warnings. It exits 1 when a preset is invalid; a preset that does not fit this Mac is still valid. |
+| `temper preset check [ID] [--memory-gib N]` | Reads and compiles one preset, or every file in `presets.d`. It shows a fork's changes, the build, memory estimates and unknowns on this Mac, and warnings. It exits 1 when a preset is invalid; a preset refused by memory admission is still valid. |
 | `temper preset fields ID [--memory-gib N]` | Lists the settings a fork can change for that preset's engine, with current values. |
 | `temper preset plan ID` | Reviews installing the preset on this Mac the way `temper init --dry-run` reviews catalog presets: the files to download, those already in the Hugging Face cache or in Temper, the disk needed and any refusal. It saves and downloads nothing. With `--json` the document is `temper-preset-plan/v1`, whose `plan` has the same fields as `init --json`'s. Added in 0.3.1. |
 | `temper preset weights ID REPO[@REVISION] FILE…` | Adds a weights record from Hugging Face and selects it. File names can be patterns, such as `'*.safetensors'`. In a copy, it also adds the weights to the copy's template. |

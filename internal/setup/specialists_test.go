@@ -24,7 +24,7 @@ func TestProjectorCountsTowardMemoryAdmission(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if plan.ModelBytes != 8<<30 || !strings.Contains(strings.Join(plan.Refusals, "; "), "model weights and the OS allowance") {
+	if plan.ModelBytes != 8<<30 || !strings.Contains(strings.Join(plan.Refusals, "; "), "estimated memory and OS allowance need 9.00 GiB") {
 		t.Fatalf("projector admission: bytes=%d, refusals=%v", plan.ModelBytes, plan.Refusals)
 	}
 }

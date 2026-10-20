@@ -60,7 +60,7 @@ func TestForkThenEditThenCheckReportsTheChangesAndTheFit(t *testing.T) {
 		t.Fatal(err)
 	}
 	out, diagnostics, code := run(t, c, root, "check", "qwen-cool")
-	for _, want := range []string{"qwen-cool: fork of " + mtp, "request_defaults.sampling.temperature 1 → 0.6", "engine_config.batch_tokens", "This Mac: fits", "not tested by the catalog"} {
+	for _, want := range []string{"qwen-cool: fork of " + mtp, "request_defaults.sampling.temperature 1 → 0.6", "engine_config.batch_tokens", "This Mac: runtime fit unknown", "KV/context cache: unknown", "not tested by the catalog"} {
 		if code != 0 || !strings.Contains(out, want) {
 			t.Fatalf("check is missing %q: %d %s %s", want, code, out, diagnostics)
 		}
@@ -74,7 +74,7 @@ func TestForkThenEditThenCheckReportsTheChangesAndTheFit(t *testing.T) {
 			Changes []catalog.Change
 		}
 	}
-	if code != 0 || json.Unmarshal([]byte(out), &report) != nil || len(report.Presets) != 1 || !report.Presets[0].Valid || report.Presets[0].Fits == nil || len(report.Presets[0].Changes) != 2 {
+	if code != 0 || json.Unmarshal([]byte(out), &report) != nil || len(report.Presets) != 1 || !report.Presets[0].Valid || report.Presets[0].Fits != nil || len(report.Presets[0].Changes) != 2 {
 		t.Fatalf("check --json: %s", out)
 	}
 	// An invalid file fails the check and names the reason; others still pass.

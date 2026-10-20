@@ -137,7 +137,7 @@ func TestLayoutCreationRenameAndRemovalNeedNoLetterShortcuts(t *testing.T) {
 
 func TestReviewArrowsReachDownloadsAndRetryWithoutSaving(t *testing.T) {
 	m := populatedPresetEditor(t)
-	m.page = 2
+	m.page = presetReviewPage
 	m.plan.CanPrepare = false
 	m.preview = func(_ context.Context, c setup.Configuration) (setup.Plan, error) {
 		return setup.Plan{Configuration: &c, CanPrepare: true}, nil
@@ -191,11 +191,11 @@ func TestReviewArrowsReachDownloadsAndRetryWithoutSaving(t *testing.T) {
 	}
 	m.Update(retry())
 	m.Update(tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
-	if m.page != 2 || m.Decision.Action != "" {
+	if m.page != presetReviewPage || m.Decision.Action != "" {
 		t.Fatal("Shift+Tab activated Back or saved without confirmation")
 	}
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if m.page != 1 || len(m.draft.Presets) != 2 {
+	if m.page != presetHarnessPage || len(m.draft.Presets) != 2 {
 		t.Fatal("Back discarded the draft")
 	}
 }

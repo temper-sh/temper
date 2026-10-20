@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/temper-sh/temper/internal/modelmemory"
 	templatepatch "github.com/temper-sh/temper/internal/patch"
 	"github.com/temper-sh/temper/internal/render/engine"
 	"github.com/temper-sh/temper/internal/software"
@@ -74,11 +75,12 @@ type File struct {
 // Artifact is exact model material. Its identity is its format and files;
 // every source serves the same paths with the same bytes.
 type Artifact struct {
-	Sources      []Source             `yaml:"sources" json:"sources"`
-	Format       string               `yaml:"format" json:"format"`
-	Files        []File               `yaml:"files" json:"files"`
-	License      string               `yaml:"license" json:"license"`
-	Presentation ArtifactPresentation `yaml:"presentation,omitempty" json:"presentation,omitempty"`
+	Sources       []Source               `yaml:"sources" json:"sources"`
+	Format        string                 `yaml:"format" json:"format"`
+	Files         []File                 `yaml:"files" json:"files"`
+	License       string                 `yaml:"license" json:"license"`
+	ContextMemory *modelmemory.Attention `yaml:"context_memory,omitempty" json:"context_memory,omitempty"`
+	Presentation  ArtifactPresentation   `yaml:"presentation,omitempty" json:"presentation,omitempty"`
 }
 
 // HuggingFace is the source this Temper downloads from.
@@ -195,18 +197,20 @@ type Preset struct {
 // Profile is one complete machine-dependent setting of a preset, chosen by
 // the Mac's memory. A lock keeps only the selected profile.
 type Profile struct {
-	MinMemoryGiB        int          `yaml:"min_memory_gib" json:"min_memory_gib"`
-	ContextWindowTokens int          `yaml:"context_window_tokens" json:"context_window_tokens"`
-	EngineConfig        EngineConfig `yaml:"engine_config" json:"engine_config"`
+	MinMemoryGiB        int                `yaml:"min_memory_gib" json:"min_memory_gib"`
+	ContextWindowTokens int                `yaml:"context_window_tokens" json:"context_window_tokens"`
+	EngineConfig        EngineConfig       `yaml:"engine_config" json:"engine_config"`
+	Memory              *MemoryMeasurement `yaml:"memory,omitempty" json:"memory,omitempty"`
 	// unreadable says why this Temper cannot use the profile; never serialized.
 	unreadable string
 }
 
 func (p *Profile) UnmarshalYAML(node *yaml.Node) error {
 	var value struct {
-		MinMemoryGiB        int          `yaml:"min_memory_gib"`
-		ContextWindowTokens int          `yaml:"context_window_tokens"`
-		EngineConfig        EngineConfig `yaml:"engine_config"`
+		MinMemoryGiB        int                `yaml:"min_memory_gib"`
+		ContextWindowTokens int                `yaml:"context_window_tokens"`
+		EngineConfig        EngineConfig       `yaml:"engine_config"`
+		Memory              *MemoryMeasurement `yaml:"memory,omitempty"`
 	}
 	*p = Profile{}
 	if err := decodeNode(node, &value); err != nil {
@@ -214,6 +218,7 @@ func (p *Profile) UnmarshalYAML(node *yaml.Node) error {
 		return nil
 	}
 	p.MinMemoryGiB, p.ContextWindowTokens, p.EngineConfig = value.MinMemoryGiB, value.ContextWindowTokens, value.EngineConfig
+	p.Memory = value.Memory
 	return nil
 }
 
@@ -376,6 +381,11 @@ func validateArtifact(id string, a Artifact) error {
 	if err := validateMaterial(id, a.Sources, a.Files, a.License, false); err != nil {
 		return err
 	}
+	if a.ContextMemory != nil {
+		if err := a.ContextMemory.Validate(); err != nil {
+			return err
+		}
+	}
 	if a.Format == "safetensors" && len(a.Files) == 2 && a.Files[0].Path == "config.json" && a.Files[1].Path == "model.safetensors" {
 		return nil
 	}
@@ -522,6 +532,11 @@ func (d Document) validatePreset(id string, p Preset) error {
 		}
 		if profile.EngineConfig.Kind != e.Adapter {
 			return errors.New("engine config does not match its adapter")
+		}
+		if profile.Memory != nil {
+			if err := profile.Memory.validate(); err != nil {
+				return fmt.Errorf("profile %d: %w", i, err)
+			}
 		}
 	}
 	if err := p.validateContext(); err != nil {

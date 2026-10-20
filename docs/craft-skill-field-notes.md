@@ -10,6 +10,85 @@ This is not a model-eval log, product evidence, or permission to change the
 skills repository. It creates no synthetic Temper work. A note may — and often
 should — conclude that no skill change is warranted.
 
+## Pi/PiG compaction targets, 2026-10-20
+
+Data modeling separated a chosen compaction target from actual model context,
+and retained each reviewed settings destination. Reliable effects placed
+ownership beside the token fields so clearing a target needed no separate
+receipt or crash reconciliation. Settings publication followed successful
+provider publication; ordinary activation repaired a partial file update.
+
+The compaction reconciliation tests covered preservation, unowned collisions,
+shared destinations, cleanup and clean reruns. Activation tests verified
+recovery without restarting an unchanged service; wizard tests verified
+explicit, revocable and shared choices. Full Go tests, vet and affected-package
+race checks passed. Native compaction quality and latency remained unmeasured.
+**No skill change warranted.**
+
+**Disposition:** the owner subsequently withdrew **Compact around** and asked
+to retain these Craft observations. Its control, saved fields, settings
+publication and dedicated tests were removed. Live client files had not been
+changed. Research and a deferred design question about layout-level policy
+remain in the workspace backlog. Passing implementation checks did not settle
+the appropriate policy scope. The retained model integrations pass full Go
+tests, vet and affected-package race checks after rollback.
+
+## Hermes integration, 2026-10-20
+
+Reliable effects kept the existing preflight/publication boundary while adding
+a YAML projection. Data modeling kept the visible provider name `temper`,
+root ownership and the saved profile destination separate. Checking upstream
+showed that unknown provider options produce warnings, so ownership lives in
+a provider-local comment; automatic discovery remains enabled by owner decision.
+
+The [adapter tests](../internal/harness/hermes_test.go) cover preservation,
+ownership conflicts and repeated activation. A shared
+[activation test](../internal/setupcmd/harness_test.go) caught invalid YAML
+when an ownership comment was inserted into a compact mapping. Managed
+mappings now use block form and the rendered document is validated before
+publication. Full Go tests, vet and affected-package race tests pass.
+Native Hermes/model execution remains untested. **No skill change warranted.**
+
+## Harness synchronization and memory accounting, 2026-10-20
+
+Data modeling separated the selected harness destination from environment-based
+discovery, and artifact geometry from executable identity and runtime
+measurements. Reliable effects made service readiness and each external file
+separate outcomes: a file failure stays visible and a retry repairs it without
+restarting a healthy service. Shared destinations are merged once; unrelated
+settings and authentication remain owned by the user.
+
+Review of Pi's picker and footer exposed a missed public surface: both display
+the provider key directly. The owner selected `temper`; root ownership remains
+separate and refuses another root's takeover. The [harness contract](contracts/harnesses.md)
+and collision tests now reflect that decision. This was a missed application
+of surface-first guidance, not a need for another skill rule.
+
+Testing kept arithmetic, metadata parsing, wizard edits and activation recovery
+at their respective boundaries. It caught a stale memory amount on wizard cards
+after context edits. The [harness](../internal/harness/harness_test.go),
+[activation](../internal/setupcmd/harness_test.go) and
+[memory](../internal/setup/memory_estimate_test.go) tests cover preservation,
+concurrent writers, cancellation, clean reruns, missing geometry and overlapping
+allocation envelopes. Full Go tests, vet and race checks pass; native client and
+model measurements remain separate. **No skill change warranted.**
+
+The owner's Splash wizard report then exposed a wrong oracle in the passing
+tests: the 24 GiB native ceiling had been treated as a required allocation.
+Retained 1.3.2 evidence instead measured 19.46 GiB loaded / 20.46 GiB peak engine
+footprint during short requests at a 112k allocation. Data modeling placed the
+reviewed measurement on the catalog profile with its exact tested execution,
+machine, counter and workload. Runtime edits invalidate applicability without
+rewriting historical evidence; missing measurements use estimation.
+
+Testing now checks that matching measurements replace estimates, edited
+executions fall back, and an allocation ceiling equal to the Metal budget does
+not itself refuse Splash. The audit also separated mapped-memory counter
+blind spots from genuinely low use, and earlier-engine measurements from current
+catalog facts. The research protocol owns future measurement recording and
+catalog handoff. These were missed applications of evidence and oracle guidance,
+not reasons to add a new Craft rule.
+
 ## First public schema reset and release preparation, 2026-10-04
 
 Data modeling kept the current v1 contracts separate from immutable historical

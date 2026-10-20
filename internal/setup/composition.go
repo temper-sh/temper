@@ -3,6 +3,7 @@ package setup
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -27,16 +28,18 @@ func (p Plan) MarshalJSON() ([]byte, error) {
 	assessments := map[string]any{}
 	for id, selected := range p.Configuration.Presets {
 		for _, m := range p.Presets {
-			if catalog.SameExecution(m.Lock, selected.Lock) {
+			if reflect.DeepEqual(m.Lock, selected.Lock) {
 				assessments[id] = struct {
 					Name                     string                `json:"name"`
 					Compute                  catalog.ComputeDevice `json:"compute"`
 					ModelBytes               int64                 `json:"model_bytes"`
 					RuntimeDiskEstimateBytes int64                 `json:"runtime_disk_estimate_bytes,omitempty"`
 					Memory                   budget.Prediction     `json:"memory_prediction"`
+					Estimate                 MemoryEstimate        `json:"memory_estimate"`
+					MemoryBytes              int64                 `json:"memory_bytes"`
 					WiredMemory              *WiredMemoryAdvice    `json:"wired_memory_advice,omitempty"`
 					Refusals                 []string              `json:"refusals,omitempty"`
-				}{selected.Name, selected.Lock.Records.Presets[selected.Lock.Preset].Compute, m.ModelBytes, m.RuntimeDiskEstimateBytes, m.Budget, m.WiredMemory, m.Refusals}
+				}{selected.Name, selected.Lock.Records.Presets[selected.Lock.Preset].Compute, m.ModelBytes, m.RuntimeDiskEstimateBytes, m.Budget, m.Memory, m.MemoryBytes, m.WiredMemory, m.Refusals}
 				break
 			}
 		}
@@ -54,6 +57,7 @@ type LayoutPlan struct {
 	StartupBytes       int64    `json:"startup_bytes"`
 	LargestPresetBytes int64    `json:"largest_preset_bytes"`
 	AllFit             bool     `json:"all_fit"`
+	MemoryIncomplete   bool     `json:"memory_incomplete"`
 	Refusals           []string `json:"refusals,omitempty"`
 }
 
@@ -81,6 +85,7 @@ func BuildConfiguration(root string, facts machine.Facts, free int64, c Configur
 				return p, err
 			}
 			estimate := one.MemoryBytes
+			assessment.MemoryIncomplete = assessment.MemoryIncomplete || len(one.Memory.Unknown) > 0
 			if err = add(&total, estimate); err != nil {
 				return p, err
 			}
@@ -90,7 +95,7 @@ func BuildConfiguration(root string, facts machine.Facts, free int64, c Configur
 				gpu = x.Compute == catalog.ComputeGPU
 			}
 			if gpu {
-				if err = add(&gpuTotal, estimate); err != nil {
+				if err = add(&gpuTotal, estimate-one.Memory.PromptCacheReserveBytes); err != nil {
 					return p, err
 				}
 			}
@@ -99,18 +104,18 @@ func BuildConfiguration(root string, facts machine.Facts, free int64, c Configur
 					return p, err
 				}
 				if gpu {
-					if err = add(&startupGPU, estimate); err != nil {
+					if err = add(&startupGPU, estimate-one.Memory.PromptCacheReserveBytes); err != nil {
 						return p, err
 					}
 				}
 			}
 		}
-		// These conservative lower bounds never claim measured KV/runtime fit.
+		// This is a scheduling allowance, not a measured simultaneous-fit claim.
 		physical := max(int64(0), facts.PhysicalMemoryBytes-budget.OSFloorMiB*MiB)
 		wired := max(int64(0), facts.WiredLimitMiB*MiB-budget.OSFloorMiB*MiB)
 		assessment.AllFit = total <= physical && gpuTotal <= wired
 		if assessment.StartupBytes > physical || startupGPU > wired {
-			assessment.Refusals = append(assessment.Refusals, "startup presets exceed the memory allowance (weights and declared engine caps); remove startup selections")
+			assessment.Refusals = append(assessment.Refusals, "startup presets exceed the memory allowance (measured peaks or fallback estimates); remove startup selections")
 		}
 		p.Layouts = append(p.Layouts, assessment)
 		for _, reason := range assessment.Refusals {
@@ -142,14 +147,18 @@ func (p Plan) configurationSections() []Section {
 			if x.Presentation.Description != "" {
 				lines = append(lines, x.Presentation.Description)
 			}
-			lines = append(lines, "Context fit is not measured; customization does not inherit a catalog performance claim.")
+			lines = append(lines, "Context capacity beyond the recorded workload is unverified; customization does not inherit a catalog performance claim.")
 		}
 		if refs := p.Configuration.References(id); len(refs) > 0 {
 			lines = append(lines, "Used by: "+strings.Join(refs, ", "))
 		}
 		for _, m := range p.Presets {
-			if catalog.SameExecution(m.Lock, selected.Lock) && m.RuntimeDiskEstimateBytes > 0 {
-				lines = append(lines, "Splash first-start weight cache: roughly another "+Size(m.RuntimeDiskEstimateBytes)+", plus 2 GiB free; additional to installation totals. Splash checks exact space before conversion.")
+			if reflect.DeepEqual(m.Lock, selected.Lock) {
+				lines = append(lines, m.Memory.Lines()...)
+				if m.RuntimeDiskEstimateBytes > 0 {
+					lines = append(lines, "Splash first-start weight cache: roughly another "+Size(m.RuntimeDiskEstimateBytes)+", plus 2 GiB free; additional to installation totals. Splash checks exact space before conversion.")
+				}
+				break
 			}
 		}
 		sections = append(sections, Section{Title: "Preset · " + id, Lines: lines})
@@ -159,7 +168,10 @@ func (p Plan) configurationSections() []Section {
 		if def == "" {
 			def = "none"
 		}
-		lines := []string{"Included: " + strings.Join(l.Layout.Presets, ", "), "Load on activation: " + strings.Join(l.Layout.Startup, ", "), "Default model: " + def, LayoutMemory(l) + " Counts weights and declared caps; KV cache and runtime overhead are not measured.", fmt.Sprintf("Idle unload after %d seconds; preload does not pin residency.", l.Layout.IdleSeconds)}
+		lines := []string{"Included: " + strings.Join(l.Layout.Presets, ", "), "Load on activation: " + strings.Join(l.Layout.Startup, ", "), "Default model: " + def, LayoutMemory(l), fmt.Sprintf("Idle unload after %d seconds; preload does not pin residency.", l.Layout.IdleSeconds)}
+		if l.MemoryIncomplete {
+			lines = append(lines, "Total runtime fit remains unknown; see each preset's measurement limits or estimated and unknown components.")
+		}
 		if !l.AllFit {
 			lines = append(lines, "Competing on-demand models use exclusive swapping; a request finishes before eviction.")
 		}
@@ -170,6 +182,14 @@ func (p Plan) configurationSections() []Section {
 			sections = append(sections, m.WiredMemory.Section())
 		}
 	}
+	harnesses := []string{"None selected. Harness files will not be changed."}
+	if len(p.Configuration.Integrations) > 0 {
+		harnesses = []string{"Layout activation synchronizes the included chat models. Saving alone does not change these files."}
+		for _, integration := range p.Configuration.Integrations {
+			harnesses = append(harnesses, integration.ID+" · "+integration.ModelsFile)
+		}
+	}
+	sections = append(sections, Section{Title: "Harnesses", Lines: harnesses})
 	var splash int64
 	for _, m := range p.Presets {
 		splash += m.RuntimeDiskEstimateBytes
@@ -194,7 +214,7 @@ func (p Plan) configurationSections() []Section {
 // LayoutMemory says what a layout needs at start and at most for one preset.
 func LayoutMemory(l LayoutPlan) string {
 	if l.StartupBytes == 0 {
-		return "Memory: nothing loads at start; the largest preset needs at least " + Size(l.LargestPresetBytes) + " when used."
+		return "Memory allowance: nothing loads at start; the largest preset accounts for " + Size(l.LargestPresetBytes) + " when used."
 	}
-	return "Memory: at least " + Size(l.StartupBytes) + " at start; the largest preset needs at least " + Size(l.LargestPresetBytes) + "."
+	return "Memory allowance: " + Size(l.StartupBytes) + " accounted at start; the largest preset accounts for " + Size(l.LargestPresetBytes) + "."
 }

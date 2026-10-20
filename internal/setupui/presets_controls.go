@@ -24,7 +24,7 @@ func (m *PresetModel) footerButtons() []presetButton {
 	if m.field != "" {
 		return []presetButton{button("Apply", "Apply", "apply", true), button("Cancel", "Cancel", "cancel-edit", true)}
 	}
-	if m.page == 2 {
+	if m.page == presetReviewPage {
 		install := "Install and start"
 		switch {
 		case m.reviewReady && !m.loading && !m.plan.CanPrepare:
@@ -47,9 +47,15 @@ func (m *PresetModel) footerButtons() []presetButton {
 	} else if m.layout != "" {
 		next, short = "Done →", "Done →"
 	} else {
+		next, short = "Next: Harnesses →", "Next →"
+	}
+	if m.page == presetHarnessPage {
 		next, short = "Review →", "Review →"
 	}
 	buttons := []presetButton{button(back, back, "back", true), {next, short, true, hitTarget{kind: hitNext}}}
+	if m.page == presetHarnessPage {
+		return buttons
+	}
 	selected := m.cursor >= 0 && m.cursor < m.count()
 	switch {
 	case m.page == 0:
@@ -83,7 +89,7 @@ func (m *PresetModel) navigationButton(back bool) int {
 		}
 		return 0
 	}
-	if m.page == 2 {
+	if m.page == presetReviewPage {
 		// Install, unless the finished check says it cannot run: then Back.
 		if back || m.installRefused() {
 			return 2
@@ -109,7 +115,7 @@ func (m *PresetModel) focusArea(area presetFocus) {
 		} else {
 			m.text.Blur()
 		}
-	} else if m.page == 2 && area == presetContentFocus {
+	} else if m.page == presetReviewPage && area == presetContentFocus {
 		m.focusDownloads = true
 	}
 }
@@ -118,7 +124,7 @@ func (m *PresetModel) contentRows() int {
 	if m.field != "" {
 		return 1
 	}
-	if m.page == 2 {
+	if m.page == presetReviewPage {
 		if m.reviewReady && !m.loading && m.reviewErr == nil {
 			for _, section := range m.plan.Sections() {
 				if section.Downloads != nil {
@@ -211,7 +217,7 @@ func (m *PresetModel) activateFocused() tea.Cmd {
 		if m.field != "" {
 			return m.activateShortcut("apply")
 		}
-		if m.page == 2 {
+		if m.page == presetReviewPage {
 			if m.contentRows() > 0 {
 				m.downloadsOpen = !m.downloadsOpen
 				m.focusDownloads = true

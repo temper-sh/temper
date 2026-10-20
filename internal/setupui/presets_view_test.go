@@ -186,7 +186,7 @@ func TestPresetEditorScreensFitAndKeepNavigationVisible(t *testing.T) {
 					m.page = 1
 					m.edit("rename", strings.Repeat("長い名前", 30))
 				case "review", "downloads", "error":
-					m.page = 2
+					m.page = presetReviewPage
 					m.downloadsOpen = screen == "downloads"
 					if screen == "error" {
 						m.reviewReady = false
@@ -325,7 +325,7 @@ func TestPresetCardsScrollWithoutMovingControlsOrSnappingBack(t *testing.T) {
 
 func TestPresetReviewScrollAndDownloadDisclosureKeepActionsVisible(t *testing.T) {
 	m := populatedPresetEditor(t)
-	m.page = 2
+	m.page = presetReviewPage
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 28})
 	view := ansi.Strip(m.View().Content)
 	if strings.Contains(view, m.plan.Downloads[0].Name) || !strings.Contains(view, "Downloads (1 file)") {
@@ -349,7 +349,7 @@ func TestPresetReviewScrollAndDownloadDisclosureKeepActionsVisible(t *testing.T)
 		t.Fatal("action navigation changed scroll or confirmed a choice")
 	}
 	clickPresetText(t, m, "Back")
-	if m.page != 1 || len(m.draft.Presets) != 2 {
+	if m.page != presetHarnessPage || len(m.draft.Presets) != 2 {
 		t.Fatal("review Back discarded selections")
 	}
 }
@@ -379,7 +379,7 @@ func TestPresetFormsKeepInvalidValueAndAcceptPastedNames(t *testing.T) {
 
 func TestPresetPreviewCannotCommitWhilePendingOrAfterResize(t *testing.T) {
 	m := populatedPresetEditor(t)
-	m.page, m.loading, m.reviewReady = 2, true, false
+	m.page, m.loading, m.reviewReady = presetReviewPage, true, false
 	clickPresetText(t, m, "Save without installing")
 	if m.Decision.Action != "" {
 		t.Fatal("pending preview allowed saving")
@@ -400,14 +400,16 @@ func TestPresetPreviewCannotCommitWhilePendingOrAfterResize(t *testing.T) {
 
 func TestPresetPreviewBackDiscardsStaleResultAndRetries(t *testing.T) {
 	m := populatedPresetEditor(t)
-	m.page = 1
+	m.page = presetHarnessPage
 	m.preview = func(_ context.Context, c setup.Configuration) (setup.Plan, error) {
 		return setup.Plan{Configuration: &c, CanPrepare: true}, nil
 	}
 	m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	_, first := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
-	editorKey(m, 'x') // Editing after cancelling must not mutate the preview's snapshot.
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc}) // Back through Harnesses to Layouts.
+	editorKey(m, 'x')                           // Editing must not mutate the preview's snapshot.
+	m.advance()                                 // Harnesses.
 	m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	_, second := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	old := first().(compositionPreview)

@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/catalog/distribution"
 	"github.com/temper-sh/temper/internal/cleanup"
+	"github.com/temper-sh/temper/internal/harness"
 	"github.com/temper-sh/temper/internal/hfcache"
 	"github.com/temper-sh/temper/internal/machine"
 	"github.com/temper-sh/temper/internal/managed"
@@ -53,13 +55,21 @@ type Command struct {
 	Effects preset.Effects
 	// Start activates a saved layout after an install; nil uses the managed
 	// router. Tests replace it so they never reach launchd.
-	Start func(ctx context.Context, root, layout string) (*managed.Job, *managed.Status, error)
+	Start      func(ctx context.Context, root, layout string) (*managed.Job, *managed.Status, error)
+	Harnesses  func() ([]harness.Option, error)
+	Controller func(string, *managed.Job, managed.State) managed.Controller
 	// Remover releases software installations for temper cleanup.
 	Remover cleanup.Remover
 }
 
 func New(detect func(context.Context) (machine.Facts, error), effects preset.Effects) Command {
-	return Command{Downloader: hfcache.CheckClient, Detect: detect, Disk: setup.FreeDisk, Home: os.UserHomeDir, Catalog: readCatalog, Newest: newestCatalog, Resolve: newSoftwareResolver(), Effects: effects}
+	return Command{Downloader: hfcache.CheckClient, Detect: detect, Disk: setup.FreeDisk, Home: os.UserHomeDir, Catalog: readCatalog, Newest: newestCatalog, Resolve: newSoftwareResolver(), Effects: effects, Harnesses: func() ([]harness.Option, error) {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return nil, err
+		}
+		return harness.Discover(home, os.Getenv, exec.LookPath)
+	}}
 }
 
 type stringsFlag []string
@@ -114,9 +124,13 @@ func newSoftwareResolver() SoftwareResolver {
 	}
 }
 
-func (c Command) start(ctx context.Context, root, layout string) (*managed.Job, *managed.Status, error) {
+func (c Command) start(ctx context.Context, root, layout string) (*managed.Job, *LayoutStatus, error) {
 	if c.Start != nil {
-		return c.Start(ctx, root, layout)
+		before, status, err := c.Start(ctx, root, layout)
+		if status == nil {
+			return before, nil, err
+		}
+		return before, &LayoutStatus{Status: *status}, err
 	}
 	return c.activate(ctx, root, layout, "", false)
 }
@@ -164,10 +178,11 @@ func (c Command) startAfterInstall(ctx context.Context, root string, configurati
 	}
 	result["layout"] = started
 	if !jsonOutput {
-		if err != nil {
-			fmt.Fprintf(out, "Layout %s did not start: %v\nStart it later with: temper layout activate %s\n", id, err, id)
-		} else if status != nil {
+		if status != nil {
 			c.renderLayoutResult(out, root, "activate", id, false, before, *status)
+		}
+		if err != nil {
+			fmt.Fprintf(out, "Layout %s activation incomplete: %v\nRetry with: temper layout activate %s\n", id, err, id)
 		}
 	}
 	return err == nil
@@ -194,10 +209,11 @@ func (c Command) restartAfterUpdate(ctx context.Context, root string, configurat
 	}
 	result["layout"] = restarted
 	if !jsonOutput {
-		if err != nil {
-			fmt.Fprintf(out, "Layout %s still runs the previous version: %v\nRestart it later with: temper layout activate %s\n", job.Layout, err, job.Layout)
-		} else if status != nil {
+		if status != nil {
 			c.renderLayoutResult(out, root, "restart", job.Layout, false, before, *status)
+		}
+		if err != nil {
+			fmt.Fprintf(out, "Layout %s update activation incomplete: %v\nRetry with: temper layout activate %s\n", job.Layout, err, job.Layout)
 		}
 	}
 	return err == nil

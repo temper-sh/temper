@@ -13,13 +13,20 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/temper-sh/temper/internal/catalog"
+	"github.com/temper-sh/temper/internal/harness"
 	"github.com/temper-sh/temper/internal/setup"
+)
+
+const (
+	presetHarnessPage = 2
+	presetReviewPage  = 3
 )
 
 type PresetOption struct {
 	ID, Name, Model, Weights, Engine, Description, AssessmentURL, Tier, Details, Unavailable string
 	ModelBytes                                                                               int64
-	MemoryBytes                                                                              int64 // lower bound for running it on this Mac
+	MemoryBytes                                                                              int64 // accounted estimate; total runtime fit remains unknown
+	MemoryBasis                                                                              string
 	// Group and Section place the preset in a tab and under a heading.
 	Group, Section string
 	// Choices are the user's saved settings for this preset.
@@ -46,6 +53,7 @@ type PresetInput struct {
 	Configuration    setup.Configuration
 	NewConfiguration bool
 	Assess           func(catalog.Lock) (setup.PresetPlan, error)
+	Harnesses        []harness.Option
 }
 type PresetDecision struct {
 	Configuration setup.Configuration
@@ -130,6 +138,8 @@ func (m *PresetModel) visible() []PresetOption {
 			if selected, ok := m.draft.Presets[p.ID]; ok {
 				if assessment, ok := m.assessments[p.ID]; ok && catalog.SameExecution(assessment.Lock, selected.Lock) {
 					p.ModelBytes = assessment.ModelBytes
+					p.MemoryBytes = assessment.MemoryBytes
+					p.MemoryBasis = assessment.Memory.Basis
 					p.Unavailable = strings.Join(assessment.Refusals, "; ")
 				}
 			}
@@ -224,6 +234,9 @@ func (m *PresetModel) selectedOption() (PresetOption, bool) {
 	return rows[m.cursor], true
 }
 func (m *PresetModel) count() int {
+	if m.page == presetHarnessPage {
+		return len(m.harnessOptions())
+	}
 	if m.page == 0 {
 		return len(m.visible())
 	}
@@ -245,6 +258,10 @@ func (m *PresetModel) edit(field, value string) tea.Cmd {
 }
 
 func (m *PresetModel) toggleMember() {
+	if m.page == presetHarnessPage {
+		m.toggleHarness()
+		return
+	}
 	if m.page == 0 {
 		p, ok := m.selectedOption()
 		if !ok {

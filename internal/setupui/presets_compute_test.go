@@ -11,9 +11,84 @@ import (
 	"github.com/temper-sh/temper/internal/budget"
 	"github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/machine"
+	"github.com/temper-sh/temper/internal/modelmemory"
 	"github.com/temper-sh/temper/internal/setup"
 	"github.com/temper-sh/temper/internal/software"
 )
+
+func TestMeasuredCardFallsBackAfterContextEditAndRecoversAtTestedContext(t *testing.T) {
+	m := presetEditor(t, "qwen3.8-27b-q4xl-splash")
+	option := &m.input.Presets[0]
+	observed := machine.Facts{Schema: machine.FactsSchemaV1, Target: software.Target{OS: "darwin", Arch: "arm64", Distribution: "macos", DistributionVersion: "26.6"},
+		HardwareModel: "MacTest,1", Chip: "Apple M5", OSBuild: "fixture", PhysicalMemoryBytes: 32 << 30,
+		MetalDeviceMemoryMiB: 24 * 1024, MetalDeviceMemorySource: machine.MetalDeviceSourceLive,
+		WiredLimitMiB: 24 * 1024, WiredLimitSource: budget.WiredSourceMetal}
+	p := option.Lock.Records.Presets[option.Lock.Preset]
+	window := p.Window()
+	p.Profiles[0].Memory = &catalog.MemoryMeasurement{
+		ObservedOn: "2026-10-20", Source: "https://example.com/assessment", Workload: "Fixture workload",
+		Counter: "engine-physical-footprint", PeakBytes: 20 << 30, Limitations: "Fixture observation; loaded sample missing.",
+		Machine: catalog.MemoryMachine{Chip: observed.Chip, PhysicalMemoryBytes: observed.PhysicalMemoryBytes,
+			MetalMemoryMiB: observed.MetalDeviceMemoryMiB, OS: "macOS 26.6"},
+		Execution: option.Lock.MemoryExecution(),
+	}
+	option.Lock.Records.Presets[option.Lock.Preset] = p
+	m.input.Assess = func(l catalog.Lock) (setup.PresetPlan, error) { return setup.Assess(l, observed) }
+	initial, err := m.input.Assess(option.Lock)
+	if err != nil || len(initial.Refusals) != 0 {
+		t.Fatal(initial.Refusals, err)
+	}
+	option.MemoryBytes, option.MemoryBasis = initial.MemoryBytes, initial.Memory.Basis
+	m.group = option.Group
+	editorKey(m, ' ')
+	for _, step := range []struct {
+		context int
+		basis   string
+		label   string
+	}{
+		{window / 2, "estimated", "Memory estimate"},
+		{window, "measured", "Measured peak"},
+	} {
+		editorKey(m, 'c')
+		m.text.SetValue(fmt.Sprint(step.context))
+		m.acceptEdit()
+		visible := m.visible()[0]
+		if visible.MemoryBasis != step.basis || visible.Unavailable != "" {
+			t.Fatal("card kept a stale basis or refusal", visible.MemoryBasis, visible.Unavailable, m.notice)
+		}
+		if view := ansi.Strip(m.View().Content); !strings.Contains(view, step.label) {
+			t.Fatal("card did not explain its selected memory", view)
+		}
+	}
+}
+
+func TestContextEditRefreshesTheVisibleCacheEstimate(t *testing.T) {
+	m := presetEditor(t, "qwen3.5-4b-q4km-off")
+	option := &m.input.Presets[0]
+	p := option.Lock.Records.Presets[option.Lock.Preset]
+	a := option.Lock.Records.Artifacts[p.Artifact]
+	a.ContextMemory = &modelmemory.Attention{Kind: "full-attention/v1", Architecture: "qwen3", Layers: 32, KVHeads: 8, KeyLength: 128, ValueLength: 128}
+	option.Lock.Records.Artifacts[p.Artifact] = a
+	observed := machine.Facts{Schema: machine.FactsSchemaV1, Target: software.Target{OS: "darwin", Arch: "arm64", Distribution: "macos", DistributionVersion: "26.6"}, HardwareModel: "Test,1", Chip: "Apple M5", OSBuild: "test",
+		PhysicalMemoryBytes: 64 << 30, MetalDeviceMemoryMiB: 48 * 1024, MetalDeviceMemorySource: machine.MetalDeviceSourceLive, WiredLimitMiB: 48 * 1024, WiredLimitSource: budget.WiredSourceMetal}
+	m.input.Assess = func(l catalog.Lock) (setup.PresetPlan, error) { return setup.Assess(l, observed) }
+	m.group = option.Group
+	editorKey(m, 'c')
+	m.text.SetValue("4096")
+	m.acceptEdit()
+	before := m.visible()[0].MemoryBytes
+	editorKey(m, 'c')
+	m.text.SetValue("32768")
+	m.acceptEdit()
+	after := m.visible()[0].MemoryBytes
+	if before == 0 || after <= before {
+		t.Fatal("context edit left stale card memory", before, after, m.notice)
+	}
+	view := ansi.Strip(m.View().Content)
+	if !strings.Contains(view, setup.Size(after)) || !strings.Contains(view, "Total fit unknown") {
+		t.Fatal(view)
+	}
+}
 
 func TestComputeEditRefreshesMemoryAndSurvivesOtherEdits(t *testing.T) {
 	m := presetEditor(t, "qwen3.8-27b-q4xl-splash", "nuextract3-q4km-llama")
