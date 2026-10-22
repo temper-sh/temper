@@ -10,6 +10,148 @@ This is not a model-eval log, product evidence, or permission to change the
 skills repository. It creates no synthetic Temper work. A note may — and often
 should — conclude that no skill change is warranted.
 
+## User choices instead of a schema editor, 2026-10-22
+
+The owner rejected an Advanced category: fields must represent useful choices
+the user can make. Unit design kept that UI projection in `presetcmd`, separate
+from the complete file/command field table. Technical values remain preserved;
+the UI derives IDs and formats, omits fixed or inapplicable controls and groups
+dependent speculation/reasoning values behind their meaningful choice. Runtime
+tuning remains in ordinary sections.
+
+[Editor stories](../internal/presetcmd/editor_fields_test.go) cover generated-name
+collisions, non-Latin names, omitted reranker/Splash controls, valid speculation
+off/on changes, preserved Python compatibility metadata and Rapid reasoning
+across saves. These checks exercise authoring outcomes rather than field counts.
+Full offline Go tests, vet, affected-package race checks and actual narrow/wide
+renders cover the delivery. **No skill change warranted.**
+
+## Preset information reduction correction, 2026-10-22
+
+The first shared-component delivery deferred field reduction despite the prior
+owner decision and added a full-help screen. The owner corrected both. The
+editor now uses contextual footer hints, source-specific forms, generated
+material IDs, read-only provenance and markers only for explicit overrides.
+Revision, format and transform remain available under source options.
+
+Data modeling's partial-data guidance kept absent source license metadata
+explicit as “Not declared by source” in local authoring; it is neither a
+permission claim nor an import refusal. [Source-switching and missing-metadata
+tests](../internal/presetcmd/editor_material_test.go) exercise the actual editor
+through Save, retaining the draft boundary.
+Full offline Go tests, vet and affected-package race checks pass; actual renders
+cover narrow forms and both color profiles. This was a failure to apply settled
+scope, not a missing craft rule. **No skill change warranted.**
+
+## Shared terminal components, 2026-10-22
+
+The accepted HTML study now supplies the shared frame, palettes, breadcrumbs,
+secondary navigation, buttons and help in `internal/tui`. Code organization
+kept these renderers in the existing UI package, with the preset manager/editor
+as the first consumer. Unit design kept focus, editing and guarded actions with
+the tool; value inputs describe what to render without a shared flow engine.
+
+Outcome tests caught a long file path hiding a save-conflict reason and narrow
+breadcrumbs truncating a short current location unnecessarily. Navigation
+checks preserve drafts, invoke the existing save boundary and restore the
+previous section when returning from a nested form. Actual renders cover
+40/80/112 columns, 24/32 rows and true-color/256-color profiles. An isolated
+terminal dry run exercised validation, help and the unsaved-draft guard while
+leaving its authoring root absent. Full offline Go tests, vet and affected-package
+race checks pass. Content and remaining action design, plus the layout editor's
+interaction/save contract, remain open. **No skill change warranted.**
+
+## Shared terminal visual design, 2026-10-21
+
+The first visual draft explored a shared
+[element/state color table](../internal/tui/theme.go) across the two working
+TUIs. Code organization kept colors and text input together while leaving
+navigation and geometry with each screen. Unit design made focus and selection
+independent authored states. The owner retained the scratch direction but
+found that it reduced accents too much, and clarified that the design must
+also cover the separate layout editor before changing the wizard.
+
+The wizard's original appearance is restored, with its original colors supplied
+to the shared input helper. All 54 retained wizard reference frames match
+exactly; the first scratch gallery is unchanged. Further exploration uses
+isolated view overrides and proposed layout renderers in scratch. This keeps
+visual exploration separate from product implementation; a proposed layout
+screen does not settle its interaction/save contract.
+
+Actual renderer output exposed both excessive inheritance lines in the editor
+and unstyled spaces interrupting a focused background. Wide fields now align
+labels, values and inheritance; narrow fields retain all three in stacked rows.
+The local before/after gallery covers 112/80/40 columns and true-color/256-color
+profiles, including loading, input errors and failed previews. Existing
+navigation, license-link, cancellation, save and viewport tests remain applicable.
+Full Go tests, vet and affected-package race checks passed, including after
+restoring the wizard. The three-tool design remains under review;
+**no skill change warranted**.
+
+## Revocable preset authoring, 2026-10-21
+
+Unit design kept the editor's draft separate from selected execution locks and
+layout membership. Code organization reused catalog field descriptions, the
+compiler, memory assessment and installation planner; the scripted commands
+and editor share metadata reads, and setup shares the text input control.
+These existing units supplied the authoring workflow without a new preset
+schema or layout-specific settings mechanism.
+
+Reliable effects placed publication in `userpreset`: a byte comparison, a
+short writer lock and one staged atomic publication. The
+[effect-boundary tests](../internal/userpreset/store_test.go) cover dry runs,
+cancellation, stale files, competing writers, clean repeats and deletion that
+preserves shared material. The documented external-editor race remains an
+optimistic-edit limitation; the lock serializes Temper writers.
+
+[Editor stories](../internal/presetcmd/editor_test.go) verify real key messages,
+draft preservation, reset/conversion, pinned metadata, cancelled reads and
+unchanged configuration/locks. They caught the file picker's incorrect Space
+key name. Actual renders at 112/80/40 columns exposed mid-word wrapping, which
+was corrected; an isolated PTY dry run left its root absent. Full offline Go
+tests, vet and race checks passed. This verifies authoring, not model behavior
+or the remaining layout integration. **No skill change warranted.**
+
+## Specialized tools enable richer composition, 2026-10-21
+
+**Owner observation during the 0.4.0 editor design:** narrow, specialized tools
+and meaningful abstractions can later combine into something more powerful
+than keeping their responsibilities together. Separation creates opportunities
+for new uses as well as making existing work easier to understand.
+
+Presets describe model configurations; layouts compose them for particular
+work. The proposed preset editor owns authoring a variant, while the layout
+editor owns the explicit decision to use it: add it, replace another preset,
+or build a new composition. The wizard combines those capabilities into a
+simple initial setup. Users can move from that guided path to the specialized
+tools as their needs grow. Saving a custom preset does not silently place it
+in a layout.
+
+The discussion initially missed an abstraction already present:
+[user presets](contracts/user-presets.md#two-forms-fork-and-copy) express
+customization through forks (catalog origin plus overrides) and independent
+copies. They can supply different model settings to different layouts without
+inventing another mechanism for overriding preset settings inside a layout.
+This is a missed opportunity to reuse an existing abstraction.
+
+The owner suggested a possible motivation: avoiding many nearly identical
+presets in the UI. That usability concern is a hypothesis about the earlier
+reasoning. A later integration convention could hide presets created for a
+layout from general pickers while exposing them where they are used. Such a
+convention can smooth the composed workflow without changing what a preset
+means; its implementation is not selected here. Settings unrelated to a preset,
+such as layout-specific harness policy, can still have their own home outside
+the preset.
+
+**Craft handoff:** retain this as candidate emphasis for `code-organization`
+and `unit-design`: assess a boundary by the useful combinations it enables,
+alongside responsibility and dependency isolation. Check whether existing
+abstractions already express the customization before adding another settings
+mechanism; integration conventions can address presentation concerns while
+unrelated policies retain separate ownership. This is an owner-led design
+observation; the editor flows and their usability remain to be implemented and
+verified. **Disposition: recorded for Craft review; skills unchanged.**
+
 ## Native reasoning budgets and Gemma adoption, 2026-10-20
 
 Data modeling kept omission, unrestricted thinking (`-1`) and immediate end

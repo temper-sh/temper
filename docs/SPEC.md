@@ -31,6 +31,14 @@ The [output-default contract](contracts/execution-lock.md#settings-and-evidence)
 owns omission, request overrides and engine-specific support. Saved limits and
 historical measurements retain their producing settings.
 
+User preset authoring lives in `temper preset`, with direct entry through
+`temper preset edit ID`. Forks track a catalog origin plus explicit overrides;
+copies own their values. The editor keeps a revocable draft, validates through
+the compiler and saves one authoring file with a concurrent-edit guard. Saving
+does not select a preset, change layout membership or rebuild an exact lock.
+The [user-preset contract](contracts/user-presets.md#interactive-authoring)
+owns navigation, reset/conversion, weights/template lookup and save/delete behavior.
+
 Pre-release schema aliases, migrations, historical hash shims and predicted
 machine-facts formats are unsupported. Historical signed publications and
 measurements retain their exact bytes and producing host. Older terminology

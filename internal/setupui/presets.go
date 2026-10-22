@@ -11,10 +11,10 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 	"github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/harness"
 	"github.com/temper-sh/temper/internal/setup"
+	"github.com/temper-sh/temper/internal/tui"
 )
 
 const (
@@ -113,15 +113,7 @@ func NewPresetModel(ctx context.Context, input PresetInput, preview func(context
 	// Clone at the edit boundary; cancel must not modify caller-owned selections.
 	raw, _ := input.Configuration.Bytes()
 	draft, _ := setup.ParseConfiguration(raw)
-	t := textinput.New()
-	t.CharLimit = 160
-	t.Prompt = "› "
-	t.SetVirtualCursor(true)
-	styles := textinput.DefaultDarkStyles()
-	styles.Focused.Text = lipgloss.NewStyle().Foreground(colorText)
-	styles.Focused.Prompt = lipgloss.NewStyle().Foreground(colorMuted)
-	styles.Cursor.Color, styles.Cursor.Blink = actionColors.Name[0], false
-	t.SetStyles(styles)
+	t := tui.TextInput(160, colorText, colorMuted, actionColors.Name[0])
 	if ctx == nil {
 		ctx = context.Background()
 	}

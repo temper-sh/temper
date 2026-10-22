@@ -16,8 +16,11 @@ ROOT/
 └─ catalog/ …            the signed catalog
 ```
 
-Make them with `temper preset fork` or `temper preset copy`, edit them by hand,
-and check them with `temper preset check`. Build an execution lock with
+Open `temper preset` to create, fork, copy, edit or check your presets. The
+editor keeps a draft until you explicitly save it. `temper preset edit ID`
+opens an existing file directly. The scripted `fork`, `copy`, `check`,
+`weights` and `template` commands remain available, and you can still edit
+the files by hand. Build an execution lock with
 `temper catalog compile --root ROOT --preset ID`, then use the
 [execution commands](execution-runtime.md) to prepare and serve it. In this
 version, `temper init`, `temper configure` and `temper update` do not list
@@ -26,7 +29,7 @@ your presets.
 ```sh
 temper catalog update --root ~/.temper
 temper preset fork qwen3.8-27b-q4xl-mtp qwen-cool --name "Qwen, cooler sampling"
-# edit ~/.temper/presets.d/qwen-cool.json
+temper preset edit qwen-cool
 temper preset check qwen-cool
 temper catalog compile --root ~/.temper --preset qwen-cool --target darwin/arm64 --out qwen-cool.lock.json
 ```
@@ -42,6 +45,127 @@ temper catalog compile --root ~/.temper --preset qwen-cool --target darwin/arm64
 
 Stability comes from the lock either way: a lock never changes, and each
 compile writes a new one.
+
+## Interactive authoring
+
+`temper preset` opens the preset manager in a terminal. `temper preset edit ID`
+opens one of your files directly. Both accept `--root PATH`, `--memory-gib N`
+and `--dry-run`. Without terminal input and output they report how to use the
+scripted commands and exit 2; they never launch an external editor. The existing
+scripted commands, including their JSON output, keep their behavior.
+
+The manager separates **Yours** from **Catalog**. Yours includes invalid files
+with their error, rather than hiding them or preventing other files from opening.
+Catalog entries are sources to fork or copy, never editable in place. A new
+preset starts from an explicitly chosen catalog preset: fork it for tuning, or
+copy it as a starting point for an independent model. Copy also accepts one of
+your presets. Choose a name; Temper derives the file ID and adds a numeric
+suffix when it is already used. Opening or abandoning this draft creates no
+file. IDs stay fixed when editing an
+existing file; use Copy for a new ID.
+
+The editor uses **General**, **Sampling**, **Engine**, **Speculation** and
+**Review** sections, omitting sections without applicable controls. It exposes
+useful user choices from the field table used by `preset fields`; there is no
+Advanced category. Model context ceilings, parser identifiers, template
+transforms, weights format and fixed engine parameters remain owned by the
+source/configuration rather than editable raw fields. Fixed compute choices and
+inapplicable generation controls are hidden. Existing metadata and profiles are preserved;
+profile settings edit the profile selected for the displayed memory size.
+Changing engine families starts from a copy of a preset for that engine.
+
+The shared terminal frame shows `Presets` and the current preset as breadcrumbs,
+with editing sections in a centered secondary row. Narrow terminals keep the
+selected section visible and mark hidden choices with chevrons. Tab and
+Shift-Tab move focus between the content, footer actions, ancestor breadcrumbs
+and secondary navigation. Left/right move within the focused navigation or
+action row; Enter activates the choice. Returning through a breadcrumb uses
+the same unsaved-draft guard as Escape. The compact footer shows shortcuts for
+the current context; there is no separate help screen.
+
+- With content focused, up/down move between fields and left/right move between sections. Enter
+  opens a field; Enter accepts the input and Escape cancels that input.
+- Fork fields mark explicit overrides, even when an override equals today's
+  origin. Unmarked values follow the origin; its value is shown for an override. Reset removes
+  that override so the next compile inherits again. Copies reset a field to
+  its value when the editor opened; they have no implicit catalog inheritance.
+- Type errors stay beside the input. Validly typed but incompatible combinations
+  may remain in the draft so related settings can be changed together. Check,
+  Review and Save use the existing compiler. Invalid drafts cannot be saved.
+  A syntactically unreadable existing file can be inspected or deleted in the
+  manager; repair its syntax by hand before opening the form.
+- Review shows validation, changes, the shared memory assessment and a read-only
+  installation plan. Unknown memory and unavailable disk estimates say so.
+  Admission refusals do not make an authored preset invalid: it may target a
+  different machine. Authoring never establishes quality or speed evidence.
+- Saving is explicit. Escape/back or Quit from a changed draft offers **Keep
+  editing**, **Discard**, or **Save**; Keep editing is the default. Ctrl-C
+  discards the unsaved draft and exits. Successful saves return to the manager.
+
+### Weights and templates in a draft
+
+Weights opens a Hugging Face repository form, then a file picker at
+the resolved commit. Only an explicit lookup accesses the network. Loading,
+failure, retry and cancellation are visible; existing settings remain usable
+offline. Selecting files uses the same size, SHA-256, license and bounded GGUF
+header reads as `preset weights`. Small files may be downloaded for hashing;
+the editor does not download model weights or install anything. Record IDs are
+generated. License metadata is read from the source; missing metadata is
+recorded as **Not declared by source**, without blocking local authoring or
+implying any license grant. Revision is directly editable; weights format is
+derived from the engine. Source identities and license metadata remain in
+read-only details.
+
+A fork's replacement weights must be another build of its origin model. The
+picker offers that explicit same-model assertion, or **Convert to copy** for a
+different model. Conversion freezes the draft's resolved values and records
+before changing weights; it is revocable until Save. No same-model assertion
+is inferred across repositories. The existing same-repository inference remains.
+Copies can select any compatible weights. Template authoring supports the model's
+builtin template, a local file in `presets.d`, and a Hugging Face file, using
+the existing template helper. The form shows only the fields for that source:
+none for builtin, a file for local, and repository/revision/file for Hugging Face.
+An existing template's transform stays attached to that source; a different
+source does not inherit an unrelated patch. There is no raw transform field.
+Choosing a source ignores values retained for inactive sources. Existing record
+references remain supported by the file/command interface. These actions change
+only the in-memory draft.
+
+Speculation offers configurations already declared for the selected weights
+and engine, plus Off where the engine permits it. Selecting a configuration
+sets its method, source and draft reference together. Draft-token tuning appears
+only when the engine exposes it. The editor couples engine-required values to
+the meaningful choice: Rapid reasoning retains/restores its known parser;
+Splash reasoning follows its effort selection; vLLM MTP uses one sequence and
+no prefix cache. Other authored values remain intact when controls are hidden.
+
+### Save and deletion boundary
+
+Save rechecks the current catalog, compiles the draft and compares the file
+with the bytes read when editing began. A changed catalog requires an explicit
+**Ctrl-R** to reload and review the draft against it (or reopening the editor);
+the reload retains draft edits. A concurrent file edit is never silently
+overwritten. New IDs cannot collide with catalog entries or existing files.
+Publication stages and syncs one file, then links a new file without replacement
+or atomically renames an edited file. Temper writers serialize their comparison
+and publication. An external editor that ignores the lock can still race the
+last comparison and rename. Unchanged saves preserve the original bytes and
+mtime. Cancellation before publication leaves the preset unchanged; a directory
+sync failure after publication is reported as saved with durability uncertain.
+
+Save changes only `presets.d/ID.json` (and root housekeeping on the first
+write). It does not select the preset, change any layout, rebuild an existing
+execution lock, install software, synchronize a harness or restart service.
+The manager reports layout references from saved configuration; those layouts
+keep their existing locks. Placement and rebuilding belong to the separate
+configuration/layout workflow. `--dry-run` performs validation and preview but
+creates no root, lock file or preset, and cannot delete.
+
+Delete requires an explicit confirmation naming the file and any saved layout
+references. It removes only that preset file, after comparing its original
+bytes again. Referenced exact locks, shared weights, templates and other files
+remain. Repeated deletion of an already absent file is clean. File conflicts
+and operational errors retain the draft for correction or copying to a new ID.
 
 ## Rules for every file
 
@@ -230,7 +354,7 @@ request budgets override it. See the
 
 ## Commands
 
-All take `--root PATH` (default `~/.temper`) and `--json` for one JSON
+The scripted commands below take `--root PATH` (default `~/.temper`) and `--json` for one JSON
 document. They read the root's active catalog, so run `temper catalog update
 --root PATH` first. The revision defaults to `main` and is recorded as its
 exact commit. `HF_TOKEN` is used for gated repositories. `weights` and

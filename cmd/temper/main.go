@@ -296,12 +296,13 @@ func usage(writer io.Writer) {
   temper layout stop          stop the running layout
   temper update               get the newest presets and software, install and restart
   temper configure            change your presets and layouts
+  temper preset               create and edit your own presets
   temper cleanup              remove old engine releases and caches nothing uses
   temper version              print the version
 
 Tools for scripts and experiments:
   temper catalog update|inspect|rollback|compile|describe
-  temper preset fork|copy|check|fields|weights|template
+  temper preset edit|fork|copy|check|fields|weights|template|plan
   temper execution configure|inspect|prepare|render|paths|serve|remove
   temper software install|check|remove
   temper machine facts

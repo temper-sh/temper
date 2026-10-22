@@ -29,10 +29,10 @@ func hub(t *testing.T) *huggingface.Client {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.URL.Path == "/api/models/unsloth/Qwen3.8-27B-GGUF/revision/main":
+		case r.URL.Path == "/api/models/unsloth/Qwen3.8-27B-GGUF/revision/main" || r.URL.Path == "/api/models/unsloth/Qwen3.8-27B-GGUF/revision/"+q6Commit:
 			json.NewEncoder(w).Encode(map[string]any{"sha": q6Commit, "cardData": map[string]any{"license": "apache-2.0"},
 				"siblings": []any{map[string]any{"rfilename": "Qwen3.8-27B-Q6_K.gguf"}, map[string]any{"rfilename": "Qwen3.8-27B-Q8_0.gguf"}}})
-		case r.URL.Path == "/api/models/other/Qwen3.8-27B-GGUF/revision/main":
+		case r.URL.Path == "/api/models/other/Qwen3.8-27B-GGUF/revision/main" || r.URL.Path == "/api/models/other/Qwen3.8-27B-GGUF/revision/"+q6Commit:
 			json.NewEncoder(w).Encode(map[string]any{"sha": q6Commit, "cardData": map[string]any{"license": "apache-2.0"},
 				"siblings": []any{map[string]any{"rfilename": "Qwen3.8-27B-Q6_K.gguf"}}})
 		case strings.HasSuffix(r.URL.Path, "/paths-info/"+q6Commit) && r.Method == http.MethodPost:

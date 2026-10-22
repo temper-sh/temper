@@ -129,6 +129,7 @@ It does not own install, check, removal, or catalog policy.
 | `temper cleanup` | `setupcmd.Cleanup`, `internal/cleanup` | plan of unused installations (lock rebuilt from its receipt, verified by digest), artifact sets, Splash caches and managed files; unused HF repos listed only | receipt and state reads; removal under the root lock, software through `software remove` | `README.md` |
 | `temper layout activate/status/stop` | `setupcmd.Layout`, `managed.Reconcile` | frozen desired/current jobs, pure composed rendering | exact preparation checks, activation journal, launchd, owned process observation and recovery | `docs/contracts/layouts.md` |
 | `temper catalog compile` | `internal/catalogcmd` | `catalog`: four native records, selected preset closure and execution identity | explicit local file reads; atomic lock publication without replacement | `docs/contracts/execution-lock.md` |
+| `temper preset`, `preset edit` | `internal/presetcmd.Editor` | revocable `UserPreset` draft, `catalog.Fields`, compiler, shared memory and installation assessment | local reads, explicit cancellable metadata lookup, guarded `userpreset.Save`/`Delete`; no configuration or service effects | `docs/contracts/user-presets.md` |
 | `temper execution configure` | `internal/catalogcmd` | `catalog.ConfigureExecution`: explicit context/output/Splash memory limits and compute selection | immutable derived lock publication | `docs/contracts/execution-runtime.md` |
 | `temper catalog describe` | `internal/catalogcmd` | `catalog.DescribePreset`: authored preset copy and optional assessment link | explicit authoring-file read, directory writer lock, validated atomic replacement; dry run writes nothing | `docs/contracts/execution-lock.md` |
 | `temper execution prepare/render/serve/remove/paths` | `catalogcmd.Runtime` | in-memory projections of one exact execution lock | software install/check/remove, `fetch`, Splash assembly, `apply` generation commit, content hashing, Field Kit binding; one supervised foreground router | `docs/contracts/execution-runtime.md` |
@@ -143,6 +144,20 @@ it is executable in a test.
 ## Package neighborhoods
 
 ### Presets, configuration and managed availability
+
+`presetcmd/editor*.go` owns the standalone manager, draft navigation and review.
+Draft field edits are in-memory computations; `records.go` shares weights and
+template reads with the scripted authoring commands. `userpreset` reads and
+resolves authoring files and owns guarded single-file publication and deletion.
+Temper writers serialize comparison and publication under a short kernel lock;
+external editors still need the documented optimistic-edit limitation.
+`tui` owns the shared terminal frame, header, breadcrumbs, secondary navigation,
+buttons, key hints, tool palettes and text input. Rendering takes values and
+returns text; each tool owns focus, navigation, editing and effects. The preset
+editor is the first consumer of the common frame. The wizard still supplies
+its existing colors to the text input until its separate flow/UI migration.
+Configuration selection, layout membership and managed activation remain
+separate operations.
 
 `catalog/compile.go` compiles v1 presets directly into self-contained execution
 locks. Locks store no fingerprint; `catalog.SameExecution` compares what runs

@@ -29,6 +29,7 @@ import (
 var target = software.Target{OS: "darwin", Arch: "arm64"}
 
 type Command struct {
+	Input   io.Reader // Interactive entry only; defaults to stdin in New.
 	Home    func() (string, error)
 	Catalog func(root string) (catalog.View, error)
 	Facts   func(context.Context) (machine.Facts, error)
@@ -39,7 +40,7 @@ type Command struct {
 }
 
 func New(facts func(context.Context) (machine.Facts, error), hub Hub) Command {
-	return Command{Home: os.UserHomeDir, Catalog: rootCatalog, Facts: facts, Hub: hub}
+	return Command{Input: os.Stdin, Home: os.UserHomeDir, Catalog: rootCatalog, Facts: facts, Hub: hub}
 }
 
 // rootCatalog is the root's active signed catalog, as every command reads it.
@@ -83,6 +84,8 @@ var positional = map[string][2]int{"fork": {2, 2}, "copy": {2, 2}, "check": {0, 
 
 func usage(w io.Writer) {
 	fmt.Fprintln(w, strings.TrimSpace(`Usage:
+  temper preset [--root PATH] [--memory-gib N] [--dry-run]
+  temper preset edit ID [--root PATH] [--memory-gib N] [--dry-run]
   temper preset fork ORIGIN ID [--name TEXT]
   temper preset copy SOURCE ID [--name TEXT] [--memory-gib N]
   temper preset check [ID] [--memory-gib N]
@@ -90,10 +93,11 @@ func usage(w io.Writer) {
   temper preset plan ID
   temper preset weights ID REPO[@REVISION] FILE... [options]
   temper preset template ID (REPO[@REVISION] FILE | --local FILE.jinja | builtin) [options]
-Your presets live in ROOT/presets.d, one ID.json file each; edit them by hand
-and check them with temper preset check. catalog compile --root ROOT --preset ID
-builds a lock from them. Every command takes --root PATH (default ~/.temper)
-and --json. Your presets are not tested by the catalog.`))
+Your presets live in ROOT/presets.d, one ID.json file each. The terminal editor
+saves only authoring files; layouts and existing locks stay unchanged.
+catalog compile --root ROOT --preset ID builds a lock from a saved preset.
+All commands take --root PATH (default ~/.temper). Scripted operations take
+--json. Your presets are not tested by the catalog.`))
 }
 
 type options struct {
@@ -106,9 +110,8 @@ type options struct {
 }
 
 func (c Command) Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	if len(args) == 0 {
-		usage(stderr)
-		return 2
+	if len(args) == 0 || args[0] == "edit" || strings.HasPrefix(args[0], "--") && args[0] != "--help" {
+		return c.interactive(ctx, args, stdout, stderr)
 	}
 	if args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
 		usage(stdout)
@@ -440,6 +443,11 @@ func checkOne(root, id string, view catalog.View, memoryGiB int, facts *machine.
 		r.Error = err.Error()
 		return r
 	}
+	return checkLoaded(id, loaded, view, memoryGiB, facts)
+}
+
+func checkLoaded(id string, loaded userpreset.Loaded, view catalog.View, memoryGiB int, facts *machine.Facts) checked {
+	r := checked{ID: id, Warnings: []string{}}
 	r.Warnings = append(r.Warnings, loaded.Warnings...)
 	r.Form, r.Origin = "copy", loaded.File.Origin
 	if loaded.File.Fork() {

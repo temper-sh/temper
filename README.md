@@ -71,6 +71,10 @@ a cloud assistant. You can switch layouts without reinstalling models.
 Start with **Default**, then edit it or add another layout, such as **Helper**
 for small models.
 
+Use [`temper preset`](docs/contracts/user-presets.md) to fork a catalog preset
+or make an independent copy, then edit its settings, weights or template.
+Saving keeps your authoring separate from the exact locks used by layouts.
+
 ## How we choose presets
 
 The **General** and **Specialist** tabs hold our curated recommendations for

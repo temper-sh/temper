@@ -5,6 +5,7 @@ package userpreset
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -50,7 +51,17 @@ func List(root string) ([]string, error) {
 // Read returns one preset file; fs.ErrNotExist means the root has none by
 // that ID.
 func Read(root, id string) ([]byte, error) {
+	if err := fileID(id); err != nil {
+		return nil, err
+	}
 	return readFile(Path(root, id))
+}
+
+func fileID(id string) error {
+	if id == "" || strings.HasPrefix(id, ".") || strings.ContainsAny(id, "/\\\x00\r\n") {
+		return fmt.Errorf("%q cannot name a preset file", id)
+	}
+	return nil
 }
 
 // readTemplate reads a local template; preparation reads at most 16 MiB.
@@ -87,21 +98,8 @@ func Exists(root, id string) (bool, error) {
 
 // Create writes a new preset file and never replaces one.
 func Create(root, id string, data []byte) error {
-	if err := os.MkdirAll(Dir(root), 0o700); err != nil {
-		return err
-	}
-	temporary, err := write(root, data)
-	if err != nil {
-		return err
-	}
-	defer os.Remove(temporary)
-	if err := os.Link(temporary, Path(root, id)); err != nil {
-		if errors.Is(err, fs.ErrExist) {
-			return fmt.Errorf("%s already exists; choose another ID", Path(root, id))
-		}
-		return err
-	}
-	return syncDir(Dir(root))
+	_, err := Save(context.Background(), root, id, nil, data, false)
+	return err
 }
 
 // Replace writes new contents only if the file still holds previous, so an
@@ -109,22 +107,134 @@ func Create(root, id string, data []byte) error {
 // once more just before the rename; an edit saved in that instant can still
 // be lost, because editors take no lock.
 func Replace(root, id string, previous, data []byte) error {
+	_, err := Save(context.Background(), root, id, previous, data, false)
+	return err
+}
+
+// Save publishes validated bytes with an optimistic edit guard. A nil previous
+// means creation. changed is true after publication, even if directory sync
+// fails; callers must not describe that outcome as an unsaved draft.
+func Save(ctx context.Context, root, id string, previous, data []byte, dry bool) (changed bool, err error) {
+	if !catalog.ValidPresetID(id) {
+		return false, fmt.Errorf("%q is not a preset ID", id)
+	}
+	if len(data) > maxFile {
+		return false, errors.New("preset must be at most 1 MiB")
+	}
+	check := func() error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		return compare(root, id, previous)
+	}
+	if err := check(); err != nil {
+		return false, err
+	}
+	if bytes.Equal(previous, data) {
+		return false, nil
+	}
+	if dry {
+		return true, nil
+	}
+	if err := os.MkdirAll(Dir(root), 0o700); err != nil {
+		return false, err
+	}
+	unlock, err := lockFiles(root)
+	if err != nil {
+		return false, err
+	}
+	defer unlock()
+	if err := check(); err != nil {
+		return false, err
+	}
 	temporary, err := write(root, data)
+	if err != nil {
+		return false, err
+	}
+	defer os.Remove(temporary)
+	if err := check(); err != nil {
+		return false, err
+	}
+	if previous == nil {
+		err = os.Link(temporary, Path(root, id))
+	} else {
+		err = os.Rename(temporary, Path(root, id))
+	}
+	if err != nil {
+		return false, err
+	}
+	if err := syncDir(Dir(root)); err != nil {
+		return true, fmt.Errorf("preset saved, but directory sync failed: %w", err)
+	}
+	return true, nil
+}
+
+func compare(root, id string, previous []byte) error {
+	info, err := os.Lstat(Path(root, id))
+	if previous == nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("%s already exists; choose another ID", Path(root, id))
+	}
 	if err != nil {
 		return err
 	}
-	defer os.Remove(temporary)
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("%s must be a regular file", Path(root, id))
+	}
 	current, err := Read(root, id)
 	if err != nil {
 		return err
 	}
 	if !bytes.Equal(current, previous) {
-		return fmt.Errorf("%s changed while Temper worked on it; run the command again", Path(root, id))
+		return fmt.Errorf("%s changed while Temper worked on it; reopen it before saving", Path(root, id))
 	}
-	if err := os.Rename(temporary, Path(root, id)); err != nil {
-		return err
+	return nil
+}
+
+// Delete removes only the reviewed preset file. Missing is already done;
+// templates, execution locks and model material are outside this operation.
+func Delete(ctx context.Context, root, id string, previous []byte, dry bool) (bool, error) {
+	if err := fileID(id); err != nil {
+		return false, err
 	}
-	return syncDir(Dir(root))
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	if err := compare(root, id, previous); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return false, nil
+		}
+		return false, err
+	}
+	if dry {
+		return true, nil
+	}
+	unlock, err := lockFiles(root)
+	if err != nil {
+		return false, err
+	}
+	defer unlock()
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	if err := compare(root, id, previous); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return false, nil
+		}
+		return false, err
+	}
+	if err := os.Remove(Path(root, id)); err != nil {
+		return false, err
+	}
+	if err := syncDir(Dir(root)); err != nil {
+		return true, fmt.Errorf("preset deleted, but directory sync failed: %w", err)
+	}
+	return true, nil
 }
 
 func syncDir(path string) error {

@@ -165,30 +165,59 @@ func setChange(u *catalog.UserPreset, key string, value any) {
 func (c Command) weights(ctx context.Context, id, repository string, patterns []string, o options, out io.Writer) error {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
+	wid, record, memoryWarning, err := c.weightsRecord(ctx, repository, patterns, o)
+	if err != nil {
+		return err
+	}
+	u, err := c.edit(o.root, id, func(u *catalog.UserPreset, view catalog.View) error {
+		return applyWeights(u, view, wid, record)
+	})
+	if err != nil {
+		return err
+	}
+	var total int64
+	for _, f := range record.Files {
+		total += f.Bytes
+	}
+	source := record.Sources[0]
+	if o.json {
+		return encode(out, map[string]any{"schema": "temper-preset-write/v1", "preset": id, "form": form(u), "weights": wid, "repo": source.Repo, "commit": source.Revision, "bytes": total, "path": userpreset.Path(o.root, id), "context_memory": record.ContextMemory, "memory_warning": memoryWarning})
+	}
+	fmt.Fprintf(out, "%s now uses weights %s: %d file(s), %s, from %s at %s.\n", id, wid, len(record.Files), setup.Size(total), source.Repo, source.Revision[:7])
+	if memoryWarning != "" {
+		fmt.Fprintln(out, "Warning: "+memoryWarning)
+	}
+	return nil
+}
+
+// weightsRecord reads metadata without editing a file. CLI writes and editor
+// drafts share both this read and applyWeights below.
+func (c Command) weightsRecord(ctx context.Context, repository string, patterns []string, o options) (string, catalog.UserArtifact, string, error) {
+	fail := func(err error) (string, catalog.UserArtifact, string, error) {
+		return "", catalog.UserArtifact{}, "", err
+	}
 	repo, revision := splitRepository(repository)
 	r, files, err := c.material(ctx, repo, revision, patterns)
 	if err != nil {
-		return err
+		return fail(err)
+	}
+	if len(files) == 0 {
+		return fail(errors.New("select at least one weights file"))
 	}
 	format := o.format
 	if format == "" {
 		if len(files) != 1 || !strings.HasSuffix(files[0].Path, ".gguf") {
-			return errors.New("say which format these files are with --format gguf, mlx-safetensors or safetensors")
+			return fail(errors.New("say which format these files are with --format gguf, mlx-safetensors or safetensors"))
 		}
 		format = "gguf"
 	}
-	license := o.license
-	if license == "" {
-		if license = r.License; license == "" {
-			return fmt.Errorf("%s declares no license; give it with --license", repo)
-		}
-	}
+	license := materialLicense(o.license, r.License)
 	wid := o.recordID
 	if wid == "" {
 		wid = recordID(files[0].Path)
 	}
 	if !catalog.ValidPresetID(wid) {
-		return fmt.Errorf("weights ID %q is invalid; give one with --weights-id", wid)
+		return fail(fmt.Errorf("weights ID %q is invalid; give one with --weights-id", wid))
 	}
 	record := catalog.UserArtifact{Artifact: catalog.Artifact{Format: format, Files: files, License: license,
 		Sources: []catalog.Source{{Hub: catalog.HubHuggingFace, Repo: repo, Revision: r.Commit}}}, SameModelAs: o.sameModelAs}
@@ -206,49 +235,36 @@ func (c Command) weights(ctx context.Context, id, repository string, patterns []
 		}
 	}
 	if err := ctx.Err(); err != nil {
-		return err
+		return fail(err)
 	}
-	u, err := c.edit(o.root, id, func(u *catalog.UserPreset, view catalog.View) error {
-		if u.Artifacts == nil {
-			u.Artifacts = map[string]catalog.UserArtifact{}
+	return wid, record, memoryWarning, nil
+}
+
+func applyWeights(u *catalog.UserPreset, view catalog.View, wid string, record catalog.UserArtifact) error {
+	if u.Artifacts == nil {
+		u.Artifacts = map[string]catalog.UserArtifact{}
+	}
+	if u.Fork() {
+		origin, ok := view.Document.Presets[u.Origin]
+		if !ok {
+			return fmt.Errorf("origin %q is not in this catalog", u.Origin)
 		}
-		if u.Fork() {
-			origin, ok := view.Document.Presets[u.Origin]
-			if !ok {
-				return fmt.Errorf("origin %q is not in this catalog", u.Origin)
-			}
-			own := view.Document.Artifacts[origin.Artifact]
-			if record.SameModelAs == "" && own.HuggingFace().Repo == repo {
-				record.SameModelAs = origin.Artifact
-			}
-			if record.SameModelAs == "" {
-				return fmt.Errorf("a fork keeps its model: if these weights are another build of %s, say --same-model-as %s; for another model, make a copy", origin.Artifact, origin.Artifact)
-			}
-			setChange(u, "artifact", wid)
-		} else {
-			u.Preset.Artifact = wid
-			if t, ok := u.Templates[u.Preset.Template]; ok && !slices.Contains(t.CompatibleArtifacts, wid) {
-				t.CompatibleArtifacts = append(t.CompatibleArtifacts, wid)
-				u.Templates[u.Preset.Template] = t
-			}
+		own := view.Document.Artifacts[origin.Artifact]
+		if record.SameModelAs == "" && own.HuggingFace().Repo == record.HuggingFace().Repo {
+			record.SameModelAs = origin.Artifact
 		}
-		u.Artifacts[wid] = record
-		return nil
-	})
-	if err != nil {
-		return err
+		if record.SameModelAs == "" {
+			return fmt.Errorf("a fork keeps its model: if these weights are another build of %s, say --same-model-as %s; for another model, make a copy", origin.Artifact, origin.Artifact)
+		}
+		setChange(u, "artifact", wid)
+	} else {
+		u.Preset.Artifact = wid
+		if t, ok := u.Templates[u.Preset.Template]; ok && !slices.Contains(t.CompatibleArtifacts, wid) {
+			t.CompatibleArtifacts = append(t.CompatibleArtifacts, wid)
+			u.Templates[u.Preset.Template] = t
+		}
 	}
-	var total int64
-	for _, f := range files {
-		total += f.Bytes
-	}
-	if o.json {
-		return encode(out, map[string]any{"schema": "temper-preset-write/v1", "preset": id, "form": form(u), "weights": wid, "repo": repo, "commit": r.Commit, "bytes": total, "path": userpreset.Path(o.root, id), "context_memory": record.ContextMemory, "memory_warning": memoryWarning})
-	}
-	fmt.Fprintf(out, "%s now uses weights %s: %d file(s), %s, from %s at %s.\n", id, wid, len(files), setup.Size(total), repo, r.Commit[:7])
-	if memoryWarning != "" {
-		fmt.Fprintln(out, "Warning: "+memoryWarning)
-	}
+	u.Artifacts[wid] = record
 	return nil
 }
 
@@ -261,82 +277,12 @@ func (c Command) template(ctx context.Context, values []string, o options, out i
 	if local && len(values) != 1 || !local && !builtin && len(values) != 3 {
 		return errors.New("give REPO[@REVISION] FILE, --local FILE.jinja, or builtin")
 	}
-	tid := o.recordID
-	if tid == "" {
-		tid = id + "-template"
-	}
-	var record catalog.Template
-	var commit string
-	if local {
-		if !templatepatch.ValidLocalFile(o.local) {
-			return fmt.Errorf("%q must be a plain file name in %s, not a .json file", o.local, userpreset.Dir(o.root))
-		}
-		license := o.license
-		if license == "" {
-			license = "your own file"
-		}
-		// Temper reads the size and SHA-256 from the file at each compile.
-		record = catalog.Template{Transform: o.transform, License: license,
-			Sources: []catalog.Source{{Hub: catalog.HubLocal}}, Files: []catalog.File{{Path: o.local}}}
-	} else if !builtin {
-		if !catalog.ValidPresetID(tid) {
-			return fmt.Errorf("template ID %q is invalid; give one with --template-id", tid)
-		}
-		repo, revision := splitRepository(values[1])
-		r, err := c.Hub.Revision(ctx, repo, revision)
-		if err != nil {
-			return err
-		}
-		commit = r.Commit
-		source, err := c.download(ctx, repo, r.Commit, values[2], maxTemplate)
-		if err != nil {
-			return err
-		}
-		// The record describes the template as prepared: after its transform.
-		final, err := templatepatch.Apply(o.transform, source)
-		if err != nil {
-			return err
-		}
-		license := o.license
-		if license == "" {
-			if license = r.License; license == "" {
-				return fmt.Errorf("%s declares no license; give it with --license", repo)
-			}
-		}
-		sum := sha256.Sum256(final)
-		record = catalog.Template{Transform: o.transform, License: license,
-			Sources: []catalog.Source{{Hub: catalog.HubHuggingFace, Repo: repo, Revision: r.Commit}},
-			Files:   []catalog.File{{Path: values[2], Bytes: int64(len(final)), SHA256: hex.EncodeToString(sum[:])}}}
+	tid, record, commit, err := c.templateRecord(ctx, id, values, o)
+	if err != nil {
+		return err
 	}
 	u, err := c.edit(o.root, id, func(u *catalog.UserPreset, view catalog.View) error {
-		chosen := catalog.BuiltinTemplate
-		if !builtin {
-			weights := ""
-			if u.Fork() {
-				origin, ok := view.Document.Presets[u.Origin]
-				if !ok {
-					return fmt.Errorf("origin %q is not in this catalog", u.Origin)
-				}
-				weights = origin.Artifact
-				if a, ok := u.Changes["artifact"].(string); ok {
-					weights = a
-				}
-			} else {
-				weights = u.Preset.Artifact
-			}
-			record.CompatibleArtifacts = []string{weights}
-			if u.Templates == nil {
-				u.Templates = map[string]catalog.Template{}
-			}
-			u.Templates[tid] = record
-			chosen = tid
-		}
-		if u.Fork() {
-			setChange(u, "template", chosen)
-		} else {
-			u.Preset.Template = chosen
-		}
-		return nil
+		return applyTemplate(u, view, tid, record, builtin)
 	})
 	if err != nil {
 		return err
@@ -370,4 +316,99 @@ func form(u catalog.UserPreset) string {
 		return "fork"
 	}
 	return "copy"
+}
+
+// templateRecord reads source bytes only; publication remains the caller's job.
+func (c Command) templateRecord(ctx context.Context, id string, values []string, o options) (string, catalog.Template, string, error) {
+	builtin := len(values) == 2 && values[1] == catalog.BuiltinTemplate
+	local := o.local != ""
+	tid := o.recordID
+	if tid == "" {
+		tid = id + "-template"
+	}
+	var record catalog.Template
+	var commit string
+	if local {
+		if !templatepatch.ValidLocalFile(o.local) {
+			return "", catalog.Template{}, "", fmt.Errorf("%q must be a plain file name in %s, not a .json file", o.local, userpreset.Dir(o.root))
+		}
+		license := materialLicense(o.license, "")
+		// Temper reads the size and SHA-256 from the file at each compile.
+		record = catalog.Template{Transform: o.transform, License: license,
+			Sources: []catalog.Source{{Hub: catalog.HubLocal}}, Files: []catalog.File{{Path: o.local}}}
+	} else if !builtin {
+		if !catalog.ValidPresetID(tid) {
+			return "", catalog.Template{}, "", fmt.Errorf("template ID %q is invalid; give one with --template-id", tid)
+		}
+		if c.Hub == nil {
+			return "", catalog.Template{}, "", errors.New("Hugging Face is unavailable")
+		}
+		repo, revision := splitRepository(values[1])
+		r, err := c.Hub.Revision(ctx, repo, revision)
+		if err != nil {
+			return "", catalog.Template{}, "", err
+		}
+		commit = r.Commit
+		source, err := c.download(ctx, repo, r.Commit, values[2], maxTemplate)
+		if err != nil {
+			return "", catalog.Template{}, "", err
+		}
+		// The record describes the template as prepared: after its transform.
+		final, err := templatepatch.Apply(o.transform, source)
+		if err != nil {
+			return "", catalog.Template{}, "", err
+		}
+		license := materialLicense(o.license, r.License)
+		sum := sha256.Sum256(final)
+		record = catalog.Template{Transform: o.transform, License: license,
+			Sources: []catalog.Source{{Hub: catalog.HubHuggingFace, Repo: repo, Revision: r.Commit}},
+			Files:   []catalog.File{{Path: values[2], Bytes: int64(len(final)), SHA256: hex.EncodeToString(sum[:])}}}
+	}
+	if err := ctx.Err(); err != nil {
+		return "", catalog.Template{}, "", err
+	}
+	return tid, record, commit, nil
+}
+
+// Local authoring preserves missing source metadata without inventing a grant.
+// The catalog's license field already permits descriptive plain text.
+func materialLicense(override, declared string) string {
+	if strings.TrimSpace(override) != "" {
+		return override
+	}
+	if strings.TrimSpace(declared) != "" {
+		return declared
+	}
+	return "Not declared by source"
+}
+
+func applyTemplate(u *catalog.UserPreset, view catalog.View, tid string, record catalog.Template, builtin bool) error {
+	chosen := catalog.BuiltinTemplate
+	if !builtin {
+		weights := ""
+		if u.Fork() {
+			origin, ok := view.Document.Presets[u.Origin]
+			if !ok {
+				return fmt.Errorf("origin %q is not in this catalog", u.Origin)
+			}
+			weights = origin.Artifact
+			if a, ok := u.Changes["artifact"].(string); ok {
+				weights = a
+			}
+		} else {
+			weights = u.Preset.Artifact
+		}
+		record.CompatibleArtifacts = []string{weights}
+		if u.Templates == nil {
+			u.Templates = map[string]catalog.Template{}
+		}
+		u.Templates[tid] = record
+		chosen = tid
+	}
+	if u.Fork() {
+		setChange(u, "template", chosen)
+	} else {
+		u.Preset.Template = chosen
+	}
+	return nil
 }
