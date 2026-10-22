@@ -291,6 +291,7 @@ func usage(writer io.Writer) {
 	fmt.Fprintf(writer, "temper %s — run local AI models on your Mac\n\n", version)
 	fmt.Fprintln(writer, `Everyday commands:
   temper init                 choose presets, install them and start the default layout
+  temper layout               compose layouts from your selected presets
   temper layout status        show what runs, where, and its model IDs
   temper layout activate ID   start a saved layout, for example after a restart
   temper layout stop          stop the running layout

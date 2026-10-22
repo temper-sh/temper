@@ -41,6 +41,7 @@ type Command struct {
 	// Name is the verb this command serves (init, configure, layout,
 	// update); it names flag sets and error messages.
 	Name      string
+	Input     io.Reader // Standalone layout editor; New supplies stdin.
 	Detect    func(context.Context) (machine.Facts, error)
 	Disk      func(string) (int64, error)
 	Home      func() (string, error)
@@ -63,7 +64,7 @@ type Command struct {
 }
 
 func New(detect func(context.Context) (machine.Facts, error), effects preset.Effects) Command {
-	return Command{Downloader: hfcache.CheckClient, Detect: detect, Disk: setup.FreeDisk, Home: os.UserHomeDir, Catalog: readCatalog, Newest: newestCatalog, Resolve: newSoftwareResolver(), Effects: effects, Harnesses: func() ([]harness.Option, error) {
+	return Command{Input: os.Stdin, Downloader: hfcache.CheckClient, Detect: detect, Disk: setup.FreeDisk, Home: os.UserHomeDir, Catalog: readCatalog, Newest: newestCatalog, Resolve: newSoftwareResolver(), Effects: effects, Harnesses: func() ([]harness.Option, error) {
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return nil, err

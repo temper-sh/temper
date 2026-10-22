@@ -75,47 +75,9 @@ func BuildConfiguration(root string, facts machine.Facts, free int64, c Configur
 	}
 	p.Configuration = &c
 	for _, id := range keys(c.Layouts) {
-		l := c.Layouts[id]
-		assessment := LayoutPlan{ID: id, Layout: l}
-		var total, gpuTotal, startupGPU int64
-		for _, id := range l.Presets {
-			lock := c.Presets[id].Lock
-			one, err := Assess(lock, facts)
-			if err != nil {
-				return p, err
-			}
-			estimate := one.MemoryBytes
-			assessment.MemoryIncomplete = assessment.MemoryIncomplete || len(one.Memory.Unknown) > 0
-			if err = add(&total, estimate); err != nil {
-				return p, err
-			}
-			assessment.LargestPresetBytes = max(assessment.LargestPresetBytes, estimate)
-			gpu := false
-			for _, x := range lock.Records.Presets {
-				gpu = x.Compute == catalog.ComputeGPU
-			}
-			if gpu {
-				if err = add(&gpuTotal, estimate-one.Memory.PromptCacheReserveBytes); err != nil {
-					return p, err
-				}
-			}
-			if slices.Contains(l.Startup, id) {
-				if err = add(&assessment.StartupBytes, estimate); err != nil {
-					return p, err
-				}
-				if gpu {
-					if err = add(&startupGPU, estimate-one.Memory.PromptCacheReserveBytes); err != nil {
-						return p, err
-					}
-				}
-			}
-		}
-		// This is a scheduling allowance, not a measured simultaneous-fit claim.
-		physical := max(int64(0), facts.PhysicalMemoryBytes-budget.OSFloorMiB*MiB)
-		wired := max(int64(0), facts.WiredLimitMiB*MiB-budget.OSFloorMiB*MiB)
-		assessment.AllFit = total <= physical && gpuTotal <= wired
-		if assessment.StartupBytes > physical || startupGPU > wired {
-			assessment.Refusals = append(assessment.Refusals, "startup presets exceed the memory allowance (measured peaks or fallback estimates); remove startup selections")
+		assessment, err := AssessLayout(c, id, facts)
+		if err != nil {
+			return p, err
 		}
 		p.Layouts = append(p.Layouts, assessment)
 		for _, reason := range assessment.Refusals {
@@ -124,6 +86,60 @@ func BuildConfiguration(root string, facts machine.Facts, free int64, c Configur
 	}
 	p.CanPrepare = len(p.Refusals) == 0
 	return p, nil
+}
+
+// AssessLayout computes the same memory allowance used by activation without
+// inspecting downloads, installing material, or rebuilding any exact lock.
+func AssessLayout(c Configuration, id string, facts machine.Facts) (LayoutPlan, error) {
+	if err := c.Validate(); err != nil {
+		return LayoutPlan{}, err
+	}
+	if _, ok := c.Layouts[id]; !ok {
+		return LayoutPlan{}, fmt.Errorf("unknown layout %q", id)
+	}
+	l := c.Layouts[id]
+	assessment := LayoutPlan{ID: id, Layout: l}
+	var total, gpuTotal, startupGPU int64
+	for _, id := range l.Presets {
+		lock := c.Presets[id].Lock
+		one, err := Assess(lock, facts)
+		if err != nil {
+			return LayoutPlan{}, err
+		}
+		estimate := one.MemoryBytes
+		assessment.MemoryIncomplete = assessment.MemoryIncomplete || len(one.Memory.Unknown) > 0
+		if err = add(&total, estimate); err != nil {
+			return LayoutPlan{}, err
+		}
+		assessment.LargestPresetBytes = max(assessment.LargestPresetBytes, estimate)
+		gpu := false
+		for _, x := range lock.Records.Presets {
+			gpu = x.Compute == catalog.ComputeGPU
+		}
+		if gpu {
+			if err = add(&gpuTotal, estimate-one.Memory.PromptCacheReserveBytes); err != nil {
+				return LayoutPlan{}, err
+			}
+		}
+		if slices.Contains(l.Startup, id) {
+			if err = add(&assessment.StartupBytes, estimate); err != nil {
+				return LayoutPlan{}, err
+			}
+			if gpu {
+				if err = add(&startupGPU, estimate-one.Memory.PromptCacheReserveBytes); err != nil {
+					return LayoutPlan{}, err
+				}
+			}
+		}
+	}
+	// This is a scheduling allowance, not a measured simultaneous-fit claim.
+	physical := max(int64(0), facts.PhysicalMemoryBytes-budget.OSFloorMiB*MiB)
+	wired := max(int64(0), facts.WiredLimitMiB*MiB-budget.OSFloorMiB*MiB)
+	assessment.AllFit = total <= physical && gpuTotal <= wired
+	if assessment.StartupBytes > physical || startupGPU > wired {
+		assessment.Refusals = append(assessment.Refusals, "startup presets exceed the memory allowance (measured peaks or fallback estimates); remove startup selections")
+	}
+	return assessment, nil
 }
 
 func (p Plan) configurationSections() []Section {

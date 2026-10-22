@@ -71,6 +71,11 @@ a cloud assistant. You can switch layouts without reinstalling models.
 Start with **Default**, then edit it or add another layout, such as **Helper**
 for small models.
 
+Use [`temper layout`](docs/contracts/layouts.md#standalone-layout-editor) to
+choose which of your selected presets belong to each layout, what loads at
+startup, and when idle models unload. Saving a layout keeps it ready for your
+next explicit activation.
+
 Use [`temper preset`](docs/contracts/user-presets.md) to fork a catalog preset
 or make an independent copy, then edit its settings, weights or template.
 Saving keeps your authoring separate from the exact locks used by layouts.

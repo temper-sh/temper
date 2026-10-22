@@ -39,6 +39,13 @@ does not select a preset, change layout membership or rebuild an exact lock.
 The [user-preset contract](contracts/user-presets.md#interactive-authoring)
 owns navigation, reset/conversion, weights/template lookup and save/delete behavior.
 
+`temper layout` edits saved composition using only the configuration's selected
+presets. It owns membership, preload, default routing, idle timeout and layout
+names; it does not browse the catalog, import authoring files or rebuild preset
+locks. Reviewed saves use the configuration revision guard and leave the running
+generation unchanged. The [layout-editor contract](contracts/layouts.md#standalone-layout-editor)
+owns its draft, review and deletion behavior.
+
 Pre-release schema aliases, migrations, historical hash shims and predicted
 machine-facts formats are unsupported. Historical signed publications and
 measurements retain their exact bytes and producing host. Older terminology

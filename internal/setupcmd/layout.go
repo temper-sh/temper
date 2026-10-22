@@ -27,9 +27,8 @@ type LayoutStatus struct {
 
 func (c Command) Layout(ctx context.Context, args []string, out, diagnostics io.Writer) int {
 	fail := c.fail
-	if len(args) == 0 {
-		layoutUsage(diagnostics)
-		return 2
+	if len(args) == 0 || args[0] == "edit" || strings.HasPrefix(args[0], "--") && !helpFlag(args[0]) {
+		return c.editLayouts(ctx, args, out, diagnostics)
 	}
 	if helpFlag(args[0]) {
 		layoutUsage(out)
@@ -380,6 +379,8 @@ func layoutHelp(operation string) clihelp.Help {
 
 func layoutUsage(w io.Writer) {
 	fmt.Fprintln(w, `usage:
+  temper layout [--root PATH] [--dry-run]
+  temper layout edit ID [--root PATH] [--dry-run]
   temper layout activate ID [--root PATH] [--listen 127.0.0.1:PORT] [--dry-run] [--json]
   temper layout status [--root PATH] [--json]
   temper layout stop [--root PATH] [--dry-run] [--json]`)

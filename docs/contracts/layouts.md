@@ -107,6 +107,39 @@ mixed engines, idle reload, busy transitions and owned shutdown. Its startup
 and cold-cache limits remain explicit; unit recovery tests and the harmless
 exec/reload test establish separate mechanical behavior.
 
+## Standalone layout editor
+
+`temper layout` opens the saved layout list; `temper layout edit ID` opens one
+layout directly. Both accept `--root PATH` and `--dry-run` and require a terminal.
+The existing activate/status/stop commands retain their behavior. The wizard's
+layout step remains available until its separate flow change.
+
+The list offers New, Edit and Delete. A new layout needs a name; Temper derives
+an unused ID. Renaming keeps that ID. New layouts start empty, with no preload
+or default model and a 1,800-second idle timeout. Empty layouts are valid.
+Inside a layout, **Presets** is one list of presets already selected in the
+saved configuration. Inclusion, preload and default are independent choices;
+preload and default require inclusion. Excluding a preset used for either asks
+to clear those references. **Settings** contains the name and idle timeout.
+There are no source tabs, catalog lookup, preset imports or authoring actions.
+Saving a preset authoring file does not add it to this list.
+
+The editor holds one revocable draft. Review shows membership, preload, default
+and idle behavior, together with available memory assessment; inability to
+assess fit does not prevent saving a structurally valid composition. Activation
+retains its machine and preparation checks. Save validates the complete
+configuration and publishes it through the existing revision guard. A concurrent
+change is refused with the draft retained. No automatic merge or lock rebuild
+occurs. Repeated unchanged saves preserve the saved file. Back and quit offer
+Keep editing or Discard when the draft changed. Dry-run Save validates without
+writing and retains the draft as unsaved.
+
+Delete confirms the named layout before saving its removal. It preserves all
+selected presets, exact locks, integrations, material and other layouts. Deleting
+or editing a running layout leaves its running generation intact; activation and
+stop remain explicit commands. This editor does not introduce a remembered
+current-layout selection while stopped.
+
 ## Script preset and layout changes
 
 Select exact catalog presets, optionally customize settings or save one under a

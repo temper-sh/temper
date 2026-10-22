@@ -128,6 +128,7 @@ It does not own install, check, removal, or catalog policy.
 | `temper update` | `setupcmd.Update` | `setup.BuildPreset` (origin preset + choices), `setup.WithNewestSoftware`, `setup.Changes` | newest catalog download and store, the same save and preparation as `configure` | `docs/contracts/init.md` |
 | `temper cleanup` | `setupcmd.Cleanup`, `internal/cleanup` | plan of unused installations (lock rebuilt from its receipt, verified by digest), artifact sets, Splash caches and managed files; unused HF repos listed only | receipt and state reads; removal under the root lock, software through `software remove` | `README.md` |
 | `temper layout activate/status/stop` | `setupcmd.Layout`, `managed.Reconcile` | frozen desired/current jobs, pure composed rendering | exact preparation checks, activation journal, launchd, owned process observation and recovery | `docs/contracts/layouts.md` |
+| `temper layout`, `layout edit` | `setupcmd.NewLayoutEditor`, `setupui.LayoutModel` | revocable membership/settings draft, shared `tui` frame, `setup.AssessLayout` | saved configuration and machine reads, revision-checked `setup.SaveConfiguration`; no preset or service effects | `docs/contracts/layouts.md` |
 | `temper catalog compile` | `internal/catalogcmd` | `catalog`: four native records, selected preset closure and execution identity | explicit local file reads; atomic lock publication without replacement | `docs/contracts/execution-lock.md` |
 | `temper preset`, `preset edit` | `internal/presetcmd.Editor` | revocable `UserPreset` draft, `catalog.Fields`, compiler, shared memory and installation assessment | local reads, explicit cancellable metadata lookup, guarded `userpreset.Save`/`Delete`; no configuration or service effects | `docs/contracts/user-presets.md` |
 | `temper execution configure` | `internal/catalogcmd` | `catalog.ConfigureExecution`: explicit context/output/Splash memory limits and compute selection | immutable derived lock publication | `docs/contracts/execution-runtime.md` |
@@ -158,6 +159,12 @@ editor is the first consumer of the common frame. The wizard still supplies
 its existing colors to the text input until its separate flow/UI migration.
 Configuration selection, layout membership and managed activation remain
 separate operations.
+
+`setupui/layouts*.go` owns standalone layout navigation and its draft. The
+`setupcmd/layout_editor.go` save callback accepts only the layout map and retains
+the configuration's exact presets, integrations and software choice under its
+original revision guard. Memory review and activation share `setup.AssessLayout`.
+The existing wizard is a separate consumer and retains its current flow.
 
 `catalog/compile.go` compiles v1 presets directly into self-contained execution
 locks. Locks store no fingerprint; `catalog.SameExecution` compares what runs

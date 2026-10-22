@@ -10,6 +10,24 @@ This is not a model-eval log, product evidence, or permission to change the
 skills repository. It creates no synthetic Temper work. A note may — and often
 should — conclude that no skill change is warranted.
 
+## Composition from selected presets, 2026-10-22
+
+The owner narrowed the layout editor to composing already-selected presets.
+Unit design kept its save callback limited to the layout map; preset selection,
+authoring and lock rebuilding remain outside that surface. Code organization
+reused the shared terminal components and extracted the existing layout memory
+assessment for both review and activation.
+
+Reliable effects reused the configuration writer's revision guard and atomic
+publication. [Command stories](../internal/setupcmd/layout_editor_test.go) prove
+preservation of exact locks, integrations, unrelated layouts and the running
+generation, plus conflict refusal, dry runs, cancellation and clean repeats.
+[UI stories](../internal/setupui/layouts_test.go) cover revocable navigation,
+dependent-reference clearing, generated names and post-publication errors.
+Full offline tests, vet and affected-package race checks pass; actual narrow/wide
+renders and an isolated terminal dry run cover the UI. This is composition and
+save evidence, not native model or activation evidence. **No skill change warranted.**
+
 ## User choices instead of a schema editor, 2026-10-22
 
 The owner rejected an Advanced category: fields must represent useful choices
