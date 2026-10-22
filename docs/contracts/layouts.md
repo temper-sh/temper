@@ -137,6 +137,13 @@ There are no source tabs, catalog browsing or authoring actions. Preset files
 resolve against the stored catalog, offline. Invalid files stay visible with
 their reason; they do not prevent using other presets. User presets are untested.
 
+Mouse clicks select a layout in the list; Edit opens it. Inside a layout, clicks
+toggle preset inclusion, open settings fields and activate breadcrumbs, sections
+and footer actions. Preload and Default apply to the selected preset. The wheel
+scrolls content. Inputs and confirmations block background controls; disabled
+actions and pending work cannot be bypassed by clicking. Back navigation and
+membership changes retain the same confirmation guards as keyboard input.
+
 The editor holds one revocable draft. Review shows membership, preload, default
 and idle behavior, together with available memory assessment; inability to
 assess fit does not prevent saving a structurally valid composition. Activation

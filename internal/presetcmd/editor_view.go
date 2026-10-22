@@ -27,21 +27,26 @@ func terminalText(s string) string {
 }
 
 func (m *Editor) View() tea.View {
+	m.hits = tui.HitMap{}
 	if m.width < 28 || m.height < 10 {
 		v := tea.NewView(ansi.Truncate("Enlarge terminal to 28 × 10. q exits.", m.width, ""))
 		v.AltScreen = true
 		return v
 	}
 	w := tui.ContentWidth(m.width)
-	header := m.renderHeader(w)
-	body, focusStart, focusEnd := m.body(w)
+	header, primary, secondary := m.renderHeader(w)
+	body, focusStart, focusEnd, rows := m.body(w)
 	if m.mode == "editor" && m.input == "" && m.confirm == "" {
 		summary := m.draftSummary(w) + "\n\n"
 		body = summary + body
 		shift := strings.Count(summary, "\n")
 		focusStart, focusEnd = focusStart+shift, focusEnd+shift
+		for i := range rows {
+			rows[i].Y += shift
+		}
 	}
-	frame := tui.Frame{Width: m.width, Height: m.height, Header: header, Footer: m.renderFooter(w)}
+	footer, actions := m.renderFooter(w)
+	frame := tui.Frame{Width: m.width, Height: m.height, Header: header, Footer: footer}
 	m.viewport.SetWidth(w)
 	m.viewport.SetHeight(frame.BodyHeight())
 	m.viewport.SetContent(body)
@@ -50,15 +55,28 @@ func (m *Editor) View() tea.View {
 		m.viewport.EnsureVisible(focusStart, 0, 0)
 		m.focus = false
 	}
+	if m.input == "" && m.confirm == "" && !m.loading {
+		m.hits.Add(int(primaryArea), frame.HeaderTargets(primary))
+		m.hits.Add(int(secondaryArea), frame.HeaderTargets(secondary))
+	}
+	if !m.loading {
+		m.hits.Add(int(contentArea), frame.BodyTargets(rows, m.viewport.YOffset()))
+	}
+	m.hits.Add(int(actionsArea), frame.FooterTargets(actions))
 	content := frame.Render(m.viewport.View())
 	v := tea.NewView(content)
 	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion
 	v.BackgroundColor, v.ForegroundColor = tui.Colors(tui.Canvas).Background, tui.Colors(tui.Canvas).Text
 	return v
 }
 
-func (m *Editor) body(width int) (string, int, int) {
+func (m *Editor) body(width int) (string, int, int, []tui.Target) {
 	var lines []string
+	var targets []tui.Target
+	hit := func(index, start int) {
+		targets = append(targets, tui.Target{Index: index, Y: start, Width: width, Height: len(lines) - start})
+	}
 	start, end := 0, 0
 	addTone := func(s string, element tui.Element, focused bool) {
 		focused = focused && (m.contentFocused() || m.confirm != "")
@@ -98,6 +116,7 @@ func (m *Editor) body(width int) (string, int, int) {
 			choices = []string{"Keep editing", "Undo conversion"}
 		}
 		for i, s := range choices {
+			rowStart := len(lines)
 			element := tui.Body
 			if m.confirm == "delete" && i == 1 {
 				element = tui.DangerAction
@@ -106,8 +125,9 @@ func (m *Editor) body(width int) (string, int, int) {
 				}
 			}
 			addTone(mark(i == m.confirmCursor)+s, element, i == m.confirmCursor)
+			hit(i, rowStart)
 		}
-		return strings.Join(lines, "\n"), start, end
+		return strings.Join(lines, "\n"), start, end, targets
 	}
 	if m.input != "" {
 		title, help := "", ""
@@ -132,8 +152,10 @@ func (m *Editor) body(width int) (string, int, int) {
 		addTone(title, tui.Heading, false)
 		addTone(help, tui.Muted, false)
 		m.text.SetWidth(max(1, width-3))
+		rowStart := len(lines)
 		lines = append(lines, m.text.View())
-		return strings.Join(lines, "\n"), 0, len(lines) - 1
+		hit(0, rowStart)
+		return strings.Join(lines, "\n"), 0, len(lines) - 1, targets
 	}
 	switch m.mode {
 	case "manager":
@@ -142,12 +164,14 @@ func (m *Editor) body(width int) (string, int, int) {
 			add("No presets yet. Press n to choose a catalog starting point.", false)
 		}
 		for i, p := range rows {
+			rowStart := len(lines)
 			name := p.name
 			if name == "" {
 				name = p.id
 			}
 			add(mark(i == m.cursor)+name, i == m.cursor)
 			addTone("  "+p.id+" · "+p.status, tui.Muted, false)
+			hit(i, rowStart)
 		}
 	case "editor":
 		if m.page == 4 {
@@ -158,6 +182,7 @@ func (m *Editor) body(width int) (string, int, int) {
 		}
 		rows := m.fields()
 		for i, f := range rows {
+			rowStart := len(lines)
 			switch f.Path {
 			case "artifact":
 				a := m.currentWeights()
@@ -187,11 +212,13 @@ func (m *Editor) body(width int) (string, int, int) {
 				addTone("  "+f.Help, tui.Muted, false)
 				end = len(lines) - 1
 			}
+			hit(i, rowStart)
 		}
 	case "form":
 		add(strings.Title(m.formKind), false)
 		addTone(m.formExplanation(), tui.Muted, false)
 		for _, i := range m.visibleFormRows() {
+			rowStart := len(lines)
 			f := m.form[i]
 			v := f.value
 			if m.formKind == "template" && i == 0 {
@@ -201,12 +228,15 @@ func (m *Editor) body(width int) (string, int, int) {
 				v = "(not set)"
 			}
 			add(mark(i == m.cursor)+f.label+": "+v, i == m.cursor)
+			hit(i, rowStart)
 		}
 		action := "Look up files"
 		if m.formKind == "template" {
 			action = "Use template in draft"
 		}
+		rowStart := len(lines)
 		add(mark(m.cursor == len(m.form))+action, m.cursor == len(m.form))
+		hit(len(m.form), rowStart)
 	case "files":
 		add("Select weights files", false)
 		add("Commit: "+m.repository.Commit, false)
@@ -222,6 +252,7 @@ func (m *Editor) body(width int) (string, int, int) {
 			add("No matching files. / changes the filter; Escape returns to the repository.", false)
 		}
 		for i, file := range files {
+			rowStart := len(lines)
 			check := "[ ] "
 			element := tui.Toggle
 			if i == m.cursor {
@@ -235,13 +266,14 @@ func (m *Editor) body(width int) (string, int, int) {
 				}
 			}
 			addTone(mark(i == m.cursor)+check+file, element, i == m.cursor)
+			hit(i, rowStart)
 		}
 	case "report":
 		for _, s := range m.report {
 			add(s, false)
 		}
 	}
-	return strings.Join(lines, "\n"), start, end
+	return strings.Join(lines, "\n"), start, end, targets
 }
 
 func mark(focused bool) string {

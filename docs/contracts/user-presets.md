@@ -83,6 +83,13 @@ action row; Enter activates the choice. Returning through a breadcrumb uses
 the same unsaved-draft guard as Escape. The compact footer shows shortcuts for
 the current context; there is no separate help screen.
 
+Mouse clicks select manager rows, open fields, toggle file choices and activate
+visible breadcrumbs, sections and footer actions. Use Open after selecting a
+manager row. In a confirmation, clicking a choice selects it; Confirm performs
+it. Inputs and confirmations block background controls, and pending reads allow
+only cancellation. The wheel scrolls content; clicks follow the visible rows
+after scrolling, wrapping or resizing.
+
 - With content focused, up/down move between fields and left/right move between sections. Enter
   opens a field; Enter accepts the input and Escape cancels that input.
 - Fork fields mark explicit overrides, even when an override equals today's

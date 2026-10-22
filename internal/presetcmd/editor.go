@@ -92,6 +92,7 @@ type Editor struct {
 	area             editorArea
 	navCursor        int
 	actionCursor     int
+	hits             tui.HitMap
 }
 
 // NewEditor reads local state without creating a root or making a network call.
@@ -317,7 +318,25 @@ func (m *Editor) job(kind string, read func(context.Context) editorJob) tea.Cmd 
 }
 
 func (m *Editor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	hits := m.hits
+	m.hits = tui.HitMap{}
 	switch msg := msg.(type) {
+	case tea.MouseClickMsg:
+		if msg.Button != tea.MouseLeft || m.width < 28 || m.height < 10 {
+			return m, nil
+		}
+		if area, index, ok := hits.At(msg.X, msg.Y); ok {
+			return m, m.click(editorArea(area), index)
+		}
+		return m, nil
+	case tea.MouseWheelMsg:
+		if m.input != "" || m.loading {
+			return m, nil
+		}
+		m.focus = false
+		var cmd tea.Cmd
+		m.viewport, cmd = m.viewport.Update(msg)
+		return m, cmd
 	case tea.WindowSizeMsg:
 		m.width, m.height = max(1, msg.Width), max(1, msg.Height)
 		m.focus = true
@@ -362,8 +381,7 @@ func (m *Editor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.loading {
 			if key == "esc" {
-				m.cancelJob()
-				m.notice = "Read cancelled; your draft is unchanged."
+				return m, m.activateAction(key)
 			}
 			return m, nil
 		}

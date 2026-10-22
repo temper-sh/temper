@@ -10,6 +10,27 @@ This is not a model-eval log, product evidence, or permission to change the
 skills repository. It creates no synthetic Temper work. A note may — and often
 should — conclude that no skill change is warranted.
 
+## Mouse interaction in both editors, 2026-10-22
+
+The owner found that the preset and layout editors rendered controls without
+enabling mouse input. Earlier render and keyboard checks did not establish
+click behavior. [Preset stories](../internal/presetcmd/editor_mouse_test.go) and
+[layout stories](../internal/setupui/layouts_mouse_test.go) reproduced that
+failure before the fix, then exercised edits through guarded saves, cancellation,
+dependency confirmations and pending work.
+
+Code organization and unit design kept hit testing and clipped frame placement
+in `tui`, while each editor retains its draft and existing action guards.
+[Frame tests](../internal/tui/mouse_test.go) check visible cells against actual
+rendering; editor stories cover scrolling, wrapped rows and stale targets after
+resize. The layout viewport now scrolls without snapping back to its selection.
+
+Full offline Go tests, vet and race tests pass. Actual 40-column terminal mouse
+checks exercised navigation, fields, membership, confirmations and dry-run saves;
+the preset root stayed absent and saved layout configuration stayed byte-identical.
+Unchanged publication boundaries reuse their existing failure and clean-rerun
+tests. **No skill change warranted.**
+
 ## Three-step wizard and shared terminal layout, 2026-10-22
 
 Code organization reused the frame, navigation, actions, input and palette

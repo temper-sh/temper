@@ -109,6 +109,7 @@ func layoutText(s string) string {
 }
 
 func (m *LayoutModel) View() tea.View {
+	m.hits = tui.HitMap{}
 	if m.width < 28 || m.height < 10 {
 		v := tea.NewView(ansi.Truncate("Enlarge terminal to 28 × 10.", m.width, ""))
 		v.AltScreen = true
@@ -124,27 +125,48 @@ func (m *LayoutModel) View() tea.View {
 	if m.area == layoutBreadcrumbs {
 		crumb = m.crumb
 	}
-	header += tui.Breadcrumbs(m.breadcrumbs(), crumb, w) + "\n"
+	path, primary := tui.BreadcrumbsWithTargets(m.breadcrumbs(), crumb, w)
+	for i := range primary {
+		primary[i].Y += strings.Count(header, "\n")
+	}
+	header += path + "\n"
+	var secondary []tui.Target
 	if m.mode == "edit" && m.field == "" {
-		header += tui.Secondary(tui.Layouts, []string{"Presets", "Settings"}, m.page, w, m.area == layoutSections) + "\n"
+		var sections string
+		sections, secondary = tui.SecondaryWithTargets(tui.Layouts, []string{"Presets", "Settings"}, m.page, w, m.area == layoutSections)
+		for i := range secondary {
+			secondary[i].Y += strings.Count(header, "\n")
+		}
+		header += sections + "\n"
 	}
 	header += "\n"
-	body, start, end := m.body(w)
-	frame := tui.Frame{Width: m.width, Height: m.height, Header: header, Footer: m.footer(w)}
+	body, start, end, rows := m.body(w)
+	footer, actions := m.footer(w)
+	frame := tui.Frame{Width: m.width, Height: m.height, Header: header, Footer: footer}
 	m.viewport.SetWidth(w)
 	m.viewport.SetHeight(frame.BodyHeight())
 	m.viewport.SetContent(body)
-	if m.area == layoutContent && m.mode != "review" {
+	if m.focus && m.area == layoutContent && m.mode != "review" {
 		m.viewport.EnsureVisible(end, 0, 0)
 		m.viewport.EnsureVisible(start, 0, 0)
 	}
+	m.focus = false
+	if m.field == "" && m.mode != "confirm" && m.loading == "" {
+		m.hits.Add(layoutBreadcrumbs, frame.HeaderTargets(primary))
+		m.hits.Add(layoutSections, frame.HeaderTargets(secondary))
+	}
+	if m.loading == "" {
+		m.hits.Add(layoutContent, frame.BodyTargets(rows, m.viewport.YOffset()))
+	}
+	m.hits.Add(layoutActions, frame.FooterTargets(actions))
 	v := tea.NewView(frame.Render(m.viewport.View()))
 	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion
 	v.BackgroundColor, v.ForegroundColor = tui.Colors(tui.Canvas).Background, tui.Colors(tui.Body).Text
 	return v
 }
 
-func (m *LayoutModel) footer(width int) string {
+func (m *LayoutModel) footer(width int) (string, []tui.Target) {
 	var parts []string
 	if m.notice != "" {
 		parts = append(parts, tui.Style(m.noticeTone).Render(ansi.Wrap(layoutText(m.notice), width, "")))
@@ -162,7 +184,11 @@ func (m *LayoutModel) footer(width int) string {
 		buttons = append(buttons, tui.Button{Label: a.label, Kind: a.kind,
 			Focused: m.area == layoutActions && m.action == i, Disabled: a.disabled || m.loading != ""})
 	}
-	parts = append(parts, tui.Actions(tui.Layouts, buttons, width))
+	actions, targets := tui.ActionsWithTargets(tui.Layouts, buttons, width)
+	for i := range targets {
+		targets[i].Y += lipgloss.Height(strings.Join(parts, "\n"))
+	}
+	parts = append(parts, actions)
 	hints := []tui.Hint{{Key: "↑↓", Action: "move"}, {Key: "Enter", Action: "choose"}, {Key: "Tab", Action: "controls"}, {Key: "Esc", Action: "back"}}
 	if m.field != "" {
 		hints = []tui.Hint{{Key: "Enter", Action: "apply"}, {Key: "Esc", Action: "cancel"}}
@@ -173,11 +199,15 @@ func (m *LayoutModel) footer(width int) string {
 	} else if m.mode == "review" {
 		hints = []tui.Hint{{Key: "↑↓", Action: "scroll"}, {Key: "Tab", Action: "actions"}, {Key: "Esc", Action: "back"}}
 	}
-	return strings.Join(append(parts, tui.KeyHelp(hints, width)), "\n")
+	return strings.Join(append(parts, tui.KeyHelp(hints, width)), "\n"), targets
 }
 
-func (m *LayoutModel) body(width int) (string, int, int) {
+func (m *LayoutModel) body(width int) (string, int, int, []tui.Target) {
 	var lines []string
+	var targets []tui.Target
+	hit := func(index, start int) {
+		targets = append(targets, tui.Target{Index: index, Y: start, Width: width, Height: len(lines) - start})
+	}
 	start, end := 0, 0
 	add := func(text string, tone tui.Element, focus bool) {
 		style := tui.Style(tone).Width(width)
@@ -204,6 +234,7 @@ func (m *LayoutModel) body(width int) (string, int, int) {
 		m.text.SetWidth(max(1, width-3))
 		start, end = len(lines), len(lines)
 		lines = append(lines, m.text.View())
+		hit(0, start)
 	} else if m.mode == "confirm" {
 		switch m.confirm {
 		case "discard":
@@ -223,9 +254,11 @@ func (m *LayoutModel) body(width int) (string, int, int) {
 			add("No layouts yet. Choose New to create one.", tui.Muted, false)
 		}
 		for i, id := range m.layoutIDs() {
+			rowStart := len(lines)
 			l := m.draft.Layouts[id]
 			add(l.Name, tui.Body, m.cursor == i)
 			add(fmt.Sprintf("  %d presets · %d preload", len(l.Presets), len(l.Startup)), tui.Muted, false)
+			hit(i, rowStart)
 			blank()
 		}
 	} else if m.mode == "review" {
@@ -260,21 +293,26 @@ func (m *LayoutModel) body(width int) (string, int, int) {
 		add("Save changes this layout. Activate it when ready to use the changes.", tui.Muted, false)
 	} else if m.page == 1 {
 		add("Name: "+layout.Name, tui.Body, m.cursor == 0)
+		hit(0, 0)
 		blank()
+		rowStart := len(lines)
 		add(fmt.Sprintf("Idle unload (seconds): %d", layout.IdleSeconds), tui.Body, m.cursor == 1)
+		hit(1, rowStart)
 	} else {
 		if len(m.presetIDs()) == 0 {
 			add("No saved presets. Create one with temper preset, then reopen this editor.", tui.Muted, false)
 		}
 		for i, id := range m.presetIDs() {
+			rowStart := len(lines)
 			add(m.presetLabel(id, false), tui.Body, i == m.cursor)
 			if reason := m.presetErrors[id]; reason != "" && i == m.cursor {
 				add(reason, tui.Error, false)
 			}
+			hit(i, rowStart)
 			blank()
 		}
 	}
-	return strings.Join(lines, "\n"), start, end
+	return strings.Join(lines, "\n"), start, end, targets
 }
 
 func (m *LayoutModel) presetLabel(id string, review bool) string {

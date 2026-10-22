@@ -156,10 +156,13 @@ Temper writers serialize comparison and publication under a short kernel lock;
 external editors still need the documented optimistic-edit limitation.
 `tui` owns the shared terminal frame, header, breadcrumbs/steps, secondary
 navigation, buttons, key hints, tool palettes and text input. All three tools
-use these components. Rendering takes values and returns text; the wizard also
-uses renderer-produced cell targets for mouse navigation and actions. The frame
-provides region offsets so scrolling and clipped footers keep clicks aligned.
-Each tool owns focus, navigation, editing and effects.
+use these components. Rendering takes values and returns text with cell targets
+for mouse navigation and actions. Each editor records row targets while rendering
+content; `Frame` projects and clips them to visible header, body and footer cells.
+The editors rebuild their `HitMap` from each view and invalidate it on updates,
+so scrolling, wrapped controls and resizing cannot retain stale targets.
+Each tool owns focus, navigation, editing and effects; mouse activation uses
+its existing guarded actions.
 Configuration selection, layout membership and managed activation remain
 separate operations.
 

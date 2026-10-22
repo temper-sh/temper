@@ -32,8 +32,12 @@ func Header(tool Tool, badge string, width int) string {
 // Breadcrumbs renders a path, with the last label current. Focus is an ancestor
 // index, or -1 when focus belongs elsewhere. The caller owns back navigation.
 func Breadcrumbs(labels []string, focus, width int) string {
-	text, _ := primaryNavigation(labels, len(labels)-1, focus, width, false)
+	text, _ := BreadcrumbsWithTargets(labels, focus, width)
 	return text
+}
+
+func BreadcrumbsWithTargets(labels []string, focus, width int) (string, []Target) {
+	return primaryNavigation(labels, len(labels)-1, focus, width, false)
 }
 
 // Steps shares breadcrumb geometry, adding completed marks before the current

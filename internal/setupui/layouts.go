@@ -62,6 +62,8 @@ type LayoutModel struct {
 	viewport                   viewport.Model
 	assessment                 *setup.LayoutPlan
 	assessmentError            string
+	focus                      bool
+	hits                       tui.HitMap
 }
 
 const (
@@ -88,7 +90,7 @@ func NewLayoutModel(ctx context.Context, input LayoutInput, save LayoutSave, pre
 	ctx, cancel := context.WithCancel(ctx)
 	m := &LayoutModel{ctx: ctx, cancel: cancel, save: save, preview: preview,
 		saved: configuration, draft: configuration, presetErrors: maps.Clone(input.PresetErrors), dry: input.DryRun, mode: "list",
-		width: 100, height: 32, viewport: viewport.New(),
+		width: 100, height: 32, viewport: viewport.New(), focus: true,
 		text: tui.TextInput(160, tui.Colors(tui.Input).Text, tui.Colors(tui.InputPrompt).Text, tui.Layouts.Colors(tui.Heading).Text)}
 	m.draft.Layouts = cloneLayouts(configuration.Layouts)
 	if input.ID != "" {
@@ -143,15 +145,35 @@ func (m *LayoutModel) list() {
 }
 
 func (m *LayoutModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	hits := m.hits
+	m.hits = tui.HitMap{}
 	switch msg := msg.(type) {
+	case tea.MouseClickMsg:
+		if msg.Button != tea.MouseLeft || m.width < 28 || m.height < 10 {
+			return m, nil
+		}
+		if area, index, ok := hits.At(msg.X, msg.Y); ok {
+			return m, m.click(area, index)
+		}
+		return m, nil
+	case tea.MouseWheelMsg:
+		if m.field != "" || m.loading != "" {
+			return m, nil
+		}
+		m.focus = false
+		var cmd tea.Cmd
+		m.viewport, cmd = m.viewport.Update(msg)
+		return m, cmd
 	case tea.WindowSizeMsg:
 		m.width, m.height = max(1, msg.Width), max(1, msg.Height)
+		m.focus = true
 		return m, nil
 	case layoutJob:
 		if msg.seq != m.seq {
 			return m, nil
 		}
 		m.loading = ""
+		m.focus = true
 		if m.jobCancel != nil {
 			m.jobCancel()
 			m.jobCancel = nil
@@ -190,6 +212,7 @@ func (m *LayoutModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tea.KeyPressMsg:
 		key := msg.String()
+		m.focus = true
 		if m.loading != "" {
 			if key == "esc" || key == "ctrl+c" {
 				m.jobCancel()
@@ -204,6 +227,12 @@ func (m *LayoutModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.field != "" {
 			return m, m.inputKey(msg)
+		}
+		if key == "pgup" || key == "pgdown" {
+			m.focus = false
+			var cmd tea.Cmd
+			m.viewport, cmd = m.viewport.Update(msg)
+			return m, cmd
 		}
 		if key == "ctrl+c" {
 			if m.mode == "confirm" {
@@ -237,10 +266,7 @@ func (m *LayoutModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "end":
 				m.action = len(m.actions()) - 1
 			case "enter", "space":
-				action := m.actions()[m.action]
-				if !action.disabled {
-					return m, m.invoke(action.id)
-				}
+				return m, m.activateAction(m.action)
 			}
 			return m, nil
 		}

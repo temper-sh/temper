@@ -129,7 +129,7 @@ func (m *Editor) hints() []tui.Hint {
 	return hints
 }
 
-func (m *Editor) renderFooter(width int) string {
+func (m *Editor) renderFooter(width int) (string, []tui.Target) {
 	var buttons []tui.Button
 	for i, action := range m.actions() {
 		kind := tui.Action
@@ -139,8 +139,7 @@ func (m *Editor) renderFooter(width int) string {
 		buttons = append(buttons, tui.Button{Label: action.label, Kind: kind, Disabled: action.disabled,
 			Focused: m.area == actionsArea && i == m.actionCursor && m.input == "" && m.confirm == "" && !m.loading})
 	}
-	footer := tui.Style(tui.Divider).Render(strings.Repeat("─", width)) + "\n" +
-		tui.Actions(tui.Presets, buttons, width) + "\n" + tui.KeyHelp(m.hints(), width)
+	footer := tui.Style(tui.Divider).Render(strings.Repeat("─", width)) + "\n"
 	notice := m.notice
 	if m.loading {
 		notice = "Reading…"
@@ -152,11 +151,16 @@ func (m *Editor) renderFooter(width int) string {
 		}
 		footer = tui.Style(tui.Notice).Render(strings.Join(rows, "\n")) + "\n" + footer
 	}
-	return footer
+	actions, targets := tui.ActionsWithTargets(tui.Presets, buttons, width)
+	for i := range targets {
+		targets[i].Y += strings.Count(footer, "\n")
+	}
+	return footer + actions + "\n" + tui.KeyHelp(m.hints(), width), targets
 }
 
 func (m *Editor) selectSection(index int) tea.Cmd {
 	m.page, m.cursor = index, 0
+	m.viewport.GotoTop()
 	if m.page == 4 {
 		return m.review()
 	}
@@ -250,6 +254,23 @@ func (m *Editor) navigationKey(key string) (tea.Cmd, bool) {
 }
 
 func (m *Editor) activateAction(key string) tea.Cmd {
+	if m.loading {
+		if key == "esc" {
+			m.cancelJob()
+			m.notice = "Read cancelled; your draft is unchanged."
+		}
+		return nil
+	}
+	if m.input != "" {
+		code := tea.KeyEnter
+		if key == "esc" {
+			code = tea.KeyEsc
+		}
+		return m.inputKey(tea.KeyPressMsg{Code: code})
+	}
+	if m.confirm != "" {
+		return m.confirmKey(key)
+	}
 	switch m.mode {
 	case "manager":
 		return m.managerKey(key)
@@ -292,7 +313,7 @@ func (m *Editor) goToAncestor(index int) tea.Cmd {
 	return nil
 }
 
-func (m *Editor) renderHeader(width int) string {
+func (m *Editor) renderHeader(width int) (string, []tui.Target, []tui.Target) {
 	badge := ""
 	if m.options.DryRun {
 		badge = "DRY RUN"
@@ -305,14 +326,22 @@ func (m *Editor) renderHeader(width int) string {
 	if m.area == primaryArea && m.input == "" && m.confirm == "" && !m.loading {
 		focus = m.navCursor
 	}
-	header += tui.Breadcrumbs(m.breadcrumbs(), focus, width) + "\n"
+	path, primary := tui.BreadcrumbsWithTargets(m.breadcrumbs(), focus, width)
+	for i := range primary {
+		primary[i].Y += strings.Count(header, "\n")
+	}
+	header += path + "\n"
 	labels, current := m.secondary()
-	header += tui.Secondary(tui.Presets, labels, current, width,
+	sections, secondary := tui.SecondaryWithTargets(tui.Presets, labels, current, width,
 		m.area == secondaryArea && m.input == "" && m.confirm == "" && !m.loading)
+	for i := range secondary {
+		secondary[i].Y += strings.Count(header, "\n")
+	}
+	header += sections
 	if m.height >= 18 {
 		header += "\n"
 	}
-	return header
+	return header, primary, secondary
 }
 
 // Keep the selected field's explanatory text visible even while focus is on a
