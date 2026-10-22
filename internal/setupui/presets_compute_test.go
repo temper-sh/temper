@@ -130,12 +130,6 @@ func TestComputeEditRefreshesMemoryAndSurvivesOtherEdits(t *testing.T) {
 	if string(before) != string(after) || m.notice != "" {
 		t.Fatal("a Template key changed the selected preset")
 	}
-	for _, width := range []int{120, 80, 28} {
-		view := ansi.Strip(reviewPresetTable(m.draft, []string{p.ID}, nil, width))
-		if !strings.Contains(view, "CPU") {
-			t.Fatalf("review omitted device at %d columns:\n%s", width, view)
-		}
-	}
 	editorKey(m, 'g')
 	editorKey(m, 's')
 	editorKey(m, 'p')
@@ -145,26 +139,6 @@ func TestComputeEditRefreshesMemoryAndSurvivesOtherEdits(t *testing.T) {
 	}
 	if !catalog.SameExecution(m.input.Presets[1].Lock, p.Lock) {
 		t.Fatal("edit mutated the input preset")
-	}
-}
-
-func TestReviewShowsRemainingContextForAnOmittedOutputLimit(t *testing.T) {
-	m := presetEditor(t, "qwen3.8-27b-q4xl-mtp")
-	editorKey(m, ' ')
-	p, _ := m.selectedOption()
-	selected := m.draft.Presets[p.ID]
-	_, preset := presetRecord(selected.Lock)
-	var err error
-	selected.Lock, err = catalog.ConfigureExecution(selected.Lock, selected.Lock.Preset, catalog.ExecutionSettings{ContextWindowTokens: preset.Window()})
-	if err != nil {
-		t.Fatal(err)
-	}
-	m.draft.Presets[p.ID] = selected
-	for _, width := range []int{120, 80, 40} {
-		view := ansi.Strip(reviewPresetTable(m.draft, []string{p.ID}, nil, width))
-		if !strings.Contains(view, "remaining") || strings.Contains(view, " / 0") {
-			t.Fatalf("review misrepresents the omitted cap at %d columns:\n%s", width, view)
-		}
 	}
 }
 

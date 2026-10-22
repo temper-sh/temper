@@ -154,11 +154,18 @@ mtime. Cancellation before publication leaves the preset unchanged; a directory
 sync failure after publication is reported as saved with durability uncertain.
 
 Save changes only `presets.d/ID.json` (and root housekeeping on the first
-write). It does not select the preset, change any layout, rebuild an existing
-execution lock, install software, synchronize a harness or restart service.
+write). The layout editor reads that folder, so saved presets appear in its
+membership list automatically. Save does not change any layout, rebuild an
+existing execution lock, install software, synchronize a harness or restart service.
 The manager reports layout references from saved configuration; those layouts
-keep their existing locks. Placement and rebuilding belong to the separate
-configuration/layout workflow. `--dry-run` performs validation and preview but
+keep their existing locks. Saving a layout captures the exact lock of a newly
+included file and its `user_preset` source ID. `temper update` reads that source:
+forks follow the catalog origin plus overrides; copies keep their authored values.
+A fork's overridden catalog values are retained with its saved configuration,
+so [updates report upstream changes](init.md#change-your-setup) while preserving
+the authored overrides. A missing or invalid file retains the saved lock and
+comparison baseline. `--dry-run` performs validation
+and preview but
 creates no root, lock file or preset, and cannot delete.
 
 Delete requires an explicit confirmation naming the file and any saved layout

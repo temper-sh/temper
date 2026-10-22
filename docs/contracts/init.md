@@ -17,8 +17,9 @@ general-purpose presets. **Specialist** groups recommended specialists by task,
 with explanations of their purpose and tradeoffs. **Other** contains the
 remaining choices, including smaller models and saved presets no longer in the
 catalog. Each preset appears in one tab. Nothing is selected for you.
-The header shows your Mac and the date of the catalog in use. A preset this
-Temper cannot use is shown disabled with the reason, for example "needs Temper
+The wizard follows **Presets → Harnesses → Review**. Machine and catalog details
+appear with the preset choices. A preset this Temper cannot use is shown
+disabled with the reason, for example "needs Temper
 0.2.0 or newer".
 
 Check the model license, hardware requirements and memory guidance beside your choice.
@@ -35,7 +36,7 @@ Use your terminal's link-opening gesture, often Cmd-click. Text previews show
 the URL explicitly. Licenses come from the selected model files, including
 saved custom presets; they are separate from Temper's own software license.
 
-Use **Compute** (`p`) beside Context and Template to switch between CPU and GPU
+Use **Compute** (`p`) beside Context to switch between CPU and GPU
 where the catalog offers both as practical choices. The selected device appears
 before Context on the same settings line. Fixed GPU presets omit the device
 label; CPU-only presets show **CPU only**. Both omit the Compute control, and
@@ -45,20 +46,21 @@ still consume RAM; GPU models also count against the GPU's wired-memory limit.
 Changing compute refreshes the memory review and does not inherit performance
 or context measurements from the other device.
 
-The template label and control appear only when compatible alternatives are
-available; otherwise `t` has no effect.
+When a preset uses a custom chat template, its name appears in the settings.
+Use `temper preset` to edit an authored preset's template.
 
 To explore the wizard without saving or downloading anything, use
 `temper init --dry-run`.
 
-## Arrange a layout
+## Your initial layout
 
 A **layout** groups presets for a way of working: coding, writing, or local
-helpers alongside a cloud assistant. Your first setup suggests one **Default**
+helpers alongside a cloud assistant. Your first setup creates one **Default**
 layout containing all the presets you selected. None loads on activation,
 and no default model is chosen; models load when requested by their preset ID.
 
-You can continue with this layout or open it to edit these independent choices:
+Layout editing lives in `temper layout`. After setup, use it to change these
+independent choices:
 
 | Choice | What happens |
 |---|---|
@@ -89,15 +91,16 @@ for ownership, directory overrides, deselection and retry behavior.
 
 ## Review and install
 
-Open **Review** to see each model's license, downloads, disk requirements, and
-estimated memory use. Model downloads can be many gigabytes; existing compatible
-downloads are reused and verified.
+**Review** confirms selected models and harnesses, layout availability,
+download/disk totals and a short memory assessment. The Downloads table shows
+individual files directly. Model licenses and preset settings remain on the
+selection screen and in the preset editor. Cached files are reused and verified.
 
 Choose **Install and start** to save your choices, install the required files
 and start the Default layout. **Save without installing** saves the choices
 without downloading; **Cancel** leaves them unsaved. When installation is not
 possible, for example because the disk is too full, the first button says so
-and the reason appears below the buttons.
+and the reason appears in the review.
 
 ## Activate, inspect and stop
 
@@ -133,7 +136,16 @@ after restarting your Mac; it does not start automatically at login.
 temper configure
 ```
 
-The same wizard lets you add presets, edit layouts, or change the default.
+The same three-step wizard lets you select presets and harness integrations.
+Reopening it preserves every existing layout, including its membership,
+preload, default-model and idle choices. It does not recreate a missing Default.
+Review names models outside layouts; place them
+with `temper layout`. Referenced presets cannot be deselected until their
+memberships are changed in the layout editor; the wizard names those layouts.
+During an unsaved first setup, returning to Presets updates the initial Default
+to match the selections. Cancel and dry runs save nothing. Scripted
+`configure --preset` retains its existing explicit selection contract.
+
 Review and install any missing files; the running layout then restarts with
 the changes. Saving alone does not change a running service.
 
@@ -151,6 +163,35 @@ and settings and is reported as `kept` with the reason; it still gets the
 newest router, because a layout runs one router. `temper update --software`
 changes only the router and engine releases and keeps everything else; it
 notes when the result is not a combination the catalog tested.
+
+Presets placed from `presets.d` retain their source file ID. Full updates read
+that file: forks combine the current catalog origin with authored overrides;
+copies retain their authored values and use the current software. Your saved
+context and compute choices remain. If the file is missing, invalid or no
+longer fits, the entire working lock stays unchanged and the reason is reported.
+`--software` keeps the saved model and settings even when authoring is unavailable.
+
+For a fork, updates also report catalog changes to fields it explicitly overrides:
+the field path, previous and current catalog values, and the authored override.
+The override stays in place. The comparison uses the catalog values saved with
+the preset, so a separate catalog refresh cannot erase it. Only overridden
+fields are retained, using the origin profile selected for this Mac; this is
+comparison data, not another execution lock.
+
+First layout placement captures that baseline. A successful full configuration
+save advances it, even when overrides leave the execution lock unchanged; a
+comparison-only save installs and restarts nothing. Dry runs, refused rebuilds
+and `--software` preserve it. New overrides, a different origin, and older saved
+presets without a baseline are reported as untracked until the next full save;
+Temper does not infer their previous catalog values from the fork's lock.
+Copies have no upstream override comparison. Removing an override resumes
+inheritance and removes its baseline on the next full save.
+
+`--json` adds `override_changes` to each preset result, with `path`, `from`,
+`to` and `override` values, and `untracked_overrides` for paths without a prior
+comparison value. JSON `null` means the catalog field was unset, distinct from
+zero or false. A post-save preparation failure still emits the report, with
+an `error` in JSON and a nonzero exit; the saved configuration can be resumed.
 
 `temper configure --software latest` follows the newest upstream router and
 engine releases for every saved preset; `--software stable` returns to the
@@ -173,8 +214,8 @@ does not establish fit on your Mac. Context and compute edits affect every
 layout using that preset, and `temper update` keeps them.
 
 Clients that support the engine's request controls can change the thinking
-level for a request. Current presets default to medium. Pi's thinking menu
-requires a configured local provider; Temper's wizard does not configure Pi.
+level for a request. Current presets default to medium. See
+[harness integrations](harnesses.md) for Pi, PiG and Hermes behavior.
 
 ## Model storage
 
@@ -211,7 +252,7 @@ selection, first remove it from layouts that use it.
 |---|---|
 | Arrow keys | Move between rows and controls. |
 | Enter or Space | Activate a button or toggle a checkbox. |
-| Tab / Shift+Tab | Focus the forward / back action; Enter confirms it. |
+| Tab / Shift+Tab | Move focus between content, actions, primary navigation and category filters; Enter activates the focused control. |
 | Esc | Go back, or cancel the current form. On the first screen it does not leave; press q or choose Cancel. |
 | PgUp / PgDown | Scroll long cards and reviews. |
 

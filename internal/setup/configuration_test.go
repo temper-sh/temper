@@ -2,6 +2,7 @@ package setup_test
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,6 +22,41 @@ func composition(t *testing.T) setup.Configuration {
 	c.Layouts["writing"] = setup.Layout{Name: "Writing", Presets: []string{compactLayout}, Startup: []string{}, IdleSeconds: 60}
 	c.Layouts["review"] = setup.Layout{Name: "Review", Presets: []string{compactLayout}, Startup: []string{compactLayout}, Default: compactLayout, IdleSeconds: 60}
 	return c
+}
+
+func TestConfigurationRetainsUserPresetSourceAndRejectsAnotherLock(t *testing.T) {
+	c := composition(t)
+	p := c.Presets[compactLayout]
+	p.UserPreset = p.Lock.Preset
+	p.ForkBaseline = &setup.ForkBaseline{Origin: "original", Values: map[string]json.RawMessage{
+		"request_defaults.sampling.temperature": json.RawMessage("0"),
+		"request_defaults.sampling.seed":        json.RawMessage("null"),
+	}}
+	c.Presets[compactLayout] = p
+	raw, err := c.Bytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved, err := setup.ParseConfiguration(raw)
+	if err != nil || saved.Presets[compactLayout].UserPreset != p.UserPreset {
+		t.Fatal("source identity was lost", err)
+	}
+	baseline := saved.Presets[compactLayout].ForkBaseline
+	if baseline == nil || baseline.Origin != "original" || string(baseline.Values["request_defaults.sampling.temperature"]) != "0" || string(baseline.Values["request_defaults.sampling.seed"]) != "null" {
+		t.Fatal("catalog comparison values were lost", baseline)
+	}
+	for _, invalid := range []string{"another-preset", "../outside"} {
+		p.UserPreset = invalid
+		c.Presets[compactLayout] = p
+		if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "user_preset") {
+			t.Fatal("source identity accepted another lock or path", invalid, err)
+		}
+	}
+	p.UserPreset = ""
+	c.Presets[compactLayout] = p
+	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "fork_baseline") {
+		t.Fatal("catalog preset accepted a fork baseline", err)
+	}
 }
 
 func TestComposedAlternativesShareDiskWithoutImplyingConcurrentMemory(t *testing.T) {

@@ -14,6 +14,23 @@ type Frame struct {
 	Header, Footer string
 }
 
+// Target is the cell rectangle of one rendered control. Its index identifies
+// the caller's action or section; the caller owns activation and focus.
+type Target struct {
+	Index, X, Y, Width, Height int
+}
+
+func (f Frame) HeaderTop() int { return f.inset() }
+
+func (f Frame) BodyTop() int {
+	header, _ := f.regions()
+	return f.inset() + len(lines(header))
+}
+
+// FooterTop is the origin of the untrimmed footer. When a short frame drops
+// leading footer lines, callers clip their targets to the visible footer.
+func (f Frame) FooterTop() int { return f.Height - f.inset() - len(lines(f.Footer)) }
+
 func ContentWidth(width int) int {
 	if width < 50 {
 		return max(1, width-2)
@@ -111,9 +128,15 @@ func (b Button) render(tool Tool, width int) string {
 }
 
 func Actions(tool Tool, buttons []Button, width int) string {
+	text, _ := ActionsWithTargets(tool, buttons, width)
+	return text
+}
+
+func ActionsWithTargets(tool Tool, buttons []Button, width int) (string, []Target) {
 	var rows []string
+	var targets []Target
 	row := ""
-	for _, button := range buttons {
+	for i, button := range buttons {
 		part := button.render(tool, width)
 		if row != "" && lipgloss.Width(row)+1+lipgloss.Width(part) > width {
 			rows = append(rows, row)
@@ -122,12 +145,13 @@ func Actions(tool Tool, buttons []Button, width int) string {
 		if row != "" {
 			row += " "
 		}
+		targets = append(targets, Target{Index: i, X: lipgloss.Width(row), Y: len(rows), Width: lipgloss.Width(part), Height: 1})
 		row += part
 	}
 	if row != "" {
 		rows = append(rows, row)
 	}
-	return strings.Join(rows, "\n")
+	return strings.Join(rows, "\n"), targets
 }
 
 type Hint struct{ Key, Action string }

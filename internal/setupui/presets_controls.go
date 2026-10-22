@@ -1,12 +1,11 @@
 package setupui
 
 import (
-	"github.com/temper-sh/temper/internal/catalog"
-	"github.com/temper-sh/temper/internal/setup"
 	"slices"
 	"strconv"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/temper-sh/temper/internal/catalog"
 )
 
 // Rendering, pointer activation and keyboard focus share the same buttons.
@@ -26,11 +25,11 @@ func (m *PresetModel) footerButtons() []presetButton {
 	}
 	if m.page == presetReviewPage {
 		install := "Install and start"
-		switch {
-		case m.reviewReady && !m.loading && !m.plan.CanPrepare:
+		if len(m.draft.Layouts) == 0 || len(m.draft.Presets) == 0 {
+			install = "Install"
+		}
+		if m.reviewReady && !m.loading && !m.plan.CanPrepare {
 			install = "Can't install yet"
-		case m.reviewReady && !m.loading && m.plan.RemainingDownloadBytes > 0:
-			install += " · " + setup.DownloadSize(m.plan.RemainingDownloadBytes)
 		}
 		var buttons []presetButton
 		for i, label := range []string{install, "Save without installing", "Back", "Cancel"} {
@@ -41,13 +40,9 @@ func (m *PresetModel) footerButtons() []presetButton {
 		}
 		return buttons
 	}
-	back, next, short := "← Back", "Next: Layouts →", "Next →"
+	back, next, short := "← Back", "Next: Harnesses →", "Next →"
 	if m.page == 0 {
 		back = "Cancel"
-	} else if m.layout != "" {
-		next, short = "Done →", "Done →"
-	} else {
-		next, short = "Next: Harnesses →", "Next →"
 	}
 	if m.page == presetHarnessPage {
 		next, short = "Review →", "Review →"
@@ -69,10 +64,7 @@ func (m *PresetModel) footerButtons() []presetButton {
 		if ok && len(record.ComputeOptions) > 1 {
 			buttons = append(buttons, button("p Compute", "Compute", "p", true))
 		}
-	case m.layout == "":
-		buttons = append(buttons, button("n New layout", "New", "n", true), button("r Rename", "Rename", "r", selected), button("x Remove", "Remove", "x", selected))
-	default:
-		buttons = append(buttons, button("i Idle unload", "Idle", "i", true))
+
 	}
 	return buttons
 }
@@ -105,7 +97,6 @@ func (m *PresetModel) navigationButton(back bool) int {
 func (m *PresetModel) focusArea(area presetFocus) {
 	m.focus = area
 	m.focusSelection = area == presetContentFocus
-	m.focusDownloads = false
 	if area == presetFilterFocus {
 		m.view.GotoTop()
 	}
@@ -115,27 +106,36 @@ func (m *PresetModel) focusArea(area presetFocus) {
 		} else {
 			m.text.Blur()
 		}
-	} else if m.page == presetReviewPage && area == presetContentFocus {
-		m.focusDownloads = true
 	}
 }
 
-func (m *PresetModel) contentRows() int {
-	if m.field != "" {
-		return 1
-	}
-	if m.page == presetReviewPage {
-		if m.reviewReady && !m.loading && m.reviewErr == nil {
-			for _, section := range m.plan.Sections() {
-				if section.Downloads != nil {
-					return 1
-				}
-			}
+func (m *PresetModel) cycleFocus(back bool) {
+	areas := []presetFocus{presetContentFocus, presetFooterFocus}
+	if m.field == "" {
+		areas = append(areas, presetStepsFocus)
+		if m.page == 0 {
+			areas = append(areas, presetFilterFocus)
 		}
-		return 0
 	}
-	if m.layout != "" {
-		return m.count() + 1 // The idle-unload control follows the preset rows.
+	delta := 1
+	if back {
+		delta = -1
+	}
+	i := slices.Index(areas, m.focus)
+	area := areas[(i+delta+len(areas))%len(areas)]
+	if area == presetFooterFocus {
+		m.action = m.navigationButton(back)
+	}
+	if area == presetStepsFocus {
+		m.step = m.page
+	}
+	m.focusArea(area)
+}
+
+func (m *PresetModel) contentRows() int {
+	if m.field != "" || m.page == presetReviewPage {
+		// Review has one scrollable content area, with no selectable rows.
+		return 1
 	}
 	return m.count()
 }
@@ -144,15 +144,33 @@ func (m *PresetModel) moveVertical(delta int) {
 	rows := m.contentRows()
 	filters := m.page == 0 && m.field == ""
 	switch m.focus {
+	case presetStepsFocus:
+		if delta > 0 && filters {
+			m.focusArea(presetFilterFocus)
+			return
+		}
+		if delta > 0 && rows > 0 {
+			m.cursor = 0
+			m.focusArea(presetContentFocus)
+			return
+		}
 	case presetFilterFocus:
+		if delta < 0 {
+			m.step = m.page
+			m.focusArea(presetStepsFocus)
+			return
+		}
 		if delta > 0 && rows > 0 {
 			m.cursor = 0
 			m.focusArea(presetContentFocus)
 			return
 		}
 	case presetFooterFocus:
-		if filters && (delta > 0 || rows == 0) {
+		if delta < 0 && rows == 0 && filters {
 			m.focusArea(presetFilterFocus)
+		} else if m.field == "" && (delta > 0 || rows == 0) {
+			m.step = m.page
+			m.focusArea(presetStepsFocus)
 		} else if rows > 0 {
 			if m.field == "" {
 				m.cursor = 0
@@ -165,6 +183,16 @@ func (m *PresetModel) moveVertical(delta int) {
 		return
 	case presetContentFocus:
 		if m.field == "" {
+			if m.page == presetReviewPage {
+				if delta < 0 && !m.view.AtTop() {
+					m.view.ScrollUp(1)
+					return
+				}
+				if delta > 0 && !m.view.AtBottom() {
+					m.view.ScrollDown(1)
+					return
+				}
+			}
 			next := m.cursor + delta
 			if next >= 0 && next < rows {
 				m.cursor = next
@@ -173,6 +201,11 @@ func (m *PresetModel) moveVertical(delta int) {
 			}
 			if delta < 0 && filters {
 				m.focusArea(presetFilterFocus)
+				return
+			}
+			if delta < 0 {
+				m.step = m.page
+				m.focusArea(presetStepsFocus)
 				return
 			}
 		}
@@ -190,11 +223,8 @@ func (m *PresetModel) moveHorizontal(delta int) {
 	case presetFooterFocus:
 		n := len(m.footerButtons())
 		m.action = (m.action + delta + n) % n
-	case presetContentFocus:
-		if m.layout != "" && m.field == "" && m.cursor < m.count() {
-			m.control = (m.control + delta + 3) % 3
-			m.focusSelection = true
-		}
+	case presetStepsFocus:
+		m.step = max(0, min(presetReviewPage, m.step+delta))
 	}
 }
 
@@ -211,30 +241,17 @@ func (m *PresetModel) activateFocused() tea.Cmd {
 				return m.activateTarget(b.target)
 			}
 		}
+	case presetStepsFocus:
+		return m.selectStep(m.step)
 	case presetFilterFocus:
 		m.moveVertical(1)
 	case presetContentFocus:
 		if m.field != "" {
 			return m.activateShortcut("apply")
 		}
-		if m.page == presetReviewPage {
-			if m.contentRows() > 0 {
-				m.downloadsOpen = !m.downloadsOpen
-				m.focusDownloads = true
-			}
-		} else if m.layout != "" && m.cursor == m.count() {
-			return m.activateShortcut("i")
-		} else if m.cursor < m.count() {
+		if m.page != presetReviewPage && m.cursor < m.count() {
 			m.focusSelection = true
-			if m.page == 1 && m.layout == "" {
-				m.layout = m.layoutIDs()[m.cursor]
-				m.cursor, m.control = 0, 0
-				m.view.GotoTop()
-			} else if m.layout != "" && m.control != 0 {
-				m.loadingChoice([]string{"", "s", "d"}[m.control])
-			} else {
-				m.toggleMember()
-			}
+			m.toggleMember()
 		}
 	}
 	return nil
@@ -257,26 +274,6 @@ func (m *PresetModel) activateShortcut(key string) tea.Cmd {
 		return m.back()
 	case "retry":
 		return m.startPreview()
-	case "n", "r", "x":
-		if m.page != 1 || m.layout != "" {
-			return nil
-		}
-		if key == "n" {
-			return m.edit("new", "")
-		}
-		ids := m.layoutIDs()
-		if m.cursor < len(ids) {
-			if key == "r" {
-				return m.edit("rename", m.draft.Layouts[ids[m.cursor]].Name)
-			}
-			delete(m.draft.Layouts, ids[m.cursor])
-			m.cursor = max(0, m.cursor-1)
-			m.focusSelection = m.focus == presetContentFocus
-		}
-	case "i":
-		if m.page == 1 && m.layout != "" {
-			return m.edit("idle", strconv.Itoa(m.draft.Layouts[m.layout].IdleSeconds))
-		}
 	case "c":
 		if p, ok := m.selectedOption(); m.page == 0 && ok {
 			lock := p.Lock

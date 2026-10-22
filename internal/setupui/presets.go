@@ -18,12 +18,14 @@ import (
 )
 
 const (
-	presetHarnessPage = 2
-	presetReviewPage  = 3
+	presetHarnessPage = 1
+	presetReviewPage  = 2
 )
 
 type PresetOption struct {
 	ID, Name, Model, Weights, Engine, Description, AssessmentURL, Tier, Details, Unavailable string
+	UserPreset                                                                               string
+	ForkBaseline                                                                             *setup.ForkBaseline
 	ModelBytes                                                                               int64
 	MemoryBytes                                                                              int64 // accounted estimate; total runtime fit remains unknown
 	MemoryBasis                                                                              string
@@ -71,6 +73,7 @@ const (
 	presetContentFocus presetFocus = iota
 	presetFilterFocus
 	presetFooterFocus
+	presetStepsFocus
 )
 
 // PresetModel holds a revocable draft. All sub-tabs operate on its one selected
@@ -84,12 +87,10 @@ type PresetModel struct {
 	page           int
 	group          string
 	cursor         int
-	control        int // Included, startup or default within a layout's preset row.
+	step           int // Focused primary-navigation step.
 	focus          presetFocus
 	editFocus      presetFocus
 	editAction     int
-	layout         string
-	suggestLayout  bool // A fresh wizard seeds its layout once, after preset selection.
 	field          string
 	text           textinput.Model
 	notice         string
@@ -103,8 +104,6 @@ type PresetModel struct {
 	width, height  int
 	view           viewport.Model
 	focusSelection bool
-	downloadsOpen  bool
-	focusDownloads bool
 	hitTargets     []hitTarget
 	Decision       PresetDecision
 }
@@ -113,11 +112,11 @@ func NewPresetModel(ctx context.Context, input PresetInput, preview func(context
 	// Clone at the edit boundary; cancel must not modify caller-owned selections.
 	raw, _ := input.Configuration.Bytes()
 	draft, _ := setup.ParseConfiguration(raw)
-	t := tui.TextInput(160, colorText, colorMuted, actionColors.Name[0])
+	t := tui.TextInput(160, tui.Colors(tui.Input).Text, tui.Colors(tui.InputPrompt).Text, tui.Wizard.Colors(tui.Heading).Text)
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	m := &PresetModel{input: input, assessments: map[string]setup.PresetPlan{}, draft: draft, ctx: ctx, preview: preview, text: t, width: 100, height: 35, view: viewport.New(), focusSelection: true, suggestLayout: input.NewConfiguration}
+	m := &PresetModel{input: input, assessments: map[string]setup.PresetPlan{}, draft: draft, ctx: ctx, preview: preview, text: t, width: 100, height: 35, view: viewport.New(), focusSelection: true}
 	m.group = m.groups()[0].ID
 	m.view.SoftWrap = false // Each card wraps before placement in the viewport.
 	return m
@@ -177,7 +176,7 @@ func (m *PresetModel) section(id string) (catalog.Section, bool) {
 
 // reservedKeys are the actions of the preset page; group shortcuts never
 // shadow them.
-var reservedKeys = []string{"c", "d", "i", "j", "k", "n", "p", "q", "r", "t", "x"}
+var reservedKeys = []string{"c", "d", "j", "k", "p", "q", "r"}
 
 // groupShortcut maps a key to the group whose name starts with it, when no
 // other group starts with the same letter. Left/Right always work.
@@ -202,14 +201,6 @@ func firstLetter(name string) (string, bool) {
 	}
 	return "", false
 }
-func (m *PresetModel) layoutIDs() []string {
-	var ids []string
-	for id := range m.draft.Layouts {
-		ids = append(ids, id)
-	}
-	slices.Sort(ids)
-	return ids
-}
 func (m *PresetModel) presetIDs() []string {
 	var ids []string
 	for id := range m.draft.Presets {
@@ -232,10 +223,7 @@ func (m *PresetModel) count() int {
 	if m.page == 0 {
 		return len(m.visible())
 	}
-	if m.layout != "" {
-		return len(m.presetIDs())
-	}
-	return len(m.layoutIDs())
+	return 0
 }
 func (m *PresetModel) edit(field, value string) tea.Cmd {
 	m.editFocus, m.editAction = m.focus, m.action
@@ -260,106 +248,27 @@ func (m *PresetModel) toggleMember() {
 			return
 		}
 		if _, selected := m.draft.Presets[p.ID]; selected {
-			if refs := m.draft.References(p.ID); len(refs) > 0 {
-				m.notice = "Included in " + strings.Join(refs, ", ") + ". Remove those memberships, startup selections and defaults first."
+			if refs := m.input.Configuration.References(p.ID); len(refs) > 0 {
+				var names []string
+				for _, id := range refs {
+					names = append(names, m.draft.Layouts[id].Name)
+				}
+				m.notice = "Used by " + strings.Join(names, ", ") + ". Change membership with temper layout before removing this preset."
 				return
 			}
 			delete(m.draft.Presets, p.ID)
 		} else if !p.buildable() {
 			m.notice = "Unavailable: " + p.Unavailable
 		} else {
-			m.draft.Presets[p.ID] = setup.Preset{Name: p.Name, Choices: p.Choices, Lock: p.Lock}
-		}
-	} else if m.layout != "" {
-		ids := m.presetIDs()
-		if m.cursor >= len(ids) {
-			return
-		}
-		id := ids[m.cursor]
-		l := m.draft.Layouts[m.layout]
-		if i := slices.Index(l.Presets, id); i >= 0 {
-			l.Presets = slices.Delete(l.Presets, i, i+1)
-			if slices.Contains(l.Startup, id) || l.Default == id {
-				m.notice = "Membership removed. Clear its startup/default choice explicitly before saving."
-			}
-		} else {
-			l.Presets = append(l.Presets, id)
-		}
-		m.draft.Layouts[m.layout] = l
-	}
-}
-func (m *PresetModel) loadingChoice(key string) {
-	ids := m.presetIDs()
-	if m.cursor >= len(ids) {
-		return
-	}
-	id := ids[m.cursor]
-	l := m.draft.Layouts[m.layout]
-	if key == "d" {
-		if l.Default == id {
-			l.Default = ""
-		} else if slices.Contains(l.Presets, id) {
-			l.Default = id
-		} else {
-			m.notice = "Include this preset before setting it as default."
-		}
-	} else {
-		if i := slices.Index(l.Startup, id); i >= 0 {
-			l.Startup = slices.Delete(l.Startup, i, i+1)
-		} else if slices.Contains(l.Presets, id) {
-			l.Startup = append(l.Startup, id)
-		} else {
-			m.notice = "Include this preset before selecting startup loading."
+			m.draft.Presets[p.ID] = setup.Preset{Name: p.Name, UserPreset: p.UserPreset, ForkBaseline: p.ForkBaseline, Choices: p.Choices, Lock: p.Lock}
 		}
 	}
-	m.draft.Layouts[m.layout] = l
 }
 func (m *PresetModel) acceptEdit() {
 	value := strings.TrimSpace(m.text.Value())
 	field := m.field
 	m.notice = ""
 	switch field {
-	case "new":
-		id := strings.Trim(strings.Map(func(r rune) rune {
-			if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
-				return r
-			}
-			if unicode.IsSpace(r) || r == '-' {
-				return '-'
-			}
-			return -1
-		}, strings.ToLower(value)), "-")
-		for strings.Contains(id, "--") {
-			id = strings.ReplaceAll(id, "--", "-")
-		}
-		if id == "" {
-			m.notice = "Choose a name containing letters or numbers."
-			return
-		}
-		if _, ok := m.draft.Layouts[id]; ok {
-			m.notice = "That layout ID already exists."
-			return
-		}
-		m.draft.Layouts[id] = setup.Layout{Name: value, Presets: []string{}, Startup: []string{}, IdleSeconds: 1800}
-		m.cursor = slices.Index(m.layoutIDs(), id)
-	case "rename":
-		if value == "" {
-			m.notice = "Name cannot be blank."
-			return
-		}
-		id := m.layoutIDs()[m.cursor]
-		l := m.draft.Layouts[id]
-		l.Name = value
-		m.draft.Layouts[id] = l
-	case "idle":
-		n, err := strconv.Atoi(value)
-		if err != nil || n <= 0 {
-			m.notice = "Idle seconds must be positive."
-			return
-		}
-		l := m.draft.Layouts[m.layout]
-		l.IdleSeconds = n
-		m.draft.Layouts[m.layout] = l
 	case "context":
 		p, ok := m.selectedOption()
 		if !ok {
@@ -377,14 +286,13 @@ func (m *PresetModel) acceptEdit() {
 	m.field = ""
 	m.text.Blur()
 	m.focus, m.action = m.editFocus, m.editAction
-	if field == "new" {
-		m.focus = presetContentFocus
-	}
 }
 func (m *PresetModel) customize(p PresetOption, window int, compute catalog.ComputeDevice) bool {
-	base, choices := p.Lock, p.Choices
+	base, choices, source := p.Lock, p.Choices, p.UserPreset
+	baseline := p.ForkBaseline
 	if selected, ok := m.draft.Presets[p.ID]; ok {
-		base, choices = selected.Lock, selected.Choices
+		base, choices, source = selected.Lock, selected.Choices, selected.UserPreset
+		baseline = selected.ForkBaseline
 	}
 	if len(base.Records.Presets) == 0 {
 		m.notice = "Unavailable: " + p.Unavailable
@@ -415,7 +323,7 @@ func (m *PresetModel) customize(p PresetOption, window int, compute catalog.Comp
 		m.assessments[p.ID] = assessment
 	}
 	name := strings.TrimSuffix(p.Name, " (customized)") + " (customized)"
-	m.draft.Presets[p.ID] = setup.Preset{Name: name, Choices: choices, Lock: lock}
+	m.draft.Presets[p.ID] = setup.Preset{Name: name, UserPreset: source, ForkBaseline: baseline, Choices: choices, Lock: lock}
 	m.notice = "Preset customized. Review context and memory fit before preparing."
 	if refs := m.draft.References(p.ID); len(refs) > 0 {
 		m.notice += " Updated in layouts: " + strings.Join(refs, ", ") + "."

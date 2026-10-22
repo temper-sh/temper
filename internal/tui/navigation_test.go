@@ -81,3 +81,53 @@ func TestPrimaryActionFocusSwapsEachToolsColors(t *testing.T) {
 		}
 	}
 }
+
+func TestStepsKeepTheCurrentStepAndCompletedMarksWithinClickTargets(t *testing.T) {
+	labels := []string{"Presets", "Harnesses", "Review"}
+	for _, width := range []int{26, 38, 76, 108} {
+		for current, name := range labels {
+			view, targets := tui.Steps(labels, current, -1, width)
+			row := strings.Split(ansi.Strip(view), "\n")[1]
+			if !strings.Contains(row, name) || strings.Count(row, "✓") != current {
+				t.Fatalf("step %s missing its location/completed marks at %d columns: %q", name, width, row)
+			}
+			for i, target := range targets {
+				text := strings.TrimSpace(ansi.Cut(row, target.X, target.X+target.Width))
+				if target.Index != i || target.Y != 1 || target.Height != 1 || target.X+target.Width > width || text == "" || strings.Contains(text, "❯") {
+					t.Fatalf("step %d target does not cover its label at %d columns: %+v %q", i, width, target, text)
+				}
+				if i == current && text != name {
+					t.Fatalf("current step click target clipped %q: %q", name, text)
+				}
+			}
+		}
+	}
+}
+
+func TestSecondaryAndWrappedActionTargetsFollowTheirRenderedCells(t *testing.T) {
+	for _, width := range []int{26, 27, 38, 76, 108} {
+		labels := []string{"General", "Specialist", "Other"}
+		for current := range labels {
+			row, targets := tui.SecondaryWithTargets(tui.Wizard, labels, current, width, false)
+			for _, target := range targets {
+				text := strings.TrimSpace(ansi.Cut(ansi.Strip(row), target.X, target.X+target.Width))
+				want := labels[target.Index]
+				if target.Index == current {
+					want = "[" + want + "]"
+				}
+				if text != want && text != "‹" && text != "›" {
+					t.Fatalf("filter target at %d columns covers %q, want %q", width, text, want)
+				}
+			}
+		}
+		buttons := []tui.Button{{Label: "Install"}, {Label: "Save"}, {Label: "Back"}, {Label: "Cancel"}, {Label: "Retry"}}
+		actions, targets := tui.ActionsWithTargets(tui.Wizard, buttons, width)
+		rows := strings.Split(ansi.Strip(actions), "\n")
+		for _, target := range targets {
+			text := strings.TrimSpace(ansi.Cut(rows[target.Y], target.X, target.X+target.Width))
+			if target.X+target.Width > width || text != buttons[target.Index].Label {
+				t.Fatalf("wrapped action target at %d columns covers %q, want %q", width, text, buttons[target.Index].Label)
+			}
+		}
+	}
+}

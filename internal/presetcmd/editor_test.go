@@ -131,8 +131,8 @@ func TestEditorPreservesSelectionsLocksAndTemplatesThroughSaveAndDelete(t *testi
 		t.Fatal(err)
 	}
 	configuration := setup.EmptyConfiguration()
-	configuration.Presets["mine"] = setup.Preset{Name: "Mine", Lock: lock}
-	configuration.Layouts = setup.StarterLayouts([]string{"mine"})
+	configuration.Presets["writing-variant"] = setup.Preset{Name: "Mine", UserPreset: "mine", Lock: lock}
+	configuration.Layouts = setup.StarterLayouts([]string{"writing-variant"})
 	if _, _, err := setup.SaveConfiguration(context.Background(), root, configuration, "", false); err != nil {
 		t.Fatal(err)
 	}

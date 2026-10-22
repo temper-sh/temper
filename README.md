@@ -41,9 +41,9 @@ On Homebrew versions before 7, omit the
 Homebrew uses a prebuilt package (bottle) when available, otherwise it builds
 from source.
 
-In the wizard, choose your presets. The **Default** layout includes them all,
-with models loading only when requested. Choose any harness integrations,
-then review the downloads and memory
+The wizard follows **Presets → Harnesses → Review**. First setup creates a
+**Default** layout containing your selected presets, with models loading only
+when requested. Choose any harness integrations, review the downloads and memory
 estimates, then choose **Install and start**. Model downloads can be many
 gigabytes. When the install finishes, Temper starts the layout and prints its
 address and model IDs. To start it again later, for example after restarting
@@ -72,13 +72,14 @@ Start with **Default**, then edit it or add another layout, such as **Helper**
 for small models.
 
 Use [`temper layout`](docs/contracts/layouts.md#standalone-layout-editor) to
-choose which of your selected presets belong to each layout, what loads at
+choose which of your saved presets belong to each layout, what loads at
 startup, and when idle models unload. Saving a layout keeps it ready for your
 next explicit activation.
 
 Use [`temper preset`](docs/contracts/user-presets.md) to fork a catalog preset
 or make an independent copy, then edit its settings, weights or template.
-Saving keeps your authoring separate from the exact locks used by layouts.
+Saved presets appear in the layout editor automatically. Authoring remains
+separate from the exact locks already used by layouts.
 
 ## How we choose presets
 
@@ -110,7 +111,7 @@ review. CPU models still use RAM.
 
 ```sh
 temper update          # Get the newest presets and software for your choices
-temper configure       # Change presets and layouts
+temper configure       # Choose presets and harness integrations
 temper layout status   # Inspect the running layout
 temper layout stop     # Stop serving and unload its models
 ```
@@ -120,6 +121,8 @@ Saved choices stay unchanged until you run `temper update` or edit them.
 what changes (old → new); your context and compute choices stay. It then
 installs the new files and restarts the running layout. Add `--dry-run` to only
 look, or `--software` to change only the router and engine releases.
+For saved forks, it also shows changes to catalog values you override, while
+keeping your overrides.
 
 By default Temper uses the software releases the catalog tested. To follow the
 newest upstream releases instead, run `temper configure --software latest`;

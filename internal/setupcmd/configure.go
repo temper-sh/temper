@@ -268,7 +268,7 @@ func (c Command) Configure(ctx context.Context, args []string, in io.Reader, out
 					if err != nil {
 						return fail(diagnostics, err)
 					}
-					o := setupui.PresetOption{ID: id, Name: saved.Name, Choices: saved.Choices, Model: a.Presentation.ModelName, Weights: a.Presentation.WeightsName, Engine: e.Presentation.DisplayName, Description: p.Presentation.Description, Tier: p.Presentation.MemoryTier, Group: d.FallbackGroup(), Lock: saved.Lock, ModelBytes: one.ModelBytes, MemoryBytes: one.MemoryBytes, MemoryBasis: one.Memory.Basis, Unavailable: strings.Join(one.Refusals, "; "), Details: "Saved exact preset · catalog recommendation does not apply to customized settings"}
+					o := setupui.PresetOption{ID: id, Name: saved.Name, UserPreset: saved.UserPreset, ForkBaseline: saved.ForkBaseline, Choices: saved.Choices, Model: a.Presentation.ModelName, Weights: a.Presentation.WeightsName, Engine: e.Presentation.DisplayName, Description: p.Presentation.Description, Tier: p.Presentation.MemoryTier, Group: d.FallbackGroup(), Lock: saved.Lock, ModelBytes: one.ModelBytes, MemoryBytes: one.MemoryBytes, MemoryBasis: one.Memory.Basis, Unavailable: strings.Join(one.Refusals, "; "), Details: "Saved exact preset · catalog recommendation does not apply to customized settings"}
 					if index >= 0 {
 						o.Group, o.Section = input.Presets[index].Group, input.Presets[index].Section
 						input.Presets[index] = o

@@ -26,12 +26,14 @@ const ConfigurationFile = "configuration.json"
 var choiceID = regexp.MustCompile(`^[a-z0-9]+(?:[.-][a-z0-9]+)*$`)
 
 // Preset is one saved exact preset. Choices hold only what the user chose
-// explicitly, so an update can rebuild the preset from its origin catalog
-// preset (the lock's preset ID) and tell a choice from a catalog default.
+// explicitly. UserPreset identifies an authored file in presets.d; otherwise
+// the lock's preset ID identifies the origin catalog preset.
 type Preset struct {
-	Name    string       `json:"name"`
-	Choices Choices      `json:"choices"`
-	Lock    catalog.Lock `json:"lock"`
+	Name         string        `json:"name"`
+	UserPreset   string        `json:"user_preset,omitempty"`
+	ForkBaseline *ForkBaseline `json:"fork_baseline,omitempty"`
+	Choices      Choices       `json:"choices"`
+	Lock         catalog.Lock  `json:"lock"`
 }
 
 // Choices are explicit user settings for one saved preset; zero means the
@@ -84,6 +86,12 @@ func (c Configuration) Validate() error {
 	for id, p := range c.Presets {
 		if !choiceID.MatchString(id) || !validName(p.Name) {
 			return fmt.Errorf("preset %q requires a stable ID and name", id)
+		}
+		if p.UserPreset != "" && (!catalog.ValidPresetID(p.UserPreset) || p.Lock.Preset != p.UserPreset) {
+			return fmt.Errorf("preset %q user_preset must name its exact lock's source preset", id)
+		}
+		if b := p.ForkBaseline; b != nil && (p.UserPreset == "" || !catalog.ValidPresetID(b.Origin) || b.Values == nil) {
+			return fmt.Errorf("preset %q fork_baseline requires a user preset, catalog origin and values", id)
 		}
 		if p.Choices.ContextWindow < 0 || p.Choices.Compute != "" && p.Choices.Compute != catalog.ComputeCPU && p.Choices.Compute != catalog.ComputeGPU {
 			return fmt.Errorf("preset %q has an invalid choice", id)

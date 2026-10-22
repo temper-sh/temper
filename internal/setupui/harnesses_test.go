@@ -20,7 +20,6 @@ func TestHarnessStepIsExplicitRevocableAndKeepsReviewedDestinations(t *testing.T
 	m := NewPresetModel(context.Background(), input, func(_ context.Context, c setup.Configuration) (setup.Plan, error) {
 		return setup.Plan{Configuration: &c, CanPrepare: true}, nil
 	})
-	m.page = 1
 	m.advance()
 	if m.page != presetHarnessPage || len(m.draft.Integrations) != 0 {
 		t.Fatal("detection implied selection")

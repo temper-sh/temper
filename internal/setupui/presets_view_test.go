@@ -97,13 +97,24 @@ func TestCategoriesAreExclusiveAndSpecialistsShowTaskGuidance(t *testing.T) {
 	}
 }
 
-func TestThreeCategoryTabsFitAndCanBeClickedInSmallTerminals(t *testing.T) {
+func TestCategoryTabsAndOverflowRemainClickableInSmallTerminals(t *testing.T) {
 	for _, width := range []int{28, 30, 36, 42, 52, 80} {
 		t.Run(fmt.Sprint(width), func(t *testing.T) {
 			m := presetEditor(t)
 			m.Update(tea.WindowSizeMsg{Width: width, Height: 12})
 			for _, group := range []struct{ id, label string }{{"specialist", "Specialist"}, {"other", "Other"}, {"general", "General"}} {
-				assertFrameFits(t, m.View().Content, width, 12)
+				for attempts := 0; attempts < len(m.groups()); attempts++ {
+					view := ansi.Strip(m.View().Content)
+					assertFrameFits(t, view, width, 12)
+					if strings.Contains(view, group.label) {
+						break
+					}
+					arrow := "›"
+					if group.id == "general" {
+						arrow = "‹"
+					}
+					clickPresetText(t, m, arrow)
+				}
 				clickPresetText(t, m, group.label)
 				if m.group != group.id || m.page != 0 || len(m.draft.Presets) != 0 {
 					t.Fatalf("click did not switch to %s without selecting a preset", group.id)
@@ -169,25 +180,23 @@ func TestSavedLicenseStaysLinkedOnPresetCards(t *testing.T) {
 
 func TestPresetEditorScreensFitAndKeepNavigationVisible(t *testing.T) {
 	for _, size := range []struct{ width, height int }{{28, 10}, {36, 10}, {42, 12}, {48, 24}, {52, 18}, {72, 24}, {80, 12}, {100, 30}, {120, 40}, {20, 6}} {
-		for _, screen := range []string{"presets", "layouts", "members", "context", "rename", "review", "downloads", "error"} {
+		for _, screen := range []string{"presets", "steps", "filters", "harnesses", "context", "review", "error"} {
 			t.Run(fmt.Sprintf("%dx%d/%s", size.width, size.height, screen), func(t *testing.T) {
 				m := populatedPresetEditor(t)
 				m.input.Presets[0].Name = "小さなモデル · Compact general assistant"
 				m.input.Presets[0].Description = strings.Repeat("Model details and limitations. ", 30)
 				m.notice = "A long notice should remain readable by scrolling without hiding the navigation."
 				switch screen {
-				case "layouts":
-					m.page = 1
-				case "members":
-					m.page, m.layout = 1, "default"
+				case "harnesses":
+					m.page = presetHarnessPage
+				case "steps":
+					m.focus = presetStepsFocus
+				case "filters":
+					m.focus = presetFilterFocus
 				case "context":
 					m.edit("context", "40960")
-				case "rename":
-					m.page = 1
-					m.edit("rename", strings.Repeat("長い名前", 30))
-				case "review", "downloads", "error":
+				case "review", "error":
 					m.page = presetReviewPage
-					m.downloadsOpen = screen == "downloads"
 					if screen == "error" {
 						m.reviewReady = false
 						m.reviewErr = errors.New("preview unavailable; retry later")
@@ -200,7 +209,7 @@ func TestPresetEditorScreensFitAndKeepNavigationVisible(t *testing.T) {
 					return
 				}
 				text := ansi.Strip(view.Content)
-				if !strings.Contains(text, "TEMPER") || !strings.Contains(text, "• ") {
+				if !strings.Contains(text, "TEMPER") || !strings.Contains(text, "❯") {
 					t.Fatalf("navigation left the frame:\n%s", text)
 				}
 				if view.MouseMode != tea.MouseModeCellMotion {
@@ -211,36 +220,44 @@ func TestPresetEditorScreensFitAndKeepNavigationVisible(t *testing.T) {
 	}
 }
 
-func TestPresetMouseFlowKeepsThreeLayoutChoicesIndependent(t *testing.T) {
+func TestPresetMouseNavigationUsesTheSameGuardedThreeStepFlow(t *testing.T) {
 	m := presetEditor(t)
+	m.preview = func(_ context.Context, c setup.Configuration) (setup.Plan, error) {
+		return setup.Plan{Configuration: &c, CanPrepare: true}, nil
+	}
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 35})
+	clickPresetText(t, m, "Review")
+	if m.page != 0 || m.notice == "" {
+		t.Fatal("primary navigation skipped Harnesses")
+	}
 	clickPresetText(t, m, "[ ]")
-	clickPresetText(t, m, "Specialist")
 	clickPresetText(t, m, "Other")
 	clickPresetText(t, m, "General")
 	if len(m.draft.Presets) != 1 {
 		t.Fatal("filter click changed selected presets")
 	}
-	clickPresetText(t, m, "Next: Layouts")
-	clickPresetText(t, m, "│ Default")
-	clickPresetText(t, m, "[ ] Default")
-	l := m.draft.Layouts["default"]
-	if len(l.Presets) != 1 || len(l.Startup) != 0 || l.Default == "" {
-		t.Fatalf("default click changed membership or startup: %+v", l)
+	clickPresetText(t, m, "Harnesses")
+	layout := m.draft.Layouts["default"]
+	if m.page != presetHarnessPage || len(layout.Presets) != 1 || len(layout.Startup) != 0 || layout.Default != "" {
+		t.Fatalf("primary navigation did not create an on-demand Default: %+v", layout)
 	}
-	clickPresetText(t, m, "[ ] Load on activation")
-	clickPresetText(t, m, "[x] Included")
-	if err := m.draft.Validate(); err == nil {
-		t.Fatal("removing membership silently cleared explicit choices")
+	preview := clickPresetText(t, m, "Review")
+	if preview == nil || !m.loading || m.Decision.Action != "" {
+		t.Fatal("Review did not start a revocable preview")
 	}
-	if view := ansi.Strip(m.View().Content); !strings.Contains(view, "clear its startup/default") {
-		t.Fatalf("invalid choices have no visible correction:\n%s", view)
+	m.Update(preview())
+	clickPresetText(t, m, "Presets")
+	if m.page != 0 || len(m.draft.Presets) != 1 || m.Decision.Action != "" {
+		t.Fatal("primary back navigation changed the selection")
 	}
-	clickPresetText(t, m, "[x] Load on activation")
-	clickPresetText(t, m, "[x] Default")
-	clickPresetText(t, m, "Done →")
-	if m.layout != "" || m.page != 1 || m.draft.Validate() != nil {
-		t.Fatal("Done did not return to the layout list with corrected choices")
+	editorKey(m, 'c')
+	clickPresetText(t, m, "Harnesses")
+	if m.field != "context" || m.page != 0 {
+		t.Fatal("primary navigation discarded an open field")
+	}
+	clickPresetText(t, m, "Cancel")
+	if m.field != "" || len(m.input.Configuration.Layouts) != 0 {
+		t.Fatal("cancel committed changes")
 	}
 }
 
@@ -313,7 +330,7 @@ func TestPresetCardsScrollWithoutMovingControlsOrSnappingBack(t *testing.T) {
 		t.Fatal("details cannot be scrolled")
 	}
 	view := ansi.Strip(m.View().Content)
-	if m.view.YOffset() != offset || !strings.Contains(view, "General") || !strings.Contains(view, "Next: Layouts") {
+	if m.view.YOffset() != offset || !strings.Contains(view, "General") || !strings.Contains(view, "Next") {
 		t.Fatalf("scroll lost navigation or snapped back:\n%s", view)
 	}
 	m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
@@ -323,23 +340,19 @@ func TestPresetCardsScrollWithoutMovingControlsOrSnappingBack(t *testing.T) {
 	}
 }
 
-func TestPresetReviewScrollAndDownloadDisclosureKeepActionsVisible(t *testing.T) {
+func TestPresetReviewShowsDownloadsAndKeepsActionsVisibleWhileScrolling(t *testing.T) {
 	m := populatedPresetEditor(t)
 	m.page = presetReviewPage
-	m.Update(tea.WindowSizeMsg{Width: 80, Height: 28})
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	view := ansi.Strip(m.View().Content)
-	if strings.Contains(view, m.plan.Downloads[0].Name) || !strings.Contains(view, "Downloads (1 file)") {
-		t.Fatal("file details are not initially collapsed")
-	}
-	clickPresetText(t, m, "▸ Downloads")
-	if !strings.Contains(ansi.Strip(m.View().Content), "Cached in Hugging Face") {
-		t.Fatal("expanded download table lost the cache status")
+	if !strings.Contains(view, "Downloads · 0 B") || !strings.Contains(view, "On install") || !strings.Contains(view, "Cached in Hugging Face") {
+		t.Fatalf("file details and cache status are not visible on arrival:\n%s", view)
 	}
 	for i := 0; i < 100; i++ {
 		m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
 	}
 	view = ansi.Strip(m.View().Content)
-	if m.view.YOffset() == 0 || !strings.Contains(view, "Save without installing") || !strings.Contains(view, "• Review") {
+	if m.view.YOffset() == 0 || !strings.Contains(view, "Save without installing") || !strings.Contains(view, "Review") {
 		t.Fatalf("review scrolling hid actions:\n%s", view)
 	}
 	offset := m.view.YOffset()
@@ -354,7 +367,7 @@ func TestPresetReviewScrollAndDownloadDisclosureKeepActionsVisible(t *testing.T)
 	}
 }
 
-func TestPresetFormsKeepInvalidValueAndAcceptPastedNames(t *testing.T) {
+func TestPresetContextKeepsInvalidValueAndAcceptsPastedTokens(t *testing.T) {
 	m := populatedPresetEditor(t)
 	editorKey(m, 'c')
 	m.text.SetValue("not a number")
@@ -362,18 +375,13 @@ func TestPresetFormsKeepInvalidValueAndAcceptPastedNames(t *testing.T) {
 	if m.field != "context" || m.text.Value() != "not a number" || m.notice == "" {
 		t.Fatal("invalid input dismissed the editor or discarded the value")
 	}
-	m.text.SetValue("32768")
+	m.text.SetValue("")
+	m.Update(tea.PasteMsg{Content: "32768"})
 	clickPresetText(t, m, "Apply")
-	if m.field != "" {
-		t.Fatal("valid edit did not return to presets")
-	}
-	m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
-	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	editorKey(m, 'n')
-	m.Update(tea.PasteMsg{Content: "Writing desk"})
-	clickPresetText(t, m, "Apply")
-	if m.draft.Layouts["writing-desk"].Name != "Writing desk" {
-		t.Fatal("pasted layout name was not accepted")
+	p, _ := m.selectedOption()
+	_, record := presetRecord(m.draft.Presets[p.ID].Lock)
+	if m.field != "" || record.Window() != 32768 {
+		t.Fatal("pasted context was not accepted")
 	}
 }
 
@@ -404,16 +412,14 @@ func TestPresetPreviewBackDiscardsStaleResultAndRetries(t *testing.T) {
 	m.preview = func(_ context.Context, c setup.Configuration) (setup.Plan, error) {
 		return setup.Plan{Configuration: &c, CanPrepare: true}, nil
 	}
-	m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
-	_, first := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	first := m.advance()
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
-	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc}) // Back through Harnesses to Layouts.
-	editorKey(m, 'x')                           // Editing must not mutate the preview's snapshot.
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc}) // Back through Harnesses to Presets.
+	editorKey(m, ' ')                           // Editing must not mutate the preview's snapshot.
 	m.advance()                                 // Harnesses.
-	m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
-	_, second := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	second := m.advance()
 	old := first().(compositionPreview)
-	if len(old.Plan.Configuration.Layouts) != 1 {
+	if len(old.Plan.Configuration.Layouts["default"].Presets) != 2 {
 		t.Fatal("editing changed a pending preview's snapshot")
 	}
 	m.Update(old)
@@ -422,13 +428,84 @@ func TestPresetPreviewBackDiscardsStaleResultAndRetries(t *testing.T) {
 	}
 	m.Update(second())
 	clickPresetText(t, m, "Save without installing")
-	if m.Decision.Action != "save" || len(m.Decision.Configuration.Layouts) != 0 {
+	if m.Decision.Action != "save" || len(m.Decision.Configuration.Layouts["default"].Presets) != 1 {
 		t.Fatal("current preview did not save the latest choices")
 	}
 }
 
-func clickPresetText(t *testing.T, m *PresetModel, label string) {
+func TestWizardFooterKeepsFocusedActionsVisibleAndClickableAfterResize(t *testing.T) {
+	for _, screen := range []string{"presets", "harnesses", "review", "error", "context"} {
+		for _, size := range [][2]int{{28, 10}, {40, 24}, {80, 32}, {112, 24}} {
+			t.Run(fmt.Sprintf("%s/%dx%d", screen, size[0], size[1]), func(t *testing.T) {
+				m := populatedPresetEditor(t)
+				switch screen {
+				case "harnesses":
+					m.page = presetHarnessPage
+				case "review", "error":
+					m.page = presetReviewPage
+					if screen == "error" {
+						m.reviewErr = errors.New("offline")
+						m.reviewReady = false
+					}
+				case "context":
+					m.edit("context", "40960")
+				}
+				m.notice = "Used by Writing desk. Change membership with temper layout before removing this preset."
+				m.focus = presetFooterFocus
+				m.Update(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
+				for i, button := range m.footerButtons() {
+					m.action = i
+					view := m.View().Content
+					label := button.label
+					if size[0] < 74 {
+						label = button.short
+					}
+					plain := ansi.Strip(view)
+					at := strings.LastIndex(plain, label)
+					if at < 0 {
+						t.Fatalf("focused action %q is hidden:\n%s", label, plain)
+					}
+					prefix := strings.Split(plain[:at], "\n")
+					x, y := ansi.StringWidth(prefix[len(prefix)-1]), len(prefix)-1
+					matched := false
+					for _, target := range m.hitTargets {
+						if target.contains(x, y) && target.kind == hitPresetAction && target.index == i {
+							matched = true
+						}
+					}
+					if !matched {
+						t.Fatalf("visible button %q has no matching action at %d,%d", label, x, y)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestWizardReviewExplainsInitialAndExistingLayoutAvailability(t *testing.T) {
+	for _, fresh := range []bool{true, false} {
+		m := populatedPresetEditor(t)
+		m.input.NewConfiguration = fresh
+		m.page = presetReviewPage
+		if !fresh {
+			layout := m.draft.Layouts["default"]
+			layout.Presets = layout.Presets[:1]
+			m.draft.Layouts["default"] = layout
+		}
+		body := m.presetContent(76, false)
+		text := strings.Join(strings.Fields(ansi.Strip(strings.Join(body.blocks, "\n"))), " ")
+		if fresh && (!strings.Contains(text, "Default layout") || !strings.Contains(text, "load on demand")) {
+			t.Fatalf("first setup does not explain on-demand behavior:\n%s", text)
+		}
+		if !fresh && (!strings.Contains(text, "kept unchanged") || !strings.Contains(text, "Outside layouts") || !strings.Contains(text, "temper layout")) {
+			t.Fatalf("rerun does not explain preserved layouts or unassigned presets:\n%s", text)
+		}
+	}
+}
+
+func clickPresetText(t *testing.T, m *PresetModel, label string) tea.Cmd {
 	t.Helper()
 	x, y := textPosition(t, m.View().Content, label)
-	m.Update(tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft})
+	_, cmd := m.Update(tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft})
+	return cmd
 }

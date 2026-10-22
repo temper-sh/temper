@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"strings"
 
@@ -20,8 +21,8 @@ type LayoutEditorOptions struct {
 	DryRun   bool
 }
 
-// NewLayoutEditor reads saved configuration only. Neither catalog state nor
-// authoring files can introduce a preset into this composition flow.
+// NewLayoutEditor reads saved composition and the preset folder. The stored
+// catalog resolves file dependencies; discovery never downloads or writes.
 func (c Command) NewLayoutEditor(ctx context.Context, options LayoutEditorOptions) (*setupui.LayoutModel, error) {
 	home := ""
 	if options.Root == "" {
@@ -39,13 +40,34 @@ func (c Command) NewLayoutEditor(ctx context.Context, options LayoutEditorOption
 	if err != nil {
 		return nil, err
 	}
+	folder, err := c.readLayoutPresetFolder(ctx, root, configuration)
+	if err != nil {
+		return nil, err
+	}
+	available := configuration
+	available.Presets = maps.Clone(configuration.Presets)
+	for id, file := range folder.files {
+		available.Presets[id] = file.preset
+	}
 	save := func(ctx context.Context, layouts map[string]setup.Layout) (bool, error) {
 		candidate := configuration
 		candidate.Layouts = layouts
+		candidate.Presets = maps.Clone(configuration.Presets)
+		for _, layout := range layouts {
+			for _, id := range layout.Presets {
+				if _, ok := candidate.Presets[id]; ok {
+					continue
+				}
+				if err := folder.check(ctx, id); err != nil {
+					return false, err
+				}
+				candidate.Presets[id] = folder.files[id].preset
+			}
+		}
 		next, changed, err := setup.SaveConfiguration(ctx, root, candidate, revision, options.DryRun)
 		published := !options.DryRun && (err == nil || changed)
 		if published {
-			revision = next
+			revision, configuration = next, candidate
 		}
 		return published, err
 	}
@@ -62,7 +84,7 @@ func (c Command) NewLayoutEditor(ctx context.Context, options LayoutEditorOption
 		}
 		return setup.AssessLayout(candidate, id, facts)
 	}
-	return setupui.NewLayoutModel(ctx, setupui.LayoutInput{Configuration: configuration, ID: options.ID, DryRun: options.DryRun}, save, preview)
+	return setupui.NewLayoutModel(ctx, setupui.LayoutInput{Configuration: available, PresetErrors: folder.problems, ID: options.ID, DryRun: options.DryRun}, save, preview)
 }
 
 func (c Command) editLayouts(ctx context.Context, args []string, out, diagnostics io.Writer) int {
@@ -79,7 +101,7 @@ func (c Command) editLayouts(ctx context.Context, args []string, out, diagnostic
 	f.StringVar(&options.Root, "root", "", "Temper folder (default ~/.temper)")
 	f.BoolVar(&options.DryRun, "dry-run", false, "review without saving or deleting layouts")
 	f.Usage = func() {
-		fmt.Fprintln(diagnostics, "Usage: temper layout [--root PATH] [--dry-run]\n       temper layout edit ID [options]\nCompose layouts from selected presets. Save is explicit; activation is separate.")
+		fmt.Fprintln(diagnostics, "Usage: temper layout [--root PATH] [--dry-run]\n       temper layout edit ID [options]\nCompose layouts from saved presets. Save is explicit; activation is separate.")
 		f.PrintDefaults()
 	}
 	if err := f.Parse(args); err != nil {

@@ -22,6 +22,7 @@ import (
 	"github.com/temper-sh/temper/internal/setup"
 	"github.com/temper-sh/temper/internal/software/catalogsource"
 	"github.com/temper-sh/temper/internal/software/catalogtrust"
+	"github.com/temper-sh/temper/internal/userpreset"
 )
 
 // NewestCatalog downloads and verifies the newest catalog. Without dry it
@@ -53,15 +54,17 @@ func newestCatalog(ctx context.Context, root string, dry bool) (catalog.View, er
 
 // presetUpdate is the outcome for one saved preset.
 type presetUpdate struct {
-	ID      string   `json:"id"`
-	Status  string   `json:"status"` // updated, unchanged or kept
-	Changes []string `json:"changes,omitempty"`
-	Reason  string   `json:"reason,omitempty"`
-	Note    string   `json:"note,omitempty"`
+	ID                 string                 `json:"id"`
+	Status             string                 `json:"status"` // updated, unchanged or kept
+	Changes            []string               `json:"changes,omitempty"`
+	Reason             string                 `json:"reason,omitempty"`
+	Note               string                 `json:"note,omitempty"`
+	OverrideChanges    []setup.OverrideChange `json:"override_changes,omitempty"`
+	UntrackedOverrides []string               `json:"untracked_overrides,omitempty"`
 }
 
 // Update downloads the newest catalog and rebuilds every saved preset from its
-// origin catalog preset, the user's choices and the software setting. With
+// origin catalog preset or authored file, choices and software setting. With
 // --software it keeps models and settings and changes only router and engine
 // releases.
 func (c Command) Update(ctx context.Context, args []string, out, diagnostics io.Writer) int {
@@ -115,37 +118,64 @@ func (c Command) Update(ctx context.Context, args []string, out, diagnostics io.
 	}
 	memoryGiB := int(facts.PhysicalMemoryBytes >> 30)
 	resolutions := map[string]catalog.Resolution{}
-	build := func(origin string, choices setup.Choices) (catalog.Lock, error) {
-		d, used, err := c.Resolve(ctx, view.Document, origin, current.Software)
+	build := func(saved setup.Preset, result *presetUpdate) (catalog.Lock, *setup.ForkBaseline, error) {
+		document, origin := view.Document, saved.Lock.Preset
+		var baseline *setup.ForkBaseline
+		if saved.UserPreset != "" {
+			raw, err := userpreset.Read(root, saved.UserPreset)
+			var file catalog.UserPreset
+			if err == nil {
+				file, err = catalog.ParseUserPreset(saved.UserPreset, raw)
+			}
+			if err != nil {
+				return catalog.Lock{}, nil, fmt.Errorf("user preset %q: %w", saved.UserPreset, err)
+			}
+			baseline = setup.CaptureForkBaseline(file, view.Document, memoryGiB)
+			result.OverrideChanges, result.UntrackedOverrides = setup.CompareForkOverrides(saved.ForkBaseline, baseline, file)
+			// Report known upstream changes even when the authored combination
+			// no longer resolves. Compile the exact bytes used for the comparison.
+			loaded, err := userpreset.Resolve(root, saved.UserPreset, raw, view)
+			if err != nil {
+				return catalog.Lock{}, nil, fmt.Errorf("user preset %q: %w", saved.UserPreset, err)
+			}
+			document, origin = loaded.Document, saved.UserPreset
+		}
+		d, used, err := c.Resolve(ctx, document, origin, current.Software)
 		if err != nil {
-			return catalog.Lock{}, err
+			return catalog.Lock{}, nil, err
 		}
 		for _, r := range used {
 			resolutions[r.Package] = r
 		}
-		return setup.BuildPreset(d, origin, memoryGiB, choices)
+		lock, err := setup.BuildPreset(d, origin, memoryGiB, saved.Choices)
+		return lock, baseline, err
 	}
 	next := current
 	next.Presets = maps.Clone(current.Presets)
 	var results []presetUpdate
+	locksChanged := false
 	for _, id := range slices.Sorted(maps.Keys(current.Presets)) {
 		saved := current.Presets[id]
 		origin := saved.Lock.Preset
 		result := presetUpdate{ID: id}
 		var candidate catalog.Lock
+		var baseline *setup.ForkBaseline
 		if *softwareOnly {
 			candidate, err = c.rebuildSoftware(ctx, saved.Lock, view.Document, current.Software, resolutions)
 			if err == nil {
 				// Compare with what a full update would build; a difference means
 				// this combination is not one the catalog tested.
-				if full, fullErr := build(origin, saved.Choices); fullErr == nil && !catalog.SameExecution(full, candidate) {
+				if full, _, fullErr := build(saved, &result); fullErr == nil && !catalog.SameExecution(full, candidate) {
 					result.Note = "not the catalog's tested combination; run temper update for it"
+					if saved.UserPreset != "" {
+						result.Note = "differs from the authored preset; run temper update to apply its settings"
+					}
 				}
 			}
-		} else if _, ok := view.Document.Presets[origin]; !ok {
+		} else if _, ok := view.Document.Presets[origin]; !ok && saved.UserPreset == "" {
 			err = errors.New(unavailableReason(view, origin, "left the catalog"))
 		} else {
-			candidate, err = build(origin, saved.Choices)
+			candidate, baseline, err = build(saved, &result)
 		}
 		if err == nil {
 			if assessed, assessErr := setup.Assess(candidate, facts); assessErr != nil {
@@ -154,7 +184,7 @@ func (c Command) Update(ctx context.Context, args []string, out, diagnostics io.
 				err = fmt.Errorf("does not fit: %s", strings.Join(assessed.Refusals, "; "))
 			}
 		}
-		if err != nil && !*softwareOnly {
+		if err != nil && !*softwareOnly && saved.UserPreset == "" {
 			// Keep models and settings; one router per layout still needs the
 			// newest software.
 			result.Status, result.Reason = "kept", err.Error()
@@ -177,7 +207,12 @@ func (c Command) Update(ctx context.Context, args []string, out, diagnostics io.
 				result.Changes = []string{"catalog metadata changed"}
 			}
 		}
-		next.Presets[id] = setup.Preset{Name: saved.Name, Choices: saved.Choices, Lock: candidate}
+		locksChanged = locksChanged || !sameLock(saved.Lock, candidate)
+		saved.Lock = candidate
+		if !*softwareOnly {
+			saved.ForkBaseline = baseline
+		}
+		next.Presets[id] = saved
 		results = append(results, result)
 	}
 	plan, err := c.Preview(ctx, root, next)
@@ -188,27 +223,37 @@ func (c Command) Update(ctx context.Context, args []string, out, diagnostics io.
 		return fail(diagnostics, fmt.Errorf("cannot install the update: %s", strings.Join(plan.Refusals, "; ")))
 	}
 	nextRev, changed, err := setup.SaveConfiguration(ctx, root, next, rev, *dry)
-	if err != nil {
+	if err != nil && !changed {
 		return fail(diagnostics, err)
 	}
+	// Comparison data is committed with the lock. If publication or later
+	// preparation fails, still emit its report instead of silently consuming it.
+	completionErr := err
 	var prepared []string
-	if changed && !*dry {
+	if changed && locksChanged && !*dry && completionErr == nil {
 		progress := diagnostics
 		if *jsonOutput {
 			progress = io.Discard
 		}
 		for _, id := range slices.Sorted(maps.Keys(next.Presets)) {
 			if err := preset.Prepare(ctx, root, next.Presets[id].Lock, c.Effects, progress); err != nil {
-				return fail(diagnostics, fmt.Errorf("configuration saved; preset %s preparation incomplete, resume with temper configure --resume --prepare: %w", id, err))
+				completionErr = fmt.Errorf("configuration saved; preset %s preparation incomplete, resume with temper configure --resume --prepare: %w", id, err)
+				break
 			}
 			prepared = append(prepared, id)
 		}
 	}
 	result := map[string]any{"schema": "temper-update-result/v1", "catalog_date": view.Document.Date,
 		"presets": results, "software": sortedResolutions(resolutions), "revision": nextRev, "changed": changed, "dry_run": *dry, "prepared": prepared}
+	if completionErr != nil {
+		result["error"] = completionErr.Error()
+	}
 	if *jsonOutput {
-		restarted := len(prepared) == 0 || c.restartAfterUpdate(ctx, root, next, true, out, result)
+		restarted := completionErr != nil || len(prepared) == 0 || c.restartAfterUpdate(ctx, root, next, true, out, result)
 		_ = c.configurationOutput(out, diagnostics, result)
+		if completionErr != nil {
+			return fail(diagnostics, completionErr)
+		}
 		if !restarted {
 			return 1
 		}
@@ -224,11 +269,20 @@ func (c Command) Update(ctx context.Context, args []string, out, diagnostics io.
 		for _, change := range r.Changes {
 			fmt.Fprintln(out, "  - "+change)
 		}
+		for _, change := range r.OverrideChanges {
+			fmt.Fprintf(out, "  - catalog %s: %s → %s; your override: %s\n", change.Path, overrideValue(change.From), overrideValue(change.To), overrideValue(change.Override))
+		}
+		if len(r.UntrackedOverrides) > 0 {
+			fmt.Fprintf(out, "  No previous catalog value for %s; comparison starts with a full save.\n", strings.Join(r.UntrackedOverrides, ", "))
+		}
 		if r.Note != "" {
 			fmt.Fprintln(out, "  "+r.Note)
 		}
 	}
 	printResolutions(out, resolutions)
+	if completionErr != nil {
+		return fail(diagnostics, completionErr)
+	}
 	switch {
 	case *dry:
 		fmt.Fprintln(out, "Dry run: nothing was saved, installed or restarted.")
@@ -242,10 +296,19 @@ func (c Command) Update(ctx context.Context, args []string, out, diagnostics io.
 				fmt.Fprintf(out, "Old releases and caches use %s; remove them with: temper cleanup\n", setup.DownloadSize(plan.Bytes()))
 			}
 		}
+	case changed:
+		fmt.Fprintln(out, "Saved catalog comparison values; preset settings are unchanged.")
 	default:
 		fmt.Fprintln(out, "Everything is up to date.")
 	}
 	return 0
+}
+
+func overrideValue(raw []byte) string {
+	if string(raw) == "null" {
+		return "unset"
+	}
+	return string(raw)
 }
 
 // rebuildSoftware keeps a saved preset's models and settings and moves its

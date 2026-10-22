@@ -1,22 +1,17 @@
 package setupui
 
 import (
-	"fmt"
 	"image/color"
 	"strings"
 
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
+	"github.com/temper-sh/temper/internal/tui"
 )
 
-// family is one kind of element's set of matching colors. Each kind of
-// element has its own family, so a page shows a few clearly separate groups:
-// preset cards, main navigation, secondary navigation, actions, layouts and
-// the review. Inside a family the colors match; a preset card draws model,
-// weights and engine as one gradient and takes every accent from it.
-// Warnings stay amber and red everywhere.
+// family supplies the shared content roles to card and review renderers.
 type family struct {
-	Name    [3]color.Color // a gradient: first, second, third
+	Name    [3]color.Color // model, weights, engine
 	Accent  color.Color    // numbers and details
 	Link    color.Color
 	Check   color.Color // chosen and done marks
@@ -24,43 +19,29 @@ type family struct {
 	Surface color.Color // a focused element's background
 }
 
-func shades(first, second, third, accent, link, check, border, surface string) family {
-	c := lipgloss.Color
-	return family{Name: [3]color.Color{c(first), c(second), c(third)}, Accent: c(accent), Link: c(link), Check: c(check), Border: c(border), Surface: c(surface)}
-}
-
-// A neutral base keeps the families apart. A focused element inverts its own
-// colors (see inverted).
+// Existing content renderers consume the shared palette. The wizard's blue
+// accent belongs to navigation and actions; content uses common neutral roles.
 var (
-	colorBackground = lipgloss.Color("#1b1c22")
-	colorSurface    = lipgloss.Color("#262833")
-	colorBorder     = lipgloss.Color("#43465a")
-	colorText       = lipgloss.Color("#eceef4")
-	colorMuted      = lipgloss.Color("#a3a7b7")
-	colorWarn       = lipgloss.Color("#ffc34f")
-	colorDanger     = lipgloss.Color("#ff7082")
-
-	// Preset cards: royal purple → indigo → blue for model, weights, engine.
-	presetColors = shades("#b996ff", "#9b94ff", "#7ea3ff", "#c6cbff", "#9fb8ff", "#9b94ff", "#9b94ff", "#262341")
-	// The TEMPER title above the step tabs.
-	colorBrand = lipgloss.Color("#ffffff")
-	// Main navigation: the step tabs. The current tab is yellow on dark and
-	// done tabs are green.
-	mainNavColors = shades("#1b1c23", "#ffb3d9", "#ffd1e8", "#ffb3d9", "#ff8fc8", "#009a54", "#e7ce54", "#33202c")
-	// Secondary navigation: group filters, group and section headings. The
-	// chosen filter is light text on green.
-	secondaryNavColors = shades("#eceef4", "#7fe0d6", "#a8eae3", "#009a54", "#4fd6c8", "#4fd6c8", "#4fd6c8", "#009a54")
-	// Actions: the footer buttons; the primary action first.
-	actionColors = shades("#ff9e6b", "#ffc9a8", "#ffe0cc", "#ffc9a8", "#ff9e6b", "#ff9e6b", "#ff9e6b", "#2e241f")
-	// Layout cards and the layout tables on Review: mint to sea green.
-	layoutColors = shades("#5fe3a1", "#6fe0b8", "#7fdcc9", "#b3f0cf", "#7fe0b8", "#5fe3a1", "#5fe3a1", "#1c2c27")
-	// Review downloads: sky blue.
-	reviewColors = shades("#5cc4ff", "#8fd4ff", "#b9e5ff", "#cdeaff", "#7cc9ff", "#5cc4ff", "#5cc4ff", "#1a2838")
+	colorBackground    = tui.Colors(tui.Canvas).Background
+	colorSurface       = tui.Colors(tui.CardFocused).Background
+	colorBorder        = tui.Colors(tui.Divider).Text
+	colorText          = tui.Colors(tui.Body).Text
+	colorMuted         = tui.Colors(tui.Muted).Text
+	colorWarn          = tui.Colors(tui.Warning).Text
+	colorDanger        = tui.Colors(tui.Error).Text
+	presetColors       = contentColors()
+	secondaryNavColors = contentColors()
+	layoutColors       = contentColors()
+	reviewColors       = contentColors()
 )
 
-// inverted is the focused form of an element drawn in fg on bg.
-func inverted(style lipgloss.Style, fg, bg color.Color) lipgloss.Style {
-	return style.Foreground(bg).Background(fg).Bold(true)
+func contentColors() family {
+	return family{
+		Name:   [3]color.Color{tui.Colors(tui.ModelName).Text, tui.Colors(tui.WeightsName).Text, tui.Colors(tui.EngineName).Text},
+		Accent: tui.Colors(tui.CardValue).Text, Link: tui.Colors(tui.Link).Text,
+		Check: tui.Colors(tui.Selected).Text, Border: tui.Colors(tui.CardFocused).Border,
+		Surface: tui.Colors(tui.CardFocused).Background,
+	}
 }
 
 type hitKind uint8
@@ -69,17 +50,11 @@ const (
 	hitNext hitKind = iota
 	hitChoice
 	hitReview
-	hitDownloads
-	hitInstall
 	hitShortcut
 	hitFilter
-	hitMember
-	hitStartup
-	hitDefault
-	hitFocus
 	hitPresetAction
 	hitField
-	hitIdle
+	hitStep
 )
 
 type hitTarget struct {
@@ -93,59 +68,11 @@ func (t hitTarget) contains(x, y int) bool {
 	return x >= t.x && x < t.x+t.width && y >= t.y && y < t.y+t.height
 }
 
-func stepTabs(labels []string, active, width int) string {
-	padding := 3
-	if width < 50 {
-		padding = 1
-	}
-	items := make([]string, len(labels))
-	for i, label := range labels {
-		border := lipgloss.RoundedBorder()
-		border.BottomLeft, border.BottomRight = "┴", "┴"
-		style := lipgloss.NewStyle().Padding(0, padding).Foreground(colorMuted).
-			BorderForeground(colorBorder)
-		switch {
-		case i == active:
-			border.Bottom, border.BottomLeft, border.BottomRight = " ", "┘", "└"
-			style = style.Foreground(mainNavColors.Border).Background(mainNavColors.Name[0]).Bold(true).BorderForeground(mainNavColors.Border)
-			label = "• " + label
-		case i < active:
-			style = style.Foreground(mainNavColors.Check)
-			label = "✓ " + label
-		}
-		items[i] = style.Border(border).Render(label)
-	}
-	// Keep whole tabs, including the active one, on a single row. Chevrons
-	// disclose the steps outside the visible range on narrow terminals.
-	start, end := 0, len(items)
-	visible := func() string {
-		parts := append([]string(nil), items[start:end]...)
-		if start > 0 {
-			parts = append([]string{"\n‹\n─"}, parts...)
-		}
-		if end < len(items) {
-			parts = append(parts, "\n›\n─")
-		}
-		return lipgloss.JoinHorizontal(lipgloss.Top, parts...)
-	}
-	for lipgloss.Width(visible()) > width && end-start > 1 {
-		if active-start > end-active-1 {
-			start++
-		} else {
-			end--
-		}
-	}
-	row := visible()
-	gap := lipgloss.NewStyle().Foreground(colorBorder).Render(strings.Repeat("─", max(0, width-lipgloss.Width(row))))
-	return lipgloss.JoinHorizontal(lipgloss.Bottom, row, gap)
-}
-
 type screenBody struct {
 	blocks               []string
 	height               int
 	lastCard             bool
 	focusStart, focusEnd int
-	downloadsTop         int
 	targets              []hitTarget
 }
 
@@ -173,29 +100,6 @@ func (b *screenBody) addBlock(block string, focused, card bool) int {
 	b.height += lipgloss.Height(block)
 	b.lastCard = card
 	return start
-}
-
-func downloadsBlock(section Section, width int, open, focused bool) (string, int) {
-	inner := width - 4
-	unit := "files"
-	if len(section.Downloads) == 1 {
-		unit = "file"
-	}
-	label := fmt.Sprintf("▸ Downloads (%d %s) · d expand", len(section.Downloads), unit)
-	if open {
-		label = fmt.Sprintf("▾ Downloads (%d %s) · d collapse", len(section.Downloads), unit)
-	}
-	border := colorBorder
-	if focused {
-		border = reviewColors.Border
-	}
-	heading := lipgloss.NewStyle().Foreground(reviewColors.Name[0]).Bold(true).Width(inner).Render(label)
-	content := heading + "\n" + lipgloss.NewStyle().Foreground(colorText).Width(inner).Render(strings.Join(section.Lines, "\n"))
-	if open {
-		content += "\n\n" + downloadTable(section.Downloads, inner)
-	}
-	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(border).
-		Padding(0, 1).Width(width).Render(content), lipgloss.Height(heading)
 }
 
 func downloadTable(downloads []Download, width int) string {

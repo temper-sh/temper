@@ -32,8 +32,19 @@ func Header(tool Tool, badge string, width int) string {
 // Breadcrumbs renders a path, with the last label current. Focus is an ancestor
 // index, or -1 when focus belongs elsewhere. The caller owns back navigation.
 func Breadcrumbs(labels []string, focus, width int) string {
+	text, _ := primaryNavigation(labels, len(labels)-1, focus, width, false)
+	return text
+}
+
+// Steps shares breadcrumb geometry, adding completed marks before the current
+// wizard step. Targets follow the rendered labels, including truncation.
+func Steps(labels []string, current, focus, width int) (string, []Target) {
+	return primaryNavigation(labels, current, focus, width, true)
+}
+
+func primaryNavigation(labels []string, current, focus, width int, steps bool) (string, []Target) {
 	if width <= 0 || len(labels) == 0 {
-		return ""
+		return "", nil
 	}
 	gap := 2
 	if width < 50 {
@@ -46,6 +57,9 @@ func Breadcrumbs(labels []string, focus, width int) string {
 	total := 0
 	for i, s := range labels {
 		text[i] = label(s)
+		if steps && i < current {
+			text[i] = "✓ " + text[i]
+		}
 		lengths[i] = ansi.StringWidth(text[i])
 		total += lengths[i]
 	}
@@ -53,7 +67,7 @@ func Breadcrumbs(labels []string, focus, width int) string {
 		longest := -1
 		for i, n := range lengths {
 			// Keep a short current location intact while shortening long ancestors.
-			if i == len(lengths)-1 && ansi.StringWidth(text[i]) <= available/2 {
+			if i == current && ansi.StringWidth(text[i]) <= available/2 {
 				continue
 			}
 			if n > 1 && (longest < 0 || n > lengths[longest]) {
@@ -66,26 +80,38 @@ func Breadcrumbs(labels []string, focus, width int) string {
 		lengths[longest]--
 		total--
 	}
+	var targets []Target
+	x := gap
 	for i, s := range text {
 		style := Style(Step).Bold(true)
-		if i == len(text)-1 {
+		if steps && i < current {
+			style = Style(StepDone).Bold(true)
+		}
+		if i == current {
 			style = Style(StepCurrent).Bold(true)
 		}
 		if i == focus {
 			style = style.Foreground(Colors(Body).Text).Underline(true)
 		}
 		text[i] = style.Render(ansi.Truncate(s, lengths[i], "…"))
+		targets = append(targets, Target{Index: i, X: x, Y: 1, Width: min(lipgloss.Width(text[i]), max(0, width-x)), Height: 1})
+		x += lipgloss.Width(text[i]) + 2*gap + 1
 	}
 	row := ansi.Truncate(strings.Repeat(" ", gap)+strings.Join(text, separator), width, "…")
 	border := Style(NavigationLine).Render(strings.Repeat("─", width))
-	return border + "\n" + row + "\n" + border
+	return border + "\n" + row + "\n" + border, targets
 }
 
 // Secondary keeps the current section visible, retaining whole labels where
 // they fit. Bracket space is reserved on inactive labels to prevent shifting.
 func Secondary(tool Tool, labels []string, current, width int, focused bool) string {
+	text, _ := SecondaryWithTargets(tool, labels, current, width, focused)
+	return text
+}
+
+func SecondaryWithTargets(tool Tool, labels []string, current, width int, focused bool) (string, []Target) {
 	if len(labels) == 0 || width <= 0 {
-		return ""
+		return "", nil
 	}
 	current = max(0, min(current, len(labels)-1))
 	start, end := 0, len(labels)
@@ -111,8 +137,12 @@ func Secondary(tool Tool, labels []string, current, width int, focused bool) str
 		}
 	}
 	var parts []string
+	var targets []Target
+	x := 0
 	if start > 0 {
 		parts = append(parts, Style(Body).Render("‹"))
+		targets = append(targets, Target{Index: start - 1, X: 0, Width: 1, Height: 1})
+		x = 2
 	}
 	for i := start; i < end; i++ {
 		room := budget - 2
@@ -131,9 +161,17 @@ func Secondary(tool Tool, labels []string, current, width int, focused bool) str
 			s = " " + s + " "
 		}
 		parts = append(parts, style.Render(s))
+		targets = append(targets, Target{Index: i, X: x, Width: ansi.StringWidth(s), Height: 1})
+		x += ansi.StringWidth(s) + 1
 	}
 	if end < len(labels) {
 		parts = append(parts, Style(Body).Render("›"))
+		targets = append(targets, Target{Index: end, X: x, Width: 1, Height: 1})
 	}
-	return lipgloss.NewStyle().Width(width).Align(lipgloss.Center).Render(ansi.Truncate(strings.Join(parts, " "), width, "…"))
+	row := ansi.Truncate(strings.Join(parts, " "), width, "…")
+	left := (width - lipgloss.Width(row)) / 2
+	for i := range targets {
+		targets[i].X += left
+	}
+	return lipgloss.NewStyle().Width(width).Align(lipgloss.Center).Render(row), targets
 }

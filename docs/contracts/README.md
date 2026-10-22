@@ -8,7 +8,7 @@ These pages explain individual commands and their exact behavior.
 | Task | Command or guide |
 |---|---|
 | Choose models and prepare a layout | [`temper init` and `temper configure`](init.md) |
-| Compose layouts from selected presets | [`temper layout`](layouts.md#standalone-layout-editor) |
+| Compose layouts from saved presets | [`temper layout`](layouts.md#standalone-layout-editor) |
 | Start, inspect or stop a saved layout | [`temper layout activate`, `status`, `stop`](layouts.md) |
 | Connect Pi, PiG or Hermes to the active layout | [Harness integrations](harnesses.md) |
 | Understand estimated and unknown memory use | [Memory estimates](memory-estimates.md) |

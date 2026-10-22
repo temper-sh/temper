@@ -17,15 +17,18 @@ import (
 	"github.com/temper-sh/temper/internal/tui"
 )
 
-// LayoutInput contains the selected presets and saved layouts, never a catalog.
+// LayoutInput contains available exact presets, saved layouts and file errors,
+// never a catalog. Newly discovered presets remain in memory until placement.
 type LayoutInput struct {
 	Configuration setup.Configuration
+	PresetErrors  map[string]string
 	ID            string
 	DryRun        bool
 }
 
-// LayoutSave publishes layouts only. Published remains true for a post-commit
-// durability error; a dry run returns false. The command owns the revision guard.
+// LayoutSave publishes composition and captures newly included presets.
+// Published remains true for a post-commit durability error; a dry run returns
+// false. The command owns the source and configuration revision guards.
 type LayoutSave func(context.Context, map[string]setup.Layout) (published bool, err error)
 type LayoutPreview func(context.Context, setup.Configuration, string) (setup.LayoutPlan, error)
 
@@ -38,13 +41,14 @@ type layoutJob struct {
 }
 
 // LayoutModel owns a revocable composition draft. Its callbacks are the only
-// effect/read edges; it cannot author, select, or rebuild a preset.
+// effect/read edges; it cannot author or rebuild a preset.
 type LayoutModel struct {
 	ctx                        context.Context
 	cancel, jobCancel          context.CancelFunc
 	save                       LayoutSave
 	preview                    LayoutPreview
 	saved, draft               setup.Configuration
+	presetErrors               map[string]string
 	dry                        bool
 	mode, id, field, confirm   string
 	returnMode, notice         string
@@ -83,7 +87,7 @@ func NewLayoutModel(ctx context.Context, input LayoutInput, save LayoutSave, pre
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	m := &LayoutModel{ctx: ctx, cancel: cancel, save: save, preview: preview,
-		saved: configuration, draft: configuration, dry: input.DryRun, mode: "list",
+		saved: configuration, draft: configuration, presetErrors: maps.Clone(input.PresetErrors), dry: input.DryRun, mode: "list",
 		width: 100, height: 32, viewport: viewport.New(),
 		text: tui.TextInput(160, tui.Colors(tui.Input).Text, tui.Colors(tui.InputPrompt).Text, tui.Layouts.Colors(tui.Heading).Text)}
 	m.draft.Layouts = cloneLayouts(configuration.Layouts)
@@ -111,7 +115,16 @@ func (m *LayoutModel) Close() {
 }
 func (m *LayoutModel) dirty() bool         { return !reflect.DeepEqual(m.saved.Layouts, m.draft.Layouts) }
 func (m *LayoutModel) layoutIDs() []string { return slices.Sorted(maps.Keys(m.draft.Layouts)) }
-func (m *LayoutModel) presetIDs() []string { return slices.Sorted(maps.Keys(m.draft.Presets)) }
+func (m *LayoutModel) presetIDs() []string {
+	ids := slices.Collect(maps.Keys(m.draft.Presets))
+	for id := range m.presetErrors {
+		if _, ok := m.draft.Presets[id]; !ok {
+			ids = append(ids, id)
+		}
+	}
+	slices.Sort(ids)
+	return ids
+}
 func (m *LayoutModel) selectedPreset() string {
 	ids := m.presetIDs()
 	if m.cursor < 0 || m.cursor >= len(ids) {
@@ -305,7 +318,7 @@ func (m *LayoutModel) count() int {
 	if m.page == 1 {
 		return 2
 	}
-	return len(m.draft.Presets)
+	return len(m.presetIDs())
 }
 
 func (m *LayoutModel) edit(field, value string) tea.Cmd {
@@ -491,6 +504,10 @@ func (m *LayoutModel) invoke(action string) tea.Cmd {
 		}
 		layout := m.draft.Layouts[m.id]
 		if !slices.Contains(layout.Presets, id) {
+			if reason := m.presetErrors[id]; reason != "" {
+				m.notice, m.noticeTone = reason, tui.Error
+				return nil
+			}
 			layout.Presets = append(layout.Presets, id)
 			m.draft.Layouts[m.id] = layout
 		} else if slices.Contains(layout.Startup, id) || layout.Default == id {

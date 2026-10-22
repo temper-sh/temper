@@ -47,7 +47,7 @@ func (m *LayoutModel) actions() []layoutAction {
 			if included {
 				label = "Exclude"
 			}
-			buttons = append(buttons, layoutAction{"member", label, tui.Action, id == ""},
+			buttons = append(buttons, layoutAction{"member", label, tui.Action, id == "" || !included && m.presetErrors[id] != ""},
 				layoutAction{"preload", "Preload", tui.Action, !included}, layoutAction{"default", "Default", tui.Action, !included})
 		} else {
 			buttons = append(buttons, layoutAction{"field", "Edit", tui.Action, false})
@@ -211,7 +211,7 @@ func (m *LayoutModel) body(width int) (string, int, int) {
 		case "delete":
 			add("Delete layout “"+m.saved.Layouts[m.id].Name+"”?", tui.Body, false)
 			blank()
-			add("Selected presets stay available. A running layout keeps serving until you stop or activate it.", tui.Muted, false)
+			add("Saved presets stay available. A running layout keeps serving until you stop or activate it.", tui.Muted, false)
 		case "member":
 			id := m.selectedPreset()
 			add("Exclude “"+m.draft.Presets[id].Name+"”?", tui.Body, false)
@@ -263,11 +263,14 @@ func (m *LayoutModel) body(width int) (string, int, int) {
 		blank()
 		add(fmt.Sprintf("Idle unload (seconds): %d", layout.IdleSeconds), tui.Body, m.cursor == 1)
 	} else {
-		if len(m.draft.Presets) == 0 {
-			add("No selected presets. Select presets through temper configure first.", tui.Muted, false)
+		if len(m.presetIDs()) == 0 {
+			add("No saved presets. Create one with temper preset, then reopen this editor.", tui.Muted, false)
 		}
 		for i, id := range m.presetIDs() {
 			add(m.presetLabel(id, false), tui.Body, i == m.cursor)
+			if reason := m.presetErrors[id]; reason != "" && i == m.cursor {
+				add(reason, tui.Error, false)
+			}
 			blank()
 		}
 	}
@@ -283,7 +286,22 @@ func (m *LayoutModel) presetLabel(id string, review bool) string {
 	if review {
 		marker = "• "
 	}
-	label := marker + m.draft.Presets[id].Name
+	preset := m.draft.Presets[id]
+	name := preset.Name
+	if name == "" {
+		name = id
+	}
+	label := marker + name
+	if !review && m.presetErrors[id] != "" {
+		if preset.Name == "" {
+			label += " · unavailable"
+		} else {
+			label += " · saved version"
+		}
+	}
+	if preset.UserPreset != "" {
+		label += " · untested"
+	}
 	if slices.Contains(layout.Startup, id) {
 		label += " · preload"
 	}

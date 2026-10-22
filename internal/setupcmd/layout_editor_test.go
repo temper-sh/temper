@@ -68,7 +68,7 @@ func TestLayoutEditorComposesSelectedPresetsAndPreservesExactInputs(t *testing.T
 	}
 	c := fixtureCommand(t)
 	c.Catalog = func(context.Context, string, string, bool) (catalog.View, error) {
-		t.Fatal("layout composition must not read the catalog")
+		t.Fatal("layout composition must not use the catalog download path")
 		return catalog.View{}, errors.New("offline")
 	}
 	m, err := c.NewLayoutEditor(ctx, LayoutEditorOptions{Root: root})
@@ -102,7 +102,7 @@ func TestLayoutEditorComposesSelectedPresetsAndPreservesExactInputs(t *testing.T
 		t.Fatal("draft/review changed saved configuration", err)
 	}
 	if view := ansi.Strip(m.View().Content); !strings.Contains(view, "chat · preload · default") || !strings.Contains(view, "300 seconds") || strings.Contains(view, "unselected") {
-		t.Fatalf("review lost chosen behavior or included an authoring file:\n%s", view)
+		t.Fatalf("review lost chosen behavior or included an unchosen file:\n%s", view)
 	}
 	save := layoutControl(m, 's')
 	if save == nil {

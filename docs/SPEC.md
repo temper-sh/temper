@@ -1,19 +1,19 @@
 # temper — product spec
 
-**Current contract for 0.1.0, 2026-10-04:** all Temper schemas and engine
+**Current contract, updated 2026-10-22:** all Temper schemas and engine
 adapter contracts start at v1. A preset owns weights, engine and settings;
 a layout is the user's named composition with independent membership, startup
 loading and optional default. General and Specialist contain curated
 recommendations with authored copy; Other contains only the remaining presets.
 Specialists are grouped by catalog-authored task headings and guidance.
 Every choice shows its selected model license, linked to guidance or publisher
-terms in selection and review. Text previews include the URL. Saved presets
+terms in selection. Text previews include the URL. Saved presets
 retain the license recorded with their exact model artifact.
 Each preset declares its default CPU/GPU device and practical choices. Compute
-is editable beside context and template only when both devices are offered.
+is editable beside context only when both devices are offered.
 Cards show selectable compute before Context on one settings line, omit fixed
 GPU labels, and retain CPU only. Rerankers omit the repeated interface label.
-The template label and control appear only when compatible alternatives are available.
+The preset card names custom chat templates; template changes belong in the preset editor.
 The chosen device is retained in the exact lock and shared across layouts.
 CPU weights count against RAM; GPU weights also count against
 the wired-memory allowance. Device changes do not inherit context evidence.
@@ -35,16 +35,32 @@ User preset authoring lives in `temper preset`, with direct entry through
 `temper preset edit ID`. Forks track a catalog origin plus explicit overrides;
 copies own their values. The editor keeps a revocable draft, validates through
 the compiler and saves one authoring file with a concurrent-edit guard. Saving
-does not select a preset, change layout membership or rebuild an exact lock.
+makes the preset available in the layout editor without changing membership
+or rebuilding an existing exact lock.
 The [user-preset contract](contracts/user-presets.md#interactive-authoring)
 owns navigation, reset/conversion, weights/template lookup and save/delete behavior.
 
-`temper layout` edits saved composition using only the configuration's selected
-presets. It owns membership, preload, default routing, idle timeout and layout
-names; it does not browse the catalog, import authoring files or rebuild preset
-locks. Reviewed saves use the configuration revision guard and leave the running
-generation unchanged. The [layout-editor contract](contracts/layouts.md#standalone-layout-editor)
+`temper layout` reads saved presets from `ROOT/presets.d` alongside existing
+exact presets. It owns membership, preload, default routing, idle timeout and
+layout names. First placement captures an exact lock and its authoring source
+in the configuration; existing locks remain unchanged. Reviewed saves use the
+source and configuration revision guards and leave the running generation
+unchanged. The [layout-editor contract](contracts/layouts.md#standalone-layout-editor)
 owns its draft, review and deletion behavior.
+Full updates report changes to catalog fields a saved fork overrides while
+preserving the overrides. The saved comparison baseline and failure behavior
+are defined in [update behavior](contracts/init.md#change-your-setup).
+
+Guided setup follows **Presets → Harnesses → Review**. First setup creates a
+concrete Default containing selected presets, with no preload or automatic
+default-model alias. Returning to Presets before saving updates that initial
+composition. Subsequent runs preserve all existing layouts and their explicit
+settings, even when Default is absent. New selections stay outside layouts until
+placed in `temper layout`; the wizard refuses removal of referenced presets and
+names the layouts to change. Scripted selection behavior remains unchanged.
+Review confirms models/harnesses, layout availability and download/disk/memory
+cost without repeating preset or layout settings. The file table is always shown;
+refusals and memory uncertainty remain visible.
 
 Pre-release schema aliases, migrations, historical hash shims and predicted
 machine-facts formats are unsupported. Historical signed publications and
@@ -52,10 +68,9 @@ measurements retain their exact bytes and producing host. Older terminology
 below is retained design history and cannot override the current contracts.
 Field Kit lifetime supervision and live-cutover boundaries remain intact.
 
-**Starter layout update, 2026-10-03 (source):** first setup suggests one editable
-**Default** layout containing every selected preset, with startup loading and
-default-model routing left unselected. Users can edit it or add layouts, such as
-Helper for small models. Existing saved configurations retain their layouts.
+**Historical starter layout update, 2026-10-03:** the original wizard suggested
+an editable Default. The current three-step wizard creates that initial
+composition and leaves layout editing to `temper layout`.
 
 Adopted 2026-08-14 as this repository's working product spec. Drafted
 2026-08-07 in `local-ai-setup/docs/TEMPER.md` by the working session that ran
@@ -186,8 +201,8 @@ screens, bordered choice blocks and grouped review sections. Navigation, review
 actions and keyboard help remain visible while content scrolls.
 Fixed templates do not add a screen. Visible Next buttons advance explicit
 choices; Review supports ordinary arrow keys and trackpad scrolling. Its
-collapsible downloads table distinguishes cached weights from required
-transfers, with the weight-transfer summary visible even when collapsed.
+downloads table distinguishes cached weights from required transfers and is
+always shown below the download and disk totals.
 The framework handles interaction and presentation; catalog validation,
 installation planning and execution remain in Temper's existing product code.
 The dependency versions are maintained in `go.mod`.

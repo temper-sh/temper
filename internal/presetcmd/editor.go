@@ -758,7 +758,14 @@ func (m *Editor) references(id string) string {
 	if err != nil {
 		return "Layout references unavailable: " + err.Error()
 	}
-	refs := c.References(id)
+	var refs []string
+	for key, preset := range c.Presets {
+		if key == id || preset.UserPreset == id {
+			refs = append(refs, c.References(key)...)
+		}
+	}
+	slices.Sort(refs)
+	refs = slices.Compact(refs)
 	if len(refs) == 0 {
 		return "No saved layout references."
 	}

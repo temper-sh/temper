@@ -13,23 +13,37 @@ import (
 	"github.com/temper-sh/temper/internal/setup"
 )
 
-func TestPresetTabFocusesNavigationWithoutActivatingIt(t *testing.T) {
+func TestPresetTabCyclesControlsWithoutActivatingThem(t *testing.T) {
 	m := presetEditor(t)
+	for _, area := range []presetFocus{presetFooterFocus, presetStepsFocus, presetFilterFocus, presetContentFocus} {
+		m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+		if m.focus != area || m.page != 0 || m.Decision.Action != "" || len(m.draft.Presets) != 0 {
+			t.Fatalf("Tab did not focus area %d without activating it", area)
+		}
+	}
 	m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
-	if view := ansi.Strip(m.View().Content); m.page != 0 || m.Decision.Action != "" || m.focus != presetFooterFocus || m.footerButtons()[m.action].target.kind != hitNext || !strings.Contains(view, "Next: Layouts") {
-		t.Fatalf("Tab must focus Next without leaving Presets:\n%s", view)
+	if m.footerButtons()[m.action].target.kind != hitNext {
+		t.Fatal("Tab must focus Next")
 	}
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if m.page != 1 {
+	if m.page != presetHarnessPage {
 		t.Fatal("Enter did not activate Next")
 	}
 	m.Update(tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
-	if view := ansi.Strip(m.View().Content); m.page != 1 || m.focus != presetFooterFocus || m.footerButtons()[m.action].target.key != "back" || !strings.Contains(view, "← Back") {
-		t.Fatalf("Shift+Tab must focus Back without leaving Layouts:\n%s", view)
+	if m.focus != presetContentFocus {
+		t.Fatal("reverse focus cycle did not return to content")
+	}
+	m.Update(tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
+	if m.focus != presetStepsFocus {
+		t.Fatal("reverse focus cycle did not reach primary navigation")
+	}
+	m.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
+	if m.page != presetHarnessPage {
+		t.Fatal("moving primary focus changed the page")
 	}
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if m.page != 0 {
-		t.Fatal("Enter did not activate Back")
+		t.Fatal("Enter did not return to Presets")
 	}
 }
 
@@ -50,92 +64,7 @@ func TestPresetHorizontalArrowsNeverLeaveTheirScreen(t *testing.T) {
 	}
 }
 
-func TestLayoutCheckboxesAreIndependentlyReachableWithArrows(t *testing.T) {
-	for _, width := range []int{100, 28} {
-		t.Run(fmt.Sprint(width), func(t *testing.T) {
-			m := presetEditor(t)
-			m.Update(tea.WindowSizeMsg{Width: width, Height: 18})
-			editorKey(m, ' ')
-			m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
-			m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-			m.Update(tea.KeyPressMsg{Code: tea.KeyEnter}) // Default; the preset is already included.
-			m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
-			if view := ansi.Strip(m.View().Content); m.focus != presetContentFocus || m.control != 1 || !strings.Contains(view, "[ ] Load on activation") {
-				t.Fatalf("startup checkbox is not focused and visible:\n%s", view)
-			}
-			editorKey(m, ' ')
-			m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
-			m.Update(tea.WindowSizeMsg{Width: 28, Height: 10})
-			if view := ansi.Strip(m.View().Content); m.focus != presetContentFocus || m.control != 2 || !strings.Contains(view, "[ ] Default") {
-				t.Fatalf("default checkbox is not focused and visible:\n%s", view)
-			}
-			assertFrameFits(t, m.View().Content, 28, 10)
-			editorKey(m, ' ')
-			l := m.draft.Layouts["default"]
-			if len(l.Presets) != 1 || len(l.Startup) != 1 || l.Default != l.Presets[0] {
-				t.Fatalf("checkbox focus changed the wrong choice: %+v", l)
-			}
-			m.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
-			editorKey(m, ' ')
-			l = m.draft.Layouts["default"]
-			if len(l.Startup) != 0 || len(l.Presets) != 1 || l.Default == "" || m.layout != "default" {
-				t.Fatal("clearing startup changed membership/default or left the editor")
-			}
-			m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
-			m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-			if m.field != "idle" {
-				t.Fatal("idle-unload control is not reachable with arrows")
-			}
-		})
-	}
-}
-
-func TestLayoutCreationRenameAndRemovalNeedNoLetterShortcuts(t *testing.T) {
-	m := presetEditor(t)
-	m.Update(tea.WindowSizeMsg{Width: 28, Height: 18})
-	m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
-	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
-	m.Update(tea.KeyPressMsg{Code: tea.KeyRight}) // New.
-	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if m.field != "new" {
-		t.Fatal("New layout is not reachable with arrows")
-	}
-	m.Update(tea.PasteMsg{Content: "Writing desk"})
-	m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
-	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if m.draft.Layouts["writing-desk"].Name != "Writing desk" {
-		t.Fatal("Apply did not create the layout")
-	}
-	m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
-	m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
-	m.Update(tea.KeyPressMsg{Code: tea.KeyRight}) // Rename.
-	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if m.field != "rename" || m.text.Value() != "Writing desk" {
-		t.Fatal("Rename lost the selected layout while navigating the footer")
-	}
-	m.text.SetValue("Discard this name")
-	m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
-	m.Update(tea.KeyPressMsg{Code: tea.KeyRight}) // Cancel.
-	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if m.field != "" || m.draft.Layouts["writing-desk"].Name != "Writing desk" {
-		t.Fatal("Cancel changed the saved draft name")
-	}
-	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter}) // Rename again.
-	m.text.SetValue("Drafting desk")
-	m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
-	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if m.draft.Layouts["writing-desk"].Name != "Drafting desk" {
-		t.Fatal("Apply did not rename the same layout")
-	}
-	m.Update(tea.KeyPressMsg{Code: tea.KeyRight}) // Remove.
-	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if _, exists := m.draft.Layouts["writing-desk"]; exists || len(m.draft.Layouts) != 1 {
-		t.Fatal("Remove did not remove only the selected layout")
-	}
-}
-
-func TestReviewArrowsReachDownloadsAndRetryWithoutSaving(t *testing.T) {
+func TestReviewArrowsScrollAndReachRetryWithoutSaving(t *testing.T) {
 	m := populatedPresetEditor(t)
 	m.page = presetReviewPage
 	m.plan.CanPrepare = false
@@ -148,19 +77,28 @@ func TestReviewArrowsReachDownloadsAndRetryWithoutSaving(t *testing.T) {
 		t.Fatalf("Tab focused %q, not Back, while installation is impossible", b.label)
 	}
 	m.Update(tea.KeyPressMsg{Code: tea.KeyUp})
-	if view := ansi.Strip(m.View().Content); m.focus != presetContentFocus || !strings.Contains(view, "▸ Downloads") {
-		t.Fatalf("Downloads cannot receive arrow focus:\n%s", view)
+	m.View()
+	if m.focus != presetContentFocus {
+		t.Fatal("Review content cannot receive arrow focus")
 	}
+	offset := m.view.YOffset()
+	m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	if m.focus != presetContentFocus || m.view.YOffset() <= offset {
+		t.Fatal("Down did not scroll Review content")
+	}
+	m.Update(tea.KeyPressMsg{Code: tea.KeyUp})
+	if m.view.YOffset() != offset {
+		t.Fatal("Up did not scroll back to the previous position")
+	}
+	before, _ := m.draft.Bytes()
 	m.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
 	m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
-	if m.downloadsOpen {
-		t.Fatal("arrow navigation activated the Downloads control")
-	}
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if !m.downloadsOpen {
-		t.Fatal("Enter did not expand Downloads")
+	after, _ := m.draft.Bytes()
+	if string(before) != string(after) || m.Decision.Action != "" || m.view.YOffset() != offset {
+		t.Fatal("read-only Review content activated an action or changed the draft")
 	}
-	m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	for i := 0; i < 5 && m.footerButtons()[m.action].short != "Install"; i++ {
 		m.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
 	}
@@ -234,7 +172,7 @@ func TestPresetContextAndFormButtonsAreReachableInNarrowTerminal(t *testing.T) {
 
 func TestEscOnTheFirstScreenKeepsTheChoices(t *testing.T) {
 	m := populatedPresetEditor(t)
-	m.page, m.layout, m.field = 0, "", ""
+	m.page, m.field = 0, ""
 	selected := len(m.draft.Presets)
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	if m.Decision.Action != "" || len(m.draft.Presets) != selected || !strings.Contains(m.notice, "press q") {

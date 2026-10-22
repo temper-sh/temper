@@ -2,6 +2,7 @@ package setupui
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"reflect"
 	"slices"
@@ -68,7 +69,7 @@ func TestPresetTabsAndBackNavigationKeepOneSelection(t *testing.T) {
 	}
 }
 
-func TestFirstSetupSuggestsOneLayoutWithSelectedPresetsAndNoStartup(t *testing.T) {
+func TestFirstSetupCreatesDefaultWithSelectedPresetsAndNoStartup(t *testing.T) {
 	m := presetEditor(t)
 	editorKey(m, ' ')
 	editorKey(m, 'o')
@@ -79,102 +80,98 @@ func TestFirstSetupSuggestsOneLayoutWithSelectedPresetsAndNoStartup(t *testing.T
 
 	l, ok := m.draft.Layouts["default"]
 	if !ok || len(m.draft.Layouts) != 1 || l.Name != "Default" {
-		t.Fatalf("expected one editable Default layout: %+v", m.draft.Layouts)
+		t.Fatalf("expected one Default layout: %+v", m.draft.Layouts)
 	}
 	if !slices.Equal(l.Presets, []string{"qwen3.5-4b-q4km-off", "qwen3.8-27b-q4xl-splash"}) || len(l.Startup) != 0 || l.Default != "" {
 		t.Fatalf("selected presets should be included without startup or default routing: %+v", l)
 	}
 	if len(m.input.Configuration.Layouts) != 0 {
-		t.Fatal("suggestion changed the caller's configuration")
+		t.Fatal("first setup changed the caller's configuration")
 	}
 }
 
-func TestReturningToLayoutsPreservesEditsToTheSuggestion(t *testing.T) {
+func TestFirstSetupRebuildsDefaultAfterChangingSelection(t *testing.T) {
 	m := presetEditor(t)
 	editorKey(m, ' ')
-	m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
-	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter}) // Open Default.
-	editorKey(m, ' ')                             // Remove its suggested membership.
-	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})   // Layouts.
-	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})   // Presets.
-	m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
-	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if len(m.draft.Layouts["default"].Presets) != 0 {
-		t.Fatal("returning to Layouts replaced an explicit membership edit")
+	m.advance()
+	if m.page != presetHarnessPage {
+		t.Fatal("Presets did not advance directly to Harnesses")
 	}
-	editorKey(m, 'x')
-	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
-	m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
-	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if len(m.draft.Layouts) != 0 {
-		t.Fatal("returning to Layouts recreated a removed suggestion")
+	m.back()
+	editorKey(m, ' ')
+	editorKey(m, 'o')
+	editorKey(m, ' ')
+	m.advance()
+	layout := m.draft.Layouts["default"]
+	if !slices.Equal(layout.Presets, []string{"qwen3.5-4b-q4km-off"}) || len(layout.Startup) != 0 || layout.Default != "" {
+		t.Fatalf("Default did not follow the revised first-setup selection: %+v", layout)
+	}
+	if err := m.draft.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	editorKey(m, 'q')
+	if m.Decision.Action != "cancel" || len(m.input.Configuration.Presets) != 0 || len(m.input.Configuration.Layouts) != 0 {
+		t.Fatal("cancel committed first-setup choices")
 	}
 }
 
 func TestExistingConfigurationKeepsItsLayoutsWhenPresetsChange(t *testing.T) {
+	for _, state := range []string{"custom Default", "no Default", "no layouts"} {
+		t.Run(state, func(t *testing.T) {
+			input := presetEditor(t).input
+			input.NewConfiguration = false
+			saved := input.Presets[1]
+			input.Configuration.Presets[saved.ID] = setup.Preset{Name: saved.Name, Lock: saved.Lock}
+			input.Configuration.Layouts = map[string]setup.Layout{}
+			if state != "no layouts" {
+				input.Configuration.Layouts["writing"] = setup.Layout{Name: "Writing desk", Presets: []string{saved.ID}, Startup: []string{saved.ID}, Default: saved.ID, IdleSeconds: 60}
+			}
+			if state == "custom Default" {
+				input.Configuration.Layouts["default"] = setup.Layout{Name: "My own layout", Presets: []string{saved.ID}, Startup: []string{}, IdleSeconds: 600}
+			}
+			before, _ := input.Configuration.Bytes()
+			m := NewPresetModel(context.Background(), input, func(_ context.Context, c setup.Configuration) (setup.Plan, error) {
+				return setup.Plan{Configuration: &c, CanPrepare: true}, nil
+			})
+			editorKey(m, ' ')
+			m.advance()
+			preview := m.advance()
+			m.Update(preview())
+			if !reflect.DeepEqual(m.plan.Configuration.Layouts, input.Configuration.Layouts) {
+				t.Fatalf("saved layouts or startup/default choices changed: %+v", m.plan.Configuration.Layouts)
+			}
+			m.action = 1
+			m.finish()
+			if m.Decision.Action != "save" || len(m.Decision.Configuration.Presets) != 2 {
+				t.Fatal("rerun failed to save new presets independently of layout membership")
+			}
+			after, _ := input.Configuration.Bytes()
+			if string(before) != string(after) {
+				t.Fatal("draft changed the caller's configuration")
+			}
+		})
+	}
+}
+
+func TestWizardRefusesRemovingReferencedPresetsAndNamesTheLayout(t *testing.T) {
 	input := presetEditor(t).input
 	input.NewConfiguration = false
-	input.Configuration.Layouts = map[string]setup.Layout{
-		"local":   {Name: "Local", Presets: []string{}, Startup: []string{}, IdleSeconds: 1800},
-		"utility": {Name: "Utility", Presets: []string{}, Startup: []string{}, IdleSeconds: 1800},
-		"default": {Name: "My own layout", Presets: []string{}, Startup: []string{}, IdleSeconds: 60},
-	}
+	saved := input.Presets[0]
+	input.Configuration.Presets[saved.ID] = setup.Preset{Name: saved.Name, Lock: saved.Lock}
+	input.Configuration.Layouts["writing"] = setup.Layout{Name: "Writing desk", Presets: []string{saved.ID}, Startup: []string{saved.ID}, Default: saved.ID, IdleSeconds: 60}
 	m := NewPresetModel(context.Background(), input, nil)
+	before, _ := m.draft.Bytes()
 	editorKey(m, ' ')
-	m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
-	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if !reflect.DeepEqual(m.draft.Layouts, input.Configuration.Layouts) {
-		t.Fatalf("saved layouts were replaced or populated: %+v", m.draft.Layouts)
+	after, _ := m.draft.Bytes()
+	if string(before) != string(after) || !strings.Contains(m.notice, "Writing desk") || !strings.Contains(m.notice, "temper layout") {
+		t.Fatalf("removing a referenced preset changed its layout or failed to name the correction: %q", m.notice)
 	}
-}
-
-func TestLayoutInclusionStartupAndDefaultAreIndependent(t *testing.T) {
-	m := presetEditor(t)
+	// Saved presets outside layouts can still be deselected.
+	editorKey(m, 'o')
 	editorKey(m, ' ')
-	m.advance()
-	m.layout = "default"
-	editorKey(m, 'd')
-	l := m.draft.Layouts["default"]
-	if len(l.Startup) != 0 || l.Default == "" {
-		t.Fatal("default implied preload")
-	}
-	editorKey(m, 's')
-	editorKey(m, 'd')
-	l = m.draft.Layouts["default"]
-	if len(l.Startup) != 1 || l.Default != "" {
-		t.Fatal("startup requires default")
-	}
-	m.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
-	m.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
 	editorKey(m, ' ')
-	if err := m.draft.Validate(); err == nil || !strings.Contains(m.notice, "explicitly") {
-		t.Fatal("membership removal silently corrected startup")
-	}
-	editorKey(m, 's')
-	if err := m.draft.Validate(); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestStarterLayoutsCanBeRemovedAndNamedCompositionsCreated(t *testing.T) {
-	m := presetEditor(t)
-	m.advance()
-	editorKey(m, 'x')
-	if len(m.draft.Layouts) != 0 {
-		t.Fatal("starters became required types")
-	}
-	m.field = "new"
-	m.text.SetValue("Editing desk")
-	m.acceptEdit()
-	if m.draft.Layouts["editing-desk"].Name != "Editing desk" {
-		t.Fatal("custom composition missing")
-	}
-	m.field = "rename"
-	m.text.SetValue("Review desk")
-	m.acceptEdit()
-	if m.draft.Layouts["editing-desk"].Name != "Review desk" {
-		t.Fatal("rename lost stable identity")
+	if len(m.draft.Presets) != 1 {
+		t.Fatal("unreferenced preset could not be removed")
 	}
 }
 
@@ -196,6 +193,25 @@ func TestSavedAliasCustomizesItsExactSourceRecord(t *testing.T) {
 	}
 	if _, changed := m.draft.Presets["qwen3.5-4b-q4km-off"]; changed {
 		t.Fatal("alias edit replaced catalog choice")
+	}
+}
+
+func TestWizardRetainsAuthoredPresetSourceWhenReselectingAndCustomizing(t *testing.T) {
+	m := presetEditor(t, "qwen3.5-4b-q4km-off")
+	p := &m.input.Presets[0]
+	p.UserPreset = p.Lock.Preset
+	p.ForkBaseline = &setup.ForkBaseline{Origin: p.UserPreset, Values: map[string]json.RawMessage{"request_defaults.sampling.temperature": json.RawMessage("0.7")}}
+	m.toggleMember()
+	m.toggleMember()
+	m.toggleMember()
+	if !m.customize(*p, 8192, "") {
+		t.Fatal(m.notice)
+	}
+	if m.draft.Presets[p.ID].UserPreset != p.UserPreset || m.draft.Presets[p.ID].ForkBaseline != p.ForkBaseline {
+		t.Fatal("wizard detached the authored source from its saved lock")
+	}
+	if err := m.draft.Validate(); err != nil {
+		t.Fatal(err)
 	}
 }
 

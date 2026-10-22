@@ -10,13 +10,64 @@ This is not a model-eval log, product evidence, or permission to change the
 skills repository. It creates no synthetic Temper work. A note may — and often
 should — conclude that no skill change is warranted.
 
-## Composition from selected presets, 2026-10-22
+## Three-step wizard and shared terminal layout, 2026-10-22
 
-The owner narrowed the layout editor to composing already-selected presets.
-Unit design kept its save callback limited to the layout map; preset selection,
-authoring and lock rebuilding remain outside that surface. Code organization
-reused the shared terminal components and extracted the existing layout memory
-assessment for both review and activation.
+Code organization reused the frame, navigation, actions, input and palette
+already consumed by the preset and layout editors. Mouse targets now come from
+the same renderers as their labels; frame offsets keep scrolling and wrapped
+footers aligned. The wizard retains its own revocable draft and guarded page
+transitions. Layout editing remains with the standalone editor.
+
+The contract distinguishes a first-setup composition from persistent automatic
+membership: first setup rebuilds Default from current selections before review;
+reruns preserve existing layouts, including the absence of Default. Referenced
+preset removal is refused with an actionable route to `temper layout`.
+[Wizard stories](../internal/setupui/presets_test.go) cover these outcomes, while
+[navigation and view tests](../internal/setupui/presets_view_test.go) cover
+stale previews, field cancellation, narrow controls and mouse geometry.
+
+Review now confirms selections and resource cost without repeating settings or
+paths. Its file table is always visible and scrolls inside the shared frame;
+the obsolete disclosure state and controls were removed. The
+[review tests](../internal/setupui/presets_review_test.go) retain separate disk
+budgets, installation refusals and measured-memory counters, workloads and limits.
+
+Full offline Go tests, vet and race tests pass. Actual terminal renders cover
+40/80/112 columns, 24/32 rows and true-color/256-color profiles. Isolated fresh
+and saved-root terminal dry runs verified context edits, Back/Next, harness
+consent, removal refusal and Save without changing root/configuration/harness
+files. Existing galleries and working-tree changes were preserved.
+**No skill change warranted.**
+
+## Fork update reporting, 2026-10-22
+
+The resolved execution lock cannot recover an overridden origin value. Data
+modeling placed a compact historical baseline beside the saved preset, retaining
+only overridden catalog fields and distinguishing untracked from unset and zero.
+This makes comparison independent of a separately refreshed catalog. Unit design
+keeps capture/comparison pure in `setup`; commands own reads and publication.
+Reliable effects advances the baseline at the configuration commit, preserves it
+on dry/software-only updates and refusals, and returns the report even if later
+preparation fails. A comparison-only save has no installation or restart effects.
+
+[Pure comparison tests](../internal/setup/fork_updates_test.go) cover selected
+profiles, equal-to-origin overrides, absent/zero/false values and source changes.
+[Command stories](../internal/setupcmd/update_overrides_test.go) exercise first
+layout placement through reporting, interruption, concurrent edits, rejected
+rebuilds, unknown history, override removal and post-commit failure. Full offline
+Go tests, vet and affected-package race checks pass. Existing UI evidence remains
+applicable; no visual behavior changed. **No skill change warranted.**
+
+## Layout composition and preset-folder discovery, 2026-10-22
+
+The owner separated authoring from composition. The first implementation
+incorrectly required a separate configuration selection before a saved preset
+could appear in a layout. The corrected flow reads `presets.d` directly.
+Unit design keeps the save callback limited to membership/settings; its command
+captures newly included exact presets in the same configuration commit. Data
+modeling retains the authoring source ID so updates cannot reinterpret a local
+preset as a catalog entry. Code organization reuses the shared terminal frame,
+existing file loader/compiler and layout memory assessment.
 
 Reliable effects reused the configuration writer's revision guard and atomic
 publication. [Command stories](../internal/setupcmd/layout_editor_test.go) prove
@@ -24,6 +75,11 @@ preservation of exact locks, integrations, unrelated layouts and the running
 generation, plus conflict refusal, dry runs, cancellation and clean repeats.
 [UI stories](../internal/setupui/layouts_test.go) cover revocable navigation,
 dependent-reference clearing, generated names and post-publication errors.
+[Folder integration stories](../internal/setupcmd/layout_presets_test.go) follow
+preset-editor Save through first layout placement, invalid files and changed
+source/template refusal. [Update stories](../internal/setupcmd/update_test.go)
+cover fork/copy ownership, catalog ID collisions and invalid/missing-file lock
+retention. Source identity survives wizard edits and named layout references.
 Full offline tests, vet and affected-package race checks pass; actual narrow/wide
 renders and an isolated terminal dry run cover the UI. This is composition and
 save evidence, not native model or activation evidence. **No skill change warranted.**

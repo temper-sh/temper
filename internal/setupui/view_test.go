@@ -31,24 +31,6 @@ func TestDownloadTableFitsAndPreservesFullFileNames(t *testing.T) {
 	}
 }
 
-func TestDownloadsCardDoesNotRewrapTableBorders(t *testing.T) {
-	items := []Download{
-		{File: "Qwen3.5-4B-Q4_K_M.gguf", Size: "2.55 GiB", Status: "Downloads on install"},
-		{File: "local/llama-cpp b10964", Size: "10.63 MiB", Status: "May download"},
-	}
-	for _, width := range []int{26, 40, 76, 96, 108} {
-		t.Run(fmt.Sprint(width), func(t *testing.T) {
-			block, _ := downloadsBlock(Section{Downloads: items}, width, true, false)
-			frame := ansi.Strip(block)
-			for _, line := range strings.Split(ansi.Strip(downloadTable(items, width-4)), "\n") {
-				if !strings.Contains(frame, "│ "+line+" │") {
-					t.Fatalf("table rewrapped inside its card:\n%s", frame)
-				}
-			}
-		})
-	}
-}
-
 func textPosition(t *testing.T, frame, label string) (int, int) {
 	t.Helper()
 	for y, line := range strings.Split(ansi.Strip(frame), "\n") {

@@ -1,12 +1,17 @@
 # Presets and layouts
 
-`temper init` and `temper configure` edit one selected preset set and named
-layouts. The screens are Presets (one tab per catalog group), Layouts, then
-Review and prepare. Nothing is selected by recommendation. On first setup, entering Layouts
-suggests one editable **Default** layout (`default`) containing every selected
-preset, with no startup loading or default model selected. The suggestion is
-created once; back navigation preserves edits and deletion. Existing saved
-configurations keep their layouts. Users can add, rename or remove layouts.
+`temper init` and interactive `temper configure` follow **Presets → Harnesses →
+Review**. Nothing is selected by recommendation. First setup creates one
+**Default** layout (`default`) containing every selected preset, with no startup
+loading or default model alias. Returning to Presets before saving updates that
+initial composition when you continue.
+
+Existing configurations keep every layout and its explicit settings, including
+an edited or absent Default. Newly selected presets remain outside those layouts
+until placed through `temper layout`; review identifies them. Referenced presets
+cannot be deselected in the wizard: it names the affected layouts and directs
+membership changes to the standalone layout editor. `temper layout` owns adding,
+renaming and removing layouts, membership, startup loading and default routing.
 
 The catalog (`temper-catalog/v1`) names single engine configurations
 `presets`. Each preset's `presentation` places it in a group (a tab) and,
@@ -26,6 +31,12 @@ exact execution `lock`. The lock records its origin catalog preset, so
 `temper update` can rebuild it from the newest catalog with the same
 choices. One `software` setting covers every preset because a layout runs one
 router.
+An authored preset also has a `user_preset` file ID. A fork's optional
+`fork_baseline` holds its catalog `origin` and a `values` map from overridden
+field paths to their previous catalog values. Missing paths are untracked;
+JSON null records an unset field. This data supports
+[update reporting](init.md#change-your-setup), never execution. Old saved
+presets without it remain usable; first placement and full updates capture it.
 Each layout has a `name`, `presets` list, `startup` list, optional `default`,
 and `idle_seconds` (positive; default 1800). Startup and default independently
 reference included presets. Empty layouts and layouts without a default are
@@ -111,25 +122,31 @@ exec/reload test establish separate mechanical behavior.
 
 `temper layout` opens the saved layout list; `temper layout edit ID` opens one
 layout directly. Both accept `--root PATH` and `--dry-run` and require a terminal.
-The existing activate/status/stop commands retain their behavior. The wizard's
-layout step remains available until its separate flow change.
+The existing activate/status/stop commands retain their behavior.
 
 The list offers New, Edit and Delete. A new layout needs a name; Temper derives
 an unused ID. Renaming keeps that ID. New layouts start empty, with no preload
 or default model and a 1,800-second idle timeout. Empty layouts are valid.
-Inside a layout, **Presets** is one list of presets already selected in the
-saved configuration. Inclusion, preload and default are independent choices;
+Inside a layout, **Presets** reads the saved files in `ROOT/presets.d` alongside
+existing exact presets. A preset saved in the preset editor appears here
+without an import or configuration-selection step. Inclusion, preload and
+default are independent choices;
 preload and default require inclusion. Excluding a preset used for either asks
 to clear those references. **Settings** contains the name and idle timeout.
-There are no source tabs, catalog lookup, preset imports or authoring actions.
-Saving a preset authoring file does not add it to this list.
+There are no source tabs, catalog browsing or authoring actions. Preset files
+resolve against the stored catalog, offline. Invalid files stay visible with
+their reason; they do not prevent using other presets. User presets are untested.
 
 The editor holds one revocable draft. Review shows membership, preload, default
 and idle behavior, together with available memory assessment; inability to
 assess fit does not prevent saving a structurally valid composition. Activation
 retains its machine and preparation checks. Save validates the complete
 configuration and publishes it through the existing revision guard. A concurrent
-change is refused with the draft retained. No automatic merge or lock rebuild
+change is refused with the draft retained. Save also captures exact locks and
+the source file ID for newly included presets; unchosen files are not saved in
+the configuration. A changed or deleted source before its first Save requires
+reopening and reviewing it. Existing exact locks stay unchanged, including
+when an authoring file is subsequently edited or removed. No automatic merge
 occurs. Repeated unchanged saves preserve the saved file. Back and quit offer
 Keep editing or Discard when the draft changed. Dry-run Save validates without
 writing and retains the draft as unsaved.

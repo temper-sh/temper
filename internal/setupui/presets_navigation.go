@@ -2,7 +2,6 @@ package setupui
 
 import (
 	"context"
-	"slices"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/temper-sh/temper/internal/setup"
@@ -22,10 +21,6 @@ func (m *PresetModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.reviewReady = msg.Err == nil
 			m.plan = msg.Plan
 			m.view.GotoTop()
-			if m.focus == presetContentFocus && m.contentRows() == 0 {
-				m.action = 0
-				m.focusArea(presetFooterFocus)
-			}
 			// Enter must never land on an install that cannot run.
 			if m.focus == presetFooterFocus && m.action == 0 && m.installRefused() {
 				m.action = 2
@@ -57,14 +52,13 @@ func (m *PresetModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		switch key {
 		case "tab", "shift+tab":
-			m.action = m.navigationButton(key == "shift+tab")
-			m.focusArea(presetFooterFocus)
+			m.cycleFocus(key == "shift+tab")
 			return m, nil
 		case "esc":
 			if m.field != "" {
 				return m, m.activateShortcut("cancel-edit")
 			}
-			if m.page == 0 && m.layout == "" {
+			if m.page == 0 {
 				// Esc goes back; the first screen has nothing behind it, and one key
 				// must not drop every choice.
 				m.notice = "To leave without saving, press q or choose Cancel."
@@ -94,7 +88,7 @@ func (m *PresetModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.activateFocused()
 			}
 		case "pgup", "pgdown":
-			m.focusSelection, m.focusDownloads = false, false
+			m.focusSelection = false
 			var cmd tea.Cmd
 			m.view, cmd = m.view.Update(msg)
 			return m, cmd
@@ -121,31 +115,19 @@ func (m *PresetModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				delta = -1
 			}
 			m.moveVertical(delta)
-		case "d", "s":
-			if m.page == presetReviewPage && key == "d" && m.contentRows() > 0 {
-				m.downloadsOpen = !m.downloadsOpen
-				m.focusDownloads = true
-			} else if m.page == 1 && m.layout != "" {
-				m.loadingChoice(key)
-				m.control = 1
-				if key == "d" {
-					m.control = 2
-				}
-				m.focusArea(presetContentFocus)
-			}
 		case "r":
 			if m.page == presetReviewPage {
 				return m, m.startPreview()
 			}
 			return m, m.activateShortcut(key)
-		case "n", "x", "i", "c", "p":
+		case "c", "p":
 			return m, m.activateShortcut(key)
 		}
 		return m, nil
 	}
 	var cmd tea.Cmd
 	if _, wheel := msg.(tea.MouseWheelMsg); wheel {
-		m.focusSelection, m.focusDownloads = false, false
+		m.focusSelection = false
 		m.view, cmd = m.view.Update(msg)
 	} else if m.field != "" && m.focus == presetContentFocus {
 		m.text, cmd = m.text.Update(msg)
@@ -168,28 +150,15 @@ func (m *PresetModel) activateTarget(target hitTarget) tea.Cmd {
 		m.focusArea(presetFilterFocus)
 		m.selectGroup(m.groups()[target.index].ID)
 	case hitChoice:
-		m.cursor, m.control = target.index, 0
-		m.focusArea(presetContentFocus)
-		return m.activateFocused()
-	case hitFocus:
 		m.cursor = target.index
 		m.focusArea(presetContentFocus)
-	case hitMember, hitStartup, hitDefault:
-		m.cursor = target.index
-		m.control = slices.Index([]hitKind{hitMember, hitStartup, hitDefault}, target.kind)
-		m.focusArea(presetContentFocus)
 		return m.activateFocused()
+	case hitStep:
+		m.step = target.index
+		return m.selectStep(target.index)
 	case hitReview:
 		m.action = target.index
 		return m.finish()
-	case hitDownloads:
-		m.cursor = 0
-		m.focusArea(presetContentFocus)
-		return m.activateFocused()
-	case hitIdle:
-		m.cursor = m.count()
-		m.focusArea(presetContentFocus)
-		return m.activateFocused()
 	case hitField:
 		m.focusArea(presetContentFocus)
 	}
@@ -206,11 +175,7 @@ func (m *PresetModel) selectGroup(group string) {
 func (m *PresetModel) back() tea.Cmd {
 	m.cancelPreview()
 	m.notice = ""
-	m.control = 0
-	if m.layout != "" {
-		m.cursor = slices.Index(m.layoutIDs(), m.layout)
-		m.layout = ""
-	} else if m.page > 0 {
+	if m.page > 0 {
 		m.page--
 		m.cursor = 0
 	} else {
@@ -227,14 +192,9 @@ func (m *PresetModel) back() tea.Cmd {
 func (m *PresetModel) advance() tea.Cmd {
 	m.notice = ""
 	if m.page == 0 {
-		if m.suggestLayout {
+		if m.input.NewConfiguration {
 			m.draft.Layouts = setup.StarterLayouts(m.presetIDs())
-			m.suggestLayout = false
 		}
-		m.page, m.cursor = 1, 0
-	} else if m.layout != "" {
-		return m.back()
-	} else if m.page == 1 {
 		m.page, m.cursor = presetHarnessPage, 0
 	} else if m.page == presetHarnessPage {
 		if err := m.draft.Validate(); err != nil {
@@ -245,7 +205,6 @@ func (m *PresetModel) advance() tea.Cmd {
 		m.focusArea(presetFooterFocus)
 		return m.startPreview()
 	}
-	m.control = 0
 	m.action = m.navigationButton(false)
 	m.focusArea(presetContentFocus)
 	if m.contentRows() == 0 {
@@ -314,4 +273,24 @@ func (m *PresetModel) finish() tea.Cmd {
 	}
 	m.Decision = PresetDecision{Configuration: m.draft, Action: action}
 	return tea.Quit
+}
+
+// Primary navigation changes pages only through the same guarded transitions
+// as footer actions. Editing a field keeps navigation outside the focus order.
+func (m *PresetModel) selectStep(step int) tea.Cmd {
+	if m.field != "" || step < 0 || step > presetReviewPage || step == m.page {
+		return nil
+	}
+	if step > m.page+1 {
+		m.notice = "Continue through Harnesses before reviewing."
+		return nil
+	}
+	if step > m.page {
+		return m.advance()
+	}
+	m.cancelPreview()
+	m.page, m.cursor, m.notice = step, 0, ""
+	m.focusArea(presetContentFocus)
+	m.view.GotoTop()
+	return nil
 }

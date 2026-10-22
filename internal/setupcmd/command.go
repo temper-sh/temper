@@ -50,6 +50,8 @@ type Command struct {
 	// available; nil skips the check.
 	Downloader func() error
 	Catalog    CatalogReader
+	// StoredCatalog reads only the local catalog; it never downloads or stores one.
+	StoredCatalog func(string) (catalog.View, error)
 	// Newest downloads the newest catalog for temper update.
 	Newest  NewestCatalog
 	Resolve SoftwareResolver
@@ -64,7 +66,7 @@ type Command struct {
 }
 
 func New(detect func(context.Context) (machine.Facts, error), effects preset.Effects) Command {
-	return Command{Input: os.Stdin, Downloader: hfcache.CheckClient, Detect: detect, Disk: setup.FreeDisk, Home: os.UserHomeDir, Catalog: readCatalog, Newest: newestCatalog, Resolve: newSoftwareResolver(), Effects: effects, Harnesses: func() ([]harness.Option, error) {
+	return Command{Input: os.Stdin, Downloader: hfcache.CheckClient, Detect: detect, Disk: setup.FreeDisk, Home: os.UserHomeDir, Catalog: readCatalog, StoredCatalog: readStoredCatalog, Newest: newestCatalog, Resolve: newSoftwareResolver(), Effects: effects, Harnesses: func() ([]harness.Option, error) {
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return nil, err
@@ -93,16 +95,21 @@ func readCatalog(ctx context.Context, root, path string, store bool) (catalog.Vi
 		}
 		return catalog.Read(raw, buildinfo.Version)
 	}
+	// Temper uses the catalog it last downloaded; only temper update and
+	// temper catalog update download a newer one.
+	view, err := readStoredCatalog(root)
+	if errors.Is(err, distribution.ErrNoCatalog) {
+		return newestCatalog(ctx, root, !store)
+	}
+	return view, err
+}
+
+func readStoredCatalog(root string) (catalog.View, error) {
 	trust, err := catalogtrust.Production()
 	if err != nil {
 		return catalog.View{}, err
 	}
-	// Temper uses the catalog it last downloaded; only temper update and
-	// temper catalog update download a newer one.
 	snapshot, err := distribution.Read(root, trust)
-	if errors.Is(err, distribution.ErrNoCatalog) {
-		return newestCatalog(ctx, root, !store)
-	}
 	if err != nil {
 		return catalog.View{}, err
 	}

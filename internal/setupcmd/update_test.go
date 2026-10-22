@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/setup"
+	"github.com/temper-sh/temper/internal/userpreset"
 )
 
 const extraction = "nuextract3-q4km-llama"
@@ -112,6 +114,102 @@ func TestUpdateRebuildsFromTheNewestCatalogAndKeepsChoices(t *testing.T) {
 	code, output, diagnostics = updateRun(c, "--root", root, "--json")
 	if result, presets := decodeUpdate(t, output); code != 0 || result.Changed || presets[extraction].Status != "unchanged" {
 		t.Fatalf("second update: %d %s %s", code, output, diagnostics)
+	}
+}
+
+func TestUpdateUsesAuthoredSourceAndKeepsItsLockWhenFileIsInvalidOrMissing(t *testing.T) {
+	for _, form := range []string{"fork", "copy"} {
+		t.Run(form, func(t *testing.T) {
+			ctx := context.Background()
+			root := filepath.Join(t.TempDir(), "root")
+			var started []string
+			c := installableCommand(t, &started, nil)
+			doc := guidedCatalog(t)
+			file := catalog.UserPreset{Schema: catalog.UserPresetSchema, Origin: compactLayout, Name: "Mine",
+				Changes: map[string]any{"request_defaults": map[string]any{"sampling": map[string]any{"temperature": 0.6}}}}
+			if form == "copy" {
+				lock, err := setup.BuildPreset(doc, compactLayout, 8, setup.Choices{})
+				if err != nil {
+					t.Fatal(err)
+				}
+				file = catalog.CopyOf(lock, "Mine")
+			}
+			writeLayoutPreset(t, root, "mine", file)
+			loaded, err := userpreset.Load(root, "mine", catalog.View{Document: doc})
+			if err != nil {
+				t.Fatal(err)
+			}
+			lock, err := setup.BuildPreset(loaded.Document, "mine", 8, setup.Choices{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			before := setup.EmptyConfiguration()
+			before.Presets["mine"] = setup.Preset{Name: "Mine", UserPreset: "mine", Lock: lock}
+			before.Layouts = setup.StarterLayouts([]string{"mine"})
+			if _, _, err := setup.SaveConfiguration(ctx, root, before, "", false); err != nil {
+				t.Fatal(err)
+			}
+			next := newerRouter(t)
+			origin := next.Presets[compactLayout]
+			origin.RequestDefaults.MaxOutputTokens = 1024
+			next.Presets[compactLayout] = origin
+			// A catalog collision must never change which source owns this preset.
+			next.Presets["mine"] = next.Presets[extraction]
+			c.Newest = newest(next)
+			if code, _, diagnostics := updateRun(c, "--root", root, "--json"); code != 0 {
+				t.Fatal(diagnostics)
+			}
+			saved, _, err := setup.ReadConfiguration(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			preset := saved.Presets["mine"]
+			record := preset.Lock.Records.Presets["mine"]
+			wantOutput, wantTemperature := 1024, 0.6
+			if form == "copy" {
+				wantOutput, wantTemperature = 4096, 0.7
+			}
+			if preset.UserPreset != "mine" || record.RequestDefaults.MaxOutputTokens != wantOutput || record.RequestDefaults.Sampling.Temperature != wantTemperature || preset.Lock.Records.Runtime.Router.Supply.Release.Version != "v263" {
+				t.Fatalf("update lost authored ownership: source=%q output=%d temperature=%g", preset.UserPreset, record.RequestDefaults.MaxOutputTokens, record.RequestDefaults.Sampling.Temperature)
+			}
+			if form == "copy" && preset.ForkBaseline != nil {
+				t.Fatal("independent copy acquired fork tracking")
+			}
+			if code, output, diagnostics := updateRun(c, "--root", root, "--json"); code != 0 {
+				t.Fatal(diagnostics)
+			} else if result, _ := decodeUpdate(t, output); result.Changed {
+				t.Fatal("unchanged authored update rewrote configuration")
+			}
+			router := next.Runtime.Router
+			release := *router.Supply.Release
+			release.Version = "v264"
+			release.Artifact.Locator = router.Supply.Source.ReleaseURL(release.Version)
+			router.Supply.Release = &release
+			next.Runtime.Router = router
+			c.Newest = newest(next)
+			for _, missing := range []bool{false, true} {
+				if missing {
+					err = os.Remove(userpreset.Path(root, "mine"))
+				} else {
+					err = os.WriteFile(userpreset.Path(root, "mine"), []byte("invalid json"), 0600)
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				code, output, diagnostics := updateRun(c, "--root", root, "--json")
+				result, records := decodeUpdate(t, output)
+				if code != 0 || result.Changed || records["mine"].Status != "kept" || !strings.Contains(records["mine"].Reason, "user preset") {
+					t.Fatalf("invalid/missing file did not keep working lock: %d %s %s", code, output, diagnostics)
+				}
+				after, _, err := setup.ReadConfiguration(root)
+				if err != nil || !sameLock(preset.Lock, after.Presets["mine"].Lock) || after.Presets["mine"].UserPreset != "mine" {
+					t.Fatal("unavailable authoring changed source or exact lock", err)
+				}
+			}
+			if len(started) != 0 {
+				t.Fatal("update activated a stopped root", started)
+			}
+		})
 	}
 }
 

@@ -58,8 +58,10 @@ replacing its product contracts or narrating every function.
 Use the authority stack in this order:
 
 1. `docs/SPEC.md` defines product behavior and non-negotiable boundaries.
-2. The local `docs/PLAN.md`, when present, defines sequencing, gates, and accepted
-   engineering work. Planning documents are not tracked or published.
+2. The local workspace's `../TEMPER-BACKLOG.md` owns pending scope and decisions;
+   `../TEMPER-PLAN.md` selects the current release and its work order. These paths
+   are relative to the repository root. Planning stays outside the product
+   repository and is not published.
 3. `docs/design/` defines persistent schemas and cross-component contracts.
 4. `docs/contracts/` defines public command behavior and stable output.
 5. This file locates the implementation of those decisions.
@@ -125,10 +127,10 @@ It does not own install, check, removal, or catalog policy.
 | Operation | Orchestrator | Decisions and schemas | Reads/effects | Contract |
 |---|---|---|---|---|
 | `temper init`, `configure` | `internal/setupcmd` | `setup`: selected exact presets with the user's choices, named layouts, the software setting, memory/download plan | machine/disk/catalog reads, `setupui` editors, revision-checked atomic configuration save, explicit shared `preset.Prepare` | `docs/contracts/init.md` |
-| `temper update` | `setupcmd.Update` | `setup.BuildPreset` (origin preset + choices), `setup.WithNewestSoftware`, `setup.Changes` | newest catalog download and store, the same save and preparation as `configure` | `docs/contracts/init.md` |
+| `temper update` | `setupcmd.Update` | `userpreset.Read`/`Resolve` (authored source), `setup.BuildPreset` (resolved preset + choices), `setup.CompareForkOverrides`, `setup.WithNewestSoftware`, `setup.Changes` | newest catalog download and store, the same save and preparation as `configure` | `docs/contracts/init.md` |
 | `temper cleanup` | `setupcmd.Cleanup`, `internal/cleanup` | plan of unused installations (lock rebuilt from its receipt, verified by digest), artifact sets, Splash caches and managed files; unused HF repos listed only | receipt and state reads; removal under the root lock, software through `software remove` | `README.md` |
 | `temper layout activate/status/stop` | `setupcmd.Layout`, `managed.Reconcile` | frozen desired/current jobs, pure composed rendering | exact preparation checks, activation journal, launchd, owned process observation and recovery | `docs/contracts/layouts.md` |
-| `temper layout`, `layout edit` | `setupcmd.NewLayoutEditor`, `setupui.LayoutModel` | revocable membership/settings draft, shared `tui` frame, `setup.AssessLayout` | saved configuration and machine reads, revision-checked `setup.SaveConfiguration`; no preset or service effects | `docs/contracts/layouts.md` |
+| `temper layout`, `layout edit` | `setupcmd.NewLayoutEditor`, `setupui.LayoutModel` | revocable membership/settings draft, shared `tui` frame, `setup.AssessLayout` | preset-folder/stored-catalog reads, source-checked first placement, revision-checked `setup.SaveConfiguration`; no authoring or service effects | `docs/contracts/layouts.md` |
 | `temper catalog compile` | `internal/catalogcmd` | `catalog`: four native records, selected preset closure and execution identity | explicit local file reads; atomic lock publication without replacement | `docs/contracts/execution-lock.md` |
 | `temper preset`, `preset edit` | `internal/presetcmd.Editor` | revocable `UserPreset` draft, `catalog.Fields`, compiler, shared memory and installation assessment | local reads, explicit cancellable metadata lookup, guarded `userpreset.Save`/`Delete`; no configuration or service effects | `docs/contracts/user-presets.md` |
 | `temper execution configure` | `internal/catalogcmd` | `catalog.ConfigureExecution`: explicit context/output/Splash memory limits and compute selection | immutable derived lock publication | `docs/contracts/execution-runtime.md` |
@@ -152,19 +154,30 @@ template reads with the scripted authoring commands. `userpreset` reads and
 resolves authoring files and owns guarded single-file publication and deletion.
 Temper writers serialize comparison and publication under a short kernel lock;
 external editors still need the documented optimistic-edit limitation.
-`tui` owns the shared terminal frame, header, breadcrumbs, secondary navigation,
-buttons, key hints, tool palettes and text input. Rendering takes values and
-returns text; each tool owns focus, navigation, editing and effects. The preset
-editor is the first consumer of the common frame. The wizard still supplies
-its existing colors to the text input until its separate flow/UI migration.
+`tui` owns the shared terminal frame, header, breadcrumbs/steps, secondary
+navigation, buttons, key hints, tool palettes and text input. All three tools
+use these components. Rendering takes values and returns text; the wizard also
+uses renderer-produced cell targets for mouse navigation and actions. The frame
+provides region offsets so scrolling and clipped footers keep clicks aligned.
+Each tool owns focus, navigation, editing and effects.
 Configuration selection, layout membership and managed activation remain
 separate operations.
 
 `setupui/layouts*.go` owns standalone layout navigation and its draft. The
 `setupcmd/layout_editor.go` save callback accepts only the layout map and retains
 the configuration's exact presets, integrations and software choice under its
-original revision guard. Memory review and activation share `setup.AssessLayout`.
-The existing wizard is a separate consumer and retains its current flow.
+original revision guard. `layout_presets.go` reads `presets.d` and resolves files
+against the stored catalog without downloading. Newly included files acquire
+exact locks and a `user_preset` source ID in the same configuration commit;
+unchosen files stay outside the saved configuration. First placement checks the
+reviewed source and template again. Update uses that source ID to preserve
+fork/copy ownership. `setup/fork_updates.go` captures only explicitly overridden
+origin values and compares them independently of the resolved lock. The
+configuration owns this baseline; full saves advance it, while software-only
+updates, dry runs and refused rebuilds retain it. Comparison-only saves skip
+preparation and restart. Reports survive post-save preparation failures.
+Memory review and activation share `setup.AssessLayout`.
+The wizard preserves existing layouts; the standalone editor owns their changes.
 
 `catalog/compile.go` compiles v1 presets directly into self-contained execution
 locks. Locks store no fingerprint; `catalog.SameExecution` compares what runs
@@ -175,9 +188,17 @@ with the pinned model card as the fallback for custom licenses. Setup reads
 the selected artifact's license; terminal views add hyperlinks and text reviews
 include the URL.
 
-`setupui/presets.go` owns one revocable draft across General/Specialist/Other, Layouts
-and review. `presets_navigation.go` owns input and cancellable previews;
-`presets_view.go` shares tabs, cards and download tables with the existing UI.
+`setupui/presets.go` owns one revocable draft across Presets, Harnesses and Review.
+Preset categories share one selection. `presets_navigation.go` owns input,
+guarded step transitions and cancellable previews. Only a new configuration
+gets `setup.StarterLayouts` from its current selections on leaving Presets;
+reruns retain every layout. The original configuration's references guard
+deselection, allowing an unsaved first setup to revise its generated Default.
+`presets_view.go` composes the shared frame/navigation/actions with preset cards
+and compact review summaries; content uses the common neutral palette.
+`presets_review.go` projects selected names, availability and resource cost from
+the checked plan. Download files are always shown using the shared table;
+preset/layout settings and filesystem paths are omitted from this confirmation.
 It receives resolved choices and a preview callback, with no effect or network
 ownership. `setupcmd/configure.go` reads and resolves inputs, reviews
 and saves. `setup/configuration.go` owns references, strict parsing, revision
@@ -348,7 +369,7 @@ caller-owned.
 | State | Path/identity | Writer and rule |
 |---|---|---|
 | Root format marker (durable) | `temper-root.json` | `datadir.Ensure`/`Mark` on every writer; `datadir.Check` on every open |
-| Selected presets and layouts (durable) | `configuration.json` | `configure`, `update`; atomic revision-checked replacement under the root lock |
+| Selected presets, fork comparison baselines and layouts (durable) | `configuration.json` | `configure`, `layout`, `update`; atomic revision-checked replacement under the root lock |
 | Managed activation | `managed/activation.json` | `managed.Reconcile`; desired/current frozen jobs, separate from configuration editing |
 | Managed render and job | `managed/generations/<digest>/` | Immutable config/plist; suspend/shutdown recovery records remain until settled |
 | Engine launch ownership | `managed/commands/<digest>/launch.json` and `process.json` | Immutable command; launcher atomically records each lifetime before exec |
@@ -413,7 +434,8 @@ Update documentation in the same commit as the change it explains:
 | Change | Documentation home |
 |---|---|
 | Product behavior or boundary | `docs/SPEC.md` |
-| Milestone, gate, or sequencing | Local `docs/PLAN.md` (not tracked) |
+| Pending scope or product decision | Workspace `../TEMPER-BACKLOG.md` (not published) |
+| Current release selection or sequencing | Workspace `../TEMPER-PLAN.md` (not published) |
 | Persistent schema or cross-component contract | `docs/design/` |
 | Public flags, output, refusal, or mutation behavior | `docs/contracts/` |
 | Package boundary, operation path, dependency direction, or durable path | this file |
