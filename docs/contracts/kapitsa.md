@@ -44,6 +44,6 @@ footprint is not the Metal allocation counter, so it does not justify a wired
 limit refusal or sysctl recommendation. Historical evidence stays unchanged
 when software, weights, placement or profile settings change.
 
-The selected catalog candidate requires Temper 0.4.0. Its pinned native release,
+The catalog preset requires Temper 0.4.0. Its pinned native release,
 model revisions and measured profile come from the
 [Qwen configuration reference](https://temper-sh.github.io/models/qwen3.8-27b/layouts/kapitsa-mlx4-reference.html).
