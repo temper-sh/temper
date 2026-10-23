@@ -61,6 +61,9 @@ func Runtime(ctx context.Context, args []string, stdout, stderr io.Writer, effec
 	if operation == "configure" {
 		return configureExecution(ctx, args[1:], stdout, stderr)
 	}
+	if operation == "verify-stopped" {
+		return verifyStopped(args[1:], stdout, stderr)
+	}
 	switch operation {
 	case "inspect", "prepare", "render", "serve", "remove", "paths":
 	default:

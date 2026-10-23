@@ -15,6 +15,7 @@ temper execution prepare --lock FILE --root PATH --installation ID [--json]
 temper execution render --lock FILE --root PATH --installation ID [--json]
 temper execution paths --lock FILE --root PATH --installation ID [--json]
 temper execution serve --lock FILE --root PATH --installation ID --generation SHA256 --listen 127.0.0.1:PORT --status-file FILE
+temper execution verify-stopped --status-file FILE [--json]
 temper execution remove --lock FILE --root PATH --installation ID [--json]
 ```
 
@@ -165,3 +166,31 @@ by itself; changed bound identities remain immediate refusals. Unknown identity,
 failed observation, forced termination of Temper, or missing final status cannot imply
 successful shutdown. Field Kit measures the supplied identities and chooses its
 own limits; these primitives contain no experiment protocol or threshold policy.
+
+An untracked process first observed after reparenting to PID 1 may disappear
+during shutdown. Temper waits within the current shutdown grace period for a
+fresh, complete membership observation. It never adopts or signals the unknown
+process. A persistent orphan refuses; a changed bound identity still refuses
+immediately. The stopped status also retains `processes`: the bound PID,
+start time and group of helpers as well as measured roles.
+
+### Verify a stopped probe after a shutdown refusal
+
+`verify-stopped` is a read-only recovery check on the original machine. It
+requires a complete `state: stopped` status and the original marked Temper
+root. It refuses a running/incomplete status, any existing or reused recorded
+PID, any surviving member of a recorded group, and an occupied or uninspectable
+router or engine port. It checks the supervisor, router group, `roles` and,
+when present, `processes`; issued 0.3.x statuses retain their recorded role
+boundary. It does not discover or adopt unrelated processes, send signals,
+remove files, or rewrite the original status. It also refuses if the status
+bytes change during verification.
+
+The JSON result is `temper-probe-recovery/v1`: `status_sha256` binds the exact
+original status bytes; `root`, `installation`, `generation`, `process_ids`,
+`process_group_ids` and `listeners` identify what was checked; `verified_at`
+records the fresh observation and `safe_to_cleanup: true` reports success.
+On refusal the command exits nonzero without a successful observation. Clients
+must match the original status and retain this result separately, with the
+verifying Temper's identity. It verifies current absence; it does not turn the
+historical shutdown failure into a successful shutdown or rerun inference.

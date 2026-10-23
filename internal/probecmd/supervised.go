@@ -67,6 +67,7 @@ type probeStatus struct {
 	Listen            string            `json:"listen"`
 	ProcessGroup      int               `json:"process_group_id"`
 	Roles             []ProcessIdentity `json:"roles"`
+	Processes         []ProcessIdentity `json:"processes,omitempty"`
 	ListenersVerified bool              `json:"listeners_verified"`
 	Updated           string            `json:"updated_at"`
 	SafeToCleanup     bool              `json:"safe_to_cleanup"`
@@ -85,6 +86,7 @@ func (p processRow) exited() bool {
 }
 
 var errCommandUnavailable = errors.New("owned process command temporarily unavailable")
+var errUnverifiedOrphan = errors.New("untracked orphan in owned process group")
 
 func parseRows(raw string) ([]processRow, error) {
 	var rows []processRow
@@ -221,6 +223,12 @@ func members(rows []processRow, group int, invocation Invocation, known map[int]
 			continue
 		}
 		prior, tracked := known[row.pid]
+		if !descendants[row.pid] && groups[row.pgid] && !tracked && row.ppid == 1 {
+			// A short-lived child may first be seen after the router exits.
+			// Do not adopt it. Shutdown may wait for its group to become empty,
+			// but cannot signal any group until membership is verified again.
+			return nil, nil, fmt.Errorf("%w: pid=%d pgid=%d state=%q", errUnverifiedOrphan, row.pid, row.pgid, row.state)
+		}
 		if !descendants[row.pid] || !groups[row.pgid] || (row.pid == group && row.pgid != group) || (tracked && prior.pgid != row.pgid && !launchedInOwnGroup(prior, row, invocation)) {
 			return nil, nil, fmt.Errorf("unrelated group member or changed owned process group: pid=%d ppid=%d pgid=%d state=%q tracked=%t prior_pgid=%d", row.pid, row.ppid, row.pgid, row.state, tracked, prior.pgid)
 		}
@@ -588,6 +596,12 @@ running:
 		}
 	}
 	status.State = "stopped"
+	// Keep the complete bound process boundary, including helpers in separate
+	// groups, for a later read-only verification if shutdown was uncertain.
+	for _, row := range known {
+		status.Processes = append(status.Processes, ProcessIdentity{PID: row.pid, PGID: row.pgid, Started: row.started})
+	}
+	sort.Slice(status.Processes, func(i, j int) bool { return status.Processes[i].PID < status.Processes[j].PID })
 	status.ListenersVerified = false
 	status.SafeToCleanup = shutdownErr == nil
 	if failure != nil || shutdownErr != nil {
@@ -630,12 +644,14 @@ func shutdownGroup(group int, invocation Invocation, known map[int]processRow, g
 		signal syscall.Signal
 		wait   time.Duration
 	}{{syscall.SIGTERM, grace}, {syscall.SIGKILL, 5 * time.Second}} {
-		present, liveGroups, err := verified()
+		deadline := time.Now().Add(stage.wait)
+		observe := func() (bool, []int, error) { return awaitShutdownObservation(verified, deadline) }
+		present, liveGroups, err := observe()
 		if err != nil || !present {
 			return err
 		}
 		for _, id := range liveGroups {
-			_, current, err := verified()
+			_, current, err := observe()
 			if err != nil {
 				return err
 			}
@@ -649,7 +665,7 @@ func shutdownGroup(group int, invocation Invocation, known map[int]processRow, g
 			if signalErr := syscall.Kill(-id, stage.signal); signalErr != nil && !errors.Is(signalErr, syscall.ESRCH) {
 				// The last live member may have exited since observation. macOS
 				// refuses signals to an all-zombie group; still wait for reaping.
-				_, remaining, err := verified()
+				_, remaining, err := observe()
 				stillLive := false
 				for _, candidate := range remaining {
 					stillLive = stillLive || candidate == id
@@ -659,9 +675,8 @@ func shutdownGroup(group int, invocation Invocation, known map[int]processRow, g
 				}
 			}
 		}
-		deadline := time.Now().Add(stage.wait)
 		for time.Now().Before(deadline) {
-			present, _, err := verified()
+			present, _, err := observe()
 			if err != nil || !present {
 				return err
 			}
@@ -669,6 +684,16 @@ func shutdownGroup(group int, invocation Invocation, known map[int]processRow, g
 		}
 	}
 	return errors.New("owned process group remained after KILL")
+}
+
+func awaitShutdownObservation(observe func() (bool, []int, error), deadline time.Time) (bool, []int, error) {
+	for {
+		present, groups, err := observe()
+		if !errors.Is(err, errUnverifiedOrphan) || !time.Now().Before(deadline) {
+			return present, groups, err
+		}
+		time.Sleep(min(100*time.Millisecond, time.Until(deadline)))
+	}
 }
 
 func exactArguments(observed string, expected []string) bool {

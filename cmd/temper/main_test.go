@@ -38,7 +38,7 @@ func TestEveryHelpRequestSucceedsWithoutEffects(t *testing.T) {
 		{"layout", "--help"}, {"layout", "activate", "--help"}, {"layout", "status", "--help"}, {"layout", "stop", "--help"},
 		{"catalog", "--help"}, {"catalog", "update", "--help"}, {"catalog", "inspect", "--help"}, {"catalog", "rollback", "--help"},
 		{"catalog", "compile", "--help"}, {"catalog", "describe", "--help"},
-		{"execution", "--help"}, {"execution", "configure", "--help"}, {"execution", "inspect", "--help"}, {"execution", "serve", "--help"},
+		{"execution", "--help"}, {"execution", "configure", "--help"}, {"execution", "inspect", "--help"}, {"execution", "serve", "--help"}, {"execution", "verify-stopped", "--help"},
 		{"machine", "--help"}, {"machine", "facts", "--help"},
 		{"preset", "--help"}, {"preset", "fork", "--help"}, {"preset", "copy", "--help"}, {"preset", "check", "--help"}, {"preset", "fields", "--help"}, {"preset", "weights", "--help"}, {"preset", "template", "--help"},
 	} {

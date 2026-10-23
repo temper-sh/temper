@@ -304,7 +304,7 @@ func usage(writer io.Writer) {
 Tools for scripts and experiments:
   temper catalog update|inspect|rollback|compile|describe
   temper preset edit|fork|copy|check|fields|weights|template|plan
-  temper execution configure|inspect|prepare|render|paths|serve|remove
+  temper execution configure|inspect|prepare|render|paths|serve|verify-stopped|remove
   temper software install|check|remove
   temper machine facts
 

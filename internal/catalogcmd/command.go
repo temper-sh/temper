@@ -296,5 +296,6 @@ func runtimeUsage(w io.Writer) {
   temper execution inspect --lock FILE
   temper execution prepare|render|paths|remove --lock FILE --root PATH --installation ID [--dry-run]
   temper execution serve --lock FILE --root PATH --installation ID --generation SHA256 --status-file FILE [--listen 127.0.0.1:PORT] [--dry-run]
-These commands act on one exact execution lock.`))
+  temper execution verify-stopped --status-file FILE [--json]
+Execution uses exact locks; verify-stopped reads the original probe status.`))
 }

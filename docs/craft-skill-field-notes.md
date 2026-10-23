@@ -955,3 +955,16 @@ formula and checksum-cache route; a syntax check alone would not have exposed
 that installation boundary. The formula's functional test reads an empty user
 configuration without creating a root or requiring a GPU. Existing guidance was
 sufficient; no skill change is proposed. Bottle asset publication remains pending.
+
+## Supervised shutdown recovery — 2026-10-23
+
+Reliable-effects separated refusing to signal an untracked orphan from waiting
+for its disappearance. Shutdown keeps its existing bound and never adopts an
+unknown process. The [execution contract](contracts/execution-runtime.md#verify-a-stopped-probe-after-a-shutdown-refusal)
+adds a read-only post-exit observation; data-modeling keeps it separate from the
+original failed status and result. Field Kit records the verifying binary and
+advances only current recovery state. Tests cover live/reused identities, helper
+groups, occupied ports, persistent orphans, changed status bytes, interrupted
+recovery and clean repeats. A real local process/listener test and the packaged
+0.3.2 repair binary exercised the boundary without model inference. Full Go
+tests, vet and race checks pass. Existing craft guidance was sufficient.
