@@ -144,9 +144,15 @@ func (c Command) start(ctx context.Context, root, layout string) (*managed.Job, 
 }
 
 // layoutToStart picks the layout an install starts: the one the root runs
-// now, else "default", else the only saved layout. Empty means none.
+// now or remembers, else "default", else the only saved layout. Empty means none.
 func layoutToStart(root string, configuration setup.Configuration) string {
 	if state, err := (managed.FileStore{Root: root}).Read(); err == nil {
+		if selection := state.Selection(); selection != nil {
+			if _, ok := configuration.Layouts[selection.Layout]; ok {
+				return selection.Layout
+			}
+			return ""
+		}
 		if job := knownJob(state); job != nil {
 			if _, ok := configuration.Layouts[job.Layout]; ok {
 				return job.Layout

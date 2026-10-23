@@ -289,6 +289,10 @@ func (l Lock) projections() (Projections, error) {
 			m.Llama, m.Sampling = nil, nil
 			m.CrispEmbed = &c.CrispEmbed.CrispEmbedTuning
 		}
+		if c.Kapitsa != nil {
+			m.Llama = nil
+			m.Kapitsa = &manifest.KapitsaTuning{KapitsaConfig: c.Kapitsa.KapitsaConfig, SoftwareSHA256: d.Engines[layout.Engine].Supply.Release.Artifact.SHA256}
+		}
 		if layout.Interface == "reranking" {
 			m.Sampling = nil
 		}

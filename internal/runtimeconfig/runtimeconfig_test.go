@@ -35,6 +35,7 @@ func TestValidationRefusesUnsafeOrAmbiguousRequirements(t *testing.T) {
 		requirements []runtimeconfig.Requirement
 		want         string
 	}{
+		{name: "Kapitsa missing identity", requirements: []runtimeconfig.Requirement{{Package: "kapitsa", RelativeExecutable: "kapitsa"}, {Package: "llama-swap", RelativeExecutable: "llama-swap"}}, want: "exact console command identity"},
 		{name: "no router", requirements: []runtimeconfig.Requirement{{Package: "rapid-mlx", RelativeExecutable: "bin/rapid-mlx"}}, want: "exact llama-swap"},
 		{name: "escape", requirements: []runtimeconfig.Requirement{{Package: "llama-swap", RelativeExecutable: "llama-swap"}, {Package: "rapid-mlx", RelativeExecutable: "../rapid-mlx"}}, want: "safe relative path"},
 		{name: "duplicate", requirements: []runtimeconfig.Requirement{{Package: "llama-swap", RelativeExecutable: "llama-swap"}, {Package: "llama-swap", RelativeExecutable: "llama-swap"}}, want: "repeat"},

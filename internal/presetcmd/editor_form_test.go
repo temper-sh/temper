@@ -13,6 +13,35 @@ import (
 	"github.com/temper-sh/temper/internal/userpreset"
 )
 
+func TestMoEPlacementCanBeEditedInForksAndCopies(t *testing.T) {
+	for _, form := range []string{"fork", "copy"} {
+		t.Run(form, func(t *testing.T) {
+			c, root := command(t)
+			if _, d, code := run(t, c, root, form, mtp, "mine"); code != 0 {
+				t.Fatal(d)
+			}
+			before, _ := userpreset.Read(root, "mine")
+			m := editor(t, c, root, "mine", false)
+			editorClick(t, m, "Engine")
+			focusField(t, m, "MoE CPU layers")
+			typeText(m, "-1")
+			saveEditor(m)
+			after, _ := userpreset.Read(root, "mine")
+			if !bytes.Equal(before, after) {
+				t.Fatal("negative placement saved")
+			}
+			focusField(t, m, "MoE CPU layers")
+			typeText(m, "4")
+			saveEditor(m)
+			view, _ := c.Catalog(root)
+			loaded, err := userpreset.Load(root, "mine", view)
+			if err != nil || loaded.Document.Presets["mine"].Config().Controls.CPUMoELayers != 4 {
+				t.Fatal("placement not saved", err)
+			}
+		})
+	}
+}
+
 func TestNamedSeedModesOverrideInheritanceAndRetainFixedZero(t *testing.T) {
 	c, root := command(t)
 	view, _ := c.Catalog(root)

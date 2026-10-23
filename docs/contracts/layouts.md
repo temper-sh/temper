@@ -58,6 +58,9 @@ cooperating writers, check the revision, fsync a staged file and atomically
 rename it. Incomplete temporary files are not current state. A canceled or dry
 save never writes. Pre-preset configurations must be recreated from explicit current choices.
 Saved exact locks support offline resume. Editing and saving never activates.
+If the first configuration saves but the initial selection write fails, Temper
+reports that partial result and names `temper layout activate default` as the
+recovery action. The saved configuration remains available for preparation.
 
 Preparation deduplicates verified weights by material identity and software by
 exact closure, independently of layout membership. Mixed engines and versions
@@ -80,8 +83,22 @@ process lifetimes. All commands accept `--root`; mutating commands accept
 `--dry-run`. They say in plain words which layout runs, its base URL, its
 model IDs and how to stop it; `--json` prints the status document instead. Service installation on the live stack remains an explicit action.
 
+`temper start` starts the remembered layout with its current saved settings;
+`temper stop` uses the same owned shutdown as `layout stop`. Selection is per
+root and survives stopping, reboot and reopening Temper. Fresh wizard setup
+selects Default. Explicit `layout activate ID` commits the selection and listener
+with activation intent after preflight and busy checks, before process effects.
+A failed start remains selected for retry. Dry runs and refusals do not select.
+Deleting a selected layout leaves the selection intact; start names the missing
+layout and requires an explicit activation of another saved layout.
+
 The activation journal is `ROOT/managed/activation.json` with
-`temper-activation/v1`, `desired` and `current` frozen jobs. Each generation
+`temper-activation/v2`, optional `selected` (`layout`, `listen`), and `desired`
+and `current` frozen jobs. A v1 journal is read without rewriting: desired, else
+current supplies its remembered selection. The next mutation writes v2. A
+stopped legacy root without either job has no known selection, even if it has
+a Default or just one layout; `start` asks for `layout activate ID`.
+Each generation
 binds router bytes, launch commands, listener and the Temper launch helper's
 binary digest. The owned label derives from the absolute root. launchd is
 bootstrapped explicitly in the user's GUI domain; no login agent or automatic

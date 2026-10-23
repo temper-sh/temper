@@ -102,6 +102,15 @@ or estimates, not proof of simultaneous residency. `memory_incomplete` exposes
 unknown allocations and unmeasured workloads. Startup admission uses the same
 selection. Unknown components alone do not prevent installation or activation.
 
+MoE `cpu_moe_layers` keeps whole-model physical accounting unchanged; available
+metadata does not establish the CPU/GPU split. Kapitsa's measured process
+footprint also does not establish Metal allocation. These cases suppress wired
+refusals and wired-limit advice derived from the whole-process total. Layouts
+retain physical startup admission and report `memory_incomplete`; `all_fit`
+stays false while the GPU split is unknown, so on-demand scheduling remains
+exclusive. [Kapitsa's contract](kapitsa.md) describes its separate engine ceiling
+and external ANE-service blind spot.
+
 Arithmetic references:
 [llama context allocation](https://github.com/ggml-org/llama.cpp/blob/b11396/src/llama-context.cpp),
 [KV tensors](https://github.com/ggml-org/llama.cpp/blob/b11396/src/llama-kv-cache.cpp),

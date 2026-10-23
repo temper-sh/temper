@@ -10,6 +10,32 @@ This is not a model-eval log, product evidence, or permission to change the
 skills repository. It creates no synthetic Temper work. A note may — and often
 should — conclude that no skill change is warranted.
 
+## Python planning, remembered selection, MoE placement and Kapitsa — 2026-10-23
+
+Data modeling separated remembered selection from process ownership and retained
+exact producing identities for memory observations. Reliable-effects guidance
+kept selection at the accepted activation-intent boundary, preserved calibration
+on retries and made inspection read-only. Unknown CPU/GPU splits remain explicit
+through composed-layout planning instead of becoming wired-memory refusals.
+
+Testing followed complete paths: Field Kit's four-candidate approval preview
+through the real Temper planner, real native/Python installation receipts,
+corrupt-artifact refusal and repaired-cache retry, and native command ownership
+through execution planning. The Kapitsa integration test exposed a missing
+supervisor identity mapping that rendering alone had missed. Pinned-source
+inspection also exposed an implicit output cap; the adapter now preserves
+Temper's remaining-context contract. The [bounded native smoke](design/kapitsa-native-smoke.md)
+then exposed false busy detection from outgoing engine keepalives and a launcher
+exec observation race. Real disposable socket tests distinguish accepted clients
+from outbound keepalives and prove refusal resumes the router. Exact-launcher
+transition tests preserve refusal for unknown children and recovery identities;
+the native rerun proves managed stop/restart and API streaming together. Empty
+native calibration observations remain distinct from populated offline fixtures.
+Full tests, vet and race checks pass. The currency pass adopted verified Go and
+byte-identical template-source updates while keeping new runtime candidates and
+their measurement invalidation separate. Existing craft guidance was sufficient;
+no skill changes proposed.
+
 ## Wizard context prompt, 2026-10-23
 
 Unit-design guidance kept pending context text inside the restored prompt;

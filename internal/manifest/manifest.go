@@ -46,6 +46,7 @@ type Patch struct {
 type Layout struct {
 	CrispEmbed            *engine.CrispEmbedTuning `yaml:"crispembed,omitempty"`
 	Splash                *SplashTuning            `yaml:"splash,omitempty"`
+	Kapitsa               *KapitsaTuning           `yaml:"kapitsa,omitempty"`
 	Draft                 *Model                   `yaml:"draft,omitempty"`
 	Projector             *Model                   `yaml:"projector,omitempty"`
 	DisplayName           string                   `yaml:"display_name"`
@@ -69,6 +70,11 @@ type SplashTuning struct {
 	engine.SplashConfig `yaml:",inline"`
 	Adapter             string `yaml:"adapter,omitempty"`
 	SoftwareSHA256      string `yaml:"software_sha256"`
+}
+
+type KapitsaTuning struct {
+	engine.KapitsaConfig `yaml:",inline"`
+	SoftwareSHA256       string `yaml:"software_sha256"`
 }
 
 type Model struct {
@@ -177,8 +183,8 @@ func (d Document) Validate() error {
 	for _, id := range sortedKeys(d.Layouts) {
 		layout := d.Layouts[id]
 		if layout.Sampling != nil {
-			if layout.Engine != engine.LlamaServer && layout.Engine != engine.Splash {
-				problems = append(problems, fmt.Sprintf("layout %q explicit sampling requires llama-server or Splash", id))
+			if layout.Engine != engine.LlamaServer && layout.Engine != engine.Splash && layout.Engine != engine.Kapitsa {
+				problems = append(problems, fmt.Sprintf("layout %q explicit sampling requires llama-server, Splash or Kapitsa", id))
 			} else if err := layout.Sampling.Validate(); err != nil {
 				problems = append(problems, fmt.Sprintf("layout %q: %v", id, err))
 			}
@@ -278,7 +284,7 @@ func (d Document) validateFields() error {
 		}
 
 		variants := 0
-		for _, selected := range []bool{layout.Llama != nil, layout.RapidMLX != nil, layout.VLLMMetal != nil, layout.Splash != nil, layout.CrispEmbed != nil} {
+		for _, selected := range []bool{layout.Llama != nil, layout.RapidMLX != nil, layout.VLLMMetal != nil, layout.Splash != nil, layout.CrispEmbed != nil, layout.Kapitsa != nil} {
 			if selected {
 				variants++
 			}
@@ -287,6 +293,7 @@ func (d Document) validateFields() error {
 			problem("layout %q must declare exactly one engine tuning block", id)
 		}
 		matches := layout.Engine == "llama-server" && layout.Llama != nil ||
+			layout.Engine == "kapitsa" && layout.Kapitsa != nil ||
 			layout.Engine == "rapid-mlx" && layout.RapidMLX != nil ||
 			layout.Engine == "vllm-metal" && layout.VLLMMetal != nil ||
 			layout.Engine == "splash" && layout.Splash != nil ||
@@ -326,11 +333,11 @@ func (d Document) validateFields() error {
 			}
 		}
 
-		if layout.Draft != nil && layout.Engine != "splash" && layout.Engine != "llama-server" && layout.Engine != "rapid-mlx" {
-			problem("layout %q: external draft requires llama-server, Splash or Rapid MLX", id)
+		if layout.Draft != nil && layout.Engine != "splash" && layout.Engine != "llama-server" && layout.Engine != "rapid-mlx" && layout.Engine != "kapitsa" {
+			problem("layout %q: external draft requires llama-server, Splash, Kapitsa or Rapid MLX", id)
 		}
-		if layout.Engine != "splash" && layout.Engine != "llama-server" && layout.Speculation != nil && (layout.Speculation.Method == "dflash" || layout.Speculation.Method == "dflash2") {
-			problem("layout %q: DFlash requires llama-server or Splash", id)
+		if layout.Engine != "splash" && layout.Engine != "llama-server" && layout.Engine != "kapitsa" && layout.Speculation != nil && (layout.Speculation.Method == "dflash" || layout.Speculation.Method == "dflash2") {
+			problem("layout %q: DFlash requires llama-server, Splash or Kapitsa", id)
 		}
 		if layout.Engine == "rapid-mlx" && layout.Draft != nil {
 			draft := layout.Draft
@@ -392,6 +399,32 @@ func validateEngineTuning(id string, layout Layout, problem func(string, ...any)
 		}
 		if layout.Speculation == nil || layout.Speculation.Method != "dflash2" || layout.Speculation.MaxTokens != 0 {
 			problem("layout %q Splash requires engine-owned DFlash2 speculation", id)
+		}
+	case "kapitsa":
+		if layout.Kapitsa == nil {
+			return
+		}
+		if err := layout.Kapitsa.KapitsaConfig.Validate(); err != nil {
+			problem("layout %q: %v", id, err)
+		}
+		if !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(layout.Kapitsa.SoftwareSHA256) {
+			problem("layout %q Kapitsa requires exact software_sha256", id)
+		}
+		if layout.Model.Format != "mlx-safetensors" || layout.Interface != "chat-completions" || !equalStringSlices(layout.Modalities, []string{"text"}) {
+			problem("layout %q Kapitsa requires text MLX chat completions", id)
+		}
+		if layout.Draft == nil || layout.Draft.Format != "safetensors" || !repoPattern.MatchString(layout.Draft.Repo) || !equalStringSlices(layout.Draft.Files, []string{"config.json", "model.safetensors"}) {
+			problem("layout %q Kapitsa requires a complete DFlash2 draft", id)
+		}
+		if layout.Speculation == nil || layout.Speculation.Method != "dflash2" || layout.Speculation.MaxTokens != 0 {
+			problem("layout %q Kapitsa requires engine-owned DFlash2 speculation", id)
+		}
+		for _, file := range layout.Model.Files {
+			for _, part := range strings.Split(file, "/") {
+				if strings.HasPrefix(part, "._") {
+					problem("layout %q Kapitsa refuses AppleDouble model sidecars", id)
+				}
+			}
 		}
 	case "llama-server":
 		if layout.Llama == nil {

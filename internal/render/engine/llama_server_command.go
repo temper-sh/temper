@@ -109,6 +109,9 @@ func llamaServerCommand(options llamaServerOptions) (Command, error) {
 		if c.ThreadsBatch > 0 {
 			groups = append(groups, []commandWord{knownWord("--threads-batch"), knownWord(strconv.Itoa(c.ThreadsBatch))})
 		}
+		if c.CPUMoELayers > 0 {
+			groups = append(groups, []commandWord{knownWord("--n-cpu-moe"), knownWord(strconv.Itoa(c.CPUMoELayers))})
+		}
 		groups = append(groups, []commandWord{knownWord("--load-mode"), knownWord(c.LoadMode)})
 	}
 	if s := options.sampling; s != nil {

@@ -113,7 +113,12 @@ func readIdentity(path string) (probecmd.ManagedIdentity, bool, error) {
 func (j Job) commands() []probecmd.ManagedCommand {
 	commands := []probecmd.ManagedCommand{{ID: "router", Path: j.Router, Arguments: j.Arguments()}}
 	for _, p := range j.Processes {
-		commands = append(commands, probecmd.ManagedCommand{ID: p.Role, Path: p.Path, Arguments: p.Arguments})
+		c := probecmd.ManagedCommand{ID: p.Role, Path: p.Path, Arguments: p.Arguments}
+		if p.Record != "" {
+			c.LauncherPath = j.Launcher
+			c.LauncherArguments = []string{"internal-managed-exec", filepath.Join(filepath.Dir(p.Record), "launch.json"), "${PORT}"}
+		}
+		commands = append(commands, c)
 	}
 	return commands
 }

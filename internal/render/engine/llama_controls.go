@@ -8,6 +8,9 @@ import (
 // Validate checks the explicit controls at both the manifest boundary and
 // command construction, before a consumer can perform runtime effects.
 func (c LlamaServerControls) Validate() error {
+	if c.CPUMoELayers < 0 || c.CPUMoELayers > math.MaxInt32 {
+		return errors.New("llama-server cpu_moe_layers requires a nonnegative 32-bit layer count")
+	}
 	if c.CheckpointMinStep != nil && *c.CheckpointMinStep < 0 {
 		return errors.New("llama-server checkpoint spacing must be nonnegative")
 	}

@@ -2,7 +2,11 @@ package managed
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -144,5 +148,92 @@ func TestStopConvergesAfterJobEffectAndLayoutEditsDoNotMutateActivation(t *testi
 	}
 	if _, err := Reconcile(context.Background(), s, c, nil, false); err != nil || c.stops != 1 {
 		t.Fatal("repeat stop repeated effect", err)
+	}
+	if s.state.Selected == nil || s.state.Selected.Layout != "writing" {
+		t.Fatal("stop lost the selected layout")
+	}
+}
+
+func TestSelectionCommitsWithIntentAndSurvivesStopRestart(t *testing.T) {
+	ctx := context.Background()
+	first := Job{Layout: "writing", Generation: "one", Listen: "127.0.0.1:9090"}
+	second := Job{Layout: "coding", Generation: "two", Listen: first.Listen}
+	s := &memoryStore{state: State{Schema: StateSchema}}
+	c := &jobController{}
+	if _, err := Reconcile(ctx, s, c, &first, false); err != nil {
+		t.Fatal(err)
+	}
+	for _, dry := range []bool{true, false} {
+		before := s.state
+		c.busy = !dry
+		_, err := Reconcile(ctx, s, c, &second, dry)
+		if !dry && err == nil {
+			t.Fatal("busy switch accepted")
+		}
+		if !reflect.DeepEqual(before, s.state) {
+			t.Fatal("dry/busy switch changed remembered choice")
+		}
+	}
+	c.busy = false
+	c.failStart = true
+	if _, err := Reconcile(ctx, s, c, &second, false); err == nil {
+		t.Fatal("expected lost response")
+	}
+	if s.state.Selected.Layout != "coding" {
+		t.Fatal("accepted switch did not remember intent")
+	}
+	if _, err := Reconcile(ctx, s, c, &second, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Reconcile(ctx, s, c, nil, false); err != nil {
+		t.Fatal(err)
+	}
+	// A new CLI process receives only persisted state, not an in-memory choice.
+	b, err := json.Marshal(s.state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var reopened State
+	if err := json.Unmarshal(b, &reopened); err != nil {
+		t.Fatal(err)
+	}
+	if reopened.Selected.Layout != "coding" || reopened.Selected.Listen != first.Listen || reopened.Current != nil || reopened.Desired != nil {
+		t.Fatalf("stopped selection: %+v", reopened)
+	}
+	s = &memoryStore{state: reopened}
+	if _, err := Reconcile(ctx, s, c, &second, false); err != nil {
+		t.Fatal(err)
+	}
+	starts := c.starts
+	if _, err := Reconcile(ctx, s, c, &second, false); err != nil || c.starts != starts {
+		t.Fatal("repeated start was not clean", err)
+	}
+}
+
+func TestStoppedLegacySelectionMigrationIsReadOnlyAndNeverGuesses(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "managed"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, "managed", "activation.json")
+	raw := []byte("{\"schema\":\"temper-activation/v1\"}\n")
+	if err := os.WriteFile(path, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := (FileStore{Root: root}).Read()
+	if err != nil || s.Selected != nil || s.Schema != StateSchema {
+		t.Fatal(s, err)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil || string(after) != string(raw) {
+		t.Fatal("read migrated bytes", err)
+	}
+	old := Job{Layout: "writing", Listen: "127.0.0.1:9090"}
+	next := Job{Layout: "coding", Listen: old.Listen}
+	if selected := (State{Current: &old, Desired: &next}).Selection(); selected.Layout != "coding" {
+		t.Fatal("pending activation lost its selected intent")
+	}
+	if selected := (State{Current: &old}).Selection(); selected.Layout != "writing" {
+		t.Fatal("pending stop lost its previous layout")
 	}
 }

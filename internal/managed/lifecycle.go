@@ -6,13 +6,35 @@ import (
 	"fmt"
 )
 
-const StateSchema = "temper-activation/v1"
+const StateSchema = "temper-activation/v2"
+
+type Selection struct {
+	Layout string `json:"layout"`
+	Listen string `json:"listen"`
+}
 
 type State struct {
-	Schema  string `json:"schema"`
-	Desired *Job   `json:"desired,omitempty"`
-	Current *Job   `json:"current,omitempty"`
+	Schema   string     `json:"schema"`
+	Desired  *Job       `json:"desired,omitempty"`
+	Current  *Job       `json:"current,omitempty"`
+	Selected *Selection `json:"selected,omitempty"`
 }
+
+// Selection survives stop and contains no process ownership authority.
+func (s State) Selection() *Selection {
+	if s.Selected != nil {
+		return s.Selected
+	}
+	job := s.Desired
+	if job == nil {
+		job = s.Current
+	}
+	if job == nil {
+		return nil
+	}
+	return &Selection{Layout: job.Layout, Listen: job.Listen}
+}
+
 type Observation struct {
 	Exists     bool              `json:"exists"`
 	Ready      bool              `json:"ready"`
@@ -87,7 +109,7 @@ func Reconcile(ctx context.Context, store Store, controller Controller, desired 
 		return Status{State: s, Observed: o}, errors.New("active work prevents this transition; retry when requests finish")
 	}
 	if dry {
-		return Status{State: State{Schema: StateSchema, Desired: desired, Current: s.Current}, Observed: o, Pending: !same(desired, s.Current)}, nil
+		return Status{State: State{Schema: StateSchema, Desired: desired, Current: s.Current, Selected: s.Selection()}, Observed: o, Pending: !same(desired, s.Current)}, nil
 	}
 	if same(s.Desired, desired) && same(s.Current, desired) && ((desired == nil && !o.Exists) || (desired != nil && o.Ready && o.Generation == desired.Generation)) {
 		return Status{State: s, Observed: o}, nil
@@ -97,6 +119,10 @@ func Reconcile(ctx context.Context, store Store, controller Controller, desired 
 	}
 	priorJobs := known(s)
 	s.Schema = StateSchema
+	s.Selected = s.Selection()
+	if desired != nil {
+		s.Selected = &Selection{Layout: desired.Layout, Listen: desired.Listen}
+	}
 	s.Desired = desired
 	// Bind a just-started job observed after an interrupted prior Start.
 	for _, job := range priorJobs {

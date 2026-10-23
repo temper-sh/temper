@@ -5,10 +5,66 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/temper-sh/temper/internal/budget"
 	"github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/machine"
 	"github.com/temper-sh/temper/internal/setup"
+	"github.com/temper-sh/temper/internal/testfixture"
 )
+
+func TestKapitsaMeasurementUsesWorkloadFootprintWithoutTreatingItAsWiredAllocation(t *testing.T) {
+	d := testfixture.KapitsaCatalog(t)
+	l := selectedLock(t, d, "qwen3.8-27b-mlx4-kapitsa")
+	f := facts(32)
+	f.Chip = "Apple M5"
+	f.MetalDeviceMemoryMiB = 24576
+	f.WiredLimitMiB = 24576
+	p, err := setup.Assess(l, f)
+	if err != nil || len(p.Refusals) != 0 || p.Memory.Basis != "measured" || p.MemoryBytes != 25761248456 || p.WiredMemory != nil {
+		t.Fatalf("measured memory misrepresented: %+v %v", p.Memory, err)
+	}
+	c := setup.EmptyConfiguration()
+	c.Presets[l.Preset] = setup.Preset{Name: "Kapitsa", Lock: l}
+	c.Layouts["default"] = setup.Layout{Name: "Default", Presets: []string{l.Preset}, Startup: []string{l.Preset}, IdleSeconds: 300}
+	composition, err := setup.AssessLayout(c, "default", f)
+	if err != nil || len(composition.Refusals) != 0 || !composition.MemoryIncomplete || composition.AllFit || composition.StartupBytes != p.MemoryBytes {
+		t.Fatal("layout inferred a wired requirement or fit from process footprint", composition, err)
+	}
+	f.Chip = "Apple M1"
+	f.Target.DistributionVersion = "14.0"
+	p, err = setup.Assess(l, f)
+	if err != nil || p.Memory.Basis != "estimated" || p.Memory.EngineLimitBytes != 24<<30 || !strings.Contains(strings.Join(p.Memory.Unknown, " "), "ANE service") {
+		t.Fatal(p.Memory, err)
+	}
+}
+
+func TestMoEPlacementDoesNotInventPhysicalSavingsOrWiredAdvice(t *testing.T) {
+	l := attentionLock(t, 4096, catalog.ComputeGPU)
+	observed := facts(16)
+	before, err := setup.Assess(l, observed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := l.Records.Presets[l.Preset]
+	p.Profiles[0].EngineConfig.Controls.CPUMoELayers = 4
+	l.Records.Presets[l.Preset] = p
+	after, err := setup.Assess(l, observed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.MemoryBytes != before.MemoryBytes || after.WiredMemory != nil || after.Budget.Status != budget.StatusUnavailable || !strings.Contains(strings.Join(after.Memory.Unknown, " "), "CPU/GPU") {
+		t.Fatalf("mixed placement invented memory savings or GPU fit: before=%+v after=%+v", before, after)
+	}
+	observed.WiredLimitMiB = 1
+	observed.MetalDeviceMemoryMiB = 1
+	c := setup.EmptyConfiguration()
+	c.Presets[l.Preset] = setup.Preset{Name: "Mixed placement", Lock: l}
+	c.Layouts["default"] = setup.Layout{Name: "Default", Presets: []string{l.Preset}, Startup: []string{l.Preset}, IdleSeconds: 300}
+	composition, err := setup.AssessLayout(c, "default", observed)
+	if err != nil || len(composition.Refusals) != 0 || !composition.MemoryIncomplete || composition.AllFit || composition.StartupBytes != before.MemoryBytes {
+		t.Fatal("layout invented physical savings or a wired requirement", composition, err)
+	}
+}
 
 func withMemoryMeasurement(l catalog.Lock, facts machine.Facts, peak int64) catalog.Lock {
 	p := l.Records.Presets[l.Preset]
@@ -59,12 +115,14 @@ func TestApplicableMeasurementReplacesEstimateThroughoutThePlan(t *testing.T) {
 }
 
 func TestMeasurementMismatchFallsBackWithTheReason(t *testing.T) {
-	for _, scenario := range []string{"context", "engine", "engine version", "weights", "compute", "cache", "machine", "RAM", "Metal budget"} {
+	for _, scenario := range []string{"context", "engine", "engine version", "weights", "compute", "cache", "MoE placement", "machine", "RAM", "Metal budget"} {
 		t.Run(scenario, func(t *testing.T) {
 			observed := facts(16)
 			l := withMemoryMeasurement(attentionLock(t, 4096, catalog.ComputeGPU), observed, 4<<30)
 			p := l.Records.Presets[l.Preset]
 			switch scenario {
+			case "MoE placement":
+				p.Profiles[0].EngineConfig.Controls.CPUMoELayers = 4
 			case "context":
 				p.Profiles[0].ContextWindowTokens = 8192
 			case "engine":

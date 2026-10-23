@@ -17,6 +17,7 @@ import (
 
 	"github.com/temper-sh/temper/internal/artifactset"
 	"github.com/temper-sh/temper/internal/datadir"
+	"github.com/temper-sh/temper/internal/kapitsa"
 	"github.com/temper-sh/temper/internal/lockfile"
 	"github.com/temper-sh/temper/internal/manifest"
 	"github.com/temper-sh/temper/internal/render/engine"
@@ -110,6 +111,7 @@ type resolvedMember struct {
 	PatchPath       string
 	PythonStatePath string
 	Splash          *engine.SplashTuning
+	Kapitsa         *engine.KapitsaTuning
 }
 
 func resolveMembers(document manifest.Document, lock lockfile.Document, mode manifest.Mode, root string) ([]resolvedMember, error) {
@@ -153,6 +155,10 @@ func resolveMembers(document manifest.Document, lock lockfile.Document, mode man
 			if layout.Splash != nil {
 				assembly, state := splash.Paths(root, member.Layout, entry.Digest(), layout.Splash.SoftwareSHA256)
 				item.Splash = &engine.SplashTuning{SplashConfig: layout.Splash.SplashConfig, Adapter: layout.Splash.Adapter, ModelID: layout.Model.Repo, AssemblyPath: assembly, StatePath: state}
+			}
+			if layout.Kapitsa != nil {
+				item.DraftPath = filepath.Join(set.Path(), "draft")
+				item.Kapitsa = &engine.KapitsaTuning{KapitsaConfig: layout.Kapitsa.KapitsaConfig, StatePath: kapitsa.StatePath(root, member.Layout, entry.Digest(), layout.Kapitsa.SoftwareSHA256)}
 			}
 			if layout.ChatTemplate != "" {
 				patch := document.Patches[layout.ChatTemplate]
@@ -324,6 +330,7 @@ func engineRequest(member resolvedMember) engine.Request {
 		VLLMMetal:             vllmMetalTuning(layout.VLLMMetal),
 		Sampling:              layout.Sampling,
 		Splash:                member.Splash,
+		Kapitsa:               member.Kapitsa,
 	}
 }
 

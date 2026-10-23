@@ -171,6 +171,15 @@ Switching back restores the authored GPU count. CPU-only presets may set that
 count to zero. Compute selection changes what runs; allowed choices and
 inactive GPU tuning do not.
 
+`engine_config.controls.cpu_moe_layers` keeps MoE weights from the first N
+model layers on CPU (`--n-cpu-moe N`). N is a nonnegative 32-bit layer count,
+not an expert count; omission or zero adds no flag. This llama.cpp control is
+independent of whole-layer GPU offload and survives compute changes. It changes
+execution identity and invalidates memory measurements taken with other placement.
+CPU placement does not reduce physical RAM accounting. Without per-layer expert
+sizes, the CPU/GPU split and wired-memory fit are unknown; Temper retains the
+whole-model physical allowance and gives no wired-limit adjustment advice.
+
 `execution configure --compute cpu|gpu` selects among the retained choices,
 alongside the required context and optional output default. Omitting it preserves the
 current device. Weights and installed software remain reusable.

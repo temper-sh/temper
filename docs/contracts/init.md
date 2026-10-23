@@ -97,7 +97,15 @@ for ownership, directory overrides, deselection and retry behavior.
 ## Review and install
 
 **Review** confirms selected models and harnesses, layout availability,
-download/disk totals and a short memory assessment. The Downloads table shows
+download/disk totals and a short memory assessment. Software totals include every
+artifact in each exact installation closure, including managed CPython, wheels
+and source archives. Identical closures share one installation; verified receipts
+and read-only provider inspection credit existing native and Python installations.
+Python disk estimates reserve the runtime's 2 GiB extraction limit and four times
+each package's compressed size (at least its declared source size), with two
+expanded copies for build/install staging, plus retained downloads. These are
+planning allowances, not measured installed sizes or guaranteed build bounds.
+The Downloads table shows
 individual files directly. Model licenses and preset settings remain on the
 selection screen and in the preset editor. Cached files are reused and verified.
 

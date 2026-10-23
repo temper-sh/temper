@@ -35,7 +35,7 @@ func TestRunInitHelpDoesNotInspectMachine(t *testing.T) {
 func TestEveryHelpRequestSucceedsWithoutEffects(t *testing.T) {
 	for _, args := range [][]string{
 		{"--help"}, {"configure", "--help"}, {"update", "--help"},
-		{"layout", "--help"}, {"layout", "activate", "--help"}, {"layout", "status", "--help"}, {"layout", "stop", "--help"},
+		{"layout", "--help"}, {"layout", "activate", "--help"}, {"layout", "status", "--help"}, {"layout", "stop", "--help"}, {"start", "--help"}, {"stop", "--help"},
 		{"catalog", "--help"}, {"catalog", "update", "--help"}, {"catalog", "inspect", "--help"}, {"catalog", "rollback", "--help"},
 		{"catalog", "compile", "--help"}, {"catalog", "describe", "--help"},
 		{"execution", "--help"}, {"execution", "configure", "--help"}, {"execution", "inspect", "--help"}, {"execution", "serve", "--help"}, {"execution", "verify-stopped", "--help"},

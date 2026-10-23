@@ -44,6 +44,7 @@ type Job struct {
 	Presets        []string  `json:"presets"`
 	Launcher       string    `json:"launcher"`
 	LauncherSHA256 string    `json:"launcher_sha256"`
+	StatePaths     []string  `json:"state_paths,omitempty"`
 }
 type Rendered struct {
 	Job    Job
@@ -66,6 +67,7 @@ func Render(root, listen string, c setup.Configuration, l setup.LayoutPlan, reso
 	models := map[string]any{}
 	groups := map[string]any{}
 	var processes []Process
+	var statePaths []string
 	router, routerIdentity := "", ""
 	ids := slices.Clone(l.Layout.Presets)
 	slices.Sort(ids)
@@ -73,7 +75,7 @@ func Render(root, listen string, c setup.Configuration, l setup.LayoutPlan, reso
 		selected := c.Presets[id]
 		lock := selected.Lock
 		for _, e := range lock.Records.Engines {
-			if e.Family() != engine.LlamaServer && e.Family() != engine.Splash {
+			if e.Family() != engine.LlamaServer && e.Family() != engine.Splash && e.Family() != engine.Kapitsa {
 				return Rendered{}, fmt.Errorf("managed layouts do not yet support %s process topology; use its explicit execution contract", e.Family())
 			}
 		}
@@ -121,6 +123,11 @@ func Render(root, listen string, c setup.Configuration, l setup.LayoutPlan, reso
 		}
 		for original, command := range commands {
 			runtime := command.Runtime()
+			for _, env := range runtime.Environment {
+				if env.Name == "KAPITSA_HOME" {
+					statePaths = append(statePaths, env.Value)
+				}
+			}
 			executable, err := resolve(lock, runtime.Requirement.Package, runtime.Requirement.RelativeExecutable)
 			if err != nil {
 				return Rendered{}, err
@@ -178,7 +185,7 @@ func Render(root, listen string, c setup.Configuration, l setup.LayoutPlan, reso
 	if err != nil {
 		return Rendered{}, err
 	}
-	job := Job{Layout: l.ID, Name: l.Layout.Name, Label: jobLabel(root), Listen: listen, Router: router, Processes: processes, Presets: ids, Launcher: launcher.Path, LauncherSHA256: launcher.SHA256}
+	job := Job{Layout: l.ID, Name: l.Layout.Name, Label: jobLabel(root), Listen: listen, Router: router, Processes: processes, Presets: ids, Launcher: launcher.Path, LauncherSHA256: launcher.SHA256, StatePaths: statePaths}
 	job.Generation = job.digest(raw)
 	job.Config = filepath.Join(root, "managed", "generations", job.Generation, "config.yaml")
 	if err := job.Validate(root); err != nil {
@@ -210,6 +217,11 @@ func (j Job) Arguments() []string {
 var labelPattern = regexp.MustCompile(`^sh\.temper\.[a-f0-9]{24}$`)
 
 func (j Job) Validate(root string) error {
+	for _, path := range j.StatePaths {
+		if filepath.Clean(path) != path || !strings.HasPrefix(path, filepath.Join(root, "runtime")+string(filepath.Separator)) {
+			return errors.New("managed state path escapes the runtime directory")
+		}
+	}
 	if j.Label != jobLabel(root) && labelPattern.MatchString(j.Label) {
 		// The label comes from the root path, so a moved or copied root
 		// cannot reach its own job.

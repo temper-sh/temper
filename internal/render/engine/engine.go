@@ -15,6 +15,7 @@ const (
 	RapidMLX    = "rapid-mlx"
 	VLLMMetal   = "vllm-metal"
 	Splash      = "splash"
+	Kapitsa     = "kapitsa"
 
 	InterfaceChatCompletions = "chat-completions"
 	InterfaceReranking       = "reranking"
@@ -46,6 +47,7 @@ type Request struct {
 	RapidMLX              *RapidMLXTuning
 	VLLMMetal             *VLLMMetalTuning
 	Splash                *SplashTuning
+	Kapitsa               *KapitsaTuning
 	Sampling              *SamplingDefaults
 }
 
@@ -73,6 +75,7 @@ type LlamaServerControls struct {
 	Fit               string `yaml:"fit" json:"fit"`
 	Threads           int    `yaml:"threads" json:"threads"`
 	ThreadsBatch      int    `yaml:"threads_batch" json:"threads_batch"`
+	CPUMoELayers      int    `yaml:"cpu_moe_layers,omitempty" json:"cpu_moe_layers,omitempty"`
 	LoadMode          string `yaml:"load_mode" json:"load_mode"`
 }
 
@@ -180,11 +183,11 @@ func Build(request Request) (Command, error) {
 			return Command{}, errors.New("reasoning_budget_tokens requires llama-server chat and a value from -1 to 2147483647")
 		}
 	}
-	if request.Sampling != nil && request.Engine != LlamaServer && request.Engine != Splash {
-		return Command{}, errors.New("explicit sampling defaults currently require llama-server")
+	if request.Sampling != nil && request.Engine != LlamaServer && request.Engine != Splash && request.Engine != Kapitsa {
+		return Command{}, errors.New("explicit sampling defaults require llama-server, Splash or Kapitsa")
 	}
 	switch request.Engine {
-	case LlamaServer, RapidMLX, VLLMMetal, Splash, CrispEmbed:
+	case LlamaServer, RapidMLX, VLLMMetal, Splash, CrispEmbed, Kapitsa:
 	default:
 		return Command{}, fmt.Errorf("engine %q is not supported", request.Engine)
 	}
@@ -192,6 +195,8 @@ func Build(request Request) (Command, error) {
 		return Command{}, err
 	}
 	switch request.Engine {
+	case Kapitsa:
+		return buildKapitsa(request)
 	case CrispEmbed:
 		return buildCrispEmbed(request)
 	case LlamaServer:
@@ -210,8 +215,8 @@ func validateVariant(request Request) error {
 	if request.ProjectorPath != "" && request.Engine != LlamaServer {
 		return errors.New("a GGUF projector path requires llama-server")
 	}
-	if request.DraftModelPath != "" && request.Engine != LlamaServer && request.Engine != RapidMLX {
-		return errors.New("a draft path requires llama-server or Rapid MLX")
+	if request.DraftModelPath != "" && request.Engine != LlamaServer && request.Engine != RapidMLX && request.Engine != Kapitsa {
+		return errors.New("a draft path requires llama-server, Rapid MLX or Kapitsa")
 	}
 	selected := 0
 	for _, present := range []bool{
@@ -220,6 +225,7 @@ func validateVariant(request Request) error {
 		request.RapidMLX != nil,
 		request.VLLMMetal != nil,
 		request.Splash != nil,
+		request.Kapitsa != nil,
 	} {
 		if present {
 			selected++
@@ -229,6 +235,7 @@ func validateVariant(request Request) error {
 		return errors.New("engine request must contain exactly one tuning variant")
 	}
 	matches := request.Engine == LlamaServer && request.LlamaServer != nil ||
+		request.Engine == Kapitsa && request.Kapitsa != nil ||
 		request.Engine == RapidMLX && request.RapidMLX != nil ||
 		request.Engine == VLLMMetal && request.VLLMMetal != nil ||
 		request.Engine == Splash && request.Splash != nil ||

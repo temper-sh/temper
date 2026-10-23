@@ -16,6 +16,7 @@ import (
 	"github.com/charmbracelet/x/term"
 	"github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/clihelp"
+	"github.com/temper-sh/temper/internal/managed"
 	"github.com/temper-sh/temper/internal/preset"
 	"github.com/temper-sh/temper/internal/setup"
 	"github.com/temper-sh/temper/internal/setupui"
@@ -390,6 +391,11 @@ func (c Command) Configure(ctx context.Context, args []string, in io.Reader, out
 	nextRev, changed, err := setup.SaveConfiguration(ctx, root, candidate, rev, *dry)
 	if err != nil {
 		return fail(diagnostics, err)
+	}
+	if rev == "" && !*dry {
+		if err := managed.SelectInitialDefault(ctx, root, nextRev); err != nil {
+			return fail(diagnostics, fmt.Errorf("configuration saved; initial layout selection incomplete: %w; select explicitly with temper layout activate default", err))
+		}
 	}
 	var prepared []string
 	if *prepare && !*dry {

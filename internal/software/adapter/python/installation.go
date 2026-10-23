@@ -31,7 +31,9 @@ const (
 	installationMarkerSchema = "temper-python-installation/v1"
 	maxRuntimeArchiveBytes   = 512 << 20
 	maxRuntimeEntries        = 100_000
-	maxRuntimeUnpackedBytes  = 2 << 30
+	// RuntimeUnpackedLimit bounds extraction and supplies the setup planner's
+	// runtime allowance when the lock has no expanded-size metadata.
+	RuntimeUnpackedLimit = 2 << 30
 )
 
 // ArtifactReader is the Python installation transport. Resolver reads and
@@ -241,7 +243,7 @@ func (a *InstallationAdapter) Install(ctx context.Context, request adapter.Insta
 		return err
 	}
 	runtimeSpec := softwarearchive.TarGzSpec{
-		Root: "python", MaxEntries: maxRuntimeEntries, MaxUnpackedBytes: maxRuntimeUnpackedBytes,
+		Root: "python", MaxEntries: maxRuntimeEntries, MaxUnpackedBytes: RuntimeUnpackedLimit,
 		Label: "managed Python archive",
 	}
 	runtimeEntries, err := softwarearchive.InspectTarGz(ctx, runtimeArchive, runtimeSpec)

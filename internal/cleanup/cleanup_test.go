@@ -186,13 +186,18 @@ func TestCleanupKeepsWhatTheRunningLayoutUses(t *testing.T) {
 	generation := strings.Repeat("a", 64)
 	mkdir(t, filepath.Join(root, "managed", "generations", generation))
 	engine := filepath.Join(root, "software", "installations", id, "upstream-release", "llama-cpp", "current", "payload", "llama-server")
-	job := &managed.Job{Generation: generation, Processes: []managed.Process{{Role: "x", Path: engine}}}
+	calibration := mkdir(t, filepath.Join(root, "runtime", "kapitsa", strings.Repeat("b", 64)))
+	job := &managed.Job{Generation: generation, Processes: []managed.Process{{Role: "x", Path: engine}}, StatePaths: []string{calibration}}
 	plan, err := Build(root, setup.EmptyConfiguration(), managed.State{Schema: managed.StateSchema, Current: job}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(plan.Remove) != 0 {
 		t.Fatalf("plan removes what the running layout uses: %+v", plan.Remove)
+	}
+	plan, err = Build(root, setup.EmptyConfiguration(), managed.State{Schema: managed.StateSchema}, "")
+	if err != nil || !slices.ContainsFunc(plan.Remove, func(i Item) bool { return i.Path == calibration }) {
+		t.Fatal("unused calibration not eligible for explicit cleanup", err, plan.Remove)
 	}
 }
 

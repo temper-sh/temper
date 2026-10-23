@@ -9,9 +9,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 
+	"github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/setup"
 )
 
@@ -45,8 +48,13 @@ func (s FileStore) Read() (State, error) {
 	if err = d.Decode(new(any)); !errors.Is(err, io.EOF) {
 		return State{}, errors.New("activation has trailing data")
 	}
-	if state.Schema != StateSchema {
+	if state.Schema != StateSchema && state.Schema != "temper-activation/v1" {
 		return State{}, errors.New("unknown activation schema")
+	}
+	state.Schema = StateSchema
+	state.Selected = state.Selection()
+	if err := validateSelection(state.Selected); err != nil {
+		return State{}, err
 	}
 	for _, j := range known(state) {
 		if err = j.Validate(s.Root); err != nil {
@@ -59,6 +67,9 @@ func (s FileStore) Save(ctx context.Context, state State) error {
 	if state.Schema != StateSchema {
 		return errors.New("invalid activation schema")
 	}
+	if err := validateSelection(state.Selected); err != nil {
+		return err
+	}
 	for _, j := range known(state) {
 		if err := j.Validate(s.Root); err != nil {
 			return err
@@ -69,6 +80,50 @@ func (s FileStore) Save(ctx context.Context, state State) error {
 		return err
 	}
 	return writeAtomic(ctx, filepath.Join(s.Root, "managed", "activation.json"), append(raw, '\n'))
+}
+
+func validateSelection(s *Selection) error {
+	if s == nil {
+		return nil
+	}
+	host, port, err := net.SplitHostPort(s.Listen)
+	n, e := strconv.Atoi(port)
+	if !catalog.ValidPresetID(s.Layout) || err != nil || e != nil || host != "127.0.0.1" || n < 1024 || n > 65535 {
+		return errors.New("invalid remembered layout or listener")
+	}
+	return nil
+}
+
+// SelectInitialDefault runs after the first configuration commit. It never
+// replaces an existing choice and verifies that the first configuration is
+// still the one whose wizard selected Default. Caller reports a failed write
+// as saved configuration with incomplete selection, before any installation.
+func SelectInitialDefault(ctx context.Context, root, revision string) error {
+	unlock, err := setup.LockRoot(root)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	c, current, err := setup.ReadConfiguration(root)
+	if err != nil {
+		return err
+	}
+	if current != revision {
+		return errors.New("configuration changed before initial layout selection; choose with temper layout activate ID")
+	}
+	if _, ok := c.Layouts["default"]; !ok {
+		return nil
+	}
+	store := FileStore{Root: root}
+	state, err := store.Read()
+	if err != nil {
+		return err
+	}
+	if state.Selection() != nil {
+		return nil
+	}
+	state.Selected = &Selection{Layout: "default", Listen: "127.0.0.1:8080"}
+	return store.Save(ctx, state)
 }
 
 // publishLauncher copies the running binary to the job's launcher path once.

@@ -449,6 +449,7 @@ var adapters = map[string]struct {
 	"splash/v1":       {"splash", false, []string{engine.InterfaceChatCompletions}, []string{"text"}},
 	"splash/v2":       {"splash", false, []string{engine.InterfaceChatCompletions}, []string{"text"}},
 	"crispembed/v1":   {"crispembed", false, []string{engine.InterfaceReranking}, []string{"text"}},
+	"kapitsa/v1":      {"kapitsa", false, []string{engine.InterfaceChatCompletions}, []string{"text"}},
 	"rapid-mlx/v1":    {"rapid-mlx", true, []string{engine.InterfaceChatCompletions}, []string{"text"}},
 	"vllm-metal/v1":   {"vllm-metal", true, []string{engine.InterfaceChatCompletions}, []string{"text"}},
 }
@@ -575,13 +576,22 @@ func (d Document) validatePreset(id string, p Preset) error {
 	if p.Interface == engine.InterfaceReranking && !p.RequestDefaults.empty() {
 		return errors.New("reranking cannot declare generation defaults")
 	}
-	if (e.Family() == engine.RapidMLX || e.Family() == engine.VLLMMetal) && !completeSnapshot(a.Files) {
+	if (e.Family() == engine.RapidMLX || e.Family() == engine.VLLMMetal || e.Family() == engine.Kapitsa) && !completeSnapshot(a.Files) {
 		return errors.New("target snapshot requires config, tokenizer and safetensors weights")
 	}
-	if e.Family() == engine.Splash {
+	if e.Family() == engine.Splash || e.Family() == engine.Kapitsa {
 		draft, ok := d.Artifacts[p.Speculation.DraftArtifact]
 		if !ok || draft.Format != "safetensors" || p.Speculation.Method != "dflash2" || p.Speculation.Source != "artifact" || p.Speculation.MaxDraftTokens != 0 {
-			return errors.New("requires a complete DFlash2 sidecar and Splash")
+			return errors.New("requires a complete DFlash2 sidecar for this engine")
+		}
+		if e.Family() == engine.Kapitsa {
+			for _, file := range append(append([]File{}, a.Files...), draft.Files...) {
+				for _, part := range strings.Split(file.Path, "/") {
+					if strings.HasPrefix(part, "._") {
+						return errors.New("Kapitsa model files cannot include AppleDouble sidecars")
+					}
+				}
+			}
 		}
 	} else if p.Speculation.Source == "artifact" {
 		draft, ok := d.Artifacts[p.Speculation.DraftArtifact]
@@ -659,7 +669,11 @@ func (l Preset) request(id string, profile Profile, a Artifact, modelPath, templ
 	if l.Interface == engine.InterfaceReranking {
 		r.Sampling = nil
 	}
-	if c.CrispEmbed != nil {
+	if c.Kapitsa != nil {
+		r.Engine, r.LlamaServer, r.NGL, r.KVCache = engine.Kapitsa, nil, nil, ""
+		r.Kapitsa = &engine.KapitsaTuning{KapitsaConfig: c.Kapitsa.KapitsaConfig, StatePath: "/state"}
+		r.DraftModelPath = "/draft"
+	} else if c.CrispEmbed != nil {
 		r.Engine, r.LlamaServer, r.NGL, r.Sampling = engine.CrispEmbed, nil, nil, nil
 		r.KVCache = ""
 		r.CrispEmbed = &c.CrispEmbed.CrispEmbedTuning

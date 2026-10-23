@@ -61,6 +61,7 @@ var llamaFields = []Field{
 	{"controls.fit", FieldChoice, []string{"on", "off"}, "Let llama.cpp shrink settings to fit memory."},
 	{"controls.threads", FieldInteger, nil, "CPU threads for generation; 0 uses the engine default."},
 	{"controls.threads_batch", FieldInteger, nil, "CPU threads for reading the prompt; 0 uses the engine default."},
+	{"controls.cpu_moe_layers", FieldInteger, nil, "Keep MoE weights in the first N model layers on CPU; 0 leaves placement unchanged. Independent of GPU layers."},
 	{"controls.load_mode", FieldChoice, []string{"auto", "none", "mmap", "mlock", "mmap+mlock", "dio"}, "How the weights are loaded into memory."},
 }
 
@@ -105,6 +106,12 @@ var crispEmbedFields = []Field{
 }
 
 var engineFields = map[string][]Field{
+	"kapitsa/v1": {
+		{"slots", FieldInteger, nil, "Concurrent requests; each keeps its own context cache."},
+		{"max_memory_bytes", FieldInteger, nil, "Engine memory ceiling in bytes; not minimum machine RAM."},
+		{"prefill_chunk_tokens", FieldInteger, nil, "Prompt tokens per prefill pass."},
+		{"ane", FieldSwitch, nil, "Use Apple Neural Engine prefill."},
+	},
 	"llama-server/v1": llamaFields,
 	"splash/v1":       splashFields,
 	"splash/v2":       splashFields,

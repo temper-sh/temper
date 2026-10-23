@@ -245,7 +245,7 @@ func (m *Editor) selectWeights() tea.Cmd {
 	switch m.draft.base(m.view, m.memory).Config().Kind {
 	case "llama-server/v1", "splash/v1", "splash/v2", "crispembed/v1":
 		format = "gguf"
-	case "rapid-mlx/v1":
+	case "rapid-mlx/v1", "kapitsa/v1":
 		format = "mlx-safetensors"
 	case "vllm-metal/v1":
 		format = "safetensors"

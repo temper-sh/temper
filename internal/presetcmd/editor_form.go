@@ -48,7 +48,8 @@ func namedModes(path string) (labels, values []string) {
 
 func controlLabel(path string) string {
 	labels := map[string]string{
-		"engine_config.kv_cache": "KV precision", "engine_config.controls.load_mode": "Weight loading",
+		"engine_config.controls.cpu_moe_layers": "MoE CPU layers",
+		"engine_config.kv_cache":                "KV precision", "engine_config.controls.load_mode": "Weight loading",
 		"engine_config.parallel": "Concurrent requests", "engine_config.batch_tokens": "Prompt batch",
 		"engine_config.microbatch_tokens": "Physical batch", "engine_config.controls.threads": "Generation",
 		"engine_config.controls.threads_batch": "Prompt processing", "engine_config.controls.context_shift": "Drop oldest context when full",
@@ -112,7 +113,7 @@ func (m *Editor) controls() []editorControl {
 		order = []string{"request_defaults.sampling.temperature", "request_defaults.sampling.top_p", "request_defaults.sampling.top_k", "request_defaults.sampling.min_p", "request_defaults.sampling.repeat_penalty", "request_defaults.sampling.presence_penalty", "request_defaults.sampling.seed"}
 	}
 	if m.page == 2 {
-		order = []string{"engine_config.kv_cache", "engine_config.flash_attention", "engine_config.gpu_layers", "engine_config.controls.fit", "engine_config.controls.load_mode", "engine_config.parallel", "engine_config.batch_tokens", "engine_config.microbatch_tokens", "engine_config.controls.threads", "engine_config.controls.threads_batch", "engine_config.controls.context_shift", "engine_config.controls.cache_prompt", "engine_config.prompt_cache_ram_mib", "engine_config.context_checkpoints", "engine_config.controls.checkpoint_min_step", "engine_config.controls.cache_reuse"}
+		order = []string{"engine_config.kv_cache", "engine_config.flash_attention", "engine_config.gpu_layers", "engine_config.controls.cpu_moe_layers", "engine_config.controls.fit", "engine_config.controls.load_mode", "engine_config.parallel", "engine_config.batch_tokens", "engine_config.microbatch_tokens", "engine_config.controls.threads", "engine_config.controls.threads_batch", "engine_config.controls.context_shift", "engine_config.controls.cache_prompt", "engine_config.prompt_cache_ram_mib", "engine_config.context_checkpoints", "engine_config.controls.checkpoint_min_step", "engine_config.controls.cache_reuse"}
 	}
 	slices.SortStableFunc(fields, func(a, b editField) int {
 		rank := func(path string) int {

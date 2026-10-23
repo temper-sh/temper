@@ -19,6 +19,7 @@ import (
 	"github.com/temper-sh/temper/internal/datadir"
 	"github.com/temper-sh/temper/internal/fetch"
 	"github.com/temper-sh/temper/internal/fieldkitbinding"
+	"github.com/temper-sh/temper/internal/kapitsa"
 	"github.com/temper-sh/temper/internal/lockfile"
 	"github.com/temper-sh/temper/internal/machine"
 	"github.com/temper-sh/temper/internal/manifest"
@@ -186,6 +187,15 @@ func Runtime(ctx context.Context, args []string, stdout, stderr io.Writer, effec
 	}
 	if operation == "prepare" || operation == "serve" {
 		for _, layout := range p.Manifest.Layouts {
+			if layout.Kapitsa != nil {
+				facts, err := effects.Facts(ctx)
+				if err != nil {
+					return failed(stderr, err)
+				}
+				if err := engine.KapitsaCompatibility(facts.Chip, facts.Target.DistributionVersion); err != nil {
+					return failed(stderr, err)
+				}
+			}
 			if layout.Splash != nil {
 				facts, err := effects.Facts(ctx)
 				if err != nil {
@@ -200,7 +210,15 @@ func Runtime(ctx context.Context, args []string, stdout, stderr io.Writer, effec
 	}
 	if operation == "paths" {
 		models, interpreters := map[string]string{}, map[string]string{}
+		states := map[string]kapitsa.State{}
 		for id, layout := range p.Manifest.Layouts {
+			if layout.Kapitsa != nil {
+				state, err := kapitsa.Inspect(resolved, kapitsa.StatePath(resolved, id, p.Artifacts.Entries[id].Digest(), layout.Kapitsa.SoftwareSHA256))
+				if err != nil {
+					return failed(stderr, err)
+				}
+				states[id] = state
+			}
 			set, err := artifactset.New(resolved, id, layout, p.Artifacts.Entries[id], p.Manifest.Patches)
 			if err != nil {
 				return failed(stderr, err)
@@ -221,13 +239,19 @@ func Runtime(ctx context.Context, args []string, stdout, stderr io.Writer, effec
 			interpreters[id] = executable
 		}
 		if *jsonOutput {
-			return encode(stdout, stderr, map[string]any{"schema": "temper-execution-paths/v1", "execution": identity, "models": models, "python": interpreters})
+			return encode(stdout, stderr, map[string]any{"schema": "temper-execution-paths/v1", "execution": identity, "models": models, "python": interpreters, "engine_state": states})
 		}
 		for _, id := range sortedKeys(models) {
 			fmt.Fprintf(stdout, "Model %s: %s\n", id, models[id])
 		}
 		for _, id := range sortedKeys(interpreters) {
 			fmt.Fprintf(stdout, "Python for %s: %s\n", id, interpreters[id])
+		}
+		for _, id := range sortedKeys(states) {
+			fmt.Fprintf(stdout, "Kapitsa home for %s: %s\n", id, states[id].Path)
+			for _, calibration := range states[id].Calibrations {
+				fmt.Fprintf(stdout, "  %s sha256:%s\n", calibration.Name, calibration.SHA256)
+			}
 		}
 		return 0
 	}
@@ -315,6 +339,18 @@ func Runtime(ctx context.Context, args []string, stdout, stderr io.Writer, effec
 func serve(ctx context.Context, effects Effects, root, installation, generation, listen, statusFile string, p catalog.Projections, stdout, stderr io.Writer) int {
 	for _, id := range sortedKeys(p.Manifest.Layouts) {
 		layout := p.Manifest.Layouts[id]
+		if layout.Kapitsa != nil {
+			set, err := artifactset.New(root, id, layout, p.Artifacts.Entries[id], p.Manifest.Patches)
+			if err != nil {
+				return failed(stderr, err)
+			}
+			if err := set.Verify(); err != nil {
+				return failed(stderr, fmt.Errorf("Kapitsa model view: %w; run execution prepare", err))
+			}
+			if err := kapitsa.PrepareState(root, kapitsa.StatePath(root, id, p.Artifacts.Entries[id].Digest(), layout.Kapitsa.SoftwareSHA256)); err != nil {
+				return failed(stderr, err)
+			}
+		}
 		if layout.Splash == nil {
 			continue
 		}

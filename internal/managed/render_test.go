@@ -34,6 +34,37 @@ func mixed(t *testing.T) setup.Configuration {
 	return c
 }
 
+func TestKapitsaManagedJobBindsNativeProcessAndRetainsCalibrationPath(t *testing.T) {
+	d := testfixture.KapitsaCatalog(t)
+	id := "qwen3.8-27b-mlx4-kapitsa"
+	l, err := catalog.CompilePreset(d, id, 32, 0, d.Runtime.Router.Target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := setup.EmptyConfiguration()
+	c.Presets[id] = setup.Preset{Name: "Qwen", Lock: l}
+	c.Layouts = setup.StarterLayouts([]string{id})
+	r, err := Render("/private/temper", "127.0.0.1:18080", c, setup.LayoutPlan{ID: "default", Layout: c.Layouts["default"], AllFit: true}, func(_ catalog.Lock, pkg, relative string) (string, error) {
+		return "/software/" + pkg + "/" + relative, nil
+	}, fixtureLauncher)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Job.Processes) != 1 || r.Job.Processes[0].Path != "/software/kapitsa/kapitsa" || len(r.Job.StatePaths) != 1 || !strings.Contains(string(r.Config), r.Job.StatePaths[0]) {
+		t.Fatal(r.Job)
+	}
+	if args := strings.Join(r.Job.Processes[0].Arguments, " "); !strings.Contains(args, "--context 98304") || !strings.Contains(args, "--dflash /private/temper/artifacts/") {
+		t.Fatal(args)
+	}
+	if err := r.Job.Validate("/private/temper"); err != nil {
+		t.Fatal(err)
+	}
+	r.Job.StatePaths = []string{"/outside/home"}
+	if err := r.Job.Validate("/private/temper"); err == nil {
+		t.Fatal("forged state preservation path admitted")
+	}
+}
+
 func TestMixedEnginesRenderExactPathsAndIndependentStartupDefault(t *testing.T) {
 	c := mixed(t)
 	l := setup.LayoutPlan{ID: "work", Layout: c.Layouts["work"], AllFit: false}

@@ -100,6 +100,7 @@ func AssessLayout(c Configuration, id string, facts machine.Facts) (LayoutPlan, 
 	l := c.Layouts[id]
 	assessment := LayoutPlan{ID: id, Layout: l}
 	var total, gpuTotal, startupGPU int64
+	gpuUnknown := false
 	for _, id := range l.Presets {
 		lock := c.Presets[id].Lock
 		one, err := Assess(lock, facts)
@@ -114,7 +115,8 @@ func AssessLayout(c Configuration, id string, facts machine.Facts) (LayoutPlan, 
 		assessment.LargestPresetBytes = max(assessment.LargestPresetBytes, estimate)
 		gpu := false
 		for _, x := range lock.Records.Presets {
-			gpu = x.Compute == catalog.ComputeGPU
+			gpu = x.Compute == catalog.ComputeGPU && predictableGPUFootprint(x)
+			gpuUnknown = gpuUnknown || x.Compute == catalog.ComputeGPU && !predictableGPUFootprint(x)
 		}
 		if gpu {
 			if err = add(&gpuTotal, estimate-one.Memory.PromptCacheReserveBytes); err != nil {
@@ -135,7 +137,8 @@ func AssessLayout(c Configuration, id string, facts machine.Facts) (LayoutPlan, 
 	// This is a scheduling allowance, not a measured simultaneous-fit claim.
 	physical := max(int64(0), facts.PhysicalMemoryBytes-budget.OSFloorMiB*MiB)
 	wired := max(int64(0), facts.WiredLimitMiB*MiB-budget.OSFloorMiB*MiB)
-	assessment.AllFit = total <= physical && gpuTotal <= wired
+	assessment.AllFit = !gpuUnknown && total <= physical && gpuTotal <= wired
+	assessment.MemoryIncomplete = assessment.MemoryIncomplete || gpuUnknown
 	if assessment.StartupBytes > physical || startupGPU > wired {
 		assessment.Refusals = append(assessment.Refusals, "startup presets exceed the memory allowance (measured peaks or fallback estimates); remove startup selections")
 	}

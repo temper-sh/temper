@@ -54,7 +54,7 @@ func (m *Editor) fieldsFor(page int) []editField {
 				continue
 			}
 		case "request_defaults.sampling.min_p", "request_defaults.sampling.repeat_penalty", "request_defaults.sampling.presence_penalty":
-			if splash {
+			if splash || kind == "kapitsa/v1" {
 				continue
 			}
 		case "speculation.method":
@@ -70,7 +70,7 @@ func (m *Editor) fieldsFor(page int) []editField {
 			f.origin = m.speculationLabel(p.Speculation)
 			f.Help = "Choose a speculation configuration available for these weights and engine."
 		case "speculation.max_draft_tokens":
-			if spec.Method == "none" || splash {
+			if spec.Method == "none" || splash || kind == "kapitsa/v1" {
 				continue
 			}
 		case "engine_config.gpu_layers":
@@ -251,7 +251,7 @@ func (m *Editor) speculationChoices() []speculationChoice {
 		}
 		choices = append(choices, speculationChoice{label: m.speculationLabel(spec), spec: spec})
 	}
-	if !strings.HasPrefix(p.Config().Kind, "splash/") {
+	if !strings.HasPrefix(p.Config().Kind, "splash/") && p.Config().Kind != "kapitsa/v1" {
 		add(catalog.Speculation{Method: "none", Source: "none"})
 	}
 	add(m.currentSpeculation())

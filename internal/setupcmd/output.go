@@ -35,8 +35,11 @@ type layoutReport struct {
 }
 
 func renderLayout(out io.Writer, r layoutReport) {
+	if r.Operation == "start" {
+		r.Operation = "activate"
+	}
 	job := r.Status.State.Current
-	if job == nil {
+	if job == nil || r.Dry && r.Operation == "activate" {
 		job = r.Status.State.Desired
 	}
 	switch r.Operation {
@@ -61,7 +64,9 @@ func renderLayout(out io.Writer, r layoutReport) {
 	}
 	if job == nil {
 		fmt.Fprintln(out, "No layout is running.")
-		if len(r.Saved) > 0 {
+		if selected := r.Status.State.Selection(); selected != nil {
+			fmt.Fprintf(out, "Selected layout: %s. Start it with: temper start\n", selected.Layout)
+		} else if len(r.Saved) > 0 {
 			fmt.Fprintf(out, "Start one with: temper layout activate %s\n", strings.Join(r.Saved, " | "))
 		}
 		return

@@ -115,11 +115,7 @@ func (l Launchd) Observe(ctx context.Context, jobs []Job) (Observation, error) {
 		return o, nil
 	}
 	o.PID, _ = strconv.Atoi(match[1])
-	var commands []probecmd.ManagedCommand
-	for _, p := range job.Processes {
-		commands = append(commands, probecmd.ManagedCommand{ID: p.Role, Path: p.Path, Arguments: p.Arguments})
-	}
-	observed, err := probecmd.ObserveManaged(o.PID, job.Router, job.Arguments(), job.Listen, commands)
+	observed, err := probecmd.ObserveManaged(o.PID, job.Router, job.Arguments(), job.Listen, job.commands())
 	if err != nil {
 		return o, err
 	}
@@ -256,11 +252,7 @@ func (l Launchd) Stop(ctx context.Context, j Job) error {
 		return errors.New("active requests prevent stopping")
 	}
 	if o.PID != 0 {
-		var beforeCommands []probecmd.ManagedCommand
-		for _, p := range j.Processes {
-			beforeCommands = append(beforeCommands, probecmd.ManagedCommand{ID: p.Role, Path: p.Path, Arguments: p.Arguments})
-		}
-		before, err := probecmd.ObserveManaged(o.PID, j.Router, j.Arguments(), j.Listen, beforeCommands)
+		before, err := probecmd.ObserveManaged(o.PID, j.Router, j.Arguments(), j.Listen, j.commands())
 		if err != nil {
 			return err
 		}
@@ -279,15 +271,11 @@ func (l Launchd) Stop(ctx context.Context, j Job) error {
 			}
 		}
 		defer func() { _ = l.Recover(context.WithoutCancel(ctx), []Job{j}) }()
-		release, err := probecmd.QuiesceManaged(routerIdentity)
+		release, err := probecmd.QuiesceManaged(routerIdentity, j.Listen)
 		if err != nil {
 			return err
 		}
-		var commands []probecmd.ManagedCommand
-		for _, p := range j.Processes {
-			commands = append(commands, probecmd.ManagedCommand{ID: p.Role, Path: p.Path, Arguments: p.Arguments})
-		}
-		bound, err := probecmd.ObserveManaged(o.PID, j.Router, j.Arguments(), j.Listen, commands)
+		bound, err := probecmd.ObserveManaged(o.PID, j.Router, j.Arguments(), j.Listen, j.commands())
 		if err != nil {
 			_ = release()
 			return err

@@ -36,12 +36,14 @@ func ConfigureExecution(base Lock, id string, settings ExecutionSettings) (Lock,
 		p.Compute = settings.Compute
 	}
 	if settings.MaxMemoryBytes != 0 {
-		if p.Profiles[0].EngineConfig.Splash == nil {
-			return Lock{}, errors.New("max-memory is supported only by Splash")
+		switch {
+		case p.Profiles[0].EngineConfig.Splash != nil:
+			p.Profiles[0].EngineConfig.Splash.MaxMemoryBytes = settings.MaxMemoryBytes
+		case p.Profiles[0].EngineConfig.Kapitsa != nil:
+			p.Profiles[0].EngineConfig.Kapitsa.MaxMemoryBytes = settings.MaxMemoryBytes
+		default:
+			return Lock{}, errors.New("max-memory is supported only by Splash or Kapitsa")
 		}
-		splash := *p.Profiles[0].EngineConfig.Splash
-		splash.MaxMemoryBytes = settings.MaxMemoryBytes
-		p.Profiles[0].EngineConfig.Splash = &splash
 	}
 	d.Presets[id] = p
 	result, err := CompilePreset(d, id, 0, 0, base.Target)

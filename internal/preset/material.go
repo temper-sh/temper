@@ -13,10 +13,12 @@ import (
 	"github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/datadir"
 	"github.com/temper-sh/temper/internal/fetch"
+	"github.com/temper-sh/temper/internal/kapitsa"
 	"github.com/temper-sh/temper/internal/probecmd"
 	"github.com/temper-sh/temper/internal/render"
 	"github.com/temper-sh/temper/internal/render/engine"
 	"github.com/temper-sh/temper/internal/software/adapter"
+	"github.com/temper-sh/temper/internal/software/adapter/python"
 	"github.com/temper-sh/temper/internal/software/adapter/upstreamrelease"
 	"github.com/temper-sh/temper/internal/software/installplan"
 	softwarelock "github.com/temper-sh/temper/internal/software/lockfile"
@@ -94,7 +96,8 @@ type Effects struct {
 }
 
 // Installed credits only an exact receipt and provider observation. The zero
-// release inspector has no transport, so this admission cannot download.
+// inspectors have no transport or installer, so this admission cannot download
+// or execute Python.
 func Installed(ctx context.Context, root string, set Installation) (bool, error) {
 	snapshot, err := receiptstore.Read(root, set.ID)
 	if err != nil || !snapshot.Exists() {
@@ -104,7 +107,16 @@ func Installed(ctx context.Context, root string, set Installation) (bool, error)
 	if err = snapshot.Document.ValidateAgainst(set.Lock, installation); err != nil {
 		return false, err
 	}
-	var inspector upstreamrelease.InstallationAdapter
+	var inspector adapter.StateInspector
+	rootUnit := set.Lock.Units[set.Lock.Selections[set.Package].RootUnit]
+	switch rootUnit.Adapter {
+	case "upstream-release":
+		inspector = &upstreamrelease.InstallationAdapter{}
+	case "python":
+		inspector = &python.InstallationAdapter{}
+	default:
+		return false, nil
+	}
 	for _, unit := range set.Lock.Units {
 		if unit.Adapter != inspector.Descriptor().ID {
 			return false, nil
@@ -234,6 +246,11 @@ func PrepareState(root string, lock catalog.Lock) error {
 		return err
 	}
 	for id, layout := range p.Manifest.Layouts {
+		if layout.Kapitsa != nil {
+			if err := kapitsa.PrepareState(root, kapitsa.StatePath(root, id, p.Artifacts.Entries[id].Digest(), layout.Kapitsa.SoftwareSHA256)); err != nil {
+				return err
+			}
+		}
 		if layout.Splash != nil {
 			m, err := splash.New(root, id, layout, p.Artifacts.Entries[id], p.Manifest.Patches)
 			if err != nil {

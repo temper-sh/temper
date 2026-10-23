@@ -176,9 +176,12 @@ func runWithDependencies(ctx context.Context, arguments []string, stdout, stderr
 		command := setupcmd.New(deps.detectFacts, deps.presetEffects())
 		command.CacheRoot, command.Remover = deps.cacheRoot, softwareOperations{deps.newSoftware}
 		return command.Cleanup(ctx, arguments[1:], stdout, stderr)
-	case "layout":
+	case "layout", "start", "stop":
 		command := setupcmd.New(deps.detectFacts, deps.presetEffects())
 		command.Name = "layout"
+		if arguments[0] != "layout" {
+			return command.Layout(ctx, append([]string{arguments[0]}, arguments[1:]...), stdout, stderr)
+		}
 		return command.Layout(ctx, arguments[1:], stdout, stderr)
 	case "machine":
 		return runMachine(ctx, arguments[1:], stdout, stderr, deps.detectFacts)
@@ -293,7 +296,9 @@ func usage(writer io.Writer) {
   temper init                 choose presets, install them and start the default layout
   temper layout               compose layouts from your saved presets
   temper layout status        show what runs, where, and its model IDs
-  temper layout activate ID   start a saved layout, for example after a restart
+  temper start                start the remembered layout
+  temper stop                 stop serving; keep the selected layout
+  temper layout activate ID   switch to a saved layout
   temper layout stop          stop the running layout
   temper update               get the newest presets and software, install and restart
   temper configure            change your presets and layouts

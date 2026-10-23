@@ -17,6 +17,12 @@ type EngineConfig struct {
 	Splash     *SplashConfig
 	Python     *PythonEngineConfig
 	CrispEmbed *CrispEmbedConfig
+	Kapitsa    *KapitsaConfig
+}
+
+type KapitsaConfig struct {
+	Kind                 string `yaml:"kind" json:"kind"`
+	engine.KapitsaConfig `yaml:",inline"`
 }
 
 type CrispEmbedConfig struct {
@@ -48,6 +54,14 @@ type SplashConfig struct {
 }
 
 func (c EngineConfig) value() (any, error) {
+	if c.Kapitsa != nil {
+		base := c.LlamaConfig
+		base.Kind = ""
+		if base != (LlamaConfig{}) || c.Splash != nil || c.Python != nil || c.CrispEmbed != nil || c.Kind != "kapitsa/v1" || c.Kapitsa.Kind != c.Kind {
+			return nil, errors.New("Kapitsa engine_config requires only its own tuning")
+		}
+		return c.Kapitsa, nil
+	}
 	if c.CrispEmbed != nil {
 		base := c.LlamaConfig
 		base.Kind = ""
@@ -104,6 +118,10 @@ func (c *EngineConfig) UnmarshalYAML(node *yaml.Node) error {
 	}
 	*c = EngineConfig{}
 	switch discriminator.Kind {
+	case "kapitsa/v1":
+		c.Kind = discriminator.Kind
+		c.Kapitsa = &KapitsaConfig{}
+		return decode(raw, c.Kapitsa)
 	case "crispembed/v1":
 		c.Kind = discriminator.Kind
 		c.CrispEmbed = &CrispEmbedConfig{}

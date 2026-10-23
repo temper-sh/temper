@@ -42,7 +42,7 @@ func portWord() commandWord {
 }
 
 func commandFromLaunch(spec launchSpec, runtime Runtime) (Command, error) {
-	if runtime.Requirement.Package == RapidMLX || runtime.Requirement.Package == VLLMMetal {
+	if runtime.Requirement.Package == RapidMLX || runtime.Requirement.Package == VLLMMetal || runtime.Requirement.Package == Kapitsa {
 		runtime.Requirement.Role = "engine"
 		if runtime.Requirement.Package == VLLMMetal {
 			runtime.Requirement.Role = "frontend"

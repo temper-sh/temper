@@ -8,6 +8,10 @@
 /build/
 /dist/
 
-# Planning documents stay in the maintainer's local workspace.
-*[Pp][Ll][Aa][Nn]*.md
-plans/
+# Planning lives in ../TEMPER-BACKLOG.md and ../TEMPER-PLAN.md.
+# Keep only legacy local plan paths ignored; ordinary prose stays visible.
+/docs/PLAN.md
+/docs/RELEASE-*-PLAN.md
+/docs/design/presets-and-layouts-plan.md
+/docs/design/v3-catalog-plan.md
+/plans/

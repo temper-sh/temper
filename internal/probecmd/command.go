@@ -144,7 +144,7 @@ func Plan(options Options) (Invocation, error) {
 				frontendPath, frontendArguments, pythonMultiprocessing = python, args, true
 			}
 		}
-		if requirement.Package == "splash" {
+		if requirement.Package == "splash" || requirement.Package == "kapitsa" {
 			args := append([]string(nil), requirement.Arguments...)
 			for i, arg := range args {
 				if arg == "${PORT}" {

@@ -17,6 +17,8 @@ import (
 	"github.com/temper-sh/temper/internal/machine"
 	"github.com/temper-sh/temper/internal/preset"
 	"github.com/temper-sh/temper/internal/render/engine"
+	"github.com/temper-sh/temper/internal/software"
+	"github.com/temper-sh/temper/internal/software/adapter/python"
 )
 
 const MiB int64 = 1 << 20
@@ -99,6 +101,11 @@ func Assess(locked catalog.Lock, facts machine.Facts) (PresetPlan, error) {
 	}
 	modelBytes := make(map[string]int64)
 	for id, layout := range locked.Records.Presets {
+		if layout.Config().Kapitsa != nil {
+			if err := engine.KapitsaCompatibility(facts.Chip, facts.Target.DistributionVersion); err != nil {
+				result.Refusals = append(result.Refusals, err.Error())
+			}
+		}
 		var size int64
 		files := append([]catalog.File(nil), locked.Records.Artifacts[layout.Artifact].Files...)
 		if layout.Speculation.DraftArtifact != "" {
@@ -153,7 +160,7 @@ func Assess(locked catalog.Lock, facts machine.Facts) (PresetPlan, error) {
 		if err != nil {
 			return PresetPlan{}, err
 		}
-		if result.Budget.Status == budget.StatusFits || result.Budget.Status == budget.StatusExceeded {
+		if result.Budget.RequiredMiB > 0 {
 			result.Memory.EngineEnvelopeBytes = max(int64(0), (result.Budget.RequiredMiB-budget.OSFloorMiB)*MiB)
 		}
 		core := result.ModelBytes
@@ -177,7 +184,13 @@ func Assess(locked catalog.Lock, facts machine.Facts) (PresetPlan, error) {
 		result.Refusals = append(result.Refusals, fmt.Sprintf("%s memory and OS allowance need %s; this machine has %s", result.Memory.Basis, Size(minimum), Size(facts.PhysicalMemoryBytes)))
 	}
 	gpuMinimum := int64(0)
-	if p.Compute == catalog.ComputeGPU {
+	mixedPlacement := p.Config().Kind == "llama-server/v1" && p.Config().Controls.CPUMoELayers > 0
+	if mixedPlacement {
+		result.Budget.Status = budget.StatusUnavailable
+		result.Budget.Reason = "MoE CPU/GPU split is unknown; numeric allocation is the conservative whole-model allowance, not a GPU requirement"
+		result.Budget.HasSuggestion = false
+	}
+	if p.Compute == catalog.ComputeGPU && predictableGPUFootprint(p) {
 		gpuMinimum = result.MemoryBytes - result.Memory.PromptCacheReserveBytes
 		if err := add(&gpuMinimum, budget.OSFloorMiB*MiB); err != nil {
 			return PresetPlan{}, err
@@ -194,8 +207,17 @@ func Assess(locked catalog.Lock, facts machine.Facts) (PresetPlan, error) {
 	if gpuMinimum%MiB != 0 {
 		gpuMinimumMiB++
 	}
-	result.WiredMemory = wiredMemoryAdvice(max(gpuMinimumMiB, result.Budget.RequiredMiB), facts, result.Budget)
+	if predictableGPUFootprint(p) {
+		result.WiredMemory = wiredMemoryAdvice(max(gpuMinimumMiB, result.Budget.RequiredMiB), facts, result.Budget)
+	}
 	return result, nil
+}
+
+// Process footprint and mixed-placement totals cannot establish Metal usage.
+// Keep their full physical allowance, but leave the GPU split unknown.
+func predictableGPUFootprint(p catalog.Preset) bool {
+	c := p.Config()
+	return c.Kapitsa == nil && !(c.Kind == "llama-server/v1" && c.Controls.CPUMoELayers > 0)
 }
 
 // build deduplicates exact model and software material across selected presets.
@@ -288,42 +310,28 @@ func build(root string, facts machine.Facts, freeBytes int64, locks []catalog.Lo
 				}
 			}
 		}
-		supplies := []catalog.Supply{locked.Records.Runtime.Router.Supply}
-		for _, id := range keys(locked.Records.Engines) {
-			supplies = append(supplies, locked.Records.Engines[id].Supply)
-		}
 		sets, err := preset.Software(locked)
 		if err != nil {
 			return Plan{}, err
 		}
-		identities := make(map[string]string, len(sets))
 		for _, set := range sets {
-			identities[set.Package] = set.ID
-		}
-		for _, supply := range supplies {
-			identity := identities[supply.Package]
-			if seenSoftware[identity] {
+			if seenSoftware[set.ID] {
 				continue
 			}
-			seenSoftware[identity] = true
-			remaining := !material.software[identity]
-
-			if supply.Release == nil {
-				return Plan{}, fmt.Errorf("software %s has no resolved release", supply.Package)
-			}
-			artifact := supply.Release.Artifact
-			// One archive plus two unpacked copies covers provider staging and
-			// committed files during a fresh preparation.
-			disk := artifact.Size
-			if err := add(&disk, artifact.UnpackedSize); err != nil {
-				return Plan{}, err
-			}
-			if err := add(&disk, artifact.UnpackedSize); err != nil {
-				return Plan{}, err
-			}
-			name := mode.Preset
-			if err := plan.download("software", name+"/"+supply.Package+" "+supply.Release.Version, artifact.Size, disk, remaining); err != nil {
-				return Plan{}, err
+			seenSoftware[set.ID] = true
+			remaining := !material.software[set.ID]
+			for _, id := range keys(set.Lock.Units) {
+				unit := set.Lock.Units[id]
+				for _, artifact := range unit.Artifacts {
+					disk, err := softwareDiskAllowance(artifact, unit.Adapter, unit.NativeName)
+					if err != nil {
+						return Plan{}, err
+					}
+					name := mode.Preset + "/" + set.Package + "/" + unit.NativeName + " " + unit.Version
+					if err := plan.download("software", name, artifact.Size, disk, remaining); err != nil {
+						return Plan{}, err
+					}
+				}
 			}
 		}
 	}
@@ -345,6 +353,35 @@ func build(root string, facts machine.Facts, freeBytes int64, locks []catalog.Lo
 	}
 	plan.CanPrepare = len(plan.Refusals) == 0
 	return plan, nil
+}
+
+// Native archives carry exact expanded sizes. Python locks carry transfer sizes:
+// reserve the runtime extraction limit and estimate package expansion at 4x
+// compressed size (at least the declared source size), with two expanded copies
+// for installation/build staging. This is an allowance, not an installed-size
+// measurement or a bound on arbitrary package build output.
+func softwareDiskAllowance(a software.Artifact, provider, name string) (int64, error) {
+	expanded := a.UnpackedSize
+	if provider == "python" {
+		if name == "cpython" {
+			expanded = python.RuntimeUnpackedLimit
+		} else {
+			var estimate int64
+			for range 4 {
+				if err := add(&estimate, a.Size); err != nil {
+					return 0, err
+				}
+			}
+			expanded = max(expanded, estimate)
+		}
+	}
+	disk := a.Size
+	for range 2 {
+		if err := add(&disk, expanded); err != nil {
+			return 0, err
+		}
+	}
+	return disk, nil
 }
 
 func (p *Plan) download(kind, name string, transfer, disk int64, remaining bool) error {

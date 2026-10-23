@@ -3,6 +3,7 @@ package probecmd
 import (
 	"errors"
 	"fmt"
+	"net/netip"
 	"os"
 	"strconv"
 	"strings"
@@ -15,7 +16,24 @@ import (
 type ManagedCommand struct {
 	ID, Path  string
 	Arguments []string
+	// The exact owned launcher is a retryable exec transition, never a process
+	// that observation or recovery may adopt as the final engine.
+	LauncherPath      string
+	LauncherArguments []string
 }
+
+var errManagedExec = errors.New("owned managed launcher is still in transition; retry after exec")
+
+func managedLaunching(row processRow, command ManagedCommand) bool {
+	if command.LauncherPath == "" || row.executable != command.LauncherPath {
+		return false
+	}
+	// Executable and argv are separate kernel reads. Exec can occur between
+	// them; only the frozen destination's complete argv is an allowed crossover.
+	return (strings.HasPrefix(row.arguments, command.LauncherPath+"\x00") && managedArguments(row.arguments, command.LauncherArguments)) ||
+		(strings.HasPrefix(row.arguments, command.Path+"\x00") && managedArguments(row.arguments, command.Arguments))
+}
+
 type ManagedObservation struct {
 	Processes  []ProcessIdentity
 	Identities []ManagedIdentity
@@ -67,11 +85,22 @@ type managedInspector struct {
 func (r managedInspector) observe(pid int, router string, args []string, listen string, commands []ManagedCommand) (ManagedObservation, error) {
 	var observed ManagedObservation
 	var err error
-	for attempt := 0; attempt < 3; attempt++ {
+	deadline := time.Now().Add(2 * time.Second)
+	disappearances := 0
+	for {
 		observed, err = r.snapshot(pid, router, args, listen, commands)
-		if !errors.Is(err, syscall.ESRCH) {
-			break
+		if errors.Is(err, errManagedExec) && time.Now().Before(deadline) {
+			time.Sleep(25 * time.Millisecond)
+			continue
 		}
+		if errors.Is(err, syscall.ESRCH) {
+			disappearances++
+			if disappearances < 3 && time.Now().Before(deadline) {
+				time.Sleep(25 * time.Millisecond)
+				continue
+			}
+		}
+		break
 	}
 	return observed, err
 }
@@ -107,11 +136,11 @@ func (r managedInspector) snapshot(pid int, router string, args []string, listen
 		}
 		row.executable, err = r.executable(row.pid)
 		if err != nil {
-			return ManagedObservation{}, err
+			return ManagedObservation{}, fmt.Errorf("read managed process %d executable: %w", row.pid, err)
 		}
 		row.arguments, err = r.arguments(row.pid)
 		if err != nil {
-			return ManagedObservation{}, err
+			return ManagedObservation{}, fmt.Errorf("read managed process %d arguments: %w", row.pid, err)
 		}
 		rows[i] = row
 		owned = append(owned, row)
@@ -127,6 +156,12 @@ func (r managedInspector) snapshot(pid int, router string, args []string, listen
 			role = "router"
 		} else {
 			for _, c := range commands {
+				if c.ID == "router" {
+					continue // Only the selected launchd leader may be the router.
+				}
+				if managedLaunching(row, c) {
+					return ManagedObservation{}, errManagedExec
+				}
 				if row.executable == c.Path && managedArguments(row.arguments, c.Arguments) {
 					role = c.ID
 					break
@@ -155,7 +190,11 @@ func (r managedInspector) snapshot(pid int, router string, args []string, listen
 // its accepted TCP connections. A connection is conservatively treated as work,
 // including idle keepalive. Children remain running. The caller must always
 // release the hold; no engine or unrelated group is signaled here.
-func QuiesceManaged(captured ManagedIdentity) (func() error, error) {
+func QuiesceManaged(captured ManagedIdentity, listen string) (func() error, error) {
+	listener, err := netip.ParseAddrPort(listen)
+	if err != nil || !listener.Addr().IsLoopback() || listener.Port() == 0 {
+		return nil, errors.New("invalid managed listener for idle check")
+	}
 	pid := captured.PID
 	remaining, err := ReapManaged([]ManagedIdentity{captured}, false)
 	if err != nil {
@@ -195,18 +234,67 @@ func QuiesceManaged(captured ManagedIdentity) (func() error, error) {
 		return nil, errors.New("router hold was not observed; transition refused")
 	}
 	raw, err := systemRead("/usr/sbin/lsof", "-nP", "-a", "-p", strconv.Itoa(pid), "-iTCP", "-sTCP:ESTABLISHED", "-Fpn")
-	if len(strings.TrimSpace(string(raw))) > 0 {
-		_ = release()
-		return nil, errors.New("router has accepted connections; close idle clients and retry after active work finishes")
-	}
 	if err != nil {
 		var exit interface{ ExitCode() int }
-		if !errors.As(err, &exit) || exit.ExitCode() != 1 {
+		if !errors.As(err, &exit) || exit.ExitCode() != 1 || len(raw) != 0 {
 			_ = release()
 			return nil, fmt.Errorf("cannot prove router idle: %w", err)
 		}
 	}
+	accepted, err := managedAcceptedConnections(raw, pid, listener)
+	if err != nil {
+		_ = release()
+		return nil, fmt.Errorf("cannot prove router idle: %w", err)
+	}
+	if accepted {
+		_ = release()
+		return nil, errors.New("router has accepted connections; close idle clients and retry after active work finishes")
+	}
 	return release, nil
+}
+
+// lsof reports local->remote endpoints for both accepted clients and outgoing
+// engine connections. Only a local endpoint on the router listener is accepted
+// client work. Idle outgoing keepalives must not prevent an idle shutdown.
+func managedAcceptedConnections(raw []byte, pid int, listener netip.AddrPort) (bool, error) {
+	if len(raw) == 0 {
+		return false, nil
+	}
+	process, pending, sockets, accepted := false, false, 0, false
+	invalid := errors.New("unexpected established-socket observation")
+	for _, line := range strings.Split(strings.TrimSuffix(string(raw), "\n"), "\n") {
+		if len(line) < 2 {
+			return false, invalid
+		}
+		switch line[0] {
+		case 'p':
+			if process || line[1:] != strconv.Itoa(pid) {
+				return false, invalid
+			}
+			process = true
+		case 'f':
+			if _, err := strconv.ParseUint(line[1:], 10, 32); err != nil || !process || pending {
+				return false, invalid
+			}
+			pending = true
+		case 'n':
+			local, remote, ok := strings.Cut(line[1:], "->")
+			from, err := netip.ParseAddrPort(local)
+			_, peerErr := netip.ParseAddrPort(remote)
+			if !pending || !ok || err != nil || peerErr != nil || from.Port() == 0 || from.Addr().Unmap() != listener.Addr().Unmap() {
+				return false, invalid
+			}
+			accepted = accepted || from.Port() == listener.Port()
+			sockets++
+			pending = false
+		default:
+			return false, invalid
+		}
+	}
+	if !process || pending || sockets == 0 {
+		return false, invalid
+	}
+	return accepted, nil
 }
 
 func ManagedListenerClosed(listen string) bool { return listenerClosed(listen) }
@@ -248,11 +336,18 @@ func CaptureManagedLaunch(id, path string, args []string) (ManagedIdentity, erro
 // after the router exits. PID reuse proves the old lifetime ended. Unknown
 // group members refuse recovery; they never acquire signaling authority.
 func ObserveManagedLoads(roots []ManagedIdentity, commands []ManagedCommand) ([]ManagedIdentity, error) {
-	rows, err := readRows()
-	if err != nil {
-		return nil, err
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		rows, err := readRows()
+		if err != nil {
+			return nil, err
+		}
+		observed, err := observeManagedLoads(rows, roots, commands, processExecutable, processArguments)
+		if !errors.Is(err, errManagedExec) || !time.Now().Before(deadline) {
+			return observed, err
+		}
+		time.Sleep(25 * time.Millisecond)
 	}
-	return observeManagedLoads(rows, roots, commands, processExecutable, processArguments)
 }
 
 func observeManagedLoads(rows []processRow, roots []ManagedIdentity, commands []ManagedCommand, executable, arguments func(int) (string, error)) ([]ManagedIdentity, error) {
@@ -287,6 +382,10 @@ func observeManagedLoads(rows []processRow, roots []ManagedIdentity, commands []
 			}
 			role := ""
 			for _, c := range commands {
+				if r.pid == root.PID && r.pgid == root.PGID && c.ID == root.ID && c.Path == root.Path && managedArguments(root.Arguments, c.Arguments) &&
+					managedLaunching(processRow{executable: path, arguments: args}, c) {
+					return nil, errManagedExec
+				}
 				if (c.ID == root.ID || strings.HasPrefix(c.ID, root.ID+"/")) && path == c.Path && managedArguments(args, c.Arguments) {
 					role = c.ID
 					break

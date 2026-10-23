@@ -50,7 +50,7 @@ address and model IDs. To start it again later, for example after restarting
 your Mac:
 
 ```sh
-temper layout activate default
+temper start
 ```
 
 In a selected Pi integration, open `/model` to refresh the picker; restart PiG
@@ -113,7 +113,8 @@ review. CPU models still use RAM.
 temper update          # Get the newest presets and software for your choices
 temper configure       # Choose presets and harness integrations
 temper layout status   # Inspect the running layout
-temper layout stop     # Stop serving and unload its models
+temper stop            # Stop serving and unload its models
+temper start           # Start the selected layout again
 ```
 
 Saved choices stay unchanged until you run `temper update` or edit them.

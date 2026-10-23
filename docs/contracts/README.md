@@ -10,7 +10,7 @@ These pages explain individual commands and their exact behavior.
 | Choose models and prepare a layout | [`temper init` and `temper configure`](init.md) |
 | Compose layouts from saved presets | [`temper layout`](layouts.md#standalone-layout-editor) |
 | Navigate the wizard and both editors | [Terminal controls](terminal-ui.md) |
-| Start, inspect or stop a saved layout | [`temper layout activate`, `status`, `stop`](layouts.md) |
+| Start, inspect or stop a saved layout | [`temper start`, `temper stop` and explicit layout activation](layouts.md) |
 | Connect Pi, PiG or Hermes to the active layout | [Harness integrations](harnesses.md) |
 | Understand estimated and unknown memory use | [Memory estimates](memory-estimates.md) |
 | Get the newest presets and software for your choices | [`temper update`](init.md#change-your-setup) |
@@ -25,6 +25,7 @@ These pages explain individual commands and their exact behavior.
 | Create and edit your own presets | [`temper preset`](user-presets.md) |
 | Define and compile a preset | [Catalog records and execution locks](execution-lock.md) |
 | Prepare, serve and remove an execution lock | [Execution commands](execution-runtime.md) |
+| Run an explicit MLX/DFlash2 preset with Kapitsa | [Kapitsa runtime](kapitsa.md) |
 
 ## Releases and catalog maintenance
 

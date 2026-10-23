@@ -14,6 +14,19 @@ import (
 // use it so a later catalog publication never changes a test's input.
 func CatalogPath() string { return filepath.Join(here(), "testdata", "catalog.json") }
 
+func KapitsaCatalog(t testing.TB) catalog.Document {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join(here(), "testdata", "kapitsa-catalog.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, err := catalog.Parse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return d
+}
+
 func here() string {
 	_, file, _, _ := runtime.Caller(0)
 	return filepath.Dir(file)

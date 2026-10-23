@@ -281,20 +281,36 @@ func newExecutionWorld(t *testing.T, parent string) *executionWorld {
 	if err != nil {
 		t.Fatal(err)
 	}
+	return executionWorldFor(t, parent, document, utilityPreset, "bin/llama-server")
+}
+
+func executionWorldFor(t *testing.T, parent string, document catalog.Document, id, executable string) *executionWorld {
+	t.Helper()
 	transport := releaseTransport{}
 	router := document.Runtime.Router
 	router.Release = transport.release(t, *router.Source, *router.Release, "llama-swap", "llama-swap")
 	document.Runtime.Router = router
-	selected := document.Presets[utilityPreset]
+	selected := document.Presets[id]
+	for i := range selected.Profiles {
+		selected.Profiles[i].Memory = nil
+	}
+	document.Presets[id] = selected
 	engine := document.Engines[selected.Engine]
-	engine.Supply.Release = transport.release(t, *engine.Supply.Source, *engine.Supply.Release, "llama-cpp", "bin/llama-server")
+	engine.Supply.Release = transport.release(t, *engine.Supply.Source, *engine.Supply.Release, engine.Supply.Package, executable)
 	document.Engines[selected.Engine] = engine
 	weights := []byte("utility weights")
 	sum := sha256.Sum256(weights)
-	artifact := document.Artifacts[selected.Artifact]
-	artifact.Files = []catalog.File{{Path: artifact.Files[0].Path, Bytes: int64(len(weights)), SHA256: hex.EncodeToString(sum[:])}}
-	document.Artifacts[selected.Artifact] = artifact
-	locked, err := catalog.CompilePreset(document, utilityPreset, 0, 0, software.Target{OS: "darwin", Arch: "arm64"})
+	for key, artifact := range document.Artifacts {
+		if key != selected.Artifact && key != selected.Speculation.DraftArtifact {
+			continue
+		}
+		for i := range artifact.Files {
+			artifact.Files[i].Bytes = int64(len(weights))
+			artifact.Files[i].SHA256 = hex.EncodeToString(sum[:])
+		}
+		document.Artifacts[key] = artifact
+	}
+	locked, err := catalog.CompilePreset(document, id, 0, 0, software.Target{OS: "darwin", Arch: "arm64"})
 	if err != nil {
 		t.Fatal(err)
 	}

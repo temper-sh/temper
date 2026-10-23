@@ -37,10 +37,16 @@ func estimateMemory(lock catalog.Lock, weights int64) (MemoryEstimate, error) {
 		return m, nil
 	}
 	switch c.Kind {
+	case "kapitsa/v1":
+		m.CacheFormat, m.ParallelSlots, m.EngineLimitBytes = "f16", c.Kapitsa.Slots, c.Kapitsa.MaxMemoryBytes
+		m.Unknown = append(m.Unknown, "Kapitsa context/recurrent cache, workspace and allocations in the separate ANE service")
 	case "splash/v1", "splash/v2":
 		m.CacheFormat, m.EngineLimitBytes = c.Splash.KVCache, c.Splash.MaxMemoryBytes
 		m.Unknown = append(m.Unknown, "Splash context/recurrent cache and native memory planning")
 	case "llama-server/v1":
+		if c.Controls.CPUMoELayers > 0 {
+			m.Unknown = append(m.Unknown, "MoE CPU/GPU weight split: per-layer expert sizes are unavailable; CPU placement does not reduce total physical RAM accounting")
+		}
 		m.CacheFormat, m.ParallelSlots = c.KVCache, c.Parallel
 		var err error
 		m.PromptCacheReserveBytes, err = modelmemory.Product(int64(c.PromptCacheRAMMiB), MiB)

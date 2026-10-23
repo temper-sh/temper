@@ -1,6 +1,6 @@
 # temper — product spec
 
-**Current contract, updated 2026-10-22:** all Temper schemas and engine
+**Current contract, updated 2026-10-23:** all Temper schemas and engine
 adapter contracts start at v1. A preset owns weights, engine and settings;
 a layout is the user's named composition with independent membership, startup
 loading and optional default. General and Specialist contain curated
@@ -9,6 +9,10 @@ Specialists are grouped by catalog-authored task headings and guidance.
 Every choice shows its selected model license, linked to guidance or publisher
 terms in selection. Text previews include the URL. Saved presets
 retain the license recorded with their exact model artifact.
+`temper start` resumes the root's remembered layout and listener; `temper stop`
+retains that choice. Activation state v2 migrates a known v1 desired/current
+selection without guessing a stopped root's choice. The
+[layout contract](contracts/layouts.md) owns migration and failure behavior.
 Each preset declares its default CPU/GPU device and practical choices. Compute
 is editable beside context only when both devices are offered.
 Cards show selectable compute before Context on one settings line, omit fixed
@@ -16,8 +20,12 @@ GPU labels, and retain CPU only. Rerankers omit the repeated interface label.
 The preset card names custom chat templates; template changes belong in the preset editor.
 The chosen device is retained in the exact lock and shared across layouts.
 CPU weights count against RAM; GPU weights also count against
-the wired-memory allowance. Device changes do not inherit context evidence.
-The five general recommendations appear in General. Specialist choices cover
+the wired-memory allowance when that split can be estimated. MoE CPU-layer
+placement preserves total physical accounting and marks the CPU/GPU split as
+unknown. [Kapitsa](contracts/kapitsa.md) adds native MLX/DFlash2 text chat with
+owned calibration and a measured Qwen profile; its process footprint is not a
+Metal allocation measurement. Device changes do not inherit context evidence.
+General recommendations appear in General. Specialist choices cover
 NuExtract3 extraction, Ettin/Qwen reranking and TranslateGemma/Tiny Aya
 translation, with language and evidence guidance in authored descriptions.
 [Setup](contracts/init.md),

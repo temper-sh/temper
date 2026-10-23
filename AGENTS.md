@@ -1,8 +1,11 @@
 # Working in Temper
 
 Read `README.md` and `docs/SPEC.md` before designing or building anything here.
-Also read `docs/PLAN.md` when present in the maintainer's workspace; planning
-documents stay local and are not tracked. This repository carries the product quality bar:
+Also read the local workspace's [Temper backlog](../TEMPER-BACKLOG.md) and
+[current release plan](../TEMPER-PLAN.md) when present. Pending scope and
+decisions live in the backlog; the release plan selects items and orders work.
+Planning stays under `v3/`, outside this repository. Archived plans are history,
+not parallel queues or current authorization. This repository carries the product quality bar:
 lab-grade, disposable, machine-specific code does not land here, however well
 it worked once.
 
@@ -20,7 +23,10 @@ local plan remain authoritative.
   frozen portable tests by composing Temper's public primitives.
 - Work arrives only two ways: an **accepted product handoff** from Labs
   (`../../labs/product-handoffs/`), or **product engineering planned in
-  `docs/PLAN.md`**. Never consume moving Labs state, raw experiment output,
+  the [workspace backlog](../TEMPER-BACKLOG.md) and selected in the
+  [release plan](../TEMPER-PLAN.md)**. Record new scope in the backlog first;
+  draw each version's work from it rather than copying open lists.
+  Never consume moving Labs state, raw experiment output,
   or an unreviewed prototype.
 - Do not edit adjacent repositories unless the user explicitly asks for the
   cross-repository step.
@@ -42,8 +48,8 @@ review of product code: `code-organization` (layout; its Go reference
 governs the CLI — the whole CLI is Go, decided 2026-08-14), `unit-design`, `data-modeling` (every schema:
 manifest, lock, catalog, state), `reliable-effects` (every verb that
 mutates), `testing`. Load the matching skill before designing or reviewing;
-The design-discipline section of `docs/PLAN.md` maps the set's spine onto
-Temper concretely.
+The rules below map the set's spine onto Temper. The backlog owns pending
+work; engineering constraints remain here and in the product contracts.
 
 Plan-local numbers, milestone labels, decision numbers, and paragraph or
 section numbers are never durable names. Outside the plan that defines one,
@@ -91,3 +97,19 @@ The short form of that mapping:
 - Output quality outranks throughput: no model or engine claim on tok/s
   alone; first-attempt task success is the primary metric.
 - Do not commit or push unless asked. Preserve dirty worktrees.
+
+## Verification and delivery notes
+
+- For product changes, run formatting/whitespace checks, the relevant
+  contract and failure-boundary tests, full Go tests, `go vet` and race tests.
+  Check dry-run purity, interruption/refusal and clean reruns at the affected
+  effect boundary. Reuse still-applicable evidence for unchanged code;
+  documentation-only maintenance needs link and consistency checks.
+- Status and inspection read state without repairing it. Process effects
+  require verified owned identities and an explicit shutdown result; a
+  status file alone never grants signaling authority. Preserve recoverable
+  installation intent and distinguish business refusals from failures.
+- Through 1.0, retain concise, evidence-linked
+  [Craft field notes](docs/craft-skill-field-notes.md) at substantive delivery
+  closeouts: useful guidance, defects and narrow proposed improvements, or
+  no change. This does not add synthetic work or automatic skill editing.

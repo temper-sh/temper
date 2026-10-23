@@ -12,9 +12,15 @@ import (
 // supplies catalog-declared sizes; installed checks supply admitted file sizes.
 func PredictBudget(document manifest.Document, mode manifest.Mode, machine budget.Machine, modelBytes map[string]int64) (budget.Prediction, error) {
 	residents := make([]budget.Resident, 0, len(mode.Members.Resident))
+	mixedPlacement := false
+	kapitsa := false
 	for _, member := range mode.Members.Resident {
 		layout := document.Layouts[member.Layout]
 		gpu := layout.CrispEmbed == nil && (member.NGL == nil || *member.NGL > 0)
+		if gpu && layout.Llama != nil && layout.Llama.Controls != nil && layout.Llama.Controls.CPUMoELayers > 0 {
+			mixedPlacement = true
+		}
+		kapitsa = kapitsa || gpu && layout.Kapitsa != nil
 		bytes, admitted := modelBytes[member.Layout]
 		if gpu && !admitted {
 			return budget.Prediction{
@@ -33,11 +39,24 @@ func PredictBudget(document manifest.Document, mode manifest.Mode, machine budge
 			ModelMiB: modelMiB,
 		})
 	}
-	return budget.Predict(budget.Input{
+	prediction, err := budget.Predict(budget.Input{
 		Utilization: document.Defaults.GPUMemoryUtilization,
 		Machine:     machine,
 		Residents:   residents,
 	})
+	if err == nil && mixedPlacement {
+		// Retain the unchanged whole-model allowance for physical RAM accounting,
+		// but do not claim a GPU fit, refusal or sysctl suggestion from that proxy.
+		prediction.Status = budget.StatusUnavailable
+		prediction.Reason = "MoE CPU/GPU split is unknown; numeric allocation is the conservative whole-model allowance, not a GPU requirement"
+		prediction.HasSuggestion = false
+	}
+	if err == nil && kapitsa {
+		prediction.Status = budget.StatusUnavailable
+		prediction.Reason = "Kapitsa Metal allocation is unknown; numeric allocation is a whole-model planning allowance, not a wired-memory requirement"
+		prediction.HasSuggestion = false
+	}
+	return prediction, err
 }
 
 func bytesToMiB(bytes int64) (int64, error) {

@@ -47,7 +47,7 @@ func (c Command) Layout(ctx context.Context, args []string, out, diagnostics io.
 		}
 		id = args[0]
 		args = args[1:]
-	} else if operation != "status" && operation != "stop" {
+	} else if operation != "status" && operation != "stop" && operation != "start" {
 		fmt.Fprintf(diagnostics, "temper layout: unknown operation %q\n", operation)
 		layoutUsage(diagnostics)
 		return 2
@@ -96,7 +96,7 @@ func (c Command) Layout(ctx context.Context, args []string, out, diagnostics io.
 	var before *managed.Job
 	var status *LayoutStatus
 	switch operation {
-	case "activate":
+	case "activate", "start":
 		before, status, err = c.activate(ctx, root, id, *listen, *dry)
 	case "status":
 		before, status, err = c.layoutStatus(ctx, root)
@@ -179,6 +179,17 @@ func (c Command) activate(ctx context.Context, root, id, listen string, dry bool
 		return nil, nil, err
 	}
 	before := knownJob(state)
+	remembered := state.Selection()
+	starting := id == ""
+	if starting {
+		if remembered == nil {
+			return before, nil, errors.New("no layout selected; choose one with temper layout activate ID")
+		}
+		id = remembered.Layout
+		if listen == "" {
+			listen = remembered.Listen
+		}
+	}
 	if listen == "" {
 		listen = "127.0.0.1:8080"
 		if state.Current != nil {
@@ -190,6 +201,9 @@ func (c Command) activate(ctx context.Context, root, id, listen string, dry bool
 		return before, nil, err
 	}
 	if _, ok := configuration.Layouts[id]; !ok {
+		if starting {
+			return before, nil, fmt.Errorf("selected layout %q no longer exists; choose another with temper layout activate ID", id)
+		}
 		return before, nil, fmt.Errorf("unknown saved layout %q", id)
 	}
 	var included []harness.Preset
@@ -266,6 +280,9 @@ func (c Command) activate(ctx context.Context, root, id, listen string, dry bool
 		defer unlock()
 		if state, err = store.Read(); err != nil {
 			return before, nil, err
+		}
+		if starting && (state.Selection() == nil || *state.Selection() != *remembered) {
+			return before, nil, errors.New("selected layout changed during start preflight; retry temper start")
 		}
 		if state.Current != nil {
 			controller = c.controller(root, desired, state)
@@ -368,6 +385,8 @@ func helpFlag(arg string) bool { return arg == "help" || arg == "--help" || arg 
 
 func layoutHelp(operation string) clihelp.Help {
 	switch operation {
+	case "start":
+		return clihelp.Help{Summary: "Start the remembered layout with its latest saved settings.", Usage: []string{"temper start [--root PATH] [--dry-run] [--json]"}}
 	case "activate":
 		return clihelp.Help{Summary: "Start a saved layout, or restart it with your latest changes. It keeps running\nafter the command exits, until you stop it or restart your Mac.",
 			Usage: []string{"temper layout activate ID [--listen 127.0.0.1:PORT] [--dry-run] [--json]"}, Examples: []string{"temper layout activate default"}}

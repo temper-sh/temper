@@ -19,6 +19,7 @@ import (
 
 	"github.com/temper-sh/temper/internal/artifactset"
 	"github.com/temper-sh/temper/internal/catalog"
+	"github.com/temper-sh/temper/internal/kapitsa"
 	"github.com/temper-sh/temper/internal/managed"
 	"github.com/temper-sh/temper/internal/preset"
 	"github.com/temper-sh/temper/internal/setup"
@@ -32,7 +33,7 @@ const (
 	KindSoftware  = "software"  // an engine or router installation
 	KindModels    = "models"    // model links of a preset
 	KindSplash    = "splash"    // Splash files prepared for a preset
-	KindRuntime   = "runtime"   // the Splash weight cache made at first start
+	KindRuntime   = "runtime"   // engine-owned caches and calibration
 	KindGenerated = "generated" // old rendered settings and launch records
 )
 
@@ -105,6 +106,7 @@ func Build(root string, configuration setup.Configuration, state managed.State, 
 			continue
 		}
 		mentioned = append(mentioned, job.Router, job.Launcher, job.Config)
+		mentioned = append(mentioned, job.StatePaths...)
 		for _, p := range job.Processes {
 			mentioned = append(mentioned, p.Path, p.Record)
 			mentioned = append(mentioned, p.Arguments...)
@@ -168,6 +170,15 @@ func Build(root string, configuration setup.Configuration, state managed.State, 
 			plan.Remove = append(plan.Remove, Item{Kind: KindRuntime, Label: "Splash weight cache", Path: path, Bytes: size(path)})
 		}
 	}
+	kapitsaStates, err := children(filepath.Join(root, "runtime", "kapitsa"))
+	if err != nil {
+		return Plan{}, err
+	}
+	for _, v := range kapitsaStates {
+		if path := filepath.Join(root, "runtime", "kapitsa", v); !inUse(path) {
+			plan.Remove = append(plan.Remove, Item{Kind: KindRuntime, Label: "Kapitsa calibration", Path: path, Bytes: size(path)})
+		}
+	}
 	keep := map[string]bool{}
 	for _, job := range []*managed.Job{state.Current, state.Desired} {
 		if job != nil {
@@ -229,6 +240,9 @@ func markMaterial(root string, lock catalog.Lock, used, repos map[string]bool) e
 			return err
 		}
 		used[set.Path()] = true
+		if layout.Kapitsa != nil {
+			used[kapitsa.StatePath(root, id, entry.Digest(), layout.Kapitsa.SoftwareSHA256)] = true
+		}
 		if layout.Splash != nil {
 			assembly, state := splash.Paths(root, id, entry.Digest(), layout.Splash.SoftwareSHA256)
 			used[assembly], used[state] = true, true
