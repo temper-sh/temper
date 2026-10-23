@@ -47,6 +47,16 @@ func input(m *presetcmd.Editor, text string) {
 	key(m, tea.KeyEnter)
 }
 
+func saveEditor(m *presetcmd.Editor) tea.Cmd {
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl})
+	return cmd
+}
+
+func typeText(m *presetcmd.Editor, text string) {
+	m.Update(tea.KeyPressMsg{Code: 'u', Mod: tea.ModCtrl})
+	m.Update(tea.PasteMsg{Content: text})
+}
+
 // singleSource keeps the manager's chosen starting point explicit in stories.
 func singleSource(c presetcmd.Command) presetcmd.Command {
 	read := c.Catalog
@@ -65,22 +75,21 @@ func TestEditorCreatesRevocableForkThenSavesOnlyTheAuthoredFile(t *testing.T) {
 	key(m, 'n')
 	key(m, 'f')
 	input(m, "My Qwen")
-	key(m, tea.KeyRight)
-	key(m, tea.KeyEnter)
-	input(m, "0.6")
+	editorClick(t, m, "Sampling")
+	typeText(m, "0.6")
 	if _, err := os.Stat(root); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("draft created root: %v", err)
 	}
 	key(m, tea.KeyEsc)
 	key(m, tea.KeyEnter) // Keep editing is the default.
-	if frame := ansi.Strip(m.View().Content); !strings.Contains(frame, "unsaved") {
+	if frame := ansi.Strip(m.View().Content); !strings.Contains(strings.ToLower(frame), "unsaved") {
 		t.Fatalf("default discarded draft:\n%s", frame)
 	}
-	key(m, 'v')
+	editorClick(t, m, "Review")
 	if frame := ansi.Strip(m.View().Content); !strings.Contains(frame, "0.6") {
 		t.Fatalf("review lost override:\n%s", frame)
 	}
-	key(m, 's')
+	saveEditor(m)
 	u := read(t, root, "my-qwen")
 	sampling := u.Changes["request_defaults"].(map[string]any)["sampling"].(map[string]any)
 	if !u.Fork() || u.Origin != mtp || u.Name != "My Qwen" || sampling["temperature"] != 0.6 {
@@ -104,7 +113,7 @@ func TestDiscardAndDryRunDoNotCreateARoot(t *testing.T) {
 			key(m, 'c')
 			input(m, "Mine")
 			if dry {
-				key(m, 's')
+				saveEditor(m)
 			}
 			key(m, tea.KeyEsc)
 			key(m, tea.KeyDown)
@@ -145,9 +154,8 @@ func TestEditorPreservesSelectionsLocksAndTemplatesThroughSaveAndDelete(t *testi
 		t.Fatal(err)
 	}
 	m := editor(t, c, root, "mine", false)
-	key(m, tea.KeyEnter)
-	input(m, "Renamed")
-	key(m, 's')
+	typeText(m, "Renamed")
+	saveEditor(m)
 	key(m, 'd')
 	if frame := ansi.Strip(m.View().Content); !strings.Contains(frame, "default") {
 		t.Fatalf("delete hides layout references:\n%s", frame)
@@ -173,14 +181,13 @@ func TestEditorKeepsTypedErrorsAndRefusesInvalidDraftsWithoutLosingEdits(t *test
 	}
 	before, _ := userpreset.Read(root, "mine")
 	m := editor(t, c, root, "mine", false)
-	focusField(t, m, "Context window tokens")
-	key(m, tea.KeyEnter)
-	input(m, "not-a-number")
+	focusField(t, m, "Context")
+	typeText(m, "not-a-number")
 	if frame := ansi.Strip(m.View().Content); !strings.Contains(frame, "whole number") {
 		t.Fatalf("type error missing:\n%s", frame)
 	}
-	input(m, "-1")
-	key(m, 's')
+	typeText(m, "-1")
+	saveEditor(m)
 	if frame := ansi.Strip(m.View().Content); !strings.Contains(frame, "Cannot save") {
 		t.Fatalf("invalid draft accepted:\n%s", frame)
 	}
@@ -188,9 +195,8 @@ func TestEditorKeepsTypedErrorsAndRefusesInvalidDraftsWithoutLosingEdits(t *test
 	if !bytes.Equal(before, after) {
 		t.Fatal("invalid draft replaced saved file")
 	}
-	key(m, tea.KeyEnter)
-	input(m, "16384")
-	key(m, 's')
+	typeText(m, "16384")
+	saveEditor(m)
 	if u := read(t, root, "mine"); u.Changes["context_window_tokens"] != 16384 {
 		t.Fatalf("could not repair draft: %+v", u)
 	}
@@ -204,14 +210,13 @@ func TestResetRemovesEqualOverrideAndUnchangedSaveKeepsOriginalBytes(t *testing.
 	before, _ := userpreset.Read(root, "mine")
 	info, _ := os.Stat(userpreset.Path(root, "mine"))
 	m := editor(t, c, root, "mine", false)
-	key(m, tea.KeyRight)
-	key(m, tea.KeyEnter)
-	input(m, "1")
+	editorClick(t, m, "Sampling")
+	typeText(m, "1")
 	if frame := ansi.Strip(m.View().Content); !strings.Contains(frame, "Override") {
 		t.Fatalf("equal override became inheritance:\n%s", frame)
 	}
-	key(m, 'r')
-	key(m, 's')
+	m.Update(tea.KeyPressMsg{Code: 'r', Mod: tea.ModAlt})
+	saveEditor(m)
 	after, _ := userpreset.Read(root, "mine")
 	current, _ := os.Stat(userpreset.Path(root, "mine"))
 	if !bytes.Equal(before, after) || !os.SameFile(info, current) || !info.ModTime().Equal(current.ModTime()) {
@@ -226,21 +231,20 @@ func TestConcurrentEditIsRefusedAndCanBeCopiedWithoutLosingDraft(t *testing.T) {
 	}
 	a := editor(t, c, root, "mine", false)
 	b := editor(t, c, root, "mine", false)
-	key(a, tea.KeyEnter)
-	input(a, "First")
-	key(a, 's')
-	key(b, tea.KeyEnter)
-	input(b, "Second")
-	key(b, 's')
+	typeText(a, "First")
+	saveEditor(a)
+	typeText(b, "Second")
+	saveEditor(b)
 	if frame := ansi.Strip(b.View().Content); !strings.Contains(frame, "changed while Temper") {
 		t.Fatalf("lost-update refusal missing:\n%s", frame)
 	}
 	if read(t, root, "mine").Name != "First" {
 		t.Fatal("overwrote concurrent writer")
 	}
+	editorClick(t, b, "Review")
 	key(b, 'c')
 	input(b, "Second")
-	key(b, 's')
+	saveEditor(b)
 	u := read(t, root, "second")
 	if u.Fork() || u.Preset.Presentation.DisplayName != "Second" {
 		t.Fatalf("copy lost draft: %+v", u)
@@ -277,12 +281,15 @@ func TestEditorRendersRealStatesAtSupportedWidths(t *testing.T) {
 			input(m, "Mine")
 			for range 5 {
 				assertEditorFrame(t, m, width, 24)
+				key(m, tea.KeyUp)
 				key(m, tea.KeyRight)
+				key(m, tea.KeyDown)
 			}
-			key(m, 'w')
+
+			focusField(t, m, "Weights")
 			assertEditorFrame(t, m, width, 24)
 			key(m, tea.KeyEsc)
-			key(m, 't')
+			focusField(t, m, "Template")
 			assertEditorFrame(t, m, width, 24)
 			key(m, tea.KeyEsc)
 			key(m, tea.KeyEsc)
@@ -298,13 +305,8 @@ func TestWeightsPickerStagesPinnedMetadataAndCanConvertAForkToACopy(t *testing.T
 	}
 	before, _ := userpreset.Read(root, "mine")
 	m := editor(t, c, root, "mine", false)
-	key(m, 'w')
-	key(m, tea.KeyEnter)
-	input(m, "other/Qwen3.8-27B-GGUF")
-	key(m, tea.KeyDown) // Revision.
-	key(m, tea.KeyDown) // Relationship appears only for another repository.
-	key(m, tea.KeyEnter)
-	key(m, tea.KeyEnter) // Different model: convert to copy.
+	focusField(t, m, "Weights")
+	typeText(m, "https://huggingface.co/other/Qwen3.8-27B-GGUF/")
 	lookup := primaryAction(m)
 	if lookup == nil {
 		t.Fatalf("lookup did not start:\n%s", ansi.Strip(m.View().Content))
@@ -318,7 +320,8 @@ func TestWeightsPickerStagesPinnedMetadataAndCanConvertAForkToACopy(t *testing.T
 		t.Fatalf("picker hid commit:\n%s", frame)
 	}
 	key(m, ' ')
-	metadata := key(m, tea.KeyEnter)
+	focusField(t, m, "Different model")
+	metadata := editorClick(t, m, "Use weights")
 	if metadata == nil {
 		t.Fatalf("metadata read did not start:\n%s", ansi.Strip(m.View().Content))
 	}
@@ -327,7 +330,7 @@ func TestWeightsPickerStagesPinnedMetadataAndCanConvertAForkToACopy(t *testing.T
 	if !bytes.Equal(before, after) {
 		t.Fatal("picker saved without Save")
 	}
-	key(m, 's')
+	saveEditor(m)
 	u := read(t, root, "mine")
 	if u.Fork() || u.Preset.Artifact != "qwen3.8-27b-q6-k" {
 		t.Fatalf("did not convert: %+v\n%s", u, ansi.Strip(m.View().Content))
@@ -345,7 +348,7 @@ func TestCancelledMetadataResultCannotReplaceTheDraft(t *testing.T) {
 	}
 	before, _ := userpreset.Read(root, "mine")
 	m := editor(t, c, root, "mine", false)
-	key(m, 'w')
+	focusField(t, m, "Weights")
 	lookup := primaryAction(m)
 	if lookup == nil {
 		t.Fatal("lookup did not start")
@@ -357,7 +360,7 @@ func TestCancelledMetadataResultCannotReplaceTheDraft(t *testing.T) {
 		t.Fatalf("stale read replaced form:\n%s", frame)
 	}
 	key(m, tea.KeyEsc)
-	key(m, 's')
+	saveEditor(m)
 	after, _ := userpreset.Read(root, "mine")
 	if !bytes.Equal(before, after) {
 		t.Fatal("cancelled read changed file")
@@ -370,15 +373,14 @@ func TestOfflinePickerKeepsExistingFieldsEditable(t *testing.T) {
 		t.Fatal(d)
 	}
 	m := editor(t, c, root, "mine", false)
-	key(m, 'w')
+	focusField(t, m, "Weights")
 	primaryAction(m)
 	if frame := ansi.Strip(m.View().Content); !strings.Contains(frame, "offline") {
 		t.Fatalf("offline state missing:\n%s", frame)
 	}
 	key(m, tea.KeyEsc)
-	key(m, tea.KeyEnter)
-	input(m, "Offline edit")
-	key(m, 's')
+	typeText(m, "Offline edit")
+	saveEditor(m)
 	if read(t, root, "mine").Name != "Offline edit" {
 		t.Fatal("offline lookup prevented ordinary edit")
 	}
@@ -393,11 +395,12 @@ func TestBuiltinAndLocalTemplateEditsRemainDraftsUntilSave(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := editor(t, c, root, "mine", false)
-	key(m, 't')
-	key(m, tea.KeyEnter) // Local.
-	key(m, tea.KeyDown)  // Only the file is required.
-	key(m, tea.KeyEnter)
-	input(m, "mine.jinja")
+	focusField(t, m, "Template")
+	editorClick(t, m, "Local file")
+	editorClick(t, m, "Browse…")
+	editorClick(t, m, "Location…")
+	input(m, userpreset.Dir(root))
+	completeRead(t, m, editorClick(t, m, "mine.jinja"))
 	load := primaryAction(m)
 	if load == nil {
 		t.Fatal("local template action missing")
@@ -406,19 +409,20 @@ func TestBuiltinAndLocalTemplateEditsRemainDraftsUntilSave(t *testing.T) {
 	if len(read(t, root, "mine").Templates) != 0 {
 		t.Fatal("template saved before Save")
 	}
-	key(m, 's')
+	saveEditor(m)
 	u := read(t, root, "mine")
 	if u.Templates["mine-template"].Files[0].SHA256 != "" {
 		t.Fatal("authoring file froze local template content")
 	}
 	key(m, tea.KeyEnter)
-	key(m, 't')
+	focusField(t, m, "Template")
+	editorClick(t, m, "From model")
 	load = primaryAction(m)
 	if load == nil {
 		t.Fatal("builtin action missing")
 	}
 	m.Update(load())
-	key(m, 's')
+	saveEditor(m)
 	if read(t, root, "mine").Changes["template"] != catalog.BuiltinTemplate {
 		t.Fatal("builtin was not selected")
 	}
@@ -448,10 +452,9 @@ func TestCatalogChangeRequiresAnotherReviewBeforeSaving(t *testing.T) {
 		return copy, err
 	}
 	m := editor(t, c, root, "mine", false)
-	key(m, tea.KeyEnter)
-	input(m, "Mine changed")
+	typeText(m, "Mine changed")
 	changed = true
-	key(m, 's')
+	saveEditor(m)
 	if frame := ansi.Strip(m.View().Content); !strings.Contains(frame, "catalog changed") {
 		t.Fatalf("catalog conflict missing:\n%s", frame)
 	}
@@ -460,7 +463,7 @@ func TestCatalogChangeRequiresAnotherReviewBeforeSaving(t *testing.T) {
 		t.Fatal("saved against unreviewed catalog")
 	}
 	m.Update(tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})
-	key(m, 's')
+	saveEditor(m)
 	if read(t, root, "mine").Name != "Mine changed" {
 		t.Fatal("catalog reload lost draft edits")
 	}
@@ -489,10 +492,9 @@ func TestCopyEditsOnlyTheSelectedProfileAndKeepsOtherAuthoredValues(t *testing.T
 		t.Fatal(err)
 	}
 	defer m.Close()
-	focusField(t, m, "Context window tokens")
-	key(m, tea.KeyEnter)
-	input(m, "16384")
-	key(m, 's')
+	focusField(t, m, "Context")
+	typeText(m, "16384")
+	saveEditor(m)
 	after := read(t, root, "mine")
 	if !reflect.DeepEqual(after.Preset.Profiles[0], u.Preset.Profiles[0]) || after.Preset.Profiles[1].ContextWindowTokens != 16384 || after.Preset.Presentation.Description != "Preserve my description" {
 		t.Fatalf("copy edit damaged other values: %+v", after.Preset)
@@ -522,10 +524,9 @@ func TestReviewUsesSharedPlannerAndMemoryRefusalDoesNotPreventAuthoring(t *testi
 		return setup.Plan{RemainingDownloadBytes: 2 << 30, RemainingDiskBytes: 3 << 30}, nil
 	}
 	m := editor(t, c, root, "mine", false)
-	focusField(t, m, "Context window tokens")
-	key(m, tea.KeyEnter)
-	input(m, "16384")
-	review := key(m, 'v')
+	focusField(t, m, "Context")
+	typeText(m, "16384")
+	review := editorClick(t, m, "Review")
 	if review == nil {
 		t.Fatal("review did not plan")
 	}
@@ -538,7 +539,7 @@ func TestReviewUsesSharedPlannerAndMemoryRefusalDoesNotPreventAuthoring(t *testi
 			t.Fatalf("review missing %q:\n%s", want, frame)
 		}
 	}
-	key(m, 's')
+	saveEditor(m)
 	if read(t, root, "mine").Changes["context_window_tokens"] != 16384 {
 		t.Fatal("machine fit became an authoring gate")
 	}

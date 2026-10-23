@@ -3,6 +3,19 @@ package presetcmd
 import tea "charm.land/bubbletea/v2"
 
 func (m *Editor) click(area editorArea, index int) tea.Cmd {
+	if area == choiceArea {
+		if m.mode == "files" && m.needsModelRelationship() && !m.loading && index >= 0 && index < 2 {
+			m.form[2].value = m.form[2].choices[index]
+			m.cursor, m.area, m.focus = len(m.visibleFiles()), contentArea, true
+			return nil
+		}
+		if !m.loading && m.visibleForm() && index >= 0 && index < len(m.pointerChoices) {
+			choice := m.pointerChoices[index]
+			m.chooseControl(choice.row, choice.option)
+			return nil
+		}
+		return nil
+	}
 	if area == actionsArea {
 		actions := m.actions()
 		if index < 0 || index >= len(actions) || actions[index].disabled {
@@ -19,7 +32,7 @@ func (m *Editor) click(area editorArea, index int) tea.Cmd {
 		if area == contentArea {
 			m.area, m.focus = contentArea, true
 			if m.input != "" {
-				return m.text.Focus()
+				return m.focusInput()
 			}
 			m.confirmCursor = index // Confirmation still requires its explicit action.
 		}
@@ -44,6 +57,23 @@ func (m *Editor) click(area editorArea, index int) tea.Cmd {
 		}
 	case contentArea:
 		m.cursor = index
+		if m.visibleForm() {
+			controls := m.controls()
+			if index < len(controls) {
+				c := controls[index]
+				if c.kind == "text" {
+					m.syncControl(c)
+					return nil
+				}
+				if c.kind == "browse" {
+					m.browseTemplate()
+					return nil
+				}
+				if c.kind != "resource" {
+					return nil
+				}
+			}
+		}
 		switch m.mode {
 		case "editor":
 			return m.editorKey("enter")
@@ -51,6 +81,8 @@ func (m *Editor) click(area editorArea, index int) tea.Cmd {
 			return m.formKey("enter")
 		case "files":
 			return m.filesKey("space")
+		case "local-files":
+			return m.localFileKey("enter")
 		}
 	}
 	return nil

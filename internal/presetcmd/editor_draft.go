@@ -22,6 +22,7 @@ type presetDraft struct {
 	id                string
 	file              catalog.UserPreset
 	original, initial []byte
+	templates         map[string][]byte
 }
 
 func draftFrom(id string, u catalog.UserPreset, original []byte) *presetDraft {
@@ -39,7 +40,7 @@ func (d *presetDraft) compile(root string, view catalog.View, memory int) (catal
 	if err != nil {
 		return catalog.Lock{}, nil, err
 	}
-	loaded, err := userpreset.Resolve(root, d.id, raw, view)
+	loaded, err := userpreset.ResolveWithTemplates(root, d.id, raw, view, d.templates)
 	if err != nil {
 		return catalog.Lock{}, nil, err
 	}
@@ -153,7 +154,7 @@ func (d *presetDraft) setValue(path string, v any, memory int) error {
 		if d.file.Changes == nil {
 			d.file.Changes = map[string]any{}
 		}
-		putNested(d.file.Changes, path, v)
+		writeNested(d.file.Changes, path, v, false)
 		return nil
 	}
 	return d.setCopy(path, v, memory)
@@ -232,9 +233,13 @@ func nestedValue(m map[string]any, path string) (any, bool) {
 
 // nil removes an authored leaf, and empty parents, rather than writing null.
 func putNested(m map[string]any, path string, v any) {
+	writeNested(m, path, v, v == nil)
+}
+
+func writeNested(m map[string]any, path string, v any, remove bool) {
 	parts := strings.SplitN(path, ".", 2)
 	if len(parts) == 1 {
-		if v == nil {
+		if remove {
 			delete(m, parts[0])
 		} else {
 			m[parts[0]] = v
@@ -245,7 +250,7 @@ func putNested(m map[string]any, path string, v any) {
 	if next == nil {
 		next = map[string]any{}
 	}
-	putNested(next, parts[1], v)
+	writeNested(next, parts[1], v, remove)
 	if len(next) == 0 {
 		delete(m, parts[0])
 	} else {
@@ -291,7 +296,13 @@ func (c Command) saveDraft(ctx context.Context, root string, d *presetDraft, rev
 			return false, err
 		}
 	}
-	changed, err := userpreset.Save(ctx, root, d.id, d.original, raw, dry)
+	templates := map[string][]byte{}
+	for _, name := range d.file.LocalTemplates() {
+		if content, ok := d.templates[name]; ok {
+			templates[name] = content
+		}
+	}
+	changed, err := userpreset.SaveWithTemplates(ctx, root, d.id, d.original, raw, templates, dry)
 	if !dry && (err == nil || changed) {
 		d.original, d.initial = raw, mustDraftBytes(d.file)
 	}

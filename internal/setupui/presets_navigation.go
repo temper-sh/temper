@@ -4,6 +4,7 @@ import (
 	"context"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/setup"
 )
 
@@ -84,6 +85,10 @@ func (m *PresetModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			return m, m.activateFocused()
 		case "space", " ":
+			if m.field == "" && m.page == 0 && m.control == "compute" && m.focus == presetContentFocus {
+				m.moveHorizontal(1)
+				return m, nil
+			}
 			if m.field == "" || m.focus != presetContentFocus {
 				return m, m.activateFocused()
 			}
@@ -149,7 +154,16 @@ func (m *PresetModel) activateTarget(target hitTarget) tea.Cmd {
 	case hitFilter:
 		m.focusArea(presetFilterFocus)
 		m.selectGroup(m.groups()[target.index].ID)
+	case hitWizardCompute:
+		m.cursor, m.control = target.index, "compute"
+		m.focusArea(presetContentFocus)
+		if p, ok := m.selectedOption(); ok {
+			if m.customize(p, 0, catalog.ComputeDevice(target.key)) {
+				m.notice = ""
+			}
+		}
 	case hitChoice:
+		m.control = ""
 		m.cursor = target.index
 		m.focusArea(presetContentFocus)
 		return m.activateFocused()
@@ -166,7 +180,7 @@ func (m *PresetModel) activateTarget(target hitTarget) tea.Cmd {
 }
 
 func (m *PresetModel) selectGroup(group string) {
-	m.group, m.cursor = group, 0
+	m.group, m.cursor, m.control = group, 0, ""
 	m.action = min(m.action, len(m.footerButtons())-1)
 	m.view.GotoTop()
 	m.focusSelection = m.focus == presetContentFocus
@@ -177,12 +191,12 @@ func (m *PresetModel) back() tea.Cmd {
 	m.notice = ""
 	if m.page > 0 {
 		m.page--
-		m.cursor = 0
+		m.cursor, m.control = 0, ""
 	} else {
 		m.Decision = PresetDecision{Action: "cancel"}
 		return tea.Quit
 	}
-	m.action = m.navigationButton(false)
+	m.action = m.navigationButton()
 	m.focusArea(presetContentFocus)
 	m.view.GotoTop()
 	m.focusSelection = true
@@ -190,6 +204,7 @@ func (m *PresetModel) back() tea.Cmd {
 }
 
 func (m *PresetModel) advance() tea.Cmd {
+	m.control = ""
 	m.notice = ""
 	if m.page == 0 {
 		if m.input.NewConfiguration {
@@ -205,10 +220,10 @@ func (m *PresetModel) advance() tea.Cmd {
 		m.focusArea(presetFooterFocus)
 		return m.startPreview()
 	}
-	m.action = m.navigationButton(false)
+	m.action = m.navigationButton()
 	m.focusArea(presetContentFocus)
 	if m.contentRows() == 0 {
-		m.action = m.navigationButton(false)
+		m.action = m.navigationButton()
 		m.focusArea(presetFooterFocus)
 	}
 	m.view.GotoTop()
@@ -289,7 +304,7 @@ func (m *PresetModel) selectStep(step int) tea.Cmd {
 		return m.advance()
 	}
 	m.cancelPreview()
-	m.page, m.cursor, m.notice = step, 0, ""
+	m.page, m.cursor, m.notice, m.control = step, 0, "", ""
 	m.focusArea(presetContentFocus)
 	m.view.GotoTop()
 	return nil

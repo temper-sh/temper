@@ -53,8 +53,9 @@ const (
 	hitShortcut
 	hitFilter
 	hitPresetAction
-	hitField
 	hitStep
+	hitField
+	hitWizardCompute
 )
 
 type hitTarget struct {

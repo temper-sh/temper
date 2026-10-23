@@ -21,10 +21,12 @@ func (m *PresetModel) View() tea.View {
 		return v
 	}
 	width := tui.ContentWidth(m.width)
-	compact := m.height < 18 || m.width < 50
 	header := tui.Header(tui.Wizard, "", width) + "\n"
 	if m.height >= 18 {
 		header += "\n"
+	}
+	if explanation := m.pageExplanation(width); explanation != "" {
+		header += explanation + "\n\n"
 	}
 	step := -1
 	if m.focus == presetStepsFocus {
@@ -47,12 +49,9 @@ func (m *PresetModel) View() tea.View {
 		}
 		header += filters + "\n"
 	}
-	if m.height >= 18 {
-		header += "\n"
-	}
 	footer, footerTargets := m.presetFooter(width)
 	frame := tui.Frame{Width: m.width, Height: m.height, Header: header, Footer: footer}
-	body := m.presetContent(width, compact)
+	body := m.presetContent(width)
 	m.view.SetWidth(width)
 	m.view.SetHeight(frame.BodyHeight())
 	m.view.SetContent(strings.Join(body.blocks, "\n"))
@@ -85,6 +84,22 @@ func (m *PresetModel) View() tea.View {
 	return v
 }
 
+func (m *PresetModel) pageExplanation(width int) string {
+	if m.width < 50 || m.height < 18 {
+		return ""
+	}
+	title, explanation := "Choose your presets", m.currentGroup().Description
+	switch {
+	case m.field != "":
+		title, explanation = "Set the context window", "Context is the total space for input and output, in tokens. A larger window requires more memory."
+	case m.page == presetHarnessPage:
+		title, explanation = "Connect your harnesses", "Choose which apps receive this root’s active models."
+	case m.page == presetReviewPage:
+		title, explanation = "Review your setup", "Check models, apps and downloads, then install or save for later."
+	}
+	return tui.PageExplanation(title, explanation, width)
+}
+
 func (m *PresetModel) filters(width int) (string, []hitTarget) {
 	var labels []string
 	current := 0
@@ -102,19 +117,11 @@ func (m *PresetModel) filters(width int) (string, []hitTarget) {
 	return row, targets
 }
 
-func (m *PresetModel) presetContent(width int, compact bool) screenBody {
+func (m *PresetModel) presetContent(width int) screenBody {
 	body := screenBody{focusStart: -1}
 	if m.field != "" {
 		m.editContent(&body, width)
 		return body
-	}
-	title, subtitle := "Choose your presets", m.currentGroup().Description
-	if m.page == presetHarnessPage {
-		title, subtitle = "Connect your harnesses", "Choose which apps receive this root’s active models."
-	}
-	if !compact && m.page != presetReviewPage {
-		body.add(lipgloss.NewStyle().Foreground(colorText).Bold(true).Width(width).Render(title)+"\n"+
-			lipgloss.NewStyle().Foreground(colorMuted).Width(width).Render(subtitle), false)
 	}
 	switch m.page {
 	case 0:
@@ -147,7 +154,7 @@ func (m *PresetModel) presetContent(width int, compact bool) screenBody {
 				mark, p.Name, lock = "[x]", selected.Name, selected.Lock
 			}
 			_, record := presetRecord(lock)
-			focused := m.focus == presetContentFocus && i == m.cursor
+			focused := m.focus == presetContentFocus && i == m.cursor && m.control == ""
 			background := colorBackground
 			if focused {
 				background = presetColors.Surface
@@ -210,6 +217,7 @@ func (m *PresetModel) presetContent(width int, compact bool) screenBody {
 				body.focusStart, body.focusEnd = top+1, top+1
 			}
 			body.targets = append(body.targets, hitTarget{kind: hitChoice, index: i, y: top, width: width, height: lipgloss.Height(card)})
+			m.wizardForm(&body, p, i, width)
 		}
 	case presetHarnessPage:
 		m.harnessCards(&body, width)
@@ -264,6 +272,9 @@ func tokenCount(n int) string {
 
 func (m *PresetModel) editContent(body *screenBody, width int) {
 	title, detail := "Context window", "Total tokens for input and output. A larger window requires more memory."
+	if m.pageExplanation(width) != "" {
+		detail = ""
+	}
 	if p, ok := m.selectedOption(); ok {
 		title += " · " + p.Name
 		if refs := m.draft.References(p.ID); len(refs) > 0 {
@@ -271,13 +282,16 @@ func (m *PresetModel) editContent(body *screenBody, width int) {
 			for _, id := range refs {
 				names = append(names, m.draft.Layouts[id].Name)
 			}
-			detail += "\nThis shared preset will change in: " + strings.Join(names, ", ") + "."
+			detail = strings.TrimSpace(detail + "\nThis shared preset will change in: " + strings.Join(names, ", ") + ".")
 		}
 	}
 	inner := width - 4
 	m.text.SetWidth(max(1, inner-3))
 	heading := lipgloss.NewStyle().Foreground(colorText).Bold(true).Width(inner).Render(title)
-	content := heading + "\n\n" + m.text.View() + "\n\n" + lipgloss.NewStyle().Foreground(colorMuted).Width(inner).Render(detail)
+	content := heading + "\n\n" + m.text.View()
+	if detail != "" {
+		content += "\n\n" + lipgloss.NewStyle().Foreground(colorMuted).Width(inner).Render(detail)
+	}
 	border := colorBorder
 	if m.focus == presetContentFocus {
 		border = tui.Wizard.Colors(tui.InputFocused).Border
@@ -349,9 +363,11 @@ func (m *PresetModel) presetFooter(width int) (string, []hitTarget) {
 	parts = append(parts, actions)
 	hints := []tui.Hint{{Key: "↑↓", Action: "choose"}, {Key: "Space", Action: "select"}, {Key: "Tab", Action: "controls"}, {Key: "q", Action: "cancel"}}
 	if m.field != "" {
-		hints = []tui.Hint{{Key: "Enter", Action: "apply"}, {Key: "Esc", Action: "cancel"}, {Key: "Tab", Action: "controls"}}
+		hints = tui.InputHints(m.focus == presetFooterFocus)
+	} else if m.page == 0 && m.control != "" && m.focus == presetContentFocus {
+		hints = []tui.Hint{{Key: "↑↓", Action: "controls"}, {Key: "←→", Action: "choose"}, {Key: "Tab", Action: "actions"}}
 	} else if m.focus != presetContentFocus {
-		hints = []tui.Hint{{Key: "←→", Action: "choose"}, {Key: "Enter", Action: "open"}, {Key: "Tab", Action: "controls"}, {Key: "Esc", Action: "back"}}
+		hints = tui.FocusHints(m.focus)
 	} else if m.page == presetReviewPage {
 		hints = []tui.Hint{{Key: "↑↓ / PgUp/Dn", Action: "scroll"}, {Key: "Tab", Action: "actions"}}
 	}

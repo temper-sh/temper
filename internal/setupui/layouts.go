@@ -43,34 +43,38 @@ type layoutJob struct {
 // LayoutModel owns a revocable composition draft. Its callbacks are the only
 // effect/read edges; it cannot author or rebuild a preset.
 type LayoutModel struct {
-	ctx                        context.Context
-	cancel, jobCancel          context.CancelFunc
-	save                       LayoutSave
-	preview                    LayoutPreview
-	saved, draft               setup.Configuration
-	presetErrors               map[string]string
-	dry                        bool
-	mode, id, field, confirm   string
-	returnMode, notice         string
-	noticeTone                 tui.Element
-	quitAfter                  bool
-	page, cursor, area, action int
-	crumb, seq                 int
-	loading                    string
-	width, height              int
-	text                       textinput.Model
-	viewport                   viewport.Model
-	assessment                 *setup.LayoutPlan
-	assessmentError            string
-	focus                      bool
-	hits                       tui.HitMap
+	ctx                      context.Context
+	cancel, jobCancel        context.CancelFunc
+	save                     LayoutSave
+	preview                  LayoutPreview
+	saved, draft             setup.Configuration
+	presetErrors             map[string]string
+	dry                      bool
+	mode, id, field, confirm string
+	returnMode, notice       string
+	noticeTone               tui.Element
+	quitAfter                bool
+	page, cursor, action     int
+	control                  int // Included, load on activation or default within a preset card.
+	area                     tui.FocusArea
+	crumb, seq               int
+	loading                  string
+	width, height            int
+	text                     textinput.Model
+	viewport                 viewport.Model
+	assessment               *setup.LayoutPlan
+	assessmentError          string
+	focus                    bool
+	hits                     tui.HitMap
+	settings                 map[string]*layoutSettings
+	settingInput             string
 }
 
 const (
-	layoutContent = iota
-	layoutActions
-	layoutBreadcrumbs
-	layoutSections
+	layoutContent     = tui.ContentFocus
+	layoutActions     = tui.ActionsFocus
+	layoutBreadcrumbs = tui.PrimaryFocus
+	layoutSections    = tui.SecondaryFocus
 )
 
 func NewLayoutModel(ctx context.Context, input LayoutInput, save LayoutSave, preview LayoutPreview) (*LayoutModel, error) {
@@ -115,7 +119,9 @@ func (m *LayoutModel) Close() {
 	}
 	m.cancel()
 }
-func (m *LayoutModel) dirty() bool         { return !reflect.DeepEqual(m.saved.Layouts, m.draft.Layouts) }
+func (m *LayoutModel) dirty() bool {
+	return m.settingsError() != "" || !reflect.DeepEqual(m.saved.Layouts, m.draft.Layouts)
+}
 func (m *LayoutModel) layoutIDs() []string { return slices.Sorted(maps.Keys(m.draft.Layouts)) }
 func (m *LayoutModel) presetIDs() []string {
 	ids := slices.Collect(maps.Keys(m.draft.Presets))
@@ -136,6 +142,8 @@ func (m *LayoutModel) selectedPreset() string {
 }
 func (m *LayoutModel) open(id string) {
 	m.id, m.mode, m.page, m.cursor, m.area, m.action = id, "edit", 0, 0, layoutContent, 0
+	m.control = 0
+	m.settingInput = ""
 	m.notice = ""
 	m.viewport.GotoTop()
 }
@@ -153,7 +161,7 @@ func (m *LayoutModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if area, index, ok := hits.At(msg.X, msg.Y); ok {
-			return m, m.click(area, index)
+			return m, m.click(tui.FocusArea(area), index)
 		}
 		return m, nil
 	case tea.MouseWheelMsg:
@@ -228,6 +236,9 @@ func (m *LayoutModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.field != "" {
 			return m, m.inputKey(msg)
 		}
+		if cmd, handled := m.settingsKey(msg); handled {
+			return m, cmd
+		}
 		if key == "pgup" || key == "pgdown" {
 			m.focus = false
 			var cmd tea.Cmd
@@ -255,12 +266,20 @@ func (m *LayoutModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.moveArea(key == "shift+tab")
 			return m, nil
 		}
+		if key == "up" || key == "k" || key == "down" || key == "j" {
+			delta := 1
+			if key == "up" || key == "k" {
+				delta = -1
+			}
+			m.moveVertical(delta)
+			return m, nil
+		}
 		if m.area == layoutActions {
 			switch key {
 			case "left", "h":
-				m.action = max(0, m.action-1)
+				m.action = tui.CycleChoice(m.action, len(m.actions()), -1)
 			case "right", "l":
-				m.action = min(len(m.actions())-1, m.action+1)
+				m.action = tui.CycleChoice(m.action, len(m.actions()), 1)
 			case "home":
 				m.action = 0
 			case "end":
@@ -284,6 +303,14 @@ func (m *LayoutModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
+		if m.mode == "edit" && m.page == 0 && m.area == layoutContent && (key == "left" || key == "right") {
+			delta := 1
+			if key == "left" {
+				delta = -1
+			}
+			m.control = tui.CycleChoice(m.control, len(layoutPresetActions), delta)
+			return m, nil
+		}
 		if m.mode == "edit" && (key == "left" || key == "right") {
 			m.page = 1 - m.page
 			m.cursor = 0
@@ -291,28 +318,22 @@ func (m *LayoutModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if m.area == layoutSections {
-			if key == "enter" || key == "space" || key == "down" {
-				m.area = layoutContent
+			if key == "enter" || key == "space" {
+				m.moveVertical(1)
 			}
 			return m, nil
 		}
 		switch key {
-		case "up", "k":
-			m.cursor = max(0, m.cursor-1)
-		case "down", "j":
-			m.cursor = min(max(0, m.count()-1), m.cursor+1)
 		case "enter", "space":
 			switch m.mode {
 			case "list":
 				return m, m.invoke("edit")
 			case "edit":
 				if m.page == 0 {
-					return m, m.invoke("member")
+					return m, m.activatePresetControl()
 				}
-				if m.cursor == 0 {
-					return m, m.edit("name", m.draft.Layouts[m.id].Name)
-				}
-				return m, m.edit("idle", strconv.Itoa(m.draft.Layouts[m.id].IdleSeconds))
+				m.moveVertical(1)
+				return m, nil
 			}
 		case "n":
 			if m.mode == "list" {
@@ -324,6 +345,10 @@ func (m *LayoutModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "p", "d":
 			if m.mode == "edit" && m.page == 0 {
+				m.control = 1
+				if key == "d" {
+					m.control = 2
+				}
 				m.choice(key)
 			}
 		}
@@ -331,6 +356,10 @@ func (m *LayoutModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	if m.field != "" {
 		m.text, cmd = m.text.Update(msg)
+	} else if m.mode == "edit" && m.page == 1 && m.area == layoutContent && m.cursor < 2 && m.loading == "" {
+		m.syncSettingInput()
+		m.text, cmd = m.text.Update(msg)
+		m.changeSetting()
 	} else if m.mode == "review" {
 		m.viewport, cmd = m.viewport.Update(msg)
 	}
@@ -342,13 +371,13 @@ func (m *LayoutModel) count() int {
 		return len(m.draft.Layouts)
 	}
 	if m.page == 1 {
-		return 2
+		return 3
 	}
 	return len(m.presetIDs())
 }
 
 func (m *LayoutModel) edit(field, value string) tea.Cmd {
-	m.field, m.area, m.action, m.notice = field, layoutContent, 0, ""
+	m.field, m.area, m.action, m.notice = field, layoutContent, 1, ""
 	m.text.SetValue(value)
 	m.text.CursorEnd()
 	return m.text.Focus()
@@ -366,30 +395,39 @@ func (m *LayoutModel) inputKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.area = layoutContent
 		m.text.Blur()
 		return nil
-	case "tab", "shift+tab":
+	case "tab", "shift+tab", "up", "down":
+		m.area = (tui.FocusOrder{Rows: 1}).Cycle(m.area, 1)
 		if m.area == layoutContent {
-			m.area = layoutActions
-			m.text.Blur()
-		} else {
-			m.area = layoutContent
 			return m.text.Focus()
 		}
+		m.action = 1
+		m.text.Blur()
 		return nil
-	case "left", "right":
+	case "left", "right", "home", "end":
 		if m.area == layoutActions {
-			m.action = 1 - m.action
+			switch msg.String() {
+			case "home":
+				m.action = 0
+			case "end":
+				m.action = 1
+			default:
+				m.action = tui.CycleChoice(m.action, 2, 1)
+			}
 			return nil
 		}
 	case "enter":
-		if m.area == layoutActions && m.action == 1 {
+		if m.area == layoutActions && m.action == 0 {
 			m.field, m.notice = "", ""
 			m.area = layoutContent
+			m.text.Blur()
 			return nil
 		}
+		m.area = layoutContent
+		focus := m.text.Focus()
 		value := strings.TrimSpace(m.text.Value())
 		if value == "" || strings.ContainsAny(value, "\x00\r\n\x1b") {
 			m.notice, m.noticeTone = "Enter a valid value.", tui.Error
-			return nil
+			return focus
 		}
 		layout := m.draft.Layouts[m.id]
 		switch m.field {
@@ -414,7 +452,7 @@ func (m *LayoutModel) inputKey(msg tea.KeyPressMsg) tea.Cmd {
 			n, err := strconv.Atoi(value)
 			if err != nil || n <= 0 {
 				m.notice, m.noticeTone = "Enter a positive number of seconds.", tui.Error
-				return nil
+				return focus
 			}
 			layout.IdleSeconds = n
 			m.draft.Layouts[m.id] = layout
@@ -504,10 +542,8 @@ func (m *LayoutModel) back() tea.Cmd {
 func (m *LayoutModel) invoke(action string) tea.Cmd {
 	switch action {
 	case "field":
-		if m.cursor == 0 {
-			return m.edit("name", m.draft.Layouts[m.id].Name)
-		}
-		return m.edit("idle", strconv.Itoa(m.draft.Layouts[m.id].IdleSeconds))
+		m.syncSettingInput()
+		return nil
 	case "new":
 		return m.edit("new", "")
 	case "edit", "delete":
@@ -556,12 +592,17 @@ func (m *LayoutModel) invoke(action string) tea.Cmd {
 			return m.back()
 		case "discard":
 			m.draft.Layouts = cloneLayouts(m.saved.Layouts)
+			m.settings, m.settingInput = nil, ""
 			return m.leave(m.quitAfter)
 		case "delete":
 			delete(m.draft.Layouts, m.id)
 			return m.publish("delete")
 		}
 	case "review":
+		if err := m.settingsError(); err != "" {
+			m.notice, m.noticeTone = err, tui.Error
+			return nil
+		}
 		m.mode, m.area, m.action, m.notice = "review", layoutActions, 0, ""
 		m.assessment, m.assessmentError = nil, ""
 		m.viewport.GotoTop()
@@ -590,6 +631,10 @@ func (m *LayoutModel) begin(kind string) (context.Context, int) {
 }
 
 func (m *LayoutModel) publish(kind string) tea.Cmd {
+	if err := m.settingsError(); err != "" {
+		m.notice, m.noticeTone = err, tui.Error
+		return nil
+	}
 	if err := m.draft.Validate(); err != nil {
 		m.notice, m.noticeTone = err.Error(), tui.Error
 		return nil

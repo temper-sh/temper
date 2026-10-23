@@ -36,8 +36,13 @@ Use your terminal's link-opening gesture, often Cmd-click. Text previews show
 the URL explicitly. Licenses come from the selected model files, including
 saved custom presets; they are separate from Temper's own software license.
 
-Use **Compute** (`p`) beside Context to switch between CPU and GPU
-where the catalog offers both as practical choices. The selected device appears
+The **Context** action or `c` opens a separate context prompt. **Apply** updates
+the draft and memory assessment; **Cancel** or Escape retains the previous
+value. Invalid input remains in the prompt until corrected or cancelled. Preset
+cards keep their context summary. Include a preset to reveal its supported
+**Compute** choices, reached with Up/Down from the card. Choose CPU or GPU with
+Left/Right or a click where the catalog offers both as practical choices;
+`p` cycles Compute. The selected device appears
 before Context on the same settings line. Fixed GPU presets omit the device
 label; CPU-only presets show **CPU only**. Both omit the Compute control, and
 `p` has no effect on them. Reranker settings omit the repeated Reranking label.
@@ -248,12 +253,16 @@ selection, first remove it from layouts that use it.
 
 ## Keyboard controls
 
+The wizard follows the same [terminal controls](terminal-ui.md) as the preset
+and layout editors, including arrow focus and scrolling. Context editing uses
+a focused prompt with Apply and Cancel.
+
 | Key | Action |
 |---|---|
 | Arrow keys | Move between rows and controls. |
 | Enter or Space | Activate a button or toggle a checkbox. |
 | Tab / Shift+Tab | Move focus between content, actions, primary navigation and category filters; Enter activates the focused control. |
-| Esc | Go back, or cancel the current form. On the first screen it does not leave; press q or choose Cancel. |
+| Esc | Go back. On the first screen it does not leave; choose Cancel or press q outside text input. |
 | PgUp / PgDown | Scroll long cards and reviews. |
 
 Mouse clicks and trackpad scrolling also work. On the preset screen, the first

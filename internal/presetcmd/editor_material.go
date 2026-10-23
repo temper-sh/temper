@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
+	"net/url"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/temper-sh/temper/internal/catalog"
+	"github.com/temper-sh/temper/internal/userpreset"
 )
 
 func (m *Editor) currentWeights() catalog.Artifact {
@@ -46,20 +47,33 @@ func (m *Editor) openWeights() {
 		{label: "Revision", value: "main"},
 	}
 	if m.draft.file.Fork() {
-		m.form = append(m.form, formField{label: "Model relationship", value: "Choose…", choices: []string{"same model, another build", "different model: convert to copy"}})
+		m.form = append(m.form, formField{label: "Model relationship", choices: []string{"same model, another build", "different model: convert to copy"}})
 	}
-	m.mode, m.cursor = "form", 0
+	m.mode, m.cursor, m.controlKey = "form", 0, ""
 }
 
 func (m *Editor) openTemplate() {
 	m.formKind = "template"
+	m.selectedTemplate = nil
 	m.form = []formField{
 		{label: "Source", value: "builtin", choices: []string{"builtin", "local", "huggingface"}},
-		{label: "Repository"},
-		{label: "Revision", value: "main"},
-		{label: "File"},
+		{label: "Repository"}, {label: "Revision", value: "main"}, {label: "File"},
 	}
-	m.mode, m.cursor = "form", 0
+	id, current := m.currentTemplate()
+	if id != catalog.BuiltinTemplate && len(current.Files) > 0 {
+		m.form[3].value = current.Files[0].Path
+		if len(current.Sources) > 0 && current.Sources[0].Hub == catalog.HubLocal {
+			m.form[0].value = "local"
+			if content, ok := m.draft.templates[current.Files[0].Path]; ok {
+				m.selectedTemplate = &userpreset.TemplateFile{Name: current.Files[0].Path, ManagedName: current.Files[0].Path, Content: content}
+			}
+		} else {
+			m.form[0].value = "huggingface"
+			m.form[1].value = current.HuggingFace().Repo
+			m.form[2].value = current.HuggingFace().Revision
+		}
+	}
+	m.mode, m.cursor, m.controlKey = "form", 0, ""
 }
 
 func (m *Editor) needsModelRelationship() bool {
@@ -74,9 +88,6 @@ func (m *Editor) visibleFormRows() []int {
 	rows := []int{0}
 	if m.formKind == "weights" {
 		rows = append(rows, 1)
-		if m.needsModelRelationship() {
-			rows = append(rows, 2)
-		}
 		return rows
 	}
 	switch m.form[0].value {
@@ -89,39 +100,42 @@ func (m *Editor) visibleFormRows() []int {
 }
 
 func (m *Editor) formKey(key string) tea.Cmd {
-	rows := append(m.visibleFormRows(), len(m.form))
-	position := max(0, slices.Index(rows, m.cursor))
-	switch key {
-	case "esc", "q":
-		m.mode = "editor"
-		m.cursor = 0
-	case "up", "k":
-		m.cursor = rows[max(0, position-1)]
-	case "down", "j", "tab":
-		m.cursor = rows[(position+1)%len(rows)]
-	case "enter", "space", " ":
-		if m.cursor == len(m.form) {
-			return m.submitForm()
-		}
-		f := &m.form[m.cursor]
-		if len(f.choices) > 0 {
-			f.value = f.choices[(slices.Index(f.choices, f.value)+1)%len(f.choices)]
-			return nil
-		}
-		return m.prompt("form", f.value)
+	if key == "esc" || key == "q" {
+		m.mode, m.cursor, m.controlKey = "editor", 0, ""
+		m.selectedTemplate = nil
 	}
 	return nil
 }
 
+// Source forms accept a repository name or its HTTPS repository page. Branches
+// and files remain separate explicit controls.
+func repositoryName(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if strings.Contains(value, "://") {
+		u, err := url.Parse(value)
+		if err != nil || u.Scheme != "https" || u.Host != "huggingface.co" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+			return "", errors.New("Use a Hugging Face repository URL or owner/name.")
+		}
+		value = strings.Trim(u.Path, "/")
+	}
+	parts := strings.Split(value, "/")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" || strings.ContainsAny(value, " \t\r\n@?#") {
+		return "", errors.New("Repository must be owner/name or https://huggingface.co/owner/name.")
+	}
+	return value, nil
+}
+
 func (m *Editor) submitForm() tea.Cmd {
 	if m.formKind == "weights" {
-		repo, revision := strings.TrimSpace(m.form[0].value), strings.TrimSpace(m.form[1].value)
-		if repo == "" || revision == "" {
-			m.notice = "Enter a repository and revision."
+		repo, err := repositoryName(m.form[0].value)
+		if err != nil {
+			m.notice = err.Error()
 			return nil
 		}
-		if m.needsModelRelationship() && m.form[2].value == "Choose…" {
-			m.notice = "Choose whether these weights are the same model or a different model."
+		m.form[0].value = repo
+		revision := strings.TrimSpace(m.form[1].value)
+		if repo == "" || revision == "" {
+			m.notice = "Enter a repository and revision."
 			return nil
 		}
 		if m.command.Hub == nil {
@@ -144,16 +158,26 @@ func (m *Editor) submitForm() tea.Cmd {
 		o.local = m.form[3].value
 		o.transform = m.templateTransform("", o.local)
 		if o.local == "" {
-			m.notice = "Enter the local template file name in presets.d."
+			m.notice = "Choose a template file with Browse…."
 			return nil
 		}
 	case "huggingface":
+		repo, err := repositoryName(m.form[1].value)
+		if err != nil {
+			m.notice = err.Error()
+			return nil
+		}
+		m.form[1].value = repo
 		o.transform = m.templateTransform(m.form[1].value, m.form[3].value)
 		if m.form[1].value == "" || m.form[2].value == "" || m.form[3].value == "" {
 			m.notice = "Enter the repository, revision and template file."
 			return nil
 		}
 		values = append(values, m.form[1].value+"@"+m.form[2].value, m.form[3].value)
+	}
+	selected := m.selectedTemplate
+	if m.form[0].value != "local" {
+		selected = nil
 	}
 	builtin := m.form[0].value == "builtin"
 	view := m.view
@@ -162,7 +186,7 @@ func (m *Editor) submitForm() tea.Cmd {
 		if err == nil {
 			err = applyTemplate(&u, view, tid, record, builtin)
 		}
-		return editorJob{file: u, err: err, warning: "Template changed in the draft. Review and Save when ready."}
+		return editorJob{file: u, template: selected, err: err, warning: "Template changed in the draft. Review and Save when ready."}
 	})
 }
 
@@ -180,25 +204,31 @@ func (m *Editor) filesKey(key string) tea.Cmd {
 	files := m.visibleFiles()
 	switch key {
 	case "esc", "q":
-		m.mode = "form"
-		m.cursor = 0
-	case "up", "k":
-		m.cursor = max(0, m.cursor-1)
-	case "down", "j":
-		m.cursor = min(max(0, len(files)-1), m.cursor+1)
-	case "space", " ":
-		if len(files) > 0 {
-			m.files[files[m.cursor]] = !m.files[files[m.cursor]]
+		m.mode, m.cursor, m.controlKey = "form", 0, ""
+	case "space", " ", "enter", "left", "right":
+		if m.cursor < len(files) {
+			if key == "space" || key == " " || key == "enter" {
+				m.files[files[m.cursor]] = !m.files[files[m.cursor]]
+			}
+		} else if m.needsModelRelationship() {
+			if m.form[2].value == m.form[2].choices[0] {
+				m.form[2].value = m.form[2].choices[1]
+			} else {
+				m.form[2].value = m.form[2].choices[0]
+			}
 		}
 	case "/":
 		return m.prompt("filter", m.fileFilter)
-	case "enter":
-		return m.selectWeights()
 	}
 	return nil
 }
 
 func (m *Editor) selectWeights() tea.Cmd {
+	if m.needsModelRelationship() && m.form[2].value == "" {
+		m.notice = "Choose whether these weights are the same model or a different model."
+		m.cursor = len(m.visibleFiles())
+		return nil
+	}
 	var files []string
 	for _, file := range m.repository.Files {
 		if m.files[file] {
@@ -226,6 +256,10 @@ func (m *Editor) selectWeights() tea.Cmd {
 		case "same model, another build":
 			o.sameModelAs = m.view.Document.Presets[u.Origin].Artifact
 		case "different model: convert to copy":
+			if m.formErrors() {
+				m.notice = "Correct invalid draft inputs before converting to a copy."
+				return nil
+			}
 			lock, _, err := m.draft.compile(m.options.Root, m.view, m.memory)
 			if err != nil {
 				m.notice = "Cannot convert: " + err.Error()
@@ -269,7 +303,7 @@ func (m *Editor) formExplanation() string {
 		case "builtin":
 			return "Use the chat template included in the model."
 		case "local":
-			return "Choose a template file in presets.d."
+			return "Use a chat template saved on this computer."
 		default:
 			return "Choose a chat template from Hugging Face."
 		}

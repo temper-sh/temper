@@ -66,6 +66,34 @@ func TestLlamaOmittedOutputStopsAtContextWithoutShiftingHistory(t *testing.T) {
 	}
 }
 
+func TestLlamaThreadDefaultsOmitOnlyTheUnspecifiedCounts(t *testing.T) {
+	for _, counts := range [][2]int{{0, 0}, {4, 0}, {0, 8}, {4, 8}, {-1, 4}, {4, -1}} {
+		t.Run(fmt.Sprint(counts), func(t *testing.T) {
+			r := validLlamaServerRequest()
+			r.LlamaServer.Controls = &engine.LlamaServerControls{ReasoningEffort: "medium", Fit: "off", LoadMode: "auto", Threads: counts[0], ThreadsBatch: counts[1]}
+			command, err := engine.Build(r)
+			if counts[0] < 0 || counts[1] < 0 {
+				if err == nil {
+					t.Fatal("negative thread count accepted")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			text := strings.Join(command.Lines(), "\n")
+			for i, flag := range []string{"--threads ", "--threads-batch "} {
+				if strings.Contains(text, flag) != (counts[i] > 0) {
+					t.Fatalf("wrong thread default: %s", text)
+				}
+				if counts[i] > 0 && !strings.Contains(text, fmt.Sprintf("%s%d", flag, counts[i])) {
+					t.Fatalf("lost explicit count: %s", text)
+				}
+			}
+		})
+	}
+}
+
 func TestVLLMOutputDefaultsDoNotBecomeGenerationConfigCeilings(t *testing.T) {
 	for _, limit := range []int{0, 4096} {
 		t.Run(fmt.Sprint(limit), func(t *testing.T) {

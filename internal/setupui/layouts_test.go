@@ -101,18 +101,16 @@ func TestLayoutSettingsAndDiscardAreReachableThroughNavigation(t *testing.T) {
 	layoutKey(m, tea.KeyTab) // Sections.
 	layoutKey(m, tea.KeyRight)
 	layoutKey(m, tea.KeyEnter)
-	layoutKey(m, tea.KeyEnter) // Name input.
 	layoutCtrl(m, 'u')
 	m.Update(tea.PasteMsg{Content: "Quiet writing"})
 	layoutKey(m, tea.KeyEnter)
-	layoutKey(m, tea.KeyDown)
-	layoutKey(m, tea.KeyEnter) // Idle input.
 	layoutCtrl(m, 'u')
 	m.Update(tea.PasteMsg{Content: "-1"})
 	layoutKey(m, tea.KeyEnter)
-	if view := ansi.Strip(m.View().Content); !strings.Contains(view, "positive number of seconds") {
+	if view := ansi.Strip(m.View().Content); !strings.Contains(view, "positive duration") {
 		t.Fatalf("invalid idle timeout was accepted:\n%s", view)
 	}
+	layoutKey(m, tea.KeyUp) // Return from units to the invalid duration.
 	layoutCtrl(m, 'u')
 	m.Update(tea.PasteMsg{Content: "120"})
 	layoutKey(m, tea.KeyEnter)
@@ -221,12 +219,14 @@ func TestLayoutFramesKeepControlsVisibleAtSupportedSizes(t *testing.T) {
 			m.Update(tea.WindowSizeMsg{Width: width, Height: height})
 			view := m.View().Content
 			assertFrameFits(t, view, width, height)
-			for _, label := range []string{"TEMPER", "Layouts", "Writing", "[Presets]", "[x] Chat", "Review", "Preload", "Default"} {
+			for _, label := range []string{"TEMPER", "Layouts", "Writing", "[Presets]", "Chat", "[x] Included", "Review", "Load on activation", "Default"} {
 				if !strings.Contains(ansi.Strip(view), label) {
 					t.Fatalf("%dx%d hides %s:\n%s", width, height, label, ansi.Strip(view))
 				}
 			}
+			layoutKey(m, tea.KeyUp) // Sections, then Settings.
 			layoutKey(m, tea.KeyRight)
+			layoutKey(m, tea.KeyDown)
 			layoutKey(m, tea.KeyEnter)
 			assertFrameFits(t, m.View().Content, width, height)
 			layoutKey(m, tea.KeyEsc)

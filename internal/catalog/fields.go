@@ -36,7 +36,7 @@ var presetFields = []Field{
 	{"request_defaults.sampling.min_p", FieldNumber, nil, "Drop tokens below this share of the most likely token's probability (0 to 1)."},
 	{"request_defaults.sampling.repeat_penalty", FieldNumber, nil, "Penalty for repeated tokens; 1 is none."},
 	{"request_defaults.sampling.presence_penalty", FieldNumber, nil, "Penalty for tokens that already appeared; 0 is none."},
-	{"request_defaults.sampling.seed", FieldInteger, nil, "Fixed seed for repeatable answers; without one each answer differs."},
+	{"request_defaults.sampling.seed", FieldInteger, nil, "Fixed seed for repeatable answers; null explicitly selects random in a fork."},
 	{"speculation.method", FieldChoice, []string{"none", "mtp", "dflash", "dflash2"}, "Speculative decoding method."},
 	{"speculation.source", FieldChoice, []string{"none", "embedded", "artifact"}, "Where the draft comes from: none, inside the weights, or draft weights."},
 	{"speculation.draft_artifact", FieldText, nil, "Draft weights ID when the source is artifact."},
@@ -59,8 +59,8 @@ var llamaFields = []Field{
 	{"controls.context_shift", FieldSwitch, nil, "Drop the oldest context when the window is full."},
 	{"controls.cache_prompt", FieldSwitch, nil, "Reuse the cached prompt between requests."},
 	{"controls.fit", FieldChoice, []string{"on", "off"}, "Let llama.cpp shrink settings to fit memory."},
-	{"controls.threads", FieldInteger, nil, "CPU threads for generation."},
-	{"controls.threads_batch", FieldInteger, nil, "CPU threads for reading the prompt."},
+	{"controls.threads", FieldInteger, nil, "CPU threads for generation; 0 uses the engine default."},
+	{"controls.threads_batch", FieldInteger, nil, "CPU threads for reading the prompt; 0 uses the engine default."},
 	{"controls.load_mode", FieldChoice, []string{"auto", "none", "mmap", "mlock", "mmap+mlock", "dio"}, "How the weights are loaded into memory."},
 }
 

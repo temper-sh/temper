@@ -10,6 +10,142 @@ This is not a model-eval log, product evidence, or permission to change the
 skills repository. It creates no synthetic Temper work. A note may — and often
 should — conclude that no skill change is warranted.
 
+## Wizard context prompt, 2026-10-23
+
+Unit-design guidance kept pending context text inside the restored prompt;
+typing does not change the selected preset or its memory assessment. Apply
+reuses the existing validation and assessment boundary. Regression stories cover
+Apply, Cancel/Escape, invalid input, narrow-terminal navigation, mouse actions
+and preservation of inline Compute choices. Publication and schemas are unchanged;
+existing guidance was sufficient, with no skill change warranted.
+
+## Visible forms and local-template import, 2026-10-23
+
+Unit design kept raw input, validation errors and pending attachments with each
+tool's draft; shared `tui` controls only render them. Cursor movement and drawing
+must not author an override. Data modeling distinguished an inherited seed from
+explicit Random (`null`) and Fixed zero; named modes retain the existing numeric
+meanings for limits, cache and engine-default thread counts.
+
+Reliable-effects guidance put local-template selection before publication:
+selection snapshots bounded bytes, review resolves that snapshot, and explicit
+Save syncs managed copies before publishing the preset reference. Failure cleanup
+removes only files created by that save; retries reuse matching prepared copies.
+Restoring a missing attachment preserves an unchanged preset's bytes and mtime.
+
+[Preset form stories](../internal/presetcmd/editor_form_test.go),
+[layout settings stories](../internal/setupui/layouts_form_test.go) and
+[wizard controls](../internal/setupui/presets_navigation_test.go) exercise actual
+typing, choices, invalid drafts, conditional settings and navigation. Existing
+source/compiler checks remain in place. [Import stories](../internal/userpreset/template_import_test.go)
+cover dry runs, cancellation between attachment and preset publication, collision
+refusal, snapshot identity, cleanup ownership and clean retry. Full tests, vet and
+race checks pass; actual renders cover 40/80/112 columns, 24/32 rows and both
+true-color and 256-color terminals. A 40-column terminal run verified Fork/name,
+explicit dry-run validation and cancellation with the authoring root absent.
+**No skill change warranted.**
+
+## Typed preset inputs
+
+Unit-design guidance kept engine choices in the existing catalog field metadata
+and reused shared button geometry for rendering and clicks. The editor owns the
+pending selection and its Apply/Cancel boundary. Tests reproduced the free-text
+problem, then exercised engine-specific KV values, booleans, omitted values,
+wrapped mouse targets, resize, cancellation and explicit saves. Existing
+reasoning tests now select options through the UI while retaining their coupled
+parser/engine assertions. No skill change is proposed.
+
+## Layout composition checkboxes, 2026-10-22
+
+The owner's clarification identified the former wizard's inline composition
+controls as the intended surface. Compact cards reuse `optionCard` and
+`tui.ActionsWithTargets`; the layout model owns selection, guarded toggles and
+saving. No new preset or configuration abstraction was needed.
+
+[Card stories](../internal/setupui/layouts_cards_test.go) cover arrow-only
+composition, disabled choices, default replacement/removal, guarded exclusion,
+wrapped/scrolled mouse targets and unchanged exact presets. Existing
+[mouse stories](../internal/setupui/layouts_mouse_test.go) retain pending-save
+and confirmation checks. Full tests, vet and race tests pass. Actual renders at
+40/80/112 columns and a 40-column terminal dry run covered checkboxes, review,
+dry-run Save and discard; saved configuration stayed unchanged. Existing
+source/revision checks retain the unchanged publication-boundary evidence.
+**No skill change warranted.**
+
+## Shared terminal keyboard behavior, 2026-10-22
+
+Three real consumers justified extracting `tui.FocusOrder`: a pure region/row
+transition that leaves scrolling, drafts and activation with each tool. Shared
+choice cycling and focus hints keep the wizard and both editors aligned.
+Inputs use Cancel/Apply and return to content; preset confirmations stay local,
+and read-only Review no longer saves when Enter has no focused action.
+
+[Focus tests](../internal/tui/focus_test.go) cover traversal and empty regions;
+[layout stories](../internal/setupui/layouts_navigation_test.go),
+[wizard stories](../internal/setupui/presets_navigation_test.go) and
+[preset stories](../internal/presetcmd/editor_arrows_test.go) cover user outcomes,
+validation, unavailable choices, confirmation and explicit save. Regression
+cases first reproduced the layout/input and preset Review/confirmation gaps.
+Full tests, vet and race tests pass. All three 40-column terminal dry runs
+completed without changing authoring/configuration/harness state; current
+40/80/112-column galleries are refreshed. Existing effect-boundary tests retain
+conflict, interruption and rerun evidence. **No skill change warranted.**
+
+## Preset arrow navigation, 2026-10-22
+
+The owner clarified that Tab reached the buttons, but arrow navigation was
+inconsistent with the wizard. Navigation now owns movement across content,
+breadcrumbs, sections and actions; mode handlers keep their existing guards.
+Shared rendering stays in `tui`; tool-specific focus remains in the editor.
+
+[Arrow stories](../internal/presetcmd/editor_arrows_test.go) first reproduced
+the trapped focus, then covered Fork/Copy through explicit Save, scroll return,
+inline validation/cancellation, empty/disabled choices, source forms and file
+selection. Full tests, vet and race tests pass. A 40-column terminal dry run
+reached Copy/Cancel, Fork/name Apply and Validate without Tab; Ctrl-C left the
+authoring root absent. Existing publication tests retain conflict, interruption
+and clean-rerun evidence. **No skill change warranted.**
+
+## Catalog preset overview and authoring actions, 2026-10-22
+
+Unit design kept the read-only overview separate from draft editing and reused
+the shared field renderer. The viewed source stays explicit through scrolling
+and name-prompt cancellation; Fork/Copy enter the existing draft flow and Save
+retains publication authority. Structured memory rows project `setup.Assess`
+without parsing its command-line prose or changing admission rules.
+
+[Overview stories](../internal/presetcmd/editor_overview_test.go) reproduced the
+missing description/actions, then exercised mouse and keyboard creation through
+Save, cancellation, unavailable sources, memory refusals and missing facts.
+Measured-memory cases retain loaded/peak values, counter, context, workload,
+machine, date and limitations. Full offline tests, vet and race tests pass;
+40/80/112-column renders and a 40-column terminal dry run cover the new page.
+Copy cancellation, Fork, Validate and Ctrl-C left the authoring root absent.
+Existing publication tests retain conflict and clean-rerun coverage.
+**No skill change warranted.**
+
+## Inline preset content, 2026-10-22
+
+Unit design kept the shared `tui.FieldRow` a renderer of supplied values;
+preset settings and source forms reuse it while the editor retains focus,
+pending input, validation and guarded Save. The
+[interaction contract](contracts/user-presets.md#interactive-authoring) separates
+Apply into the draft from publication and keeps other controls inactive during
+an edit.
+
+[Editor stories](../internal/presetcmd/editor_content_test.go) first reproduced
+the lost field context, then covered inline errors, keyboard and mouse
+Apply/Cancel, retained Unicode input across resize and explicit Save.
+[Renderer coverage](../internal/tui/field_test.go) catches width overflow and
+ANSI styles becoming visible text: underline belongs on the input's plain text,
+before rendering its cursor and colors.
+
+Full offline tests, vet and race tests pass. Actual renders cover 40/80/112
+columns, 24/32 rows and truecolor/256 palettes. A 40-column terminal mouse and
+keyboard dry run exercised validation, correction, Apply, Cancel and Validate;
+Ctrl-C left the authoring root absent. Existing publication tests still cover
+cancellation, conflicts and clean reruns. **No skill change warranted.**
+
 ## Mouse interaction in both editors, 2026-10-22
 
 The owner found that the preset and layout editors rendered controls without

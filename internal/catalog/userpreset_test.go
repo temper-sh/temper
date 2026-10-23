@@ -21,6 +21,36 @@ const mtp = "qwen3.8-27b-q4xl-mtp"
 
 var target = software.Target{OS: "darwin", Arch: "arm64"}
 
+func TestForkRandomSeedIsDistinctFromInheritanceAndFixedZero(t *testing.T) {
+	d := testfixture.MixedEngineCatalog(t)
+	p := d.Presets[mtp]
+	seed := 17
+	p.RequestDefaults.Sampling.Seed = &seed
+	d.Presets[mtp] = p
+	for _, tc := range []struct {
+		name, changes string
+		seed          *int
+	}{
+		{"inherit", `{}`, &seed},
+		{"random", `{"request_defaults":{"sampling":{"seed":null}}}`, nil},
+		{"fixed zero", `{"request_defaults":{"sampling":{"seed":0}}}`, new(int)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			u := userPreset(t, "mine", fmt.Sprintf(`{"schema":"temper-preset/v1","origin":%q,"changes":%s}`, mtp, tc.changes))
+			raw, err := catalog.MarshalUserPreset(u)
+			if err != nil {
+				t.Fatal(err)
+			}
+			u = userPreset(t, "mine", string(raw))
+			lock, _ := compileUser(t, d, "mine", u)
+			got := lock.Records.Presets["mine"].RequestDefaults.Sampling.Seed
+			if !reflect.DeepEqual(got, tc.seed) {
+				t.Fatalf("seed %v, want %v", got, tc.seed)
+			}
+		})
+	}
+}
+
 func userPreset(t *testing.T, id, text string) catalog.UserPreset {
 	t.Helper()
 	u, err := catalog.ParseUserPreset(id, []byte(text))
@@ -266,7 +296,7 @@ func TestUserPresetRefusalsNameTheProblem(t *testing.T) {
 		"dotted key":      {`{"schema": "temper-preset/v1", "origin": "qwen3.8-27b-q4xl-mtp", "changes": {"request_defaults.sampling.temperature": 0.25}}`, "nest the names"},
 		"inner dotted":    {`{"schema": "temper-preset/v1", "origin": "qwen3.8-27b-q4xl-mtp", "changes": {"request_defaults": {"sampling.temperature": 0.25}}}`, "nest the names"},
 		"local name":      {`{"schema": "temper-preset/v1", "origin": "qwen3.8-27b-q4xl-mtp", "templates": {"mine": {"sources": [{"hub": "local"}], "files": [{"path": "a.jinja#b"}], "compatible_artifacts": ["qwen3.8-27b-q4xl"], "license": "own"}}}`, "plain file name"},
-		"removal":         {`{"schema": "temper-preset/v1", "origin": "qwen3.8-27b-q4xl-mtp", "changes": {"request_defaults": {"sampling": {"seed": null}}}}`, "cannot be removed"},
+		"removal":         {`{"schema": "temper-preset/v1", "origin": "qwen3.8-27b-q4xl-mtp", "changes": {"request_defaults": {"sampling": {"temperature": null}}}}`, "cannot be removed"},
 		"engine rule":     {`{"schema": "temper-preset/v1", "origin": "qwen3.8-27b-q4xl-mtp", "changes": {"engine_config": {"microbatch_tokens": 99999}}}`, "ubatch must not exceed batch"},
 		"another model":   {`{"schema": "temper-preset/v1", "origin": "qwen3.8-27b-q4xl-mtp", "changes": {"artifact": "gemma-4-e2b-q4km"}}`, "a fork keeps its origin's model"},
 		"unknown origin":  {`{"schema": "temper-preset/v1", "origin": "qwen-9"}`, `origin "qwen-9" is not in this catalog`},

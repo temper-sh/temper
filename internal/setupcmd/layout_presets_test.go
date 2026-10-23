@@ -85,7 +85,7 @@ func TestPresetEditorSaveAppearsInLayoutWithoutConfigurationSelection(t *testing
 			layoutControl(editor, 'u')
 			editor.Update(tea.PasteMsg{Content: "Fresh preset"})
 			layoutPress(editor, tea.KeyEnter)
-			layoutPress(editor, 's')
+			layoutControl(editor, 's')
 			file, err := userpreset.Read(root, "fresh-preset")
 			if err != nil {
 				t.Fatal("preset editor did not save", err, ansi.Strip(editor.View().Content))

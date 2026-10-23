@@ -194,7 +194,8 @@ func TestPresetEditorScreensFitAndKeepNavigationVisible(t *testing.T) {
 				case "filters":
 					m.focus = presetFilterFocus
 				case "context":
-					m.edit("context", "40960")
+					m.activateShortcut("c")
+					wizardType(m, "40960")
 				case "review", "error":
 					m.page = presetReviewPage
 					if screen == "error" {
@@ -251,14 +252,20 @@ func TestPresetMouseNavigationUsesTheSameGuardedThreeStepFlow(t *testing.T) {
 		t.Fatal("primary back navigation changed the selection")
 	}
 	editorKey(m, 'c')
+	wizardType(m, "bad")
 	clickPresetText(t, m, "Harnesses")
-	if m.field != "context" || m.page != 0 {
-		t.Fatal("primary navigation discarded an open field")
+	if m.page != 0 {
+		t.Fatal("primary navigation bypassed the context prompt")
 	}
 	clickPresetText(t, m, "Cancel")
-	if m.field != "" || len(m.input.Configuration.Layouts) != 0 {
+	if m.field != "" || m.Decision.Action != "" {
+		t.Fatal("Cancel did not leave only the context prompt")
+	}
+	clickPresetText(t, m, "Cancel")
+	if m.Decision.Action != "cancel" || len(m.input.Configuration.Layouts) != 0 {
 		t.Fatal("cancel committed changes")
 	}
+
 }
 
 func TestPresetFiltersAreReachableWithArrowsAndPreserveSelections(t *testing.T) {
@@ -268,7 +275,11 @@ func TestPresetFiltersAreReachableWithArrowsAndPreserveSelections(t *testing.T) 
 	if view := ansi.Strip(m.View().Content); m.focus != presetFilterFocus || m.group != "general" || !strings.Contains(view, "General") {
 		t.Fatalf("Up from the first preset did not focus the filters:\n%s", view)
 	}
-	m.Update(tea.KeyPressMsg{Code: tea.KeyLeft}) // Stay at General.
+	m.Update(tea.KeyPressMsg{Code: tea.KeyLeft}) // Secondary choices wrap, like buttons.
+	if m.group != "other" {
+		t.Fatal("Left did not wrap to Other")
+	}
+	m.Update(tea.KeyPressMsg{Code: tea.KeyRight}) // General.
 	m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
 	if m.group != "specialist" {
 		t.Fatal("Right did not reach Specialist")
@@ -333,7 +344,10 @@ func TestPresetCardsScrollWithoutMovingControlsOrSnappingBack(t *testing.T) {
 	if m.view.YOffset() != offset || !strings.Contains(view, "General") || !strings.Contains(view, "Next") {
 		t.Fatalf("scroll lost navigation or snapped back:\n%s", view)
 	}
-	m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	for m.cursor == 0 {
+		m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+		m.View()
+	}
 	view = ansi.Strip(m.View().Content)
 	if !strings.Contains(view, m.input.Presets[1].Name) {
 		t.Fatalf("moving focus did not reveal the next preset:\n%s", view)
@@ -370,18 +384,21 @@ func TestPresetReviewShowsDownloadsAndKeepsActionsVisibleWhileScrolling(t *testi
 func TestPresetContextKeepsInvalidValueAndAcceptsPastedTokens(t *testing.T) {
 	m := populatedPresetEditor(t)
 	editorKey(m, 'c')
-	m.text.SetValue("not a number")
+	wizardType(m, "not a number")
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if m.field != "context" || m.text.Value() != "not a number" || m.notice == "" {
-		t.Fatal("invalid input dismissed the editor or discarded the value")
-	}
-	m.text.SetValue("")
-	m.Update(tea.PasteMsg{Content: "32768"})
-	clickPresetText(t, m, "Apply")
 	p, _ := m.selectedOption()
+	for _, width := range []int{40, 112, 28} {
+		m.Update(tea.WindowSizeMsg{Width: width, Height: 24})
+		assertFrameFits(t, m.View().Content, width, 24)
+		if m.field != "context" || m.notice == "" || m.text.Value() != "not a number" {
+			t.Fatal("resize lost invalid text")
+		}
+	}
+	wizardType(m, "32768")
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	_, record := presetRecord(m.draft.Presets[p.ID].Lock)
-	if m.field != "" || record.Window() != 32768 {
-		t.Fatal("pasted context was not accepted")
+	if record.Window() != 32768 || m.field != "" || m.Decision.Action != "" {
+		t.Fatal("paste did not update the draft")
 	}
 }
 
@@ -448,7 +465,8 @@ func TestWizardFooterKeepsFocusedActionsVisibleAndClickableAfterResize(t *testin
 						m.reviewReady = false
 					}
 				case "context":
-					m.edit("context", "40960")
+					m.activateShortcut("c")
+					wizardType(m, "40960")
 				}
 				m.notice = "Used by Writing desk. Change membership with temper layout before removing this preset."
 				m.focus = presetFooterFocus
@@ -492,7 +510,7 @@ func TestWizardReviewExplainsInitialAndExistingLayoutAvailability(t *testing.T) 
 			layout.Presets = layout.Presets[:1]
 			m.draft.Layouts["default"] = layout
 		}
-		body := m.presetContent(76, false)
+		body := m.presetContent(76)
 		text := strings.Join(strings.Fields(ansi.Strip(strings.Join(body.blocks, "\n"))), " ")
 		if fresh && (!strings.Contains(text, "Default layout") || !strings.Contains(text, "load on demand")) {
 			t.Fatalf("first setup does not explain on-demand behavior:\n%s", text)

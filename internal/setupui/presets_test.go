@@ -183,9 +183,7 @@ func TestSavedAliasCustomizesItsExactSourceRecord(t *testing.T) {
 	m.input.Presets = []PresetOption{p}
 	m.group = "other"
 	m.draft.Presets[p.ID] = setup.Preset{Name: p.Name, Lock: p.Lock}
-	m.field = "context"
-	m.text.SetValue("8192")
-	m.acceptEdit()
+	setWizardContext(m, "8192")
 	saved := m.draft.Presets[p.ID]
 	_, record := presetRecord(saved.Lock)
 	if record.Window() != 8192 || !strings.Contains(saved.Name, "customized") {
@@ -225,7 +223,7 @@ func TestPresetWithoutALockShowsWhyAndCannotBeSelected(t *testing.T) {
 		t.Fatalf("selected a preset without a lock: %q", m.notice)
 	}
 	editorKey(m, 'c')
-	if m.field != "" || !strings.Contains(m.notice, "needs Temper 0.2.0") {
+	if m.control != "" || !strings.Contains(m.notice, "needs Temper 0.2.0") {
 		t.Fatalf("customized a preset without a lock: %q", m.notice)
 	}
 	if view := m.View().Content; !strings.Contains(view, "needs Temper 0.2.0") || strings.Contains(view, "Context 0") {

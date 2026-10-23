@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/temper-sh/temper/internal/catalog"
+	"github.com/temper-sh/temper/internal/tui"
 )
 
 // Rendering, pointer activation and keyboard focus share the same buttons.
@@ -21,7 +22,7 @@ func (m *PresetModel) footerButtons() []presetButton {
 		return presetButton{label, short, available, hitTarget{kind: hitShortcut, key: key}}
 	}
 	if m.field != "" {
-		return []presetButton{button("Apply", "Apply", "apply", true), button("Cancel", "Cancel", "cancel-edit", true)}
+		return []presetButton{button("Cancel", "Cancel", "cancel-edit", true), button("Apply", "Apply", "apply", true)}
 	}
 	if m.page == presetReviewPage {
 		install := "Install and start"
@@ -54,16 +55,13 @@ func (m *PresetModel) footerButtons() []presetButton {
 	selected := m.cursor >= 0 && m.cursor < m.count()
 	switch {
 	case m.page == 0:
-		p, ok := m.selectedOption()
+		p, _ := m.selectedOption()
 		lock := p.Lock
 		if selected, ok := m.draft.Presets[p.ID]; ok {
 			lock = selected.Lock
 		}
 		_, record := presetRecord(lock)
 		buttons = append(buttons, button("c Context", "Context", "c", selected && record.ContextConfigurable()))
-		if ok && len(record.ComputeOptions) > 1 {
-			buttons = append(buttons, button("p Compute", "Compute", "p", true))
-		}
 
 	}
 	return buttons
@@ -74,21 +72,15 @@ func (m *PresetModel) installRefused() bool {
 	return m.reviewReady && !m.loading && !m.plan.CanPrepare
 }
 
-func (m *PresetModel) navigationButton(back bool) int {
+func (m *PresetModel) navigationButton() int {
 	if m.field != "" {
-		if back {
-			return 1
-		}
-		return 0
+		return 1
 	}
 	if m.page == presetReviewPage {
-		// Install, unless the finished check says it cannot run: then Back.
-		if back || m.installRefused() {
+		// Prefer Back while installation is unavailable, including a pending check.
+		if !m.actionAvailable(0) {
 			return 2
 		}
-		return 0
-	}
-	if back {
 		return 0
 	}
 	return 1
@@ -110,21 +102,16 @@ func (m *PresetModel) focusArea(area presetFocus) {
 }
 
 func (m *PresetModel) cycleFocus(back bool) {
-	areas := []presetFocus{presetContentFocus, presetFooterFocus}
-	if m.field == "" {
-		areas = append(areas, presetStepsFocus)
-		if m.page == 0 {
-			areas = append(areas, presetFilterFocus)
-		}
-	}
 	delta := 1
 	if back {
 		delta = -1
 	}
-	i := slices.Index(areas, m.focus)
-	area := areas[(i+delta+len(areas))%len(areas)]
+	m.navigateTo(m.focusOrder().Cycle(m.focus, delta))
+}
+
+func (m *PresetModel) navigateTo(area presetFocus) {
 	if area == presetFooterFocus {
-		m.action = m.navigationButton(back)
+		m.action = m.navigationButton()
 	}
 	if area == presetStepsFocus {
 		m.step = m.page
@@ -132,97 +119,76 @@ func (m *PresetModel) cycleFocus(back bool) {
 	m.focusArea(area)
 }
 
+func (m *PresetModel) focusOrder() tui.FocusOrder {
+	return tui.FocusOrder{Primary: m.field == "", Secondary: m.field == "" && m.page == 0, Rows: m.contentRows()}
+}
+
 func (m *PresetModel) contentRows() int {
 	if m.field != "" || m.page == presetReviewPage {
 		// Review has one scrollable content area, with no selectable rows.
 		return 1
 	}
+	if m.page == 0 {
+		return len(m.wizardControls())
+	}
 	return m.count()
 }
 
 func (m *PresetModel) moveVertical(delta int) {
-	rows := m.contentRows()
-	filters := m.page == 0 && m.field == ""
-	switch m.focus {
-	case presetStepsFocus:
-		if delta > 0 && filters {
-			m.focusArea(presetFilterFocus)
+	if m.focus == presetContentFocus && m.field == "" && m.page == presetReviewPage {
+		if delta < 0 && !m.view.AtTop() {
+			m.view.ScrollUp(1)
 			return
 		}
-		if delta > 0 && rows > 0 {
-			m.cursor = 0
-			m.focusArea(presetContentFocus)
+		if delta > 0 && !m.view.AtBottom() {
+			m.view.ScrollDown(1)
 			return
-		}
-	case presetFilterFocus:
-		if delta < 0 {
-			m.step = m.page
-			m.focusArea(presetStepsFocus)
-			return
-		}
-		if delta > 0 && rows > 0 {
-			m.cursor = 0
-			m.focusArea(presetContentFocus)
-			return
-		}
-	case presetFooterFocus:
-		if delta < 0 && rows == 0 && filters {
-			m.focusArea(presetFilterFocus)
-		} else if m.field == "" && (delta > 0 || rows == 0) {
-			m.step = m.page
-			m.focusArea(presetStepsFocus)
-		} else if rows > 0 {
-			if m.field == "" {
-				m.cursor = 0
-				if delta < 0 {
-					m.cursor = rows - 1
-				}
-			}
-			m.focusArea(presetContentFocus)
-		}
-		return
-	case presetContentFocus:
-		if m.field == "" {
-			if m.page == presetReviewPage {
-				if delta < 0 && !m.view.AtTop() {
-					m.view.ScrollUp(1)
-					return
-				}
-				if delta > 0 && !m.view.AtBottom() {
-					m.view.ScrollDown(1)
-					return
-				}
-			}
-			next := m.cursor + delta
-			if next >= 0 && next < rows {
-				m.cursor = next
-				m.focusArea(presetContentFocus)
-				return
-			}
-			if delta < 0 && filters {
-				m.focusArea(presetFilterFocus)
-				return
-			}
-			if delta < 0 {
-				m.step = m.page
-				m.focusArea(presetStepsFocus)
-				return
-			}
 		}
 	}
-	m.action = m.navigationButton(false)
-	m.focusArea(presetFooterFocus)
+	row := m.cursor
+	if m.page == 0 {
+		row = max(0, slices.Index(m.wizardControls(), wizardControl{m.cursor, m.control}))
+	}
+	if m.field != "" || m.page == presetReviewPage {
+		row = 0
+	}
+	area, row := m.focusOrder().Vertical(m.focus, row, delta)
+	if m.field == "" && m.page != presetReviewPage {
+		if m.page == 0 && len(m.wizardControls()) > 0 {
+			c := m.wizardControls()[row]
+			m.cursor, m.control = c.preset, c.kind
+		} else {
+			m.cursor = row
+			m.control = ""
+		}
+	}
+	m.navigateTo(area)
 }
 
 func (m *PresetModel) moveHorizontal(delta int) {
 	switch m.focus {
-	case presetFilterFocus:
+	case presetFilterFocus, presetContentFocus:
+		if m.field != "" || m.page != 0 {
+			return
+		}
+		if m.focus == presetContentFocus && m.control == "compute" {
+			p, ok := m.selectedOption()
+			if !ok {
+				return
+			}
+			_, record := presetRecord(m.draft.Presets[p.ID].Lock)
+			next := tui.CycleChoice(slices.Index(record.ComputeOptions, record.Compute), len(record.ComputeOptions), delta)
+			if m.customize(p, 0, record.ComputeOptions[next]) {
+				m.notice = ""
+			}
+			return
+		}
 		groups := m.groups()
 		i := slices.IndexFunc(groups, func(g catalog.Group) bool { return g.ID == m.group })
-		m.selectGroup(groups[max(0, min(len(groups)-1, i+delta))].ID)
+		m.selectGroup(groups[tui.CycleChoice(i, len(groups), delta)].ID)
 	case presetFooterFocus:
 		n := len(m.footerButtons())
-		m.action = (m.action + delta + n) % n
+		m.action = tui.CycleChoice(m.action, n, delta)
 	case presetStepsFocus:
 		m.step = max(0, min(presetReviewPage, m.step+delta))
 	}
@@ -249,6 +215,10 @@ func (m *PresetModel) activateFocused() tea.Cmd {
 		if m.field != "" {
 			return m.activateShortcut("apply")
 		}
+		if m.page == 0 && m.control != "" {
+			m.moveVertical(1)
+			return nil
+		}
 		if m.page != presetReviewPage && m.cursor < m.count() {
 			m.focusSelection = true
 			m.toggleMember()
@@ -268,8 +238,7 @@ func (m *PresetModel) activateShortcut(key string) tea.Cmd {
 	case "cancel-edit":
 		m.field, m.notice = "", ""
 		m.text.Blur()
-		m.focus, m.action = m.editFocus, m.editAction
-		m.focusSelection = true
+		m.focusArea(presetContentFocus)
 	case "back":
 		return m.back()
 	case "retry":
@@ -293,7 +262,20 @@ func (m *PresetModel) activateShortcut(key string) tea.Cmd {
 		}
 	case "p":
 		if m.page == 0 {
-			m.cycleCompute()
+			if p, ok := m.selectedOption(); ok {
+				_, record := presetRecord(p.Lock)
+				if len(record.ComputeOptions) < 2 {
+					return nil
+				}
+				if _, selected := m.draft.Presets[p.ID]; !selected {
+					m.notice = "Include the preset before customizing it."
+					return nil
+				}
+			}
+			m.control = "compute"
+			if m.cycleCompute() {
+				m.notice = ""
+			}
 			m.focusSelection = m.focus == presetContentFocus
 		}
 	}

@@ -16,6 +16,16 @@ import (
 	"github.com/temper-sh/temper/internal/software"
 )
 
+func wizardType(m *PresetModel, value string) {
+	m.Update(tea.KeyPressMsg{Code: 'u', Mod: tea.ModCtrl})
+	m.Update(tea.PasteMsg{Content: value})
+}
+func setWizardContext(m *PresetModel, value string) {
+	m.activateShortcut("c")
+	wizardType(m, value)
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter}) // Apply, retaining its new assessment.
+}
+
 func TestMeasuredCardFallsBackAfterContextEditAndRecoversAtTestedContext(t *testing.T) {
 	m := presetEditor(t, "qwen3.8-27b-q4xl-splash")
 	option := &m.input.Presets[0]
@@ -49,9 +59,7 @@ func TestMeasuredCardFallsBackAfterContextEditAndRecoversAtTestedContext(t *test
 		{window / 2, "estimated", "Memory estimate"},
 		{window, "measured", "Measured peak"},
 	} {
-		editorKey(m, 'c')
-		m.text.SetValue(fmt.Sprint(step.context))
-		m.acceptEdit()
+		setWizardContext(m, fmt.Sprint(step.context))
 		visible := m.visible()[0]
 		if visible.MemoryBasis != step.basis || visible.Unavailable != "" {
 			t.Fatal("card kept a stale basis or refusal", visible.MemoryBasis, visible.Unavailable, m.notice)
@@ -73,13 +81,10 @@ func TestContextEditRefreshesTheVisibleCacheEstimate(t *testing.T) {
 		PhysicalMemoryBytes: 64 << 30, MetalDeviceMemoryMiB: 48 * 1024, MetalDeviceMemorySource: machine.MetalDeviceSourceLive, WiredLimitMiB: 48 * 1024, WiredLimitSource: budget.WiredSourceMetal}
 	m.input.Assess = func(l catalog.Lock) (setup.PresetPlan, error) { return setup.Assess(l, observed) }
 	m.group = option.Group
-	editorKey(m, 'c')
-	m.text.SetValue("4096")
-	m.acceptEdit()
+	editorKey(m, ' ')
+	setWizardContext(m, "4096")
 	before := m.visible()[0].MemoryBytes
-	editorKey(m, 'c')
-	m.text.SetValue("32768")
-	m.acceptEdit()
+	setWizardContext(m, "32768")
 	after := m.visible()[0].MemoryBytes
 	if before == 0 || after <= before {
 		t.Fatal("context edit left stale card memory", before, after, m.notice)
@@ -105,6 +110,7 @@ func TestComputeEditRefreshesMemoryAndSurvivesOtherEdits(t *testing.T) {
 			m.input.Presets[i].Unavailable = strings.Join(base.Refusals, "; ")
 		}
 	}
+	editorKey(m, ' ')
 	editorKey(m, 'p')
 	_, cpu := presetRecord(m.draft.Presets[p.ID].Lock)
 	if cpu.Compute != catalog.ComputeCPU || m.visible()[0].Unavailable != "" {
@@ -114,11 +120,9 @@ func TestComputeEditRefreshesMemoryAndSurvivesOtherEdits(t *testing.T) {
 		t.Fatalf("picker did not place the selected device before Context on the same line:\n%s", view)
 	}
 	m.draft.Layouts["work"] = setup.Layout{Name: "Work", Presets: []string{p.ID}, Startup: []string{p.ID}, IdleSeconds: 60}
-	editorKey(m, 'c')
-	m.text.SetValue("4096")
-	m.acceptEdit()
+	setWizardContext(m, "4096")
 	_, edited := presetRecord(m.draft.Presets[p.ID].Lock)
-	if edited.Compute != catalog.ComputeCPU || edited.Window() != 4096 || !strings.Contains(m.notice, "work") {
+	if edited.Compute != catalog.ComputeCPU || edited.Window() != 4096 || len(m.draft.References(p.ID)) != 1 {
 		t.Fatalf("context edit reset compute or lost layout references: %s", m.notice)
 	}
 	if got := m.draft.Presets[p.ID].Choices; got != (setup.Choices{ContextWindow: 4096, Compute: catalog.ComputeCPU}) {
@@ -155,24 +159,16 @@ func TestComputeControlUsesKeyboardAndMouseAtNarrowWidths(t *testing.T) {
 				m := presetEditor(t, tc.id)
 				m.Update(tea.WindowSizeMsg{Width: width, Height: 18})
 				editorKey(m, 's')
-				m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
-				for i := 0; i < 2; i++ {
-					m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
-				}
-				if m.footerButtons()[m.action].target.key != "p" {
-					t.Fatal("Compute is not reachable from the footer")
-				}
-				if view := strings.ToLower(ansi.Strip(m.View().Content)); strings.Contains(view, "template") {
-					t.Fatalf("a preset with its model's own template shows a Template control:\n%s", view)
-				}
-				m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+				editorKey(m, ' ')
+				editorKey(m, 'p')
+
 				p, _ := m.selectedOption()
 				_, chosen := presetRecord(m.draft.Presets[p.ID].Lock)
 				if chosen.Compute != tc.next {
 					t.Fatalf("keyboard Compute failed: %s", m.notice)
 				}
 				assertFrameFits(t, m.View().Content, width, 18)
-				clickPresetText(t, m, "Compute")
+				clickPresetText(t, m, strings.ToUpper(string(tc.before)))
 				_, chosen = presetRecord(m.draft.Presets[p.ID].Lock)
 				if chosen.Compute != tc.before {
 					t.Fatal("mouse Compute failed")
@@ -218,14 +214,12 @@ func TestFixedComputeCardsOmitControlAndIgnoreShortcut(t *testing.T) {
 	}
 }
 
-func TestRemovingComputeControlKeepsFooterNavigationAligned(t *testing.T) {
+func TestChangingCategoryKeepsFooterNavigationAligned(t *testing.T) {
 	m := presetEditor(t, "gemma-4-31b-qat-ud-q4-k-xl-llama", "nuextract3-q4km-llama")
 	editorKey(m, 's')
 	m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
-	for i := 0; i < 2; i++ {
-		m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
-	}
-	editorKey(m, 'g') // The focused Compute button disappears.
+	m.Update(tea.KeyPressMsg{Code: tea.KeyRight}) // Context.
+	editorKey(m, 'g')                             // Keep the footer action aligned after changing category.
 	if view := ansi.Strip(m.View().Content); strings.Contains(view, "Compute") {
 		t.Fatalf("fixed-device footer retained Compute:\n%s", view)
 	}

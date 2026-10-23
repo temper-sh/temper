@@ -102,10 +102,14 @@ func llamaServerCommand(options llamaServerOptions) (Command, error) {
 			[]commandWord{knownWord(llamaBooleanFlag(c.ContextShift && options.maxTokens != -1, "--context-shift", "--no-context-shift"))},
 			[]commandWord{knownWord(llamaBooleanFlag(c.CachePrompt, "--cache-prompt", "--no-cache-prompt"))},
 			[]commandWord{knownWord("--fit"), knownWord(c.Fit)},
-			[]commandWord{knownWord("--threads"), knownWord(strconv.Itoa(c.Threads))},
-			[]commandWord{knownWord("--threads-batch"), knownWord(strconv.Itoa(c.ThreadsBatch))},
-			[]commandWord{knownWord("--load-mode"), knownWord(c.LoadMode)},
 		)
+		if c.Threads > 0 {
+			groups = append(groups, []commandWord{knownWord("--threads"), knownWord(strconv.Itoa(c.Threads))})
+		}
+		if c.ThreadsBatch > 0 {
+			groups = append(groups, []commandWord{knownWord("--threads-batch"), knownWord(strconv.Itoa(c.ThreadsBatch))})
+		}
+		groups = append(groups, []commandWord{knownWord("--load-mode"), knownWord(c.LoadMode)})
 	}
 	if s := options.sampling; s != nil {
 		for _, pair := range []struct {

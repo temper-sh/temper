@@ -8,7 +8,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/tui"
 	"github.com/temper-sh/temper/internal/userpreset"
 )
@@ -35,8 +34,8 @@ func (m *Editor) View() tea.View {
 	}
 	w := tui.ContentWidth(m.width)
 	header, primary, secondary := m.renderHeader(w)
-	body, focusStart, focusEnd, rows := m.body(w)
-	if m.mode == "editor" && m.input == "" && m.confirm == "" {
+	body, focusStart, focusEnd, rows, choices := m.body(w)
+	if m.mode == "editor" && !m.visibleForm() && m.input == "" && m.confirm == "" {
 		summary := m.draftSummary(w) + "\n\n"
 		body = summary + body
 		shift := strings.Count(summary, "\n")
@@ -44,13 +43,16 @@ func (m *Editor) View() tea.View {
 		for i := range rows {
 			rows[i].Y += shift
 		}
+		for i := range choices {
+			choices[i].Y += shift
+		}
 	}
 	footer, actions := m.renderFooter(w)
 	frame := tui.Frame{Width: m.width, Height: m.height, Header: header, Footer: footer}
 	m.viewport.SetWidth(w)
 	m.viewport.SetHeight(frame.BodyHeight())
 	m.viewport.SetContent(body)
-	if m.focus && (m.contentFocused() || m.confirm != "") {
+	if m.focus && (m.contentFocused() || m.input != "" || m.confirm != "") {
 		m.viewport.EnsureVisible(focusEnd, 0, 0)
 		m.viewport.EnsureVisible(focusStart, 0, 0)
 		m.focus = false
@@ -60,6 +62,7 @@ func (m *Editor) View() tea.View {
 		m.hits.Add(int(secondaryArea), frame.HeaderTargets(secondary))
 	}
 	if !m.loading {
+		m.hits.Add(int(choiceArea), frame.BodyTargets(choices, m.viewport.YOffset()))
 		m.hits.Add(int(contentArea), frame.BodyTargets(rows, m.viewport.YOffset()))
 	}
 	m.hits.Add(int(actionsArea), frame.FooterTargets(actions))
@@ -71,11 +74,23 @@ func (m *Editor) View() tea.View {
 	return v
 }
 
-func (m *Editor) body(width int) (string, int, int, []tui.Target) {
+func (m *Editor) body(width int) (string, int, int, []tui.Target, []tui.Target) {
+	if m.mode == "local-files" && m.input == "" {
+		return m.localFilesBody(width)
+	}
+	if m.visibleForm() {
+		return m.controlBody(width)
+	}
 	var lines []string
 	var targets []tui.Target
+	var choices []tui.Target
 	hit := func(index, start int) {
 		targets = append(targets, tui.Target{Index: index, Y: start, Width: width, Height: len(lines) - start})
+	}
+	separate := func(index int) {
+		if index > 0 {
+			lines = append(lines, "")
+		}
 	}
 	start, end := 0, 0
 	addTone := func(s string, element tui.Element, focused bool) {
@@ -116,6 +131,7 @@ func (m *Editor) body(width int) (string, int, int, []tui.Target) {
 			choices = []string{"Keep editing", "Undo conversion"}
 		}
 		for i, s := range choices {
+			separate(i)
 			rowStart := len(lines)
 			element := tui.Body
 			if m.confirm == "delete" && i == 1 {
@@ -127,43 +143,41 @@ func (m *Editor) body(width int) (string, int, int, []tui.Target) {
 			addTone(mark(i == m.confirmCursor)+s, element, i == m.confirmCursor)
 			hit(i, rowStart)
 		}
-		return strings.Join(lines, "\n"), start, end, targets
+		return strings.Join(lines, "\n"), start, end, targets, nil
 	}
 	if m.input != "" {
 		title, help := "", ""
 		switch m.input {
 		case "new-name":
 			title = "Preset name"
-		case "field":
-			title = fieldLabel(m.field.Path)
-			help = m.field.Help
-			if len(m.field.Choices) > 0 {
-				help += " Choices: " + strings.Join(m.field.Choices, ", ")
-			}
-			if m.field.Type == catalog.FieldSwitch {
-				help += " Choices: true, false"
-			}
-		case "form":
-			title = m.form[m.cursor].label
+		case "browse-path":
+			title, help = "Directory", "Enter a folder path to browse."
 		case "filter":
 			title = "Filter file names"
-			help = "Selected files stay selected when filtered out."
+			if m.pageExplanation(width) == "" {
+				help = "Selected files stay selected when filtered out."
+			}
 		}
 		addTone(title, tui.Heading, false)
 		addTone(help, tui.Muted, false)
+		m.text.Prompt = "› "
 		m.text.SetWidth(max(1, width-3))
+		m.text.SetCursor(m.text.Position())
 		rowStart := len(lines)
 		lines = append(lines, m.text.View())
 		hit(0, rowStart)
-		return strings.Join(lines, "\n"), 0, len(lines) - 1, targets
+		return strings.Join(lines, "\n"), 0, len(lines) - 1, targets, nil
 	}
 	switch m.mode {
+	case "overview":
+		return m.overview.render(width), 0, 0, nil, nil
 	case "manager":
 		rows := m.visiblePresets()
 		if len(rows) == 0 {
 			add("No presets yet. Press n to choose a catalog starting point.", false)
 		}
 		for i, p := range rows {
+			separate(i)
 			rowStart := len(lines)
 			name := p.name
 			if name == "" {
@@ -180,65 +194,10 @@ func (m *Editor) body(width int) (string, int, int, []tui.Target) {
 			}
 			break
 		}
-		rows := m.fields()
-		for i, f := range rows {
-			rowStart := len(lines)
-			switch f.Path {
-			case "artifact":
-				a := m.currentWeights()
-				if len(a.Files) > 0 {
-					f.current = a.Files[0].Path
-					if len(a.Files) > 1 {
-						f.current = fmt.Sprintf("%s (+%d files)", a.Files[0].Path, len(a.Files)-1)
-					}
-				}
-				f.Help = "Choose model weights."
-			case "template":
-				id, template := m.currentTemplate()
-				if id == catalog.BuiltinTemplate {
-					f.current = "From model"
-				} else if len(template.Files) > 0 {
-					f.current = template.Files[0].Path
-				}
-				f.Help = "Choose the model's template, a local file or Hugging Face."
-			}
-			selected := i == m.cursor
-			if selected {
-				start = len(lines)
-			}
-			row := fieldRow(f, m.draft.file.Fork(), selected && m.contentFocused(), width)
-			lines = append(lines, strings.Split(row, "\n")...)
-			if selected {
-				addTone("  "+f.Help, tui.Muted, false)
-				end = len(lines) - 1
-			}
-			hit(i, rowStart)
-		}
-	case "form":
-		add(strings.Title(m.formKind), false)
-		addTone(m.formExplanation(), tui.Muted, false)
-		for _, i := range m.visibleFormRows() {
-			rowStart := len(lines)
-			f := m.form[i]
-			v := f.value
-			if m.formKind == "template" && i == 0 {
-				v = map[string]string{"builtin": "From model", "local": "Local file", "huggingface": "Hugging Face"}[v]
-			}
-			if v == "" {
-				v = "(not set)"
-			}
-			add(mark(i == m.cursor)+f.label+": "+v, i == m.cursor)
-			hit(i, rowStart)
-		}
-		action := "Look up files"
-		if m.formKind == "template" {
-			action = "Use template in draft"
-		}
-		rowStart := len(lines)
-		add(mark(m.cursor == len(m.form))+action, m.cursor == len(m.form))
-		hit(len(m.form), rowStart)
 	case "files":
-		add("Select weights files", false)
+		if m.pageExplanation(width) == "" {
+			add("Select weights files", false)
+		}
 		add("Commit: "+m.repository.Commit, false)
 		selected := 0
 		for _, yes := range m.files {
@@ -252,6 +211,7 @@ func (m *Editor) body(width int) (string, int, int, []tui.Target) {
 			add("No matching files. / changes the filter; Escape returns to the repository.", false)
 		}
 		for i, file := range files {
+			separate(i)
 			rowStart := len(lines)
 			check := "[ ] "
 			element := tui.Toggle
@@ -268,12 +228,36 @@ func (m *Editor) body(width int) (string, int, int, []tui.Target) {
 			addTone(mark(i == m.cursor)+check+file, element, i == m.cursor)
 			hit(i, rowStart)
 		}
+		if m.needsModelRelationship() {
+			lines = append(lines, "", tui.Style(tui.Body).Render("Model relationship"))
+			y := len(lines)
+			selected := -1
+			for i, value := range m.form[2].choices {
+				if value == m.form[2].value {
+					selected = i
+				}
+			}
+			block, ts := tui.FormChoices(tui.Presets, []string{"Same model", "Different model"}, selected, width, m.cursor == len(files) && m.area == contentArea)
+			lines = append(lines, strings.Split(block, "\n")...)
+			for _, target := range ts {
+				target.Y += y
+				choices = append(choices, target)
+			}
+			if selected == 1 {
+				lines = append(lines, strings.Split(ansi.Wrap("Use weights will make this draft an independent copy.", width, ""), "\n")...)
+			}
+			hit(len(files), y)
+			if m.cursor == len(files) {
+				start, end = y, len(lines)-1
+			}
+		}
+
 	case "report":
 		for _, s := range m.report {
 			add(s, false)
 		}
 	}
-	return strings.Join(lines, "\n"), start, end, targets
+	return strings.Join(lines, "\n"), start, end, targets, choices
 }
 
 func mark(focused bool) string {
@@ -290,13 +274,25 @@ func shownValue(v any) string {
 }
 func fieldLabel(path string) string {
 	if path == "name" {
-		return "Display name"
+		return "Name"
 	}
 	if path == "artifact" {
 		return "Weights"
 	}
 	if path == "template" {
 		return "Template"
+	}
+	switch path {
+	case "context_window_tokens":
+		return "Context"
+	case "request_defaults.max_output_tokens":
+		return "Output limit"
+	case "request_defaults.reasoning_budget_tokens":
+		return "Reasoning budget"
+	case "speculation.method":
+		return "Speculation"
+	case "speculation.max_draft_tokens":
+		return "Draft tokens"
 	}
 	path = strings.TrimPrefix(path, "request_defaults.")
 	path = strings.TrimPrefix(path, "sampling.")
@@ -308,47 +304,4 @@ func fieldLabel(path string) string {
 	label := strings.ReplaceAll(path, "_", " ")
 	label = strings.NewReplacer("kv ", "KV ", "gpu ", "GPU ", "cpu ", "CPU ", " mib", " MiB").Replace(label)
 	return strings.ToUpper(label[:1]) + label[1:]
-}
-
-// Wide rows align labels, values and overrides; narrow rows keep the same
-// information stacked. Only the selected field adds its explanatory help.
-func fieldRow(f editField, fork, focused bool, width int) string {
-	element := tui.EditorRow
-	if focused {
-		element = tui.EditorRowFocused
-	}
-	p := tui.Colors(element)
-	inner := width - 2
-	label := terminalText(fieldLabel(f.Path))
-	value := terminalText(shownValue(f.current))
-	labelStyle := tui.Style(tui.Muted).Background(p.Background)
-	if focused {
-		labelStyle = labelStyle.Foreground(p.Text).Bold(true)
-	}
-	valueStyle := tui.Style(element).Bold(focused)
-	if width >= 70 {
-		label = fmt.Sprintf("%-27s", label)
-	} else {
-		label += ":"
-	}
-	row := labelStyle.Render(label) + valueStyle.Render(" "+value)
-	if fork && f.override {
-		status := "Override"
-		if f.Path != "artifact" && f.Path != "template" {
-			status += " · origin: " + terminalText(shownValue(f.origin))
-		}
-		gap := inner - ansi.StringWidth(row) - ansi.StringWidth(status)
-		status = tui.Style(tui.Override).Background(p.Background).Render(status)
-		if width >= 70 && gap >= 3 {
-			row += tui.Style(element).Render(strings.Repeat(" ", gap)) + status
-		} else {
-			row += "\n" + status
-		}
-	}
-	row = ansi.Wrap(row, inner, "")
-	style := tui.Style(element).Width(width).PaddingLeft(2)
-	if focused {
-		style = style.PaddingLeft(1).Border(lipgloss.Border{Left: "▎"}, false, false, false, true)
-	}
-	return style.Render(row)
 }

@@ -1,6 +1,9 @@
 package setupui
 
-import tea "charm.land/bubbletea/v2"
+import (
+	tea "charm.land/bubbletea/v2"
+	"github.com/temper-sh/temper/internal/tui"
+)
 
 func (m *LayoutModel) activateAction(index int) tea.Cmd {
 	actions := m.actions()
@@ -14,7 +17,7 @@ func (m *LayoutModel) activateAction(index int) tea.Cmd {
 	return m.invoke(actions[index].id)
 }
 
-func (m *LayoutModel) click(area, index int) tea.Cmd {
+func (m *LayoutModel) click(area tui.FocusArea, index int) tea.Cmd {
 	if area == layoutActions {
 		return m.activateAction(index)
 	}
@@ -30,6 +33,14 @@ func (m *LayoutModel) click(area, index int) tea.Cmd {
 	}
 	m.area, m.focus = layoutContent, true
 	switch area {
+	case layoutPresetControls:
+		if m.mode == "edit" && m.page == 1 {
+			m.cursor = 2
+			m.changeTimeUnit(index == 1)
+			return nil
+		}
+		m.cursor, m.control = index/len(layoutPresetActions), index%len(layoutPresetActions)
+		return m.activatePresetControl()
 	case layoutBreadcrumbs:
 		if index >= len(m.breadcrumbs())-1 {
 			return nil
@@ -48,7 +59,7 @@ func (m *LayoutModel) click(area, index int) tea.Cmd {
 		m.cursor = index
 		if m.mode == "edit" {
 			if m.page == 0 {
-				return m.invoke("member")
+				return nil // The card selects; only its explicit controls toggle.
 			}
 			return m.invoke("field")
 		}

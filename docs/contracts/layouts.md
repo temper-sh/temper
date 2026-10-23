@@ -130,18 +130,34 @@ or default model and a 1,800-second idle timeout. Empty layouts are valid.
 Inside a layout, **Presets** reads the saved files in `ROOT/presets.d` alongside
 existing exact presets. A preset saved in the preset editor appears here
 without an import or configuration-selection step. Inclusion, preload and
-default are independent choices;
+default are independent choices. Each preset card shows **Included**, **Load on
+activation** and **Default** checkboxes together;
 preload and default require inclusion. Excluding a preset used for either asks
 to clear those references. **Settings** contains the name and idle timeout.
 There are no source tabs, catalog browsing or authoring actions. Preset files
 resolve against the stored catalog, offline. Invalid files stay visible with
 their reason; they do not prevent using other presets. User presets are untested.
 
-Mouse clicks select a layout in the list; Edit opens it. Inside a layout, clicks
-toggle preset inclusion, open settings fields and activate breadcrumbs, sections
-and footer actions. Preload and Default apply to the selected preset. The wheel
-scrolls content. Inputs and confirmations block background controls; disabled
-actions and pending work cannot be bypassed by clicking. Back navigation and
+The [shared terminal controls](terminal-ui.md) apply here: arrows reach
+navigation, visible settings inputs and footer actions, including Review/Save. Empty lists are skipped; review content scrolls before focus
+leaves it. Tab remains an optional shortcut between regions.
+
+Inside Presets, Up/Down moves between cards and Left/Right chooses a checkbox.
+Enter or Space toggles the focused checkbox. Moving across a checkbox never
+changes its value; preload and default remain disabled until inclusion. The
+selected card keeps its controls visible when they wrap. Move up into secondary
+navigation to choose Settings. The footer offers Discard, Review and Save.
+Settings has visible Name and Unload after inactivity inputs, with Seconds /
+Minutes choices. Switching units preserves the duration, including fractional
+minutes that represent whole seconds. Empty names and invalid durations stay
+visible and prevent Review or Save. Typing changes the draft; navigation and
+resizing retain it.
+
+Mouse clicks select a layout in the list; Edit opens it. Inside a layout, a card
+click selects the preset and each checkbox toggles only its own choice. Clicks
+also focus settings inputs and activate breadcrumbs, sections and footer actions.
+The wheel scrolls content. Naming prompts and confirmations block background controls;
+disabled actions and pending work cannot be bypassed by clicking. Back navigation and
 membership changes retain the same confirmation guards as keyboard input.
 
 The editor holds one revocable draft. Review shows membership, preload, default

@@ -132,7 +132,7 @@ It does not own install, check, removal, or catalog policy.
 | `temper layout activate/status/stop` | `setupcmd.Layout`, `managed.Reconcile` | frozen desired/current jobs, pure composed rendering | exact preparation checks, activation journal, launchd, owned process observation and recovery | `docs/contracts/layouts.md` |
 | `temper layout`, `layout edit` | `setupcmd.NewLayoutEditor`, `setupui.LayoutModel` | revocable membership/settings draft, shared `tui` frame, `setup.AssessLayout` | preset-folder/stored-catalog reads, source-checked first placement, revision-checked `setup.SaveConfiguration`; no authoring or service effects | `docs/contracts/layouts.md` |
 | `temper catalog compile` | `internal/catalogcmd` | `catalog`: four native records, selected preset closure and execution identity | explicit local file reads; atomic lock publication without replacement | `docs/contracts/execution-lock.md` |
-| `temper preset`, `preset edit` | `internal/presetcmd.Editor` | revocable `UserPreset` draft, `catalog.Fields`, compiler, shared memory and installation assessment | local reads, explicit cancellable metadata lookup, guarded `userpreset.Save`/`Delete`; no configuration or service effects | `docs/contracts/user-presets.md` |
+| `temper preset`, `preset edit` | `internal/presetcmd.Editor` | revocable `UserPreset` draft, `catalog.Fields`, compiler, shared memory and installation assessment | local reads, explicit cancellable metadata lookup, guarded `userpreset.SaveWithTemplates`/`Delete`; no configuration or service effects | `docs/contracts/user-presets.md` |
 | `temper execution configure` | `internal/catalogcmd` | `catalog.ConfigureExecution`: explicit context/output/Splash memory limits and compute selection | immutable derived lock publication | `docs/contracts/execution-runtime.md` |
 | `temper catalog describe` | `internal/catalogcmd` | `catalog.DescribePreset`: authored preset copy and optional assessment link | explicit authoring-file read, directory writer lock, validated atomic replacement; dry run writes nothing | `docs/contracts/execution-lock.md` |
 | `temper execution prepare/render/serve/remove/paths` | `catalogcmd.Runtime` | in-memory projections of one exact execution lock | software install/check/remove, `fetch`, Splash assembly, `apply` generation commit, content hashing, Field Kit binding; one supervised foreground router | `docs/contracts/execution-runtime.md` |
@@ -148,26 +148,53 @@ it is executable in a test.
 
 ### Presets, configuration and managed availability
 
+Visible forms use `tui.FormField`, `FormChoices` and `FormToggle`. Tool models
+own raw input, errors, conditional controls and draft updates; rendering and
+focus changes do not author overrides. `presetcmd/editor_local_template.go`
+reads selections into `userpreset.TemplateFile` snapshots. Draft compilation
+uses `ResolveWithTemplates`; `SaveWithTemplates` durably prepares only referenced
+attachments before atomically publishing the preset, with collision, cancellation
+and optimistic-edit guards. Ordinary saves use the same boundary without attachments.
+
 `presetcmd/editor*.go` owns the standalone manager, draft navigation and review.
-Draft field edits are in-memory computations; `records.go` shares weights and
+`editor_navigation.go` maps its visible rows and scroll boundaries to shared
+focus traversal; mode handlers retain their guarded operations.
+`editor_form.go` projects supported fields into visible controls and responsive
+rows, retaining raw invalid text separately from the last valid authored values.
+`editor_overview.go` projects the chosen catalog preset and typed memory
+assessment into read-only sections, retaining that source for Fork/Copy even
+after scrolling. Its actions enter the existing draft flow. Draft field
+edits are in-memory computations; `records.go` shares weights and
 template reads with the scripted authoring commands. `userpreset` reads and
 resolves authoring files and owns guarded single-file publication and deletion.
 Temper writers serialize comparison and publication under a short kernel lock;
 external editors still need the documented optimistic-edit limitation.
 `tui` owns the shared terminal frame, header, breadcrumbs/steps, secondary
 navigation, buttons, key hints, tool palettes and text input. All three tools
-use these components. Rendering takes values and returns text with cell targets
-for mouse navigation and actions. Each editor records row targets while rendering
-content; `Frame` projects and clips them to visible header, body and footer cells.
+use these components. Its `FieldRow` renders aligned labels and values with
+optional supporting text for read-only summaries; visible editing uses the form
+controls without moving editing or validation into `tui`. Rendering takes values and returns text
+with cell targets for mouse navigation and actions. Each editor records row
+targets while rendering content; `Frame` projects and clips them to visible
+header, body and footer cells.
 The editors rebuild their `HitMap` from each view and invalidate it on updates,
 so scrolling, wrapped controls and resizing cannot retain stale targets.
-Each tool owns focus, navigation, editing and effects; mouse activation uses
-its existing guarded actions.
+`tui.FocusOrder` owns the pure traversal of primary/secondary navigation,
+content rows and actions, including empty screens and modal input. The wizard
+and both editors supply visible regions, scroll to their content boundaries,
+and use the same action/secondary cycling and focus hints. Each tool retains
+its focus state, editing and guarded activation; the shared helper performs no
+commands or effects.
+The wizard's context prompt owns pending text separately from the selected
+preset: Apply validates and reassesses the draft, while Cancel discards the text.
 Configuration selection, layout membership and managed activation remain
 separate operations.
 
-`setupui/layouts*.go` owns standalone layout navigation and its draft. The
-`setupcmd/layout_editor.go` save callback accepts only the layout map and retains
+`setupui/layouts*.go` owns standalone layout navigation and its draft. Preset
+cards reuse the wizard's `optionCard` and `tui.ActionsWithTargets`; their
+Included, Load on activation and Default controls share keyboard order and
+rendered pointer geometry. Card clicks select; control activation owns changes.
+The `setupcmd/layout_editor.go` save callback accepts only the layout map and retains
 the configuration's exact presets, integrations and software choice under its
 original revision guard. `layout_presets.go` reads `presets.d` and resolves files
 against the stored catalog without downloading. Newly included files acquire

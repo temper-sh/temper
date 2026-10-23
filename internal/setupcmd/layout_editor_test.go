@@ -83,15 +83,14 @@ func TestLayoutEditorComposesSelectedPresetsAndPreservesExactInputs(t *testing.T
 	layoutPress(m, ' ')
 	layoutPress(m, 'p')
 	layoutPress(m, 'd')
+	layoutPress(m, tea.KeyUp) // Sections, then Settings.
 	layoutPress(m, tea.KeyRight)
-	layoutPress(m, tea.KeyEnter)
+	layoutPress(m, tea.KeyDown)
 	layoutControl(m, 'u')
 	m.Update(tea.PasteMsg{Content: "Writing desk"})
 	layoutPress(m, tea.KeyEnter)
-	layoutPress(m, tea.KeyDown)
-	layoutPress(m, tea.KeyEnter)
 	layoutControl(m, 'u')
-	m.Update(tea.PasteMsg{Content: "300"})
+	m.Update(tea.PasteMsg{Content: "5"})
 	layoutPress(m, tea.KeyEnter)
 	review := layoutControl(m, 's')
 	if review == nil {

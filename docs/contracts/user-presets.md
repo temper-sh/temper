@@ -56,8 +56,13 @@ scripted commands, including their JSON output, keep their behavior.
 
 The manager separates **Yours** from **Catalog**. Yours includes invalid files
 with their error, rather than hiding them or preventing other files from opening.
-Catalog entries are sources to fork or copy, never editable in place. A new
-preset starts from an explicitly chosen catalog preset: fork it for tuning, or
+Catalog entries are sources to fork or copy, never editable in place. A catalog
+preset's page shows its description, configuration and memory assessment
+in separate sections. Its **Fork** and **Copy** buttons use the selected preset;
+cancelling the name prompt returns to that page without creating a draft or file.
+Unavailable catalog presets show their reason on this page, with disabled
+authoring actions. Memory refusals do not disable authoring a valid preset.
+A new preset starts from an explicitly chosen catalog preset: fork it for tuning, or
 copy it as a starting point for an independent model. Copy also accepts one of
 your presets. Choose a name; Temper derives the file ID and adds a numeric
 suffix when it is already used. Opening or abandoning this draft creates no
@@ -76,33 +81,45 @@ Changing engine families starts from a copy of a preset for that engine.
 
 The shared terminal frame shows `Presets` and the current preset as breadcrumbs,
 with editing sections in a centered secondary row. Narrow terminals keep the
-selected section visible and mark hidden choices with chevrons. Tab and
-Shift-Tab move focus between the content, footer actions, ancestor breadcrumbs
-and secondary navigation. Left/right move within the focused navigation or
-action row; Enter activates the choice. Returning through a breadcrumb uses
+selected section visible and mark hidden choices with chevrons. The
+[shared terminal controls](terminal-ui.md) cover arrow navigation, action focus
+and visible draft controls. Returning through a breadcrumb uses
 the same unsaved-draft guard as Escape. The compact footer shows shortcuts for
 the current context; there is no separate help screen.
 
-Mouse clicks select manager rows, open fields, toggle file choices and activate
+Mouse clicks select manager rows, focus inputs, choose options and activate
 visible breadcrumbs, sections and footer actions. Use Open after selecting a
 manager row. In a confirmation, clicking a choice selects it; Confirm performs
-it. Inputs and confirmations block background controls, and pending reads allow
+it. Naming prompts and confirmations block background controls, and pending reads allow
 only cancellation. The wheel scrolls content; clicks follow the visible rows
 after scrolling, wrapping or resizing.
 
-- With content focused, up/down move between fields and left/right move between sections. Enter
-  opens a field; Enter accepts the input and Escape cancels that input.
-- Fork fields mark explicit overrides, even when an override equals today's
-  origin. Unmarked values follow the origin; its value is shown for an override. Reset removes
-  that override so the next compile inherits again. Copies reset a field to
-  its value when the editor opened; they have no implicit catalog inheritance.
-- Type errors stay beside the input. Validly typed but incompatible combinations
-  may remain in the draft so related settings can be changed together. Check,
+- Text and number inputs remain visible. Typing changes the unsaved draft;
+  Up/Down moves between controls, Left/Right moves the text cursor or chooses an
+  option, and Enter advances a text input. Move up from the first control to
+  change sections. Tab moves between content, navigation and footer actions.
+  Typing consumes ordinary shortcut letters; Ctrl-S remains explicit Save.
+- Fixed choices use buttons and booleans use toggles. Left/Right or a click
+  changes the draft immediately. Typing and pasting cannot introduce an option
+  the engine does not support. Wide forms place related controls in two columns;
+  narrow forms stack them in the same reading order.
+- Output limit, reasoning budget, seed, CPU threads and prompt-cache memory use
+  named modes. Custom values must be positive; a fixed seed may be zero.
+  Remaining context is offered only when the engine supports it.
+- A focused fork override shows **Override** and its catalog value, including
+  an explicitly authored value equal to today's origin. **Alt-R** removes the
+  override so the next compile inherits again. Copies reset to the value when
+  the editor opened; they have no implicit catalog inheritance.
+- Type errors stay directly below the edited row. Validly typed but incompatible combinations
+  may remain in the draft so related settings can be changed together. Invalid
+  input survives navigation and resizing. Hiding a dependent control discards
+  its invalid text while preserving any previously valid authored value. Check,
   Review and Save use the existing compiler. Invalid drafts cannot be saved.
   A syntactically unreadable existing file can be inspected or deleted in the
   manager; repair its syntax by hand before opening the form.
 - Review shows validation, changes, the shared memory assessment and a read-only
   installation plan. Unknown memory and unavailable disk estimates say so.
+  Enter in read-only content does not save; choose the Save action.
   Admission refusals do not make an authored preset invalid: it may target a
   different machine. Authoring never establishes quality or speed evidence.
 - Saving is explicit. Escape/back or Quit from a changed draft offers **Keep
@@ -124,14 +141,23 @@ derived from the engine. Source identities and license metadata remain in
 read-only details.
 
 A fork's replacement weights must be another build of its origin model. The
-picker offers that explicit same-model assertion, or **Convert to copy** for a
-different model. Conversion freezes the draft's resolved values and records
+file list offers **Same model** or **Different model** when the repository differs.
+**Use weights** confirms the selection and, for a different model, converts to a copy. Conversion freezes the draft's resolved values and records
 before changing weights; it is revocable until Save. No same-model assertion
 is inferred across repositories. The existing same-repository inference remains.
 Copies can select any compatible weights. Template authoring supports the model's
-builtin template, a local file in `presets.d`, and a Hugging Face file, using
+builtin template, a file from your computer, and a Hugging Face file, using
 the existing template helper. The form shows only the fields for that source:
 none for builtin, a file for local, and repository/revision/file for Hugging Face.
+For a local template, choose **Browse…**, navigate folders or use **Location…**
+to enter a directory, then choose a file. Selection reads a snapshot of at most
+16 MiB and shows the filename and size. **Use template** attaches it to the draft;
+**Save** copies it into `presets.d` with a content-derived filename and saves the
+preset reference. Cancel leaves the previous draft template intact. Review and
+dry runs resolve the snapshot without writing a copy. The original file is
+never modified. Changing it after selection does not change the selected bytes.
+Repository fields accept `owner/name` or an HTTPS Hugging Face repository URL;
+revision and file path remain separate controls.
 An existing template's transform stays attached to that source; a different
 source does not inherit an unrelated patch. There is no raw transform field.
 Choosing a source ignores values retained for inactive sources. Existing record
@@ -153,15 +179,23 @@ with the bytes read when editing began. A changed catalog requires an explicit
 **Ctrl-R** to reload and review the draft against it (or reopening the editor);
 the reload retains draft edits. A concurrent file edit is never silently
 overwritten. New IDs cannot collide with catalog entries or existing files.
-Publication stages and syncs one file, then links a new file without replacement
+Publication stages and syncs the preset, then links a new file without replacement
 or atomically renames an edited file. Temper writers serialize their comparison
-and publication. An external editor that ignores the lock can still race the
+and publication. Imported templates are synced before the preset reference is
+published. An existing matching file is reused; a different file or symlink at
+that destination is refused. A pre-publication failure removes only copies
+created by that Save. A process crash can leave an unreferenced copy that a retry
+reuses. A directory-sync error after publication reports that the preset was saved.
+An external editor that ignores the lock can still race the
 last comparison and rename. Unchanged saves preserve the original bytes and
-mtime. Cancellation before publication leaves the preset unchanged; a directory
+mtime. Reselecting a missing local template restores its managed copy without
+rewriting an unchanged preset. Cancellation before publication leaves the preset
+unchanged; a directory
 sync failure after publication is reported as saved with durability uncertain.
 
-Save changes only `presets.d/ID.json` (and root housekeeping on the first
-write). The layout editor reads that folder, so saved presets appear in its
+Save changes `presets.d/ID.json` and any explicitly attached local templates
+(plus root housekeeping on the first write). The layout editor reads that folder,
+so saved presets appear in its
 membership list automatically. Save does not change any layout, rebuild an
 existing execution lock, install software, synchronize a harness or restart service.
 The manager reports layout references from saved configuration; those layouts
@@ -230,13 +264,20 @@ and operational errors retain the draft for correction or copying to a new ID.
   values. They are the sampling values and seed, reasoning,
   `max_output_tokens`, speculation, the context window, compute, the weights,
   the template, and every engine setting of the origin's engine.
-- Your value replaces the origin's. Nothing can be removed.
+- Your value replaces the origin's. Removing an override restores inheritance.
+  `request_defaults.sampling.seed: null` explicitly selects a random seed;
+  omission inherits and integer `0` is a fixed seed. Other fields reject `null`.
+  This explicit random override requires Temper 0.4.0.
 - Each compile starts from the newest origin. A catalog change to a setting you
   did not change reaches your preset; your own value wins where both changed.
   A change that becomes invalid makes compile and check fail with the reason.
 - A fork cannot change its engine, interface, modalities, profiles as a list,
   excluded engine versions or presentation, other than `name`. A different
   engine or model is a copy.
+
+For llama.cpp CPU-thread controls, `threads: 0` and `threads_batch: 0` use
+engine defaults by omitting the corresponding launch argument. Positive counts
+remain explicit. Negative counts are refused. These defaults require Temper 0.4.0.
 
 For llama.cpp chat presets, a fork can also set
 `"changes": {"request_defaults": {"reasoning_budget_tokens": 1024}}`.

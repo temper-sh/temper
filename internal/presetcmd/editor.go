@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"slices"
 	"strings"
@@ -40,6 +41,7 @@ type formField struct {
 	choices      []string
 }
 type editorJob struct {
+	template   *userpreset.TemplateFile
 	seq        int
 	kind       string
 	repository huggingface.Repository
@@ -68,9 +70,9 @@ type Editor struct {
 	cursor, page     int
 	draft            *presetDraft
 	pending          catalog.UserPreset
+	pendingTemplates map[string][]byte
 	beforeConversion []byte
 	input            string
-	field            editField
 	text             textinput.Model
 	formKind         string
 	form             []formField
@@ -78,6 +80,7 @@ type Editor struct {
 	files            map[string]bool
 	fileFilter       string
 	report           []string
+	overview         *presetOverview
 	reportTitle      string
 	returnMode       string
 	confirm          string
@@ -93,6 +96,14 @@ type Editor struct {
 	navCursor        int
 	actionCursor     int
 	hits             tui.HitMap
+	values           map[string]string
+	valueErrors      map[string]string
+	customModes      map[string]bool
+	controlKey       string
+	pointerChoices   []controlChoice
+	selectedTemplate *userpreset.TemplateFile
+	directory        string
+	directoryEntries []os.DirEntry
 }
 
 // NewEditor reads local state without creating a root or making a network call.
@@ -201,7 +212,7 @@ func (m *Editor) reload() error {
 	}
 	for _, unavailable := range m.view.Unavailable {
 		if unavailable.Kind == "preset" {
-			m.items = append(m.items, managerPreset{id: unavailable.ID, status: "unavailable on this Temper"})
+			m.items = append(m.items, managerPreset{id: unavailable.ID, name: unavailable.Presentation.DisplayName, status: "unavailable on this Temper"})
 		}
 	}
 	return nil
@@ -232,13 +243,20 @@ func (m *Editor) open(id string) error {
 		}
 	}
 	m.draft = draftFrom(id, u, raw)
+	m.clearFormInputs()
 	m.mode, m.page, m.cursor, m.beforeConversion = "editor", 0, 0, nil
 	return nil
 }
 
 func (m *Editor) beginNew(copy bool) tea.Cmd {
 	var u catalog.UserPreset
+	m.pendingTemplates = nil
 	if m.mode == "editor" {
+		if m.formErrors() {
+			m.notice = "Correct invalid draft inputs before making a copy."
+			return nil
+		}
+		m.pendingTemplates = maps.Clone(m.draft.templates)
 		lock, _, err := m.draft.compile(m.options.Root, m.view, m.memory)
 		if err != nil {
 			m.notice = err.Error()
@@ -246,13 +264,21 @@ func (m *Editor) beginNew(copy bool) tea.Cmd {
 		}
 		u = catalog.CopyOf(lock, "")
 	} else {
-		rows := m.visiblePresets()
-		if len(rows) == 0 {
-			m.catalogTab = true
-			m.cursor = 0
-			return nil
+		var source managerPreset
+		if m.mode == "overview" {
+			if m.overview.lock == nil {
+				return nil
+			}
+			source = m.overview.source
+		} else {
+			rows := m.visiblePresets()
+			if len(rows) == 0 {
+				m.catalogTab = true
+				m.cursor = 0
+				return nil
+			}
+			source = rows[m.cursor]
 		}
-		source := rows[m.cursor]
 		if !copy {
 			if source.mine {
 				m.notice = "Forks start from Catalog; copy your preset to make an independent variant."
@@ -289,6 +315,9 @@ func (m *Editor) beginNew(copy bool) tea.Cmd {
 
 func (m *Editor) prompt(kind, value string) tea.Cmd {
 	m.input = kind
+	m.area, m.actionCursor, m.focus = contentArea, 1, true
+	m.text.Placeholder = ""
+
 	m.text.SetValue(value)
 	m.text.CursorEnd()
 	return m.text.Focus()
@@ -358,10 +387,22 @@ func (m *Editor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.cursor = 0
 		case "material":
 			m.draft.file = msg.file
+			m.clearHiddenInputs()
+			if msg.template != nil {
+				if m.draft.templates == nil {
+					m.draft.templates = map[string][]byte{}
+				}
+				m.draft.templates[msg.template.ManagedName] = msg.template.Content
+			}
+			m.controlKey = ""
 			m.mode = "editor"
 			m.page = 0
 			m.cursor = 0
 			m.notice = msg.warning
+		case "local-template":
+			m.selectedTemplate = msg.template
+			m.form[3].value = msg.template.ManagedName
+			m.mode, m.cursor, m.controlKey = "form", 1, ""
 		case "review":
 			m.report = append(m.report, msg.lines...)
 		}
@@ -388,6 +429,10 @@ func (m *Editor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.input != "" {
 			return m, m.inputKey(msg)
 		}
+		if cmd, handled := m.controlKeypress(msg); handled {
+			m.focus = true
+			return m, cmd
+		}
 		m.notice = ""
 		m.focus = true
 		if m.confirm != "" {
@@ -412,16 +457,14 @@ func (m *Editor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.formKey(key)
 		case "files":
 			return m, m.filesKey(key)
+		case "local-files":
+			return m, m.localFileKey(key)
+		case "overview":
+			return m, m.overviewKey(key)
 		case "report":
 			if key == "esc" || key == "q" {
 				m.mode = m.returnMode
 				m.viewport.GotoTop()
-			}
-			if key == "up" || key == "down" {
-				m.focus = false
-				var cmd tea.Cmd
-				m.viewport, cmd = m.viewport.Update(msg)
-				return m, cmd
 			}
 		}
 	default:
@@ -429,6 +472,20 @@ func (m *Editor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			var cmd tea.Cmd
 			m.text, cmd = m.text.Update(msg)
 			return m, cmd
+		}
+		if m.visibleForm() && m.area == contentArea && !m.loading {
+			controls := m.controls()
+			if m.cursor < len(controls) && controls[m.cursor].kind == "text" {
+				c := controls[m.cursor]
+				m.syncControl(c)
+				var cmd tea.Cmd
+				before := m.text.Value()
+				m.text, cmd = m.text.Update(msg)
+				if m.text.Value() != before {
+					m.changeControlText(c)
+				}
+				return m, cmd
+			}
 		}
 	}
 	return m, nil
@@ -447,15 +504,11 @@ func (m *Editor) managerKey(key string) tea.Cmd {
 		m.catalogTab = true
 		m.cursor = 0
 		m.notice = "Choose a catalog starting point, then Fork (f) or Copy (c)."
-	case "up", "k":
-		m.cursor = max(0, m.cursor-1)
-	case "down", "j":
-		m.cursor = min(max(0, len(rows)-1), m.cursor+1)
 	case "f":
 		return m.beginNew(false)
 	case "c":
 		return m.beginNew(true)
-	case "enter", "e":
+	case "enter", "space", " ", "e":
 		if len(rows) > 0 {
 			if rows[m.cursor].mine {
 				if err := m.open(rows[m.cursor].id); err != nil {
@@ -496,6 +549,8 @@ func (m *Editor) managerKey(key string) tea.Cmd {
 
 func section(path string) int {
 	switch {
+	case path == "engine_config.controls.reasoning_effort" || path == "engine_config.controls.preserve_reasoning":
+		return 0
 	case strings.HasPrefix(path, "request_defaults.sampling."):
 		return 1
 	case strings.HasPrefix(path, "engine_config."):
@@ -507,12 +562,13 @@ func section(path string) int {
 	}
 }
 
-func (m *Editor) fields() []editField {
-	return m.fieldsFor(m.page)
-}
-
 func (m *Editor) editorKey(key string) tea.Cmd {
-	rows := m.fields()
+	var rows []editField
+	if m.page != 4 {
+		for _, c := range m.controls() {
+			rows = append(rows, c.field)
+		}
+	}
 	switch key {
 	case "ctrl+r":
 		view, err := m.command.view(m.options.Root)
@@ -525,7 +581,7 @@ func (m *Editor) editorKey(key string) tea.Cmd {
 		return m.review()
 	case "q", "esc":
 		m.quitAfter = key == "q"
-		if m.draft.dirty() {
+		if m.draft.dirty() || m.formErrors() {
 			m.confirm, m.confirmCursor = "leave", 0
 			return nil
 		}
@@ -534,41 +590,13 @@ func (m *Editor) editorKey(key string) tea.Cmd {
 		return m.stepSection(-1)
 	case "right", "tab":
 		return m.stepSection(1)
-	case "up", "k":
+	case "enter", "space", " ":
 		if m.page == 4 {
-			m.viewport.ScrollUp(1)
-			m.focus = false
-		} else {
-			m.cursor = max(0, m.cursor-1)
+			return nil // Review content is read-only; Save is a footer action.
 		}
-	case "down", "j":
-		if m.page == 4 {
-			m.viewport.ScrollDown(1)
-			m.focus = false
-		} else {
-			m.cursor = min(max(0, len(rows)-1), m.cursor+1)
-		}
-	case "enter":
-		if m.page == 4 {
-			return m.save()
-		}
-		if len(rows) > 0 {
-			m.field = rows[m.cursor]
-			switch m.field.Path {
-			case "artifact":
-				m.openWeights()
-				return nil
-			case "template":
-				m.openTemplate()
-				return nil
-			case "speculation.method":
-				next := (slices.Index(m.field.Choices, fieldText(m.field.current)) + 1) % len(m.field.Choices)
-				if err := m.setEditorField(m.field.Field, m.field.Choices[next]); err != nil {
-					m.notice = err.Error()
-				}
-				return nil
-			}
-			return m.prompt("field", fieldText(m.field.current))
+		if len(rows) > 0 && m.visibleForm() {
+			cmd, _ := m.controlKeypress(tea.KeyPressMsg{Code: tea.KeyEnter})
+			return cmd
 		}
 	case "r":
 		if m.page == 4 {
@@ -578,7 +606,12 @@ func (m *Editor) editorKey(key string) tea.Cmd {
 			if err := m.resetEditorField(rows[m.cursor].Path); err != nil {
 				m.notice = err.Error()
 			}
-			m.cursor = min(m.cursor, max(0, len(m.fields())-1))
+			delete(m.values, rows[m.cursor].Path)
+			delete(m.valueErrors, rows[m.cursor].Path)
+			delete(m.customModes, rows[m.cursor].Path)
+			m.clearHiddenInputs()
+			m.controlKey = ""
+			m.cursor = min(m.cursor, max(0, len(m.controls())-1))
 		}
 	case "v":
 		m.page, m.cursor = 4, 0
@@ -622,8 +655,38 @@ func fieldText(v any) string {
 
 func (m *Editor) inputKey(msg tea.KeyPressMsg) tea.Cmd {
 	key := msg.String()
+	m.focus = true
+	if key == "tab" || key == "shift+tab" || key == "up" || key == "down" {
+		m.area = (tui.FocusOrder{Rows: 1}).Cycle(m.area, 1)
+		if m.area == contentArea {
+			return m.focusInput()
+		}
+		m.actionCursor = 1
+		m.text.Blur()
+		return nil
+	}
+	if m.area == actionsArea && key != "esc" {
+		switch key {
+		case "left":
+			m.actionCursor = tui.CycleChoice(m.actionCursor, 2, -1)
+		case "right":
+			m.actionCursor = tui.CycleChoice(m.actionCursor, 2, 1)
+		case "home":
+			m.actionCursor = 0
+		case "end":
+			m.actionCursor = 1
+		case "enter", "space":
+			key = m.actions()[m.actionCursor].key
+		default:
+			return nil
+		}
+		if key != "enter" && key != "esc" {
+			return nil
+		}
+	}
 	if key == "esc" {
 		m.input = ""
+		m.area = contentArea
 		m.text.Blur()
 		m.notice = ""
 		return nil
@@ -633,22 +696,24 @@ func (m *Editor) inputKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.text, cmd = m.text.Update(msg)
 		return cmd
 	}
+	m.area = contentArea
+	focus := m.focusInput()
 	text := m.text.Value()
 	switch m.input {
 	case "new-name":
 		if _, err := parseField(catalog.Field{Type: catalog.FieldText}, text); err != nil {
 			m.notice = err.Error()
-			return nil
+			return focus
 		}
 		text = strings.TrimSpace(text)
 		if text == "" {
 			m.notice = "Enter a preset name."
-			return nil
+			return focus
 		}
 		id, err := m.availablePresetID(text)
 		if err != nil {
 			m.notice = err.Error()
-			return nil
+			return focus
 		}
 		if m.pending.Fork() {
 			m.pending.Name = text
@@ -656,21 +721,23 @@ func (m *Editor) inputKey(msg tea.KeyPressMsg) tea.Cmd {
 			m.pending.Preset.Presentation.DisplayName = text
 		}
 		m.draft = draftFrom(id, m.pending, nil)
+		m.draft.templates = m.pendingTemplates
+		m.pendingTemplates = nil
+		m.clearFormInputs()
+		m.overview = nil
 		m.mode, m.page, m.cursor = "editor", 0, 0
 		m.beforeConversion = nil
-	case "field":
-		if err := m.setEditorField(m.field.Field, text); err != nil {
+	case "browse-path":
+		if err := m.readDirectory(text); err != nil {
 			m.notice = err.Error()
-			return nil
+			return focus
 		}
-		m.cursor = min(m.cursor, max(0, len(m.fields())-1))
-	case "form":
-		m.form[m.cursor].value = text
 	case "filter":
 		m.fileFilter = text
 		m.cursor = 0
 	}
 	m.input = ""
+	m.area = contentArea
 	m.notice = ""
 	m.text.Blur()
 	m.focus = true
@@ -683,6 +750,7 @@ func (m *Editor) leave() tea.Cmd {
 	m.mode = "manager"
 	m.page, m.cursor = 0, 0
 	m.beforeConversion = nil
+	m.clearFormInputs()
 	if m.quitAfter {
 		m.Close()
 		return tea.Quit
@@ -695,12 +763,41 @@ func (m *Editor) confirmKey(key string) tea.Cmd {
 	if m.confirm == "leave" {
 		count = 3
 	}
+	order := tui.FocusOrder{Rows: count}
+	switch key {
+	case "up", "down", "tab", "shift+tab":
+		delta := 1
+		if key == "up" || key == "shift+tab" {
+			delta = -1
+		}
+		if key == "tab" || key == "shift+tab" {
+			m.area = order.Cycle(m.area, delta)
+		} else {
+			m.area, m.confirmCursor = order.Vertical(m.area, m.confirmCursor, delta)
+		}
+		if m.area == actionsArea {
+			m.actionCursor = 1
+		}
+		return nil
+	case "left", "right":
+		if m.area == actionsArea {
+			m.actionCursor = tui.CycleChoice(m.actionCursor, 2, 1)
+			return nil
+		}
+	case "enter", "space", " ":
+		key = "enter"
+		if m.area == actionsArea && m.actionCursor == 0 {
+			key = "esc"
+		}
+		m.area = contentArea
+	}
 	switch key {
 	case "esc":
 		m.confirm = ""
-	case "up", "left":
+		m.area = contentArea
+	case "left":
 		m.confirmCursor = max(0, m.confirmCursor-1)
-	case "down", "right", "tab":
+	case "right":
 		m.confirmCursor = (m.confirmCursor + 1) % count
 	case "enter":
 		if m.confirmCursor == 0 {
@@ -734,6 +831,7 @@ func (m *Editor) confirmKey(key string) tea.Cmd {
 				m.notice = err.Error()
 			} else {
 				m.draft.file = u
+				m.clearFormInputs()
 				m.beforeConversion = nil
 				m.page, m.cursor = 0, 0
 			}
@@ -744,6 +842,10 @@ func (m *Editor) confirmKey(key string) tea.Cmd {
 }
 
 func (m *Editor) save() tea.Cmd {
+	if m.formErrors() {
+		m.notice = "Correct " + m.firstFormError() + " before saving. Your draft has not been saved."
+		return nil
+	}
 	changed, err := m.command.saveDraft(m.ctx, m.options.Root, m.draft, m.view, m.memory, m.options.DryRun)
 	if err != nil && !changed {
 		m.notice = "Cannot save: " + err.Error()
@@ -791,26 +893,14 @@ func (m *Editor) references(id string) string {
 }
 
 func (m *Editor) inspect(p managerPreset) tea.Cmd {
-	if p.mine {
-		r := checkOne(m.options.Root, p.id, m.view, m.memory, m.facts)
-		var b strings.Builder
-		describe(&b, r)
-		m.report = strings.Split(b.String(), "\n")
-	} else {
-		lock, err := catalog.CompilePreset(m.view.Document, p.id, m.memory, 0, target)
-		m.report = []string{p.name, p.id}
-		if err != nil {
-			m.report = append(m.report, err.Error())
-		} else if m.facts != nil {
-			a, err := setup.Assess(lock, *m.facts)
-			if err != nil {
-				m.report = append(m.report, err.Error())
-			} else {
-				m.report = append(m.report, a.Memory.Lines()...)
-				m.report = append(m.report, a.Refusals...)
-			}
-		}
+	if !p.mine {
+		m.inspectCatalog(p)
+		return nil
 	}
+	r := checkOne(m.options.Root, p.id, m.view, m.memory, m.facts)
+	var b strings.Builder
+	describe(&b, r)
+	m.report = strings.Split(b.String(), "\n")
 	m.report = append(m.report, m.references(p.id))
 	m.reportTitle = "Check"
 	m.returnMode, m.mode = "manager", "report"
@@ -819,8 +909,12 @@ func (m *Editor) inspect(p managerPreset) tea.Cmd {
 }
 
 func (m *Editor) review() tea.Cmd {
+	if m.formErrors() {
+		m.report = []string{"Correct " + m.firstFormError() + " before reviewing or saving."}
+		return nil
+	}
 	raw := mustDraftBytes(m.draft.file)
-	loaded, err := userpreset.Resolve(m.options.Root, m.draft.id, raw, m.view)
+	loaded, err := userpreset.ResolveWithTemplates(m.options.Root, m.draft.id, raw, m.view, m.draft.templates)
 	if err != nil {
 		m.report = []string{"Invalid: " + err.Error()}
 		return nil

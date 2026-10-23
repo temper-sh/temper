@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/temper-sh/temper/internal/catalog"
+	templatepatch "github.com/temper-sh/temper/internal/patch"
 )
 
 // Folder is the name of the user preset folder inside a root.
@@ -115,6 +116,13 @@ func Replace(root, id string, previous, data []byte) error {
 // means creation. changed is true after publication, even if directory sync
 // fails; callers must not describe that outcome as an unsaved draft.
 func Save(ctx context.Context, root, id string, previous, data []byte, dry bool) (changed bool, err error) {
+	return SaveWithTemplates(ctx, root, id, previous, data, nil, dry)
+}
+
+// SaveWithTemplates makes imported bytes durable before publishing the single
+// preset reference. Ordinary failures remove only files created by this save;
+// a process crash can leave an unreferenced copy, safely reused on retry.
+func SaveWithTemplates(ctx context.Context, root, id string, previous, data []byte, templates map[string][]byte, dry bool) (changed bool, err error) {
 	if !catalog.ValidPresetID(id) {
 		return false, fmt.Errorf("%q is not a preset ID", id)
 	}
@@ -130,7 +138,32 @@ func Save(ctx context.Context, root, id string, previous, data []byte, dry bool)
 	if err := check(); err != nil {
 		return false, err
 	}
-	if bytes.Equal(previous, data) {
+	names := make([]string, 0, len(templates))
+	missingTemplate := false
+	referenced := map[string]bool{}
+	if len(templates) > 0 {
+		u, err := catalog.ParseUserPreset(id, data)
+		if err != nil {
+			return false, err
+		}
+		for _, name := range u.LocalTemplates() {
+			referenced[name] = true
+		}
+	}
+	for name, content := range templates {
+		if !referenced[name] || !templatepatch.ValidLocalFile(name) || len(content) == 0 || len(content) > 16<<20 {
+			return false, fmt.Errorf("invalid imported template %q", name)
+		}
+		exists, err := existingTemplate(root, name, content)
+		if err != nil {
+			return false, err
+		}
+		missingTemplate = missingTemplate || !exists
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	unchangedPreset := bytes.Equal(previous, data)
+	if unchangedPreset && !missingTemplate {
 		return false, nil
 	}
 	if dry {
@@ -152,8 +185,54 @@ func Save(ctx context.Context, root, id string, previous, data []byte, dry bool)
 		return false, err
 	}
 	defer os.Remove(temporary)
+	created := map[string]os.FileInfo{}
+	defer func() {
+		if changed {
+			return
+		}
+		for path, own := range created {
+			if now, e := os.Lstat(path); e == nil && os.SameFile(own, now) {
+				_ = os.Remove(path)
+			}
+		}
+	}()
+	for _, name := range names {
+		if err := check(); err != nil {
+			return false, err
+		}
+		exists, err := existingTemplate(root, name, templates[name])
+		if err != nil {
+			return false, err
+		}
+		if exists {
+			continue
+		}
+		staged, err := write(root, templates[name])
+		if err != nil {
+			return false, err
+		}
+		path := filepath.Join(Dir(root), name)
+		err = os.Link(staged, path)
+		if err == nil {
+			created[path], err = os.Lstat(staged)
+		}
+		_ = os.Remove(staged)
+		if err != nil {
+			return false, err
+		}
+	}
+	if len(created) > 0 {
+		if err := syncDir(Dir(root)); err != nil {
+			return false, err
+		}
+	}
 	if err := check(); err != nil {
 		return false, err
+	}
+	if unchangedPreset {
+		// The preset already refers to these bytes. Restore a missing managed
+		// copy without rewriting the unchanged reference or its modification time.
+		return len(created) > 0, nil
 	}
 	if previous == nil {
 		err = os.Link(temporary, Path(root, id))
@@ -286,12 +365,25 @@ func Load(root, id string, view catalog.View) (Loaded, error) {
 // Resolve parses and resolves one preset file's bytes. Its local template
 // files are read now, so the lock records their exact content.
 func Resolve(root, id string, raw []byte, view catalog.View) (Loaded, error) {
+	return ResolveWithTemplates(root, id, raw, view, nil)
+}
+
+// ResolveWithTemplates validates a draft against selected in-memory templates
+// without creating a staging directory or changing the user's source files.
+func ResolveWithTemplates(root, id string, raw []byte, view catalog.View, templates map[string][]byte) (Loaded, error) {
 	u, err := catalog.ParseUserPreset(id, raw)
 	if err != nil {
 		return Loaded{}, err
 	}
 	for template, file := range u.LocalTemplates() {
-		content, err := readTemplate(filepath.Join(Dir(root), file))
+		content, selected := templates[file]
+		var err error
+		if selected && (len(content) == 0 || len(content) > 16<<20) {
+			return Loaded{}, fmt.Errorf("templates[%q]: imported template must be nonempty and at most 16 MiB", template)
+		}
+		if !selected {
+			content, err = readTemplate(filepath.Join(Dir(root), file))
+		}
 		if err != nil {
 			return Loaded{}, fmt.Errorf("templates[%q]: %w", template, err)
 		}

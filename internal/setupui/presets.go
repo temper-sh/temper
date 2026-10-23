@@ -67,13 +67,13 @@ type compositionPreview struct {
 	Err  error
 }
 
-type presetFocus uint8
+type presetFocus = tui.FocusArea
 
 const (
-	presetContentFocus presetFocus = iota
-	presetFilterFocus
-	presetFooterFocus
-	presetStepsFocus
+	presetContentFocus = tui.ContentFocus
+	presetFilterFocus  = tui.SecondaryFocus
+	presetFooterFocus  = tui.ActionsFocus
+	presetStepsFocus   = tui.PrimaryFocus
 )
 
 // PresetModel holds a revocable draft. All sub-tabs operate on its one selected
@@ -89,8 +89,7 @@ type PresetModel struct {
 	cursor         int
 	step           int // Focused primary-navigation step.
 	focus          presetFocus
-	editFocus      presetFocus
-	editAction     int
+	control        string
 	field          string
 	text           textinput.Model
 	notice         string
@@ -226,9 +225,8 @@ func (m *PresetModel) count() int {
 	return 0
 }
 func (m *PresetModel) edit(field, value string) tea.Cmd {
-	m.editFocus, m.editAction = m.focus, m.action
-	m.focus, m.action = presetContentFocus, 0
-	m.field = field
+	m.focus, m.action = presetContentFocus, 1
+	m.field, m.control = field, ""
 	m.notice = ""
 	m.focusSelection = true
 	m.view.GotoTop()
@@ -257,6 +255,7 @@ func (m *PresetModel) toggleMember() {
 				return
 			}
 			delete(m.draft.Presets, p.ID)
+			m.control = ""
 		} else if !p.buildable() {
 			m.notice = "Unavailable: " + p.Unavailable
 		} else {
@@ -285,8 +284,9 @@ func (m *PresetModel) acceptEdit() {
 	}
 	m.field = ""
 	m.text.Blur()
-	m.focus, m.action = m.editFocus, m.editAction
+	m.focusArea(presetContentFocus)
 }
+
 func (m *PresetModel) customize(p PresetOption, window int, compute catalog.ComputeDevice) bool {
 	base, choices, source := p.Lock, p.Choices, p.UserPreset
 	baseline := p.ForkBaseline
@@ -330,10 +330,10 @@ func (m *PresetModel) customize(p PresetOption, window int, compute catalog.Comp
 	}
 	return true
 }
-func (m *PresetModel) cycleCompute() {
+func (m *PresetModel) cycleCompute() bool {
 	p, ok := m.selectedOption()
 	if !ok {
-		return
+		return false
 	}
 	lock := p.Lock
 	if selected, ok := m.draft.Presets[p.ID]; ok {
@@ -341,10 +341,10 @@ func (m *PresetModel) cycleCompute() {
 	}
 	_, record := presetRecord(lock)
 	if len(record.ComputeOptions) < 2 {
-		return
+		return false
 	}
 	next := record.ComputeOptions[(slices.Index(record.ComputeOptions, record.Compute)+1)%len(record.ComputeOptions)]
-	m.customize(p, 0, next)
+	return m.customize(p, 0, next)
 }
 
 func RunPresets(ctx context.Context, in io.Reader, out io.Writer, input PresetInput, preview func(context.Context, setup.Configuration) (setup.Plan, error)) (PresetDecision, error) {

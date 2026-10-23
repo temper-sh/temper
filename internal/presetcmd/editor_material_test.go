@@ -55,14 +55,15 @@ func TestMaterialFormsShowOnlyTheSelectedSourcesDecisions(t *testing.T) {
 	check([]string{"Weights", "Template"}, []string{"Inherited"})
 	key(m, tea.KeyDown)
 	key(m, tea.KeyEnter) // Weights opens its source chooser, never an ID prompt.
-	check([]string{"Repository:", "Revision:"}, []string{"Model relationship:"})
+	check([]string{"Repository", "Revision"}, []string{"Model relationship"})
 	key(m, tea.KeyEsc)
-	key(m, 't')
-	check([]string{"From model"}, []string{"Repository:", "Revision:", "File:", "Transform"})
-	key(m, tea.KeyEnter) // Local file.
-	check([]string{"File:"}, []string{"Repository:", "Revision:", "Transform"})
-	key(m, tea.KeyEnter) // Hugging Face.
-	check([]string{"Repository:", "Revision:", "File:"}, nil)
+	focusField(t, m, "Template")
+	editorClick(t, m, "From model")
+	check([]string{"From model"}, []string{"Repository", "Revision", "Transform"})
+	editorClick(t, m, "Local file")
+	check([]string{"Browse…"}, []string{"Repository", "Revision", "Transform"})
+	editorClick(t, m, "Hugging Face")
+	check([]string{"Repository", "Revision", "File"}, nil)
 }
 
 type hubWithoutLicense struct{ presetcmd.Hub }
@@ -81,43 +82,41 @@ func TestEditorImportsMissingLicenseMetadataAndIgnoresInactiveTemplateSources(t 
 	}
 	before, _ := userpreset.Read(root, "mine")
 	m := editor(t, c, root, "mine", false)
-	key(m, 'w')
+	focusField(t, m, "Weights")
 	completeRead(t, m, primaryAction(m))
 	key(m, ' ')
-	completeRead(t, m, key(m, tea.KeyEnter))
+	completeRead(t, m, editorClick(t, m, "Use weights"))
 	after, _ := userpreset.Read(root, "mine")
 	if !bytes.Equal(before, after) {
 		t.Fatal("weights import saved before Save")
 	}
-	key(m, 's')
+	saveEditor(m)
 	u := read(t, root, "mine")
 	a := u.Artifacts[u.Changes["artifact"].(string)]
 	if a.License != "Not declared by source" || a.Sources[0].Revision != q6Commit {
 		t.Fatalf("missing metadata was fabricated or lost: %+v", a)
 	}
 	key(m, tea.KeyEnter) // Reopen the saved preset.
-	key(m, 't')
-	key(m, tea.KeyEnter) // Local.
-	key(m, tea.KeyDown)
-	key(m, tea.KeyEnter)
-	input(m, "does-not-exist.jinja")
-	key(m, tea.KeyUp)
-	key(m, tea.KeyEnter) // Switch to Hugging Face; the local path must not be used.
-	key(m, tea.KeyDown)
-	key(m, tea.KeyEnter)
-	input(m, "froggeric/Qwen-Fixed-Chat-Templates")
-	key(m, tea.KeyDown) // Revision.
-	key(m, tea.KeyDown) // File.
-	key(m, tea.KeyEnter)
-	input(m, "chat_template.jinja")
+	focusField(t, m, "Template")
+	editorClick(t, m, "Local file")
+	editorClick(t, m, "Hugging Face")
+	focusField(t, m, "Repository")
+	typeText(m, "https://huggingface.co/froggeric/Qwen-Fixed-Chat-Templates")
+	focusField(t, m, "File")
+	typeText(m, "chat_template.jinja")
 	completeRead(t, m, primaryAction(m))
-	key(m, 's')
+	saveEditor(m)
 	u = read(t, root, "mine")
-	template := u.Templates[u.Changes["template"].(string)]
+	tid, ok := u.Changes["template"].(string)
+	if !ok {
+		t.Fatalf("template was not saved: %s", ansi.Strip(m.View().Content))
+	}
+	template := u.Templates[tid]
 	if template.License != "Not declared by source" || template.Sources[0].Hub != catalog.HubHuggingFace || template.Sources[0].Revision != templateCommit {
 		t.Fatalf("wrong source or invented license: %+v", template)
 	}
 	key(m, tea.KeyEnter)
+	editorClick(t, m, "Review")
 	key(m, 'd')
 	m.Update(tea.WindowSizeMsg{Width: 112, Height: 64})
 	frame := ansi.Strip(m.View().Content)

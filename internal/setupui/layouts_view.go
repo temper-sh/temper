@@ -21,7 +21,7 @@ type layoutAction struct {
 
 func (m *LayoutModel) actions() []layoutAction {
 	if m.field != "" {
-		return []layoutAction{{"apply", "Apply", tui.PrimaryAction, false}, {"back", "Cancel", tui.QuietAction, false}}
+		return []layoutAction{{"back", "Cancel", tui.QuietAction, false}, {"apply", "Apply", tui.PrimaryAction, false}}
 	}
 	switch m.mode {
 	case "confirm":
@@ -39,20 +39,11 @@ func (m *LayoutModel) actions() []layoutAction {
 		}
 		return []layoutAction{{"save", label, tui.PrimaryAction, false}, {"back", "Back", tui.QuietAction, false}}
 	case "edit":
-		buttons := []layoutAction{{"review", "Review", tui.PrimaryAction, false}}
-		if m.page == 0 {
-			id := m.selectedPreset()
-			included := slices.Contains(m.draft.Layouts[m.id].Presets, id)
-			label := "Include"
-			if included {
-				label = "Exclude"
-			}
-			buttons = append(buttons, layoutAction{"member", label, tui.Action, id == "" || !included && m.presetErrors[id] != ""},
-				layoutAction{"preload", "Preload", tui.Action, !included}, layoutAction{"default", "Default", tui.Action, !included})
-		} else {
-			buttons = append(buttons, layoutAction{"field", "Edit", tui.Action, false})
+		save := "Save"
+		if m.dry {
+			save = "Check save"
 		}
-		return append(buttons, layoutAction{"back", "Back", tui.QuietAction, false})
+		return []layoutAction{{"back", "Discard", tui.QuietAction, false}, {"review", "Review", tui.Action, false}, {"save", save, tui.PrimaryAction, false}}
 	default:
 		empty := len(m.draft.Layouts) == 0
 		if empty {
@@ -80,25 +71,6 @@ func (m *LayoutModel) breadcrumbs() []string {
 	return labels
 }
 
-func (m *LayoutModel) moveArea(back bool) {
-	areas := []int{layoutContent, layoutActions}
-	if m.mode == "confirm" {
-		areas = []int{layoutActions}
-	} else if len(m.breadcrumbs()) > 1 {
-		areas = append(areas, layoutBreadcrumbs)
-		if m.mode == "edit" {
-			areas = append(areas, layoutSections)
-		}
-	}
-	delta := 1
-	if back {
-		delta = -1
-	}
-	i := slices.Index(areas, m.area)
-	m.area = areas[(max(0, i)+delta+len(areas))%len(areas)]
-	m.action, m.crumb = 0, 0
-}
-
 func layoutText(s string) string {
 	return strings.Map(func(r rune) rune {
 		if unicode.IsControl(r) {
@@ -106,6 +78,33 @@ func layoutText(s string) string {
 		}
 		return r
 	}, ansi.Strip(s))
+}
+
+func (m *LayoutModel) pageExplanation(width int) string {
+	if m.width < 50 || m.height < 18 {
+		return ""
+	}
+	title, explanation := "Choose a layout", "Layouts group the presets you want available together. Open one to edit it, or create a new layout."
+	switch {
+	case m.field == "new":
+		title, explanation = "Create a layout", "Name a new layout, then choose its presets. It starts empty; Save keeps your changes."
+	case m.field == "name":
+		title, explanation = "Rename this layout", "Change the name shown in the layout list. Apply updates the draft; Save keeps it."
+	case m.field == "idle":
+		title, explanation = "Set idle unloading", "Unload models after this many seconds without use, including preloaded models. They load again when requested."
+	case m.mode == "confirm":
+		title, explanation = "Confirm the change", "Choose whether to keep your current choices or apply the change described below."
+	case m.mode == "review":
+		title, explanation = "Review this layout", "Check its presets, loading choices and memory needs. Save keeps the layout; activate it to use the changes."
+		if m.dry {
+			explanation = "Check its presets, loading choices and memory needs. Check save validates the changes without saving them."
+		}
+	case m.mode == "edit" && m.page == 1:
+		title, explanation = "Layout settings", "Set the layout name and idle timeout. Idle models unload to free memory, then load again when requested."
+	case m.mode == "edit":
+		title, explanation = "Choose how presets are used", "Included: available in this layout. Load on activation: preload into memory; otherwise load on demand. Default: answer requests for the “default” model."
+	}
+	return tui.PageExplanation(title, explanation, width)
 }
 
 func (m *LayoutModel) View() tea.View {
@@ -121,6 +120,9 @@ func (m *LayoutModel) View() tea.View {
 		badge = "dry run"
 	}
 	header := tui.Header(tui.Layouts, badge, w) + "\n\n"
+	if explanation := m.pageExplanation(w); explanation != "" {
+		header += explanation + "\n\n"
+	}
 	crumb := -1
 	if m.area == layoutBreadcrumbs {
 		crumb = m.crumb
@@ -140,25 +142,34 @@ func (m *LayoutModel) View() tea.View {
 		header += sections + "\n"
 	}
 	header += "\n"
-	body, start, end, rows := m.body(w)
+	body, start, end, rows, controls := m.body(w)
 	footer, actions := m.footer(w)
 	frame := tui.Frame{Width: m.width, Height: m.height, Header: header, Footer: footer}
 	m.viewport.SetWidth(w)
 	m.viewport.SetHeight(frame.BodyHeight())
 	m.viewport.SetContent(body)
 	if m.focus && m.area == layoutContent && m.mode != "review" {
+		if m.mode == "edit" && m.page == 0 && end-start >= frame.BodyHeight() {
+			for _, target := range controls {
+				if target.Index == m.cursor*len(layoutPresetActions)+m.control {
+					start, end = target.Y, target.Y
+					break
+				}
+			}
+		}
 		m.viewport.EnsureVisible(end, 0, 0)
 		m.viewport.EnsureVisible(start, 0, 0)
 	}
 	m.focus = false
 	if m.field == "" && m.mode != "confirm" && m.loading == "" {
-		m.hits.Add(layoutBreadcrumbs, frame.HeaderTargets(primary))
-		m.hits.Add(layoutSections, frame.HeaderTargets(secondary))
+		m.hits.Add(int(layoutBreadcrumbs), frame.HeaderTargets(primary))
+		m.hits.Add(int(layoutSections), frame.HeaderTargets(secondary))
 	}
 	if m.loading == "" {
-		m.hits.Add(layoutContent, frame.BodyTargets(rows, m.viewport.YOffset()))
+		m.hits.Add(int(layoutPresetControls), frame.BodyTargets(controls, m.viewport.YOffset()))
+		m.hits.Add(int(layoutContent), frame.BodyTargets(rows, m.viewport.YOffset()))
 	}
-	m.hits.Add(layoutActions, frame.FooterTargets(actions))
+	m.hits.Add(int(layoutActions), frame.FooterTargets(actions))
 	v := tea.NewView(frame.Render(m.viewport.View()))
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
@@ -179,6 +190,13 @@ func (m *LayoutModel) footer(width int) (string, []tui.Target) {
 		parts = append(parts, tui.Style(tui.Muted).Render(message))
 	}
 	parts = append(parts, tui.Style(tui.Divider).Render(strings.Repeat("─", width)))
+	if m.mode == "edit" && m.field == "" {
+		status := "No unsaved changes"
+		if m.dirty() {
+			status = "Unsaved changes"
+		}
+		parts = append(parts, tui.Style(tui.Muted).Render(status))
+	}
 	buttons := []tui.Button{}
 	for i, a := range m.actions() {
 		buttons = append(buttons, tui.Button{Label: a.label, Kind: a.kind,
@@ -191,20 +209,23 @@ func (m *LayoutModel) footer(width int) (string, []tui.Target) {
 	parts = append(parts, actions)
 	hints := []tui.Hint{{Key: "↑↓", Action: "move"}, {Key: "Enter", Action: "choose"}, {Key: "Tab", Action: "controls"}, {Key: "Esc", Action: "back"}}
 	if m.field != "" {
-		hints = []tui.Hint{{Key: "Enter", Action: "apply"}, {Key: "Esc", Action: "cancel"}}
+		hints = tui.InputHints(m.area == layoutActions)
 	} else if m.area == layoutActions || m.area == layoutBreadcrumbs || m.area == layoutSections {
-		hints = []tui.Hint{{Key: "←→", Action: "choose"}, {Key: "Enter", Action: "open"}, {Key: "Tab", Action: "controls"}, {Key: "Esc", Action: "back"}}
+		hints = tui.FocusHints(m.area)
 	} else if m.mode == "edit" && m.page == 0 {
-		hints = []tui.Hint{{Key: "Space", Action: "toggle"}, {Key: "p", Action: "preload"}, {Key: "d", Action: "default"}, {Key: "Tab", Action: "controls"}}
+		hints = []tui.Hint{{Key: "↑↓", Action: "move"}, {Key: "←→", Action: "option"}, {Key: "Enter", Action: "toggle"}, {Key: "Esc", Action: "back"}}
+	} else if m.mode == "edit" && m.page == 1 {
+		hints = []tui.Hint{{Key: "↑↓", Action: "controls"}, {Key: "←→", Action: "choose"}, {Key: "Enter", Action: "use"}}
 	} else if m.mode == "review" {
 		hints = []tui.Hint{{Key: "↑↓", Action: "scroll"}, {Key: "Tab", Action: "actions"}, {Key: "Esc", Action: "back"}}
 	}
 	return strings.Join(append(parts, tui.KeyHelp(hints, width)), "\n"), targets
 }
 
-func (m *LayoutModel) body(width int) (string, int, int, []tui.Target) {
+func (m *LayoutModel) body(width int) (string, int, int, []tui.Target, []tui.Target) {
 	var lines []string
 	var targets []tui.Target
+	var controls []tui.Target
 	hit := func(index, start int) {
 		targets = append(targets, tui.Target{Index: index, Y: start, Width: width, Height: len(lines) - start})
 	}
@@ -267,7 +288,7 @@ func (m *LayoutModel) body(width int) (string, int, int, []tui.Target) {
 			add("None", tui.Muted, false)
 		}
 		for _, id := range layout.Presets {
-			add(m.presetLabel(id, true), tui.Body, false)
+			add(m.presetLabel(id), tui.Body, false)
 		}
 		blank()
 		if len(layout.Startup) == 0 {
@@ -292,51 +313,38 @@ func (m *LayoutModel) body(width int) (string, int, int, []tui.Target) {
 		blank()
 		add("Save changes this layout. Activate it when ready to use the changes.", tui.Muted, false)
 	} else if m.page == 1 {
-		add("Name: "+layout.Name, tui.Body, m.cursor == 0)
-		hit(0, 0)
-		blank()
-		rowStart := len(lines)
-		add(fmt.Sprintf("Idle unload (seconds): %d", layout.IdleSeconds), tui.Body, m.cursor == 1)
-		hit(1, rowStart)
+		return m.settingsBody(width)
 	} else {
 		if len(m.presetIDs()) == 0 {
 			add("No saved presets. Create one with temper preset, then reopen this editor.", tui.Muted, false)
 		}
 		for i, id := range m.presetIDs() {
 			rowStart := len(lines)
-			add(m.presetLabel(id, false), tui.Body, i == m.cursor)
-			if reason := m.presetErrors[id]; reason != "" && i == m.cursor {
-				add(reason, tui.Error, false)
+			focused := i == m.cursor && m.area == layoutContent
+			card, switches := m.presetCard(id, focused, width)
+			lines = append(lines, strings.Split(card, "\n")...)
+			if i == m.cursor {
+				start, end = rowStart+1, rowStart+switches[len(switches)-1].Y
+			}
+			for _, target := range switches {
+				target.Y += rowStart
+				target.Index += i * len(layoutPresetActions)
+				controls = append(controls, target)
 			}
 			hit(i, rowStart)
-			blank()
 		}
 	}
-	return strings.Join(lines, "\n"), start, end, targets
+	return strings.Join(lines, "\n"), start, end, targets, controls
 }
 
-func (m *LayoutModel) presetLabel(id string, review bool) string {
+func (m *LayoutModel) presetLabel(id string) string {
 	layout := m.draft.Layouts[m.id]
-	marker := "[ ] "
-	if slices.Contains(layout.Presets, id) {
-		marker = "[x] "
-	}
-	if review {
-		marker = "• "
-	}
 	preset := m.draft.Presets[id]
 	name := preset.Name
 	if name == "" {
 		name = id
 	}
-	label := marker + name
-	if !review && m.presetErrors[id] != "" {
-		if preset.Name == "" {
-			label += " · unavailable"
-		} else {
-			label += " · saved version"
-		}
-	}
+	label := "• " + name
 	if preset.UserPreset != "" {
 		label += " · untested"
 	}

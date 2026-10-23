@@ -62,7 +62,7 @@ func TestPresetMouseUsesVisibleScrolledRowsAndInvalidatesTargetsOnResize(t *test
 		t.Fatal("a stale pre-resize click opened a preset")
 	}
 	editorClick(t, m, "Open")
-	if frame := ansi.Strip(m.View().Content); !strings.Contains(frame, "choice-19") || !strings.Contains(frame, "Check") {
+	if frame := ansi.Strip(m.View().Content); !strings.Contains(frame, "Choice 19") || !strings.Contains(frame, "Fork") {
 		t.Fatalf("scrolled click selected the wrong preset:\n%s", frame)
 	}
 }
@@ -76,9 +76,8 @@ func TestPresetMouseCancelsPendingReadsAndSelectsMaterialFiles(t *testing.T) {
 	m := editor(t, c, root, "mine", false)
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 32})
 	editorClick(t, m, "Weights")
-	editorClick(t, m, "Revision:")
-	editorClick(t, m, "Cancel")
-	old := editorClick(t, m, "Look up files")
+	editorClick(t, m, "Revision")
+	old := editorClick(t, m, "Find files")
 	if old == nil {
 		t.Fatal("clicking the lookup action did not start its read")
 	}
@@ -87,9 +86,9 @@ func TestPresetMouseCancelsPendingReadsAndSelectsMaterialFiles(t *testing.T) {
 	if frame := ansi.Strip(m.View().Content); strings.Contains(frame, "Select weights files") {
 		t.Fatal("a cancelled read changed the visible form")
 	}
-	completeRead(t, m, editorClick(t, m, "Look up files"))
+	completeRead(t, m, editorClick(t, m, "Find files"))
 	editorClick(t, m, "Qwen3.8-27B-Q6_K.gguf")
-	completeRead(t, m, editorClick(t, m, "Use files"))
+	completeRead(t, m, editorClick(t, m, "Use weights"))
 	after, _ := userpreset.Read(root, "mine")
 	if !bytes.Equal(before, after) {
 		t.Fatal("choosing files published before Save")
@@ -119,14 +118,13 @@ func TestPresetMouseEditsSelectedFileAndKeepsConfirmationAndSaveGuards(t *testin
 			editorClick(t, m, "Temperature")
 			m.Update(tea.KeyPressMsg{Code: 'u', Mod: tea.ModCtrl})
 			m.Update(tea.PasteMsg{Content: "invalid"})
-			editorClick(t, m, "Apply")
+			editorClick(t, m, "Save")
 			if view := ansi.Strip(m.View().Content); !strings.Contains(view, "invalid") {
 				t.Fatalf("invalid input was discarded:\n%s", view)
 			}
-			editorClick(t, m, "Presets") // The input keeps background navigation inactive.
+			editorClick(t, m, "Temperature") // Return to the invalid draft input.
 			m.Update(tea.KeyPressMsg{Code: 'u', Mod: tea.ModCtrl})
 			m.Update(tea.PasteMsg{Content: "0.6"})
-			editorClick(t, m, "Apply")
 			editorClick(t, m, "Presets")
 			editorClick(t, m, "Keep editing")
 			if view := ansi.Strip(m.View().Content); !strings.Contains(view, "Unsaved changes") {

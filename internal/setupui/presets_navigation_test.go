@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -30,12 +31,8 @@ func TestPresetTabCyclesControlsWithoutActivatingThem(t *testing.T) {
 		t.Fatal("Enter did not activate Next")
 	}
 	m.Update(tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
-	if m.focus != presetContentFocus {
-		t.Fatal("reverse focus cycle did not return to content")
-	}
-	m.Update(tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
 	if m.focus != presetStepsFocus {
-		t.Fatal("reverse focus cycle did not reach primary navigation")
+		t.Fatal("reverse focus cycle did not skip empty harness content")
 	}
 	m.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
 	if m.page != presetHarnessPage {
@@ -132,9 +129,54 @@ func TestReviewArrowsScrollAndReachRetryWithoutSaving(t *testing.T) {
 	if m.page != presetReviewPage || m.Decision.Action != "" {
 		t.Fatal("Shift+Tab activated Back or saved without confirmation")
 	}
+	m.Update(tea.KeyPressMsg{Code: tea.KeyRight}) // Save.
+	m.Update(tea.KeyPressMsg{Code: tea.KeyRight}) // Back; reverse Tab also enters on the primary action.
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if m.page != presetHarnessPage || len(m.draft.Presets) != 2 {
 		t.Fatal("Back discarded the draft")
+	}
+}
+
+func TestWizardContextPromptAppliesOrDiscardsChanges(t *testing.T) {
+	for _, cancel := range []string{"Escape", "Cancel"} {
+		t.Run(cancel, func(t *testing.T) {
+			m := presetEditor(t)
+			editorKey(m, ' ')
+			p, _ := m.selectedOption()
+			_, original := presetRecord(m.draft.Presets[p.ID].Lock)
+			clickPresetText(t, m, "c Context")
+			if !strings.Contains(m.View().Content, "Apply") {
+				t.Fatal("Context did not open its Apply/Cancel prompt")
+			}
+			wizardType(m, "8192")
+			_, draft := presetRecord(m.draft.Presets[p.ID].Lock)
+			if draft.Window() != original.Window() {
+				t.Fatal("typing changed the draft before Apply")
+			}
+			if cancel == "Escape" {
+				m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+			} else {
+				clickPresetText(t, m, "Cancel")
+			}
+			editorKey(m, 'c')
+			if m.text.Value() != strconv.Itoa(original.Window()) || m.Decision.Action != "" {
+				t.Fatal("cancelling kept the uncommitted value or quit the wizard")
+			}
+			wizardType(m, "8192")
+			clickPresetText(t, m, "Apply")
+			_, draft = presetRecord(m.draft.Presets[p.ID].Lock)
+			if draft.Window() != 8192 || m.Decision.Action != "" {
+				t.Fatal("Apply did not update the revocable draft")
+			}
+			for _, control := range m.wizardControls() {
+				if control.kind == "context" {
+					t.Fatal("inline context input remains in card navigation")
+				}
+			}
+			if !strings.Contains(ansi.Strip(m.View().Content), "Context "+tokenCount(8192)+" tokens") {
+				t.Fatal("card lost its context summary")
+			}
+		})
 	}
 }
 
@@ -165,14 +207,74 @@ func TestPresetContextAndFormButtonsAreReachableInNarrowTerminal(t *testing.T) {
 	if m.field != "" || len(m.draft.Presets) != 0 {
 		t.Fatal("Cancel applied the context edit")
 	}
-	if view := ansi.Strip(m.View().Content); m.focus != presetFooterFocus || m.footerButtons()[m.action].target.key != "c" || !strings.Contains(view, "Context") {
-		t.Fatalf("Context is not focused after returning from the form:\n%s", view)
+	if view := ansi.Strip(m.View().Content); m.focus != presetContentFocus || !strings.Contains(view, "[ ]") {
+		t.Fatalf("Cancel did not return to the unchanged preset row:\n%s", view)
+	}
+}
+
+func TestWizardArrowsApplyContextAndReachSaveWithoutTab(t *testing.T) {
+	m := presetEditor(t)
+	m.preview = func(_ context.Context, c setup.Configuration) (setup.Plan, error) {
+		return setup.Plan{Configuration: &c, CanPrepare: true}, nil
+	}
+	m.Update(tea.WindowSizeMsg{Width: 40, Height: 24})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter}) // Include the selected preset.
+	m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyRight}) // Context.
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m.Update(tea.KeyPressMsg{Code: 'u', Mod: tea.ModCtrl})
+	m.Update(tea.PasteMsg{Content: "bad"})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyUp}) // Apply, from either direction.
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if m.field == "" || m.focus != presetContentFocus || m.notice == "" {
+		t.Fatal("invalid Apply did not retain the input with typing focus")
+	}
+	m.Update(tea.KeyPressMsg{Code: 'u', Mod: tea.ModCtrl})
+	m.Update(tea.PasteMsg{Content: "8192"})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
+	if button := m.footerButtons()[m.action]; button.target.key != "cancel-edit" {
+		t.Fatal("Cancel is not left of Apply")
+	}
+	m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if m.field != "" || m.focus != presetContentFocus || m.Decision.Action != "" {
+		t.Fatal("Apply did not return to content with an unpublished draft")
+	}
+	m.Update(tea.KeyPressMsg{Code: tea.KeyUp}) // Secondary.
+	m.Update(tea.KeyPressMsg{Code: tea.KeyUp}) // Primary.
+	m.Update(tea.KeyPressMsg{Code: tea.KeyUp}) // Next.
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyUp}) // Skip empty Harnesses.
+	if m.focus != presetStepsFocus {
+		t.Fatal("empty harness content trapped arrow focus")
+	}
+	m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	_, preview := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if preview == nil || m.Decision.Action != "" {
+		t.Fatal("arrow Review did not start an unpublished preview")
+	}
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter}) // Pending check cannot commit.
+	if m.Decision.Action != "" {
+		t.Fatal("Enter bypassed the pending review")
+	}
+	m.Update(preview())
+	m.Update(tea.KeyPressMsg{Code: tea.KeyRight}) // Save without installing.
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if m.Decision.Action != "save" || len(m.Decision.Configuration.Presets) != 1 {
+		t.Fatalf("arrow Save returned %q", m.Decision.Action)
+	}
+	for _, p := range m.Decision.Configuration.Presets {
+		_, record := presetRecord(p.Lock)
+		if record.Window() != 8192 {
+			t.Fatal("Save lost the context applied through arrow navigation")
+		}
 	}
 }
 
 func TestEscOnTheFirstScreenKeepsTheChoices(t *testing.T) {
 	m := populatedPresetEditor(t)
-	m.page, m.field = 0, ""
+	m.page, m.control = 0, ""
 	selected := len(m.draft.Presets)
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	if m.Decision.Action != "" || len(m.draft.Presets) != selected || !strings.Contains(m.notice, "press q") {

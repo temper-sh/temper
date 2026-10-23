@@ -61,7 +61,8 @@ type LlamaServerTuning struct {
 }
 
 // LlamaServerControls makes output-affecting defaults explicit for refreshed
-// engine layouts. A nil block preserves the existing launch contract.
+// engine layouts. A nil block preserves the existing launch contract. Zero
+// thread counts omit their flags so the engine chooses its defaults.
 type LlamaServerControls struct {
 	CheckpointMinStep *int   `yaml:"checkpoint_min_step,omitempty" json:"checkpoint_min_step,omitempty"`
 	CacheReuse        int    `yaml:"cache_reuse" json:"cache_reuse"`

@@ -44,7 +44,7 @@ func hub(t *testing.T) *huggingface.Client {
 				}
 			}
 			json.NewEncoder(w).Encode(entries)
-		case r.URL.Path == "/api/models/froggeric/Qwen-Fixed-Chat-Templates/revision/main":
+		case r.URL.Path == "/api/models/froggeric/Qwen-Fixed-Chat-Templates/revision/main" || r.URL.Path == "/api/models/froggeric/Qwen-Fixed-Chat-Templates/revision/"+templateCommit:
 			json.NewEncoder(w).Encode(map[string]any{"sha": templateCommit, "cardData": map[string]any{"license": "apache-2.0"}})
 		case r.URL.Path == "/froggeric/Qwen-Fixed-Chat-Templates/resolve/"+templateCommit+"/chat_template.jinja":
 			w.Write([]byte(templateText))

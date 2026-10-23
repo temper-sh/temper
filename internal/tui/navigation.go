@@ -29,6 +29,22 @@ func Header(tool Tool, badge string, width int) string {
 	return ansi.Truncate(text, max(0, width), "…")
 }
 
+// PageExplanation renders page-owned guidance for the shared header, between
+// the tool heading and primary navigation. Empty guidance takes no space.
+func PageExplanation(title, explanation string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	var parts []string
+	if title != "" {
+		parts = append(parts, Style(Heading).Bold(true).Width(width).Render(label(title)))
+	}
+	if explanation != "" {
+		parts = append(parts, Style(Muted).Width(width).Render(label(explanation)))
+	}
+	return strings.Join(parts, "\n")
+}
+
 // Breadcrumbs renders a path, with the last label current. Focus is an ancestor
 // index, or -1 when focus belongs elsewhere. The caller owns back navigation.
 func Breadcrumbs(labels []string, focus, width int) string {

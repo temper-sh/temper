@@ -50,24 +50,23 @@ func TestLayoutMouseEditsMembershipSettingsAndReviewedSave(t *testing.T) {
 			layoutClick(t, m, "Writing")
 			layoutClick(t, m, "Edit")
 			layoutClick(t, m, "Default")
-			layoutClick(t, m, "[x] Chat")
+			layoutClick(t, m, "[x] Included")
 			layoutClick(t, m, "Keep included")
 			if m.draft.Layouts["writing"].Default != "chat" {
 				t.Fatal("mouse cancellation lost the default model")
 			}
+			layoutClick(t, m, "[x] Included")
 			layoutClick(t, m, "Exclude")
-			layoutClick(t, m, "Exclude")
-			layoutClick(t, m, "Preload") // Disabled while the preset is excluded.
+			layoutClick(t, m, "Load on activation") // Disabled while the preset is excluded.
 			if len(m.draft.Layouts["writing"].Presets) != 0 || len(m.draft.Layouts["writing"].Startup) != 0 {
 				t.Fatal("disabled mouse action changed membership")
 			}
-			layoutClick(t, m, "[ ] Chat")
-			layoutClick(t, m, "Preload")
+			layoutClick(t, m, "[ ] Included")
+			layoutClick(t, m, "Load on activation")
 			layoutClick(t, m, "Settings")
-			layoutClick(t, m, "Idle unload")
+			layoutClick(t, m, "Unload after inactivity")
 			m.Update(tea.KeyPressMsg{Code: 'u', Mod: tea.ModCtrl})
-			m.Update(tea.PasteMsg{Content: "120"})
-			layoutClick(t, m, "Apply")
+			m.Update(tea.PasteMsg{Content: "2"})
 			layoutClick(t, m, "Layouts")
 			layoutClick(t, m, "Keep editing")
 			preview := layoutClick(t, m, "Review")

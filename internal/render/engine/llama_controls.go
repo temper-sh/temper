@@ -11,8 +11,8 @@ func (c LlamaServerControls) Validate() error {
 	if c.CheckpointMinStep != nil && *c.CheckpointMinStep < 0 {
 		return errors.New("llama-server checkpoint spacing must be nonnegative")
 	}
-	if c.CacheReuse < 0 || c.Threads <= 0 || c.ThreadsBatch <= 0 {
-		return errors.New("llama-server controls require nonnegative cache reuse and positive thread counts")
+	if c.CacheReuse < 0 || c.Threads < 0 || c.ThreadsBatch < 0 {
+		return errors.New("llama-server controls require nonnegative cache reuse and thread counts (zero uses engine defaults)")
 	}
 	if c.ReasoningEffort != "low" && c.ReasoningEffort != "medium" && c.ReasoningEffort != "high" && c.ReasoningEffort != "xhigh" {
 		return errors.New("llama-server reasoning effort must be low, medium, high or xhigh")

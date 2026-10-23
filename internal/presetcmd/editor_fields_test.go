@@ -17,11 +17,9 @@ import (
 
 func focusField(t *testing.T, m *presetcmd.Editor, label string) {
 	t.Helper()
-	for range 80 {
-		key(m, tea.KeyUp)
-	}
-	for range 80 {
-		if strings.Contains(ansi.Strip(m.View().Content), "▎ "+label) {
+	for range 150 {
+		if strings.Contains(ansi.Strip(m.View().Content), label) {
+			editorClick(t, m, label)
 			return
 		}
 		key(m, tea.KeyDown)
@@ -42,7 +40,7 @@ func TestNewPresetNeedsOnlyANameAndNeverOverwritesACollision(t *testing.T) {
 	if _, err := os.Stat(root); !os.IsNotExist(err) {
 		t.Fatalf("naming a draft created a root: %v", err)
 	}
-	key(m, 's')
+	saveEditor(m)
 	before, err := userpreset.Read(root, "writing")
 	if err != nil {
 		t.Fatal(err)
@@ -50,7 +48,7 @@ func TestNewPresetNeedsOnlyANameAndNeverOverwritesACollision(t *testing.T) {
 	key(m, 'n')
 	key(m, 'f')
 	input(m, "Writing")
-	key(m, 's')
+	saveEditor(m)
 	if read(t, root, "writing-2").Name != "Writing" {
 		t.Fatal("collision handling changed the chosen name")
 	}
@@ -61,7 +59,7 @@ func TestNewPresetNeedsOnlyANameAndNeverOverwritesACollision(t *testing.T) {
 	key(m, 'n')
 	key(m, 'f')
 	input(m, "写作")
-	key(m, 's')
+	saveEditor(m)
 	if read(t, root, "preset").Name != "写作" {
 		t.Fatal("non-Latin display name was lost")
 	}
@@ -75,31 +73,27 @@ func TestSpeculationChoiceKeepsItsDependentValuesConsistent(t *testing.T) {
 				t.Fatal(d)
 			}
 			m := editor(t, c, root, "mine", false)
-			for range 3 {
-				key(m, tea.KeyRight)
-			}
-			focusField(t, m, "Method")
-			key(m, tea.KeyEnter) // MTP → Off is a complete configuration change.
+			editorClick(t, m, "Speculation")
+			focusField(t, m, "Configuration")
+			key(m, tea.KeyRight) // MTP → Off is a complete configuration change.
 			frame := ansi.Strip(m.View().Content)
-			for _, absent := range []string{"Max draft tokens", "Draft artifact", "Source:"} {
+			for _, absent := range []string{"Draft tokens", "Draft artifact", "Source:"} {
 				if strings.Contains(frame, absent) {
 					t.Fatalf("inapplicable %q remains:\n%s", absent, frame)
 				}
 			}
-			key(m, 's')
+			saveEditor(m)
 			if out, d, code := run(t, c, root, "check", "mine"); code != 0 {
 				t.Fatalf("turning speculation off left incompatible fields: %s %s", out, d)
 			}
 			key(m, tea.KeyEnter)
-			for range 3 {
-				key(m, tea.KeyRight)
-			}
-			focusField(t, m, "Method")
-			key(m, tea.KeyEnter)
-			if frame := ansi.Strip(m.View().Content); !strings.Contains(frame, "Max draft tokens") {
+			editorClick(t, m, "Speculation")
+			focusField(t, m, "Configuration")
+			key(m, tea.KeyRight)
+			if frame := ansi.Strip(m.View().Content); !strings.Contains(frame, "Draft tokens") {
 				t.Fatalf("supported speculation cannot be restored:\n%s", frame)
 			}
-			key(m, 's')
+			saveEditor(m)
 			if out, d, code := run(t, c, root, "check", "mine"); code != 0 {
 				t.Fatalf("restored speculation is invalid: %s %s", out, d)
 			}
@@ -120,7 +114,7 @@ func TestFixedAndInapplicableControlsAreAbsent(t *testing.T) {
 			t.Fatalf("reranker offers %q:\n%s", absent, frame)
 		}
 	}
-	key(m, tea.KeyRight)
+	editorClick(t, m, "Engine")
 	if frame := ansi.Strip(m.View().Content); !strings.Contains(frame, "[Engine]") || !strings.Contains(frame, "Threads") {
 		t.Fatalf("navigation did not skip empty sections:\n%s", frame)
 	}
@@ -129,18 +123,17 @@ func TestFixedAndInapplicableControlsAreAbsent(t *testing.T) {
 	}
 	s := editor(t, c, root, "splash", false)
 	s.Update(tea.WindowSizeMsg{Width: 112, Height: 40})
-	key(s, tea.KeyRight)
+	editorClick(t, s, "Sampling")
 	frame = ansi.Strip(s.View().Content)
 	for _, absent := range []string{"Speculation", "Min p", "Repeat penalty", "Presence penalty"} {
 		if strings.Contains(frame, absent) {
 			t.Fatalf("Splash offers fixed %q:\n%s", absent, frame)
 		}
 	}
-	key(s, tea.KeyRight)
+	editorClick(t, s, "Engine")
 	focusField(t, s, "Reasoning effort")
-	key(s, tea.KeyEnter)
-	input(s, "none")
-	key(s, 's')
+	key(s, tea.KeyHome)
+	saveEditor(s)
 	if out, d, code := run(t, c, root, "check", "splash"); code != 0 {
 		t.Fatalf("reasoning choice did not update its engine requirements: %s %s", out, d)
 	}
@@ -165,17 +158,15 @@ func TestPythonCompatibilityMetadataSurvivesOrdinaryEditing(t *testing.T) {
 			before := read(t, root, "mine")
 			m := editor(t, c, root, "mine", false)
 			m.Update(tea.WindowSizeMsg{Width: 112, Height: 80})
-			key(m, tea.KeyEnter)
-			input(m, "Renamed")
-			key(m, tea.KeyRight)
-			key(m, tea.KeyRight)
+			typeText(m, "Renamed")
+			editorClick(t, m, "Engine")
 			frame := ansi.Strip(m.View().Content)
 			for _, absent := range []string{"Tool call parser", "Reasoning parser", "Block size", "Advanced"} {
 				if strings.Contains(frame, absent) {
 					t.Fatalf("compatibility field %q is editable:\n%s", absent, frame)
 				}
 			}
-			key(m, 's')
+			saveEditor(m)
 			after := read(t, root, "mine")
 			if !reflect.DeepEqual(before.Preset.Profiles, after.Preset.Profiles) || before.Preset.ContextLimitTokens != after.Preset.ContextLimitTokens {
 				t.Fatal("hidden compatibility metadata changed during rename")
@@ -184,9 +175,7 @@ func TestPythonCompatibilityMetadataSurvivesOrdinaryEditing(t *testing.T) {
 				for _, reasoning := range []string{"off", "on"} {
 					key(m, tea.KeyEnter) // Reopen after each Save.
 					focusField(t, m, "Reasoning")
-					key(m, tea.KeyEnter)
-					input(m, reasoning)
-					key(m, 's')
+					saveEditor(m)
 					if out, d, code := run(t, c, root, "check", "mine"); code != 0 {
 						t.Fatalf("reasoning %s lost its parser contract: %s %s", reasoning, out, d)
 					}

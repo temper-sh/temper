@@ -31,7 +31,7 @@ func TestBreadcrumbBackKeepsTheUnsavedDraftUntilDiscardIsChosen(t *testing.T) {
 	}
 	key(m, tea.KeyEnter) // Keep editing.
 	frame = ansi.Strip(m.View().Content)
-	if !strings.Contains(frame, "Writing") || !strings.Contains(frame, "unsaved") {
+	if !strings.Contains(frame, "Writing") || !strings.Contains(strings.ToLower(frame), "unsaved") {
 		t.Fatalf("draft was lost:\n%s", frame)
 	}
 	if _, err := os.Stat(root); !errors.Is(err, os.ErrNotExist) {
@@ -73,7 +73,7 @@ func TestSecondaryFocusPreservesTheEditingContext(t *testing.T) {
 		t.Fatalf("focused section is hidden:\n%s", frame)
 	}
 	key(m, '?')
-	if frame := ansi.Strip(m.View().Content); strings.Contains(frame, "Keyboard shortcuts") || !strings.Contains(frame, "[Sampling]") || !strings.Contains(frame, "unsaved") {
+	if frame := ansi.Strip(m.View().Content); strings.Contains(frame, "Keyboard shortcuts") || !strings.Contains(frame, "[Sampling]") || !strings.Contains(strings.ToLower(frame), "unsaved") {
 		t.Fatalf("unused key changed the editing context:\n%s", frame)
 	}
 	key(m, 'w')
