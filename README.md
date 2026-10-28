@@ -11,6 +11,8 @@ when idle. Each model is paired with an engine, such as llama.cpp, carefully
 chosen for that model and the hardware it will run on. Temper installs and
 configures the pieces.
 
+![Temper setup wizard: choose models, connect apps, and review downloads and memory.](docs/assets/setup-wizard.gif)
+
 ## Get started
 
 Temper runs on macOS on Apple Silicon. Individual
