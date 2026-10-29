@@ -89,8 +89,8 @@ type PresetModel struct {
 	cursor         int
 	step           int // Focused primary-navigation step.
 	focus          presetFocus
-	control        string
 	field          string
+	compute        catalog.ComputeDevice // Pending prompt choice; Apply publishes it to the draft.
 	text           textinput.Model
 	notice         string
 	plan           setup.Plan
@@ -226,10 +226,15 @@ func (m *PresetModel) count() int {
 }
 func (m *PresetModel) edit(field, value string) tea.Cmd {
 	m.focus, m.action = presetContentFocus, 1
-	m.field, m.control = field, ""
+	m.field = field
 	m.notice = ""
 	m.focusSelection = true
 	m.view.GotoTop()
+	if field == "compute" {
+		m.compute = catalog.ComputeDevice(value)
+		m.text.Blur()
+		return nil
+	}
 	m.text.SetValue(value)
 	m.text.CursorEnd()
 	return m.text.Focus()
@@ -255,7 +260,6 @@ func (m *PresetModel) toggleMember() {
 				return
 			}
 			delete(m.draft.Presets, p.ID)
-			m.control = ""
 		} else if !p.buildable() {
 			m.notice = "Unavailable: " + p.Unavailable
 		} else {
@@ -268,6 +272,11 @@ func (m *PresetModel) acceptEdit() {
 	field := m.field
 	m.notice = ""
 	switch field {
+	case "compute":
+		p, ok := m.selectedOption()
+		if !ok || !m.customize(p, 0, m.compute) {
+			return
+		}
 	case "context":
 		p, ok := m.selectedOption()
 		if !ok {
@@ -330,23 +339,6 @@ func (m *PresetModel) customize(p PresetOption, window int, compute catalog.Comp
 	}
 	return true
 }
-func (m *PresetModel) cycleCompute() bool {
-	p, ok := m.selectedOption()
-	if !ok {
-		return false
-	}
-	lock := p.Lock
-	if selected, ok := m.draft.Presets[p.ID]; ok {
-		lock = selected.Lock
-	}
-	_, record := presetRecord(lock)
-	if len(record.ComputeOptions) < 2 {
-		return false
-	}
-	next := record.ComputeOptions[(slices.Index(record.ComputeOptions, record.Compute)+1)%len(record.ComputeOptions)]
-	return m.customize(p, 0, next)
-}
-
 func RunPresets(ctx context.Context, in io.Reader, out io.Writer, input PresetInput, preview func(context.Context, setup.Configuration) (setup.Plan, error)) (PresetDecision, error) {
 	m := NewPresetModel(ctx, input, preview)
 	defer m.cancelPreview()

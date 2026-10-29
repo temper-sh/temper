@@ -168,11 +168,6 @@ func TestWizardContextPromptAppliesOrDiscardsChanges(t *testing.T) {
 			if draft.Window() != 8192 || m.Decision.Action != "" {
 				t.Fatal("Apply did not update the revocable draft")
 			}
-			for _, control := range m.wizardControls() {
-				if control.kind == "context" {
-					t.Fatal("inline context input remains in card navigation")
-				}
-			}
 			if !strings.Contains(ansi.Strip(m.View().Content), "Context "+tokenCount(8192)+" tokens") {
 				t.Fatal("card lost its context summary")
 			}
@@ -274,7 +269,7 @@ func TestWizardArrowsApplyContextAndReachSaveWithoutTab(t *testing.T) {
 
 func TestEscOnTheFirstScreenKeepsTheChoices(t *testing.T) {
 	m := populatedPresetEditor(t)
-	m.page, m.control = 0, ""
+	m.page = 0
 	selected := len(m.draft.Presets)
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	if m.Decision.Action != "" || len(m.draft.Presets) != selected || !strings.Contains(m.notice, "press q") {

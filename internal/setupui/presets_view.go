@@ -3,6 +3,7 @@ package setupui
 import (
 	"fmt"
 	"image/color"
+	"slices"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -90,7 +91,9 @@ func (m *PresetModel) pageExplanation(width int) string {
 	}
 	title, explanation := "Choose your presets", m.currentGroup().Description
 	switch {
-	case m.field != "":
+	case m.field == "compute":
+		title, explanation = "Choose where the model runs", "CPU uses system RAM. GPU also uses the wired-memory allowance."
+	case m.field == "context":
 		title, explanation = "Set the context window", "Context is the total space for input and output, in tokens. A larger window requires more memory."
 	case m.page == presetHarnessPage:
 		title, explanation = "Connect your harnesses", "Choose which apps receive this root’s active models."
@@ -154,7 +157,7 @@ func (m *PresetModel) presetContent(width int) screenBody {
 				mark, p.Name, lock = "[x]", selected.Name, selected.Lock
 			}
 			_, record := presetRecord(lock)
-			focused := m.focus == presetContentFocus && i == m.cursor && m.control == ""
+			focused := m.focus == presetContentFocus && i == m.cursor
 			background := colorBackground
 			if focused {
 				background = presetColors.Surface
@@ -217,7 +220,6 @@ func (m *PresetModel) presetContent(width int) screenBody {
 				body.focusStart, body.focusEnd = top+1, top+1
 			}
 			body.targets = append(body.targets, hitTarget{kind: hitChoice, index: i, y: top, width: width, height: lipgloss.Height(card)})
-			m.wizardForm(&body, p, i, width)
 		}
 	case presetHarnessPage:
 		m.harnessCards(&body, width)
@@ -272,6 +274,9 @@ func tokenCount(n int) string {
 
 func (m *PresetModel) editContent(body *screenBody, width int) {
 	title, detail := "Context window", "Total tokens for input and output. A larger window requires more memory."
+	if m.field == "compute" {
+		title, detail = "Compute device", "CPU uses system RAM. GPU also uses the wired-memory allowance."
+	}
 	if m.pageExplanation(width) != "" {
 		detail = ""
 	}
@@ -288,7 +293,22 @@ func (m *PresetModel) editContent(body *screenBody, width int) {
 	inner := width - 4
 	m.text.SetWidth(max(1, inner-3))
 	heading := lipgloss.NewStyle().Foreground(colorText).Bold(true).Width(inner).Render(title)
-	content := heading + "\n\n" + m.text.View()
+	input := m.text.View()
+	var choices []hitTarget
+	if m.field == "compute" {
+		p, _ := m.selectedOption()
+		_, record := presetRecord(m.draft.Presets[p.ID].Lock)
+		var labels []string
+		for _, device := range record.ComputeOptions {
+			labels = append(labels, strings.ToUpper(string(device)))
+		}
+		var targets []tui.Target
+		input, targets = tui.FormChoices(tui.Wizard, labels, slices.Index(record.ComputeOptions, m.compute), inner, m.focus == presetContentFocus)
+		for _, target := range targets {
+			choices = append(choices, hitTarget{kind: hitWizardCompute, key: string(record.ComputeOptions[target.Index]), x: 2 + target.X, y: target.Y, width: target.Width, height: target.Height})
+		}
+	}
+	content := heading + "\n\n" + input
 	if detail != "" {
 		content += "\n\n" + lipgloss.NewStyle().Foreground(colorMuted).Width(inner).Render(detail)
 	}
@@ -302,7 +322,14 @@ func (m *PresetModel) editContent(body *screenBody, width int) {
 	if m.focus == presetContentFocus {
 		body.focusStart, body.focusEnd = inputLine, inputLine
 	}
-	body.targets = append(body.targets, hitTarget{kind: hitField, x: 2, y: inputLine, width: inner, height: 1})
+	if m.field == "compute" {
+		for _, target := range choices {
+			target.y += inputLine
+			body.targets = append(body.targets, target)
+		}
+	} else {
+		body.targets = append(body.targets, hitTarget{kind: hitField, x: 2, y: inputLine, width: inner, height: 1})
+	}
 	if m.notice != "" {
 		body.add(warningBlock("Check this value", []string{m.notice}, width), false)
 	}
@@ -362,10 +389,10 @@ func (m *PresetModel) presetFooter(width int) (string, []hitTarget) {
 	}
 	parts = append(parts, actions)
 	hints := []tui.Hint{{Key: "↑↓", Action: "choose"}, {Key: "Space", Action: "select"}, {Key: "Tab", Action: "controls"}, {Key: "q", Action: "cancel"}}
-	if m.field != "" {
+	if m.field == "compute" && m.focus == presetContentFocus {
+		hints = []tui.Hint{{Key: "←→", Action: "choose"}, {Key: "Enter", Action: "apply"}, {Key: "Tab", Action: "actions"}, {Key: "Esc", Action: "cancel"}}
+	} else if m.field != "" {
 		hints = tui.InputHints(m.focus == presetFooterFocus)
-	} else if m.page == 0 && m.control != "" && m.focus == presetContentFocus {
-		hints = []tui.Hint{{Key: "↑↓", Action: "controls"}, {Key: "←→", Action: "choose"}, {Key: "Tab", Action: "actions"}}
 	} else if m.focus != presetContentFocus {
 		hints = tui.FocusHints(m.focus)
 	} else if m.page == presetReviewPage {

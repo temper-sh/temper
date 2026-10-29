@@ -103,7 +103,8 @@ fit remain visible; fit on 8/16 GB Macs has not yet been verified.
 Every choice shows its model license. Click the underlined license to read
 its conditions; the same link appears in the final review.
 
-The **Compute** control offers **CPU** or **GPU** where both are practical choices.
+For an included preset, **Compute** or `p` opens a **CPU/GPU** prompt where both
+are practical choices. **Apply** changes the device; **Cancel** keeps the current one.
 The selected device appears before Context on the same settings line. Fixed GPU
 presets omit the device label; CPU-only presets show **CPU only**.
 The choice applies in every layout using that preset and appears in the memory

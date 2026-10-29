@@ -223,7 +223,7 @@ func TestPresetWithoutALockShowsWhyAndCannotBeSelected(t *testing.T) {
 		t.Fatalf("selected a preset without a lock: %q", m.notice)
 	}
 	editorKey(m, 'c')
-	if m.control != "" || !strings.Contains(m.notice, "needs Temper 0.2.0") {
+	if m.field != "" || !strings.Contains(m.notice, "needs Temper 0.2.0") {
 		t.Fatalf("customized a preset without a lock: %q", m.notice)
 	}
 	if view := m.View().Content; !strings.Contains(view, "needs Temper 0.2.0") || strings.Contains(view, "Context 0") {

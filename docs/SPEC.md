@@ -14,7 +14,8 @@ retains that choice. Activation state v2 migrates a known v1 desired/current
 selection without guessing a stopped root's choice. The
 [layout contract](contracts/layouts.md) owns migration and failure behavior.
 Each preset declares its default CPU/GPU device and practical choices. Compute
-is editable beside context only when both devices are offered.
+is editable through a separate Apply/Cancel prompt, like Context, only when
+both devices are offered and the preset is included.
 Cards show selectable compute before Context on one settings line, omit fixed
 GPU labels, and retain CPU only. Rerankers omit the repeated interface label.
 The preset card names custom chat templates; template changes belong in the preset editor.

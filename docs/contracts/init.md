@@ -39,10 +39,11 @@ saved custom presets; they are separate from Temper's own software license.
 The **Context** action or `c` opens a separate context prompt. **Apply** updates
 the draft and memory assessment; **Cancel** or Escape retains the previous
 value. Invalid input remains in the prompt until corrected or cancelled. Preset
-cards keep their context summary. Include a preset to reveal its supported
-**Compute** choices, reached with Up/Down from the card. Choose CPU or GPU with
-Left/Right or a click where the catalog offers both as practical choices;
-`p` cycles Compute. The selected device appears
+cards keep their context summary. For an included preset offering both devices,
+the **Compute** action or `p` opens a separate CPU/GPU prompt at the current
+device. Left/Right, Space or a click changes the pending choice; **Apply**
+updates the draft and memory assessment. **Cancel** or Escape keeps the previous
+device. The selected device appears
 before Context on the same settings line. Fixed GPU presets omit the device
 label; CPU-only presets show **CPU only**. Both omit the Compute control, and
 `p` has no effect on them. Reranker settings omit the repeated Reranking label.
@@ -262,8 +263,8 @@ selection, first remove it from layouts that use it.
 ## Keyboard controls
 
 The wizard follows the same [terminal controls](terminal-ui.md) as the preset
-and layout editors, including arrow focus and scrolling. Context editing uses
-a focused prompt with Apply and Cancel.
+and layout editors, including arrow focus and scrolling. Context and Compute
+editing use focused prompts with Apply and Cancel.
 
 | Key | Action |
 |---|---|

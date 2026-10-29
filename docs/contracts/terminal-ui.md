@@ -36,8 +36,7 @@ unavailable. Moving between focus regions never activates a control. Left/Right 
 choice changes its draft value. Disabled controls cannot perform
 their action, and Save or installation still requires explicit activation.
 
-Ordinary preset and layout settings, and the wizard’s included-preset Compute
-choices, are always-visible draft controls. Typing
+Ordinary preset and layout settings are always-visible draft controls. Typing
 edits the focused input; Up/Down moves between controls, Left/Right moves a text
 cursor or chooses an option, and Enter advances a text input or activates the
 focused control. Text input consumes ordinary characters, including shortcut
@@ -48,8 +47,10 @@ modes expose output limits, reasoning budgets, random/fixed seeds and optional
 engine settings without asking users to enter sentinel numbers.
 
 Save is explicit; Discard follows the existing guarded exit flow. The wizard’s
-Context action or `c` opens a separate prompt: Apply updates its draft and memory
-assessment, while Cancel or Escape preserves the previous value. Navigation
+Context action or `c`, and Compute action or `p` for included presets with both
+CPU/GPU choices, open separate prompts. Compute starts at the current device;
+Left/Right, Space or a click changes only its pending choice. Apply updates the
+draft and memory assessment, while Cancel or Escape preserves the previous value. Navigation
 stays within that prompt until it is applied or cancelled. New-preset and
 new-layout naming prompts also retain Cancel / Apply. Template and weights
 selection have dedicated source pages, with Cancel

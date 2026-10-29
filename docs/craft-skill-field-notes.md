@@ -10,6 +10,16 @@ This is not a model-eval log, product evidence, or permission to change the
 skills repository. It creates no synthetic Temper work. A note may — and often
 should — conclude that no skill change is warranted.
 
+## Wizard compute prompt — 2026-10-28
+
+The existing Apply/Cancel boundary now owns CPU/GPU selection as well as
+Context. A pending device stays separate from the preset draft and its memory
+assessment; removing inline controls also removes their extra navigation state.
+Regression stories cover cancellation, explicit Apply, failed assessment and
+retry, fixed/unselected presets, and narrow keyboard/mouse navigation. Actual
+40/80-column terminal checks and full tests, vet and race checks pass. Existing
+guidance was sufficient; no skill change is proposed.
+
 ## Python planning, remembered selection, MoE placement and Kapitsa — 2026-10-23
 
 Data modeling separated remembered selection from process ownership and retained

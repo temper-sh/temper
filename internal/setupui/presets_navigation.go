@@ -74,7 +74,7 @@ func (m *PresetModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.moveVertical(delta)
 			return m, nil
 		case "left", "right":
-			if m.field == "" || m.focus != presetContentFocus {
+			if m.field != "context" || m.focus != presetContentFocus {
 				delta := 1
 				if key == "left" {
 					delta = -1
@@ -85,7 +85,7 @@ func (m *PresetModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			return m, m.activateFocused()
 		case "space", " ":
-			if m.field == "" && m.page == 0 && m.control == "compute" && m.focus == presetContentFocus {
+			if m.field == "compute" && m.focus == presetContentFocus {
 				m.moveHorizontal(1)
 				return m, nil
 			}
@@ -99,7 +99,7 @@ func (m *PresetModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 		if m.field != "" {
-			if m.focus == presetContentFocus {
+			if m.field == "context" && m.focus == presetContentFocus {
 				var cmd tea.Cmd
 				m.text, cmd = m.text.Update(msg)
 				return m, cmd
@@ -134,7 +134,7 @@ func (m *PresetModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if _, wheel := msg.(tea.MouseWheelMsg); wheel {
 		m.focusSelection = false
 		m.view, cmd = m.view.Update(msg)
-	} else if m.field != "" && m.focus == presetContentFocus {
+	} else if m.field == "context" && m.focus == presetContentFocus {
 		m.text, cmd = m.text.Update(msg)
 	}
 	return m, cmd
@@ -155,15 +155,11 @@ func (m *PresetModel) activateTarget(target hitTarget) tea.Cmd {
 		m.focusArea(presetFilterFocus)
 		m.selectGroup(m.groups()[target.index].ID)
 	case hitWizardCompute:
-		m.cursor, m.control = target.index, "compute"
-		m.focusArea(presetContentFocus)
-		if p, ok := m.selectedOption(); ok {
-			if m.customize(p, 0, catalog.ComputeDevice(target.key)) {
-				m.notice = ""
-			}
+		if m.field == "compute" {
+			m.compute = catalog.ComputeDevice(target.key)
+			m.focusArea(presetContentFocus)
 		}
 	case hitChoice:
-		m.control = ""
 		m.cursor = target.index
 		m.focusArea(presetContentFocus)
 		return m.activateFocused()
@@ -180,7 +176,7 @@ func (m *PresetModel) activateTarget(target hitTarget) tea.Cmd {
 }
 
 func (m *PresetModel) selectGroup(group string) {
-	m.group, m.cursor, m.control = group, 0, ""
+	m.group, m.cursor = group, 0
 	m.action = min(m.action, len(m.footerButtons())-1)
 	m.view.GotoTop()
 	m.focusSelection = m.focus == presetContentFocus
@@ -191,7 +187,7 @@ func (m *PresetModel) back() tea.Cmd {
 	m.notice = ""
 	if m.page > 0 {
 		m.page--
-		m.cursor, m.control = 0, ""
+		m.cursor = 0
 	} else {
 		m.Decision = PresetDecision{Action: "cancel"}
 		return tea.Quit
@@ -204,7 +200,6 @@ func (m *PresetModel) back() tea.Cmd {
 }
 
 func (m *PresetModel) advance() tea.Cmd {
-	m.control = ""
 	m.notice = ""
 	if m.page == 0 {
 		if m.input.NewConfiguration {
@@ -304,7 +299,7 @@ func (m *PresetModel) selectStep(step int) tea.Cmd {
 		return m.advance()
 	}
 	m.cancelPreview()
-	m.page, m.cursor, m.notice, m.control = step, 0, "", ""
+	m.page, m.cursor, m.notice = step, 0, ""
 	m.focusArea(presetContentFocus)
 	m.view.GotoTop()
 	return nil

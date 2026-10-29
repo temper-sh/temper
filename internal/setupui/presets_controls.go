@@ -62,7 +62,10 @@ func (m *PresetModel) footerButtons() []presetButton {
 		}
 		_, record := presetRecord(lock)
 		buttons = append(buttons, button("c Context", "Context", "c", selected && record.ContextConfigurable()))
-
+		if len(record.ComputeOptions) > 1 {
+			_, included := m.draft.Presets[p.ID]
+			buttons = append(buttons, button("p Compute", "Compute", "p", selected && included))
+		}
 	}
 	return buttons
 }
@@ -92,7 +95,7 @@ func (m *PresetModel) focusArea(area presetFocus) {
 	if area == presetFilterFocus {
 		m.view.GotoTop()
 	}
-	if m.field != "" {
+	if m.field == "context" {
 		if area == presetContentFocus {
 			m.text.Focus()
 		} else {
@@ -128,9 +131,6 @@ func (m *PresetModel) contentRows() int {
 		// Review has one scrollable content area, with no selectable rows.
 		return 1
 	}
-	if m.page == 0 {
-		return len(m.wizardControls())
-	}
 	return m.count()
 }
 
@@ -146,21 +146,12 @@ func (m *PresetModel) moveVertical(delta int) {
 		}
 	}
 	row := m.cursor
-	if m.page == 0 {
-		row = max(0, slices.Index(m.wizardControls(), wizardControl{m.cursor, m.control}))
-	}
 	if m.field != "" || m.page == presetReviewPage {
 		row = 0
 	}
 	area, row := m.focusOrder().Vertical(m.focus, row, delta)
 	if m.field == "" && m.page != presetReviewPage {
-		if m.page == 0 && len(m.wizardControls()) > 0 {
-			c := m.wizardControls()[row]
-			m.cursor, m.control = c.preset, c.kind
-		} else {
-			m.cursor = row
-			m.control = ""
-		}
+		m.cursor = row
 	}
 	m.navigateTo(area)
 }
@@ -168,19 +159,18 @@ func (m *PresetModel) moveVertical(delta int) {
 func (m *PresetModel) moveHorizontal(delta int) {
 	switch m.focus {
 	case presetFilterFocus, presetContentFocus:
-		if m.field != "" || m.page != 0 {
-			return
-		}
-		if m.focus == presetContentFocus && m.control == "compute" {
+		if m.field == "compute" && m.focus == presetContentFocus {
 			p, ok := m.selectedOption()
 			if !ok {
 				return
 			}
 			_, record := presetRecord(m.draft.Presets[p.ID].Lock)
-			next := tui.CycleChoice(slices.Index(record.ComputeOptions, record.Compute), len(record.ComputeOptions), delta)
-			if m.customize(p, 0, record.ComputeOptions[next]) {
-				m.notice = ""
-			}
+			next := tui.CycleChoice(slices.Index(record.ComputeOptions, m.compute), len(record.ComputeOptions), delta)
+			m.compute = record.ComputeOptions[next]
+			m.notice = ""
+			return
+		}
+		if m.field != "" || m.page != 0 {
 			return
 		}
 		groups := m.groups()
@@ -214,10 +204,6 @@ func (m *PresetModel) activateFocused() tea.Cmd {
 	case presetContentFocus:
 		if m.field != "" {
 			return m.activateShortcut("apply")
-		}
-		if m.page == 0 && m.control != "" {
-			m.moveVertical(1)
-			return nil
 		}
 		if m.page != presetReviewPage && m.cursor < m.count() {
 			m.focusSelection = true
@@ -261,22 +247,21 @@ func (m *PresetModel) activateShortcut(key string) tea.Cmd {
 			return m.edit("context", strconv.Itoa(record.Window()))
 		}
 	case "p":
-		if m.page == 0 {
-			if p, ok := m.selectedOption(); ok {
-				_, record := presetRecord(p.Lock)
-				if len(record.ComputeOptions) < 2 {
-					return nil
-				}
-				if _, selected := m.draft.Presets[p.ID]; !selected {
-					m.notice = "Include the preset before customizing it."
-					return nil
-				}
+		if p, ok := m.selectedOption(); m.page == 0 && ok {
+			lock := p.Lock
+			chosen, included := m.draft.Presets[p.ID]
+			if included {
+				lock = chosen.Lock
 			}
-			m.control = "compute"
-			if m.cycleCompute() {
-				m.notice = ""
+			_, record := presetRecord(lock)
+			if len(record.ComputeOptions) < 2 {
+				return nil
 			}
-			m.focusSelection = m.focus == presetContentFocus
+			if !included {
+				m.notice = "Include the preset before customizing it."
+				return nil
+			}
+			return m.edit("compute", string(record.Compute))
 		}
 	}
 	return nil

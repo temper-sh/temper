@@ -112,6 +112,8 @@ func TestComputeEditRefreshesMemoryAndSurvivesOtherEdits(t *testing.T) {
 	}
 	editorKey(m, ' ')
 	editorKey(m, 'p')
+	m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	_, cpu := presetRecord(m.draft.Presets[p.ID].Lock)
 	if cpu.Compute != catalog.ComputeCPU || m.visible()[0].Unavailable != "" {
 		t.Fatalf("CPU edit left a stale GPU refusal: %s", m.notice)
@@ -137,6 +139,8 @@ func TestComputeEditRefreshesMemoryAndSurvivesOtherEdits(t *testing.T) {
 	editorKey(m, 'g')
 	editorKey(m, 's')
 	editorKey(m, 'p')
+	m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	_, gpu := presetRecord(m.draft.Presets[p.ID].Lock)
 	if gpu.Compute != catalog.ComputeGPU || gpu.Window() != 4096 || m.visible()[0].Unavailable == "" {
 		t.Fatal("GPU round trip lost settings or memory refusal")
@@ -161,6 +165,8 @@ func TestComputeControlUsesKeyboardAndMouseAtNarrowWidths(t *testing.T) {
 				editorKey(m, 's')
 				editorKey(m, ' ')
 				editorKey(m, 'p')
+				m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
+				m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 
 				p, _ := m.selectedOption()
 				_, chosen := presetRecord(m.draft.Presets[p.ID].Lock)
@@ -168,7 +174,9 @@ func TestComputeControlUsesKeyboardAndMouseAtNarrowWidths(t *testing.T) {
 					t.Fatalf("keyboard Compute failed: %s", m.notice)
 				}
 				assertFrameFits(t, m.View().Content, width, 18)
-				clickPresetText(t, m, strings.ToUpper(string(tc.before)))
+				editorKey(m, 'p')
+				clickPresetText(t, m, "○ "+strings.ToUpper(string(tc.before)))
+				clickPresetText(t, m, "Apply")
 				_, chosen = presetRecord(m.draft.Presets[p.ID].Lock)
 				if chosen.Compute != tc.before {
 					t.Fatal("mouse Compute failed")
@@ -239,8 +247,90 @@ func TestComputeAssessmentFailureLeavesDraftUnchanged(t *testing.T) {
 		return setup.PresetPlan{}, errors.New("assessment unavailable")
 	}
 	editorKey(m, 'p')
+	m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	after, _ := m.draft.Bytes()
-	if string(before) != string(after) || m.notice != "assessment unavailable" {
+	if string(before) != string(after) || m.notice != "assessment unavailable" || m.field != "compute" {
 		t.Fatal("failed assessment changed the selected execution")
 	}
+	m.input.Assess = nil
+	clickPresetText(t, m, "Apply")
+	p, _ := m.selectedOption()
+	_, record := presetRecord(m.draft.Presets[p.ID].Lock)
+	if record.Compute != catalog.ComputeCPU || m.field != "" {
+		t.Fatal("retry did not apply the pending device")
+	}
+}
+
+func TestComputePromptRequiresAnIncludedPreset(t *testing.T) {
+	m := presetEditor(t, "nuextract3-q4km-llama")
+	editorKey(m, 's')
+	editorKey(m, 'p')
+	if m.field != "" || len(m.draft.Presets) != 0 || !strings.Contains(m.notice, "Include the preset") {
+		t.Fatal("Compute customized an unselected preset")
+	}
+	clickPresetText(t, m, "p Compute")
+	if m.field != "" || len(m.draft.Presets) != 0 {
+		t.Fatal("disabled Compute action selected a preset")
+	}
+}
+
+func TestComputePromptStagesChangesAndCancelRestoresCurrentDevice(t *testing.T) {
+	for _, cancel := range []string{"Escape", "Cancel"} {
+		t.Run(cancel, func(t *testing.T) {
+			m := presetEditor(t, "nuextract3-q4km-llama")
+			editorKey(m, 's')
+			editorKey(m, ' ')
+			before, _ := m.draft.Bytes()
+			clickPresetText(t, m, "p Compute")
+			if view := ansi.Strip(m.View().Content); !strings.Contains(view, "● GPU") || !strings.Contains(view, "Apply") {
+				t.Fatalf("Compute did not open at the current device:\n%s", view)
+			}
+			clickPresetText(t, m, "○ CPU")
+			pending, _ := m.draft.Bytes()
+			if string(before) != string(pending) || len(m.assessments) != 0 {
+				t.Fatal("choosing a device changed the draft or memory assessment before Apply")
+			}
+			if cancel == "Escape" {
+				m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+			} else {
+				clickPresetText(t, m, "Cancel")
+			}
+			editorKey(m, 'p')
+			if view := ansi.Strip(m.View().Content); !strings.Contains(view, "● GPU") || m.Decision.Action != "" {
+				t.Fatalf("cancelled choice was retained or wizard exited:\n%s", view)
+			}
+			m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+			if view := ansi.Strip(m.View().Content); strings.Contains(view, "● GPU") || strings.Contains(view, "○ CPU") || !strings.Contains(view, "Compute GPU") {
+				t.Fatalf("card kept inline choices or lost its device summary:\n%s", view)
+			}
+		})
+	}
+}
+
+func TestComputePromptIsReachableWithArrowsInNarrowTerminal(t *testing.T) {
+	m := presetEditor(t, "nuextract3-q4km-llama")
+	m.Update(tea.WindowSizeMsg{Width: 28, Height: 12})
+	editorKey(m, 's')
+	editorKey(m, ' ')
+	m.Update(tea.KeyPressMsg{Code: tea.KeyDown})  // Actions, directly after the card.
+	m.Update(tea.KeyPressMsg{Code: tea.KeyRight}) // Context.
+	m.Update(tea.KeyPressMsg{Code: tea.KeyRight}) // Compute.
+	if view := ansi.Strip(m.View().Content); !strings.Contains(view, "Compute") {
+		t.Fatalf("focused Compute action is not visible:\n%s", view)
+	}
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if m.field != "compute" {
+		t.Fatal("Compute action did not open its prompt")
+	}
+	assertFrameFits(t, m.View().Content, 28, 12)
+	editorKey(m, ' ')                            // GPU -> CPU.
+	m.Update(tea.KeyPressMsg{Code: tea.KeyDown}) // Apply.
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	p, _ := m.selectedOption()
+	_, record := presetRecord(m.draft.Presets[p.ID].Lock)
+	if record.Compute != catalog.ComputeCPU || m.field != "" || m.Decision.Action != "" {
+		t.Fatal("arrow Apply did not update only the revocable draft")
+	}
+	assertFrameFits(t, m.View().Content, 28, 12)
 }
