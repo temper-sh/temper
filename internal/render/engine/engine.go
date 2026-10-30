@@ -68,7 +68,7 @@ type LlamaServerTuning struct {
 type LlamaServerControls struct {
 	CheckpointMinStep *int   `yaml:"checkpoint_min_step,omitempty" json:"checkpoint_min_step,omitempty"`
 	CacheReuse        int    `yaml:"cache_reuse" json:"cache_reuse"`
-	ReasoningEffort   string `yaml:"reasoning_effort" json:"reasoning_effort"`
+	ReasoningEffort   string `yaml:"reasoning_effort,omitempty" json:"reasoning_effort,omitempty"`
 	PreserveReasoning bool   `yaml:"preserve_reasoning" json:"preserve_reasoning"`
 	ContextShift      bool   `yaml:"context_shift" json:"context_shift"`
 	CachePrompt       bool   `yaml:"cache_prompt" json:"cache_prompt"`
@@ -79,14 +79,15 @@ type LlamaServerControls struct {
 	LoadMode          string `yaml:"load_mode" json:"load_mode"`
 }
 
-// SamplingDefaults are server defaults; an explicit request may override them.
+// SamplingDefaults contains independent optional server defaults. Nil delegates
+// to the pinned engine; explicit requests may override supplied defaults.
 type SamplingDefaults struct {
-	Temperature     float64 `yaml:"temperature" json:"temperature"`
-	TopK            int     `yaml:"top_k" json:"top_k"`
-	TopP            float64 `yaml:"top_p" json:"top_p"`
-	MinP            float64 `yaml:"min_p" json:"min_p"`
-	RepeatPenalty   float64 `yaml:"repeat_penalty" json:"repeat_penalty"`
-	PresencePenalty float64 `yaml:"presence_penalty" json:"presence_penalty"`
+	Temperature     *float64 `yaml:"temperature,omitempty" json:"temperature,omitempty"`
+	TopK            *int     `yaml:"top_k,omitempty" json:"top_k,omitempty"`
+	TopP            *float64 `yaml:"top_p,omitempty" json:"top_p,omitempty"`
+	MinP            *float64 `yaml:"min_p,omitempty" json:"min_p,omitempty"`
+	RepeatPenalty   *float64 `yaml:"repeat_penalty,omitempty" json:"repeat_penalty,omitempty"`
+	PresencePenalty *float64 `yaml:"presence_penalty,omitempty" json:"presence_penalty,omitempty"`
 	// Seed fixes generation for repeatable runs. Without one the engine
 	// picks a random seed, so asking again gives a new answer.
 	Seed *int `yaml:"seed,omitempty" json:"seed,omitempty"`

@@ -19,7 +19,7 @@ func attentionLock(t *testing.T, context int, compute catalog.ComputeDevice) cat
 	p.Profiles = p.Profiles[:1]
 	p.Profiles[0].ContextWindowTokens = context
 	p.Profiles[0].EngineConfig.KVCache = "f16"
-	p.Profiles[0].EngineConfig.PromptCacheRAMMiB = 0
+	p.Profiles[0].EngineConfig.PromptCacheRAMMiB = new(0)
 	d.Presets[compactLocal] = p
 	a := d.Artifacts[p.Artifact]
 	a.Files[0].Bytes = 3 << 30
@@ -82,7 +82,7 @@ func TestGeometryIsArtifactMetadataAndSurvivesLockRoundTrip(t *testing.T) {
 func TestPromptReserveAddsOnceAndStaysOutsideGPUAllowance(t *testing.T) {
 	l := attentionLock(t, 4096, catalog.ComputeGPU)
 	p := l.Records.Presets[l.Preset]
-	p.Profiles[0].EngineConfig.PromptCacheRAMMiB = 4096
+	p.Profiles[0].EngineConfig.PromptCacheRAMMiB = new(4096)
 	l.Records.Presets[l.Preset] = p
 	observed := facts(16)
 	observed.MetalDeviceMemoryMiB, observed.WiredLimitMiB = 5*1024, 5*1024
@@ -103,5 +103,16 @@ func TestSplashCeilingDoesNotRefuseThePresetAtTheMetalLimit(t *testing.T) {
 	if err != nil || len(got.Refusals) != 0 || got.Memory.Basis != "estimated" || got.Memory.KVCacheBytes != nil ||
 		got.Memory.EngineLimitBytes != cap || got.Memory.EngineEnvelopeBytes != 0 || got.MemoryBytes != got.ModelBytes {
 		t.Fatal("Splash ceiling became a required allocation", got.Memory, got.Refusals, err)
+	}
+}
+
+func TestOmittedPromptReserveIsUnknownRatherThanExplicitZero(t *testing.T) {
+	l := attentionLock(t, 4096, catalog.ComputeGPU)
+	p := l.Records.Presets[l.Preset]
+	p.Profiles[0].EngineConfig.PromptCacheRAMMiB = nil
+	l.Records.Presets[l.Preset] = p
+	got, err := setup.Assess(l, facts(16))
+	if err != nil || !strings.Contains(strings.Join(got.Memory.Unknown, " "), "prompt-cache RAM") {
+		t.Fatal("omitted engine reserve represented as known zero", got.Memory, err)
 	}
 }

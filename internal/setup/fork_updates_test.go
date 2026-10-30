@@ -34,8 +34,8 @@ func TestForkComparisonUsesExplicitOverridesAndSelectedOriginProfile(t *testing.
 	p.Profiles[1].ContextWindowTokens = 12288
 	p.Profiles[1].EngineConfig.BatchTokens = 2048
 	p.Profiles[1].EngineConfig.Controls.CachePrompt = false
-	p.RequestDefaults.Sampling.Temperature = 0.9
-	p.RequestDefaults.Sampling.TopP = 0.95 // Inherited; never an override report.
+	p.RequestDefaults.Sampling.Temperature = new(float64(0.9))
+	p.RequestDefaults.Sampling.TopP = new(float64(0.95)) // Inherited; never an override report.
 	p.RequestDefaults.Sampling.Seed = new(0)
 	p.RequestDefaults.ReasoningBudgetTokens = new(-1)
 	d.Presets[compactLayout] = p

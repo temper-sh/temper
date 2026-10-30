@@ -40,7 +40,7 @@ func changedTemperature(t *testing.T) catalog.Document {
 	t.Helper()
 	d := guidedCatalog(t)
 	p := d.Presets[compactLayout]
-	p.RequestDefaults.Sampling.Temperature = 0.9
+	p.RequestDefaults.Sampling.Temperature = new(float64(0.9))
 	d.Presets[compactLayout] = p
 	return d
 }
@@ -235,7 +235,7 @@ func TestLegacyForkEstablishesBaselineAndRemovingOverrideResumesInheritance(t *t
 	code, output, diagnostics = updateRun(c, "--root", root, "--json")
 	_, records = decodeUpdate(t, output)
 	after, _, err := setup.ReadConfiguration(root)
-	if code != 0 || err != nil || len(records["mine"].OverrideChanges) != 0 || len(after.Presets["mine"].ForkBaseline.Values) != 0 || after.Presets["mine"].Lock.Records.Presets["mine"].RequestDefaults.Sampling.Temperature != 0.9 {
+	if code != 0 || err != nil || len(records["mine"].OverrideChanges) != 0 || len(after.Presets["mine"].ForkBaseline.Values) != 0 || *after.Presets["mine"].Lock.Records.Presets["mine"].RequestDefaults.Sampling.Temperature != 0.9 {
 		t.Fatal("removed override did not resume inheritance", output, diagnostics, err)
 	}
 }

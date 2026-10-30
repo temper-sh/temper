@@ -94,9 +94,11 @@ func llamaServerCommand(options llamaServerOptions) (Command, error) {
 		if c.CheckpointMinStep != nil {
 			groups = append(groups, []commandWord{knownWord("--checkpoint-min-step"), knownWord(strconv.Itoa(*c.CheckpointMinStep))})
 		}
+		groups = append(groups, []commandWord{knownWord("--cache-reuse"), knownWord(strconv.Itoa(c.CacheReuse))})
+		if c.ReasoningEffort != "" {
+			groups = append(groups, []commandWord{knownWord("--reasoning-effort"), knownWord(c.ReasoningEffort)})
+		}
 		groups = append(groups,
-			[]commandWord{knownWord("--cache-reuse"), knownWord(strconv.Itoa(c.CacheReuse))},
-			[]commandWord{knownWord("--reasoning-effort"), knownWord(c.ReasoningEffort)},
 			[]commandWord{knownWord(llamaBooleanFlag(c.PreserveReasoning, "--reasoning-preserve", "--no-reasoning-preserve"))},
 			// Without an output cap, stop at the context boundary instead of discarding history.
 			[]commandWord{knownWord(llamaBooleanFlag(c.ContextShift && options.maxTokens != -1, "--context-shift", "--no-context-shift"))},
@@ -117,14 +119,18 @@ func llamaServerCommand(options llamaServerOptions) (Command, error) {
 	if s := options.sampling; s != nil {
 		for _, pair := range []struct {
 			name  string
-			value float64
+			value *float64
 		}{
 			{"--temp", s.Temperature}, {"--top-p", s.TopP}, {"--min-p", s.MinP},
 			{"--repeat-penalty", s.RepeatPenalty}, {"--presence-penalty", s.PresencePenalty},
 		} {
-			groups = append(groups, []commandWord{knownWord(pair.name), knownWord(strconv.FormatFloat(pair.value, 'g', -1, 64))})
+			if pair.value != nil {
+				groups = append(groups, []commandWord{knownWord(pair.name), knownWord(strconv.FormatFloat(*pair.value, 'g', -1, 64))})
+			}
 		}
-		groups = append(groups, []commandWord{knownWord("--top-k"), knownWord(strconv.Itoa(s.TopK))})
+		if s.TopK != nil {
+			groups = append(groups, []commandWord{knownWord("--top-k"), knownWord(strconv.Itoa(*s.TopK))})
+		}
 		if s.Seed != nil {
 			groups = append(groups, []commandWord{knownWord("--seed"), knownWord(strconv.Itoa(*s.Seed))})
 		}

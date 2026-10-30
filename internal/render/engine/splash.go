@@ -19,8 +19,8 @@ const SplashSourceBootstrap = "import os,pathlib,runpy,sys; os.environ.pop('SPLA
 type SplashConfig struct {
 	KVCache               string `yaml:"kv_cache" json:"kv_cache"`
 	MaxMemoryBytes        int64  `yaml:"max_memory_bytes" json:"max_memory_bytes"`
-	ReasoningEffort       string `yaml:"reasoning_effort" json:"reasoning_effort"`
-	RequestTimeoutSeconds int    `yaml:"request_timeout_seconds" json:"request_timeout_seconds"`
+	ReasoningEffort       string `yaml:"reasoning_effort,omitempty" json:"reasoning_effort,omitempty"`
+	RequestTimeoutSeconds *int   `yaml:"request_timeout_seconds,omitempty" json:"request_timeout_seconds,omitempty"`
 }
 
 type SplashTuning struct {
@@ -42,13 +42,13 @@ func (c SplashConfig) Validate() error {
 	if c.KVCache != "int8" && c.KVCache != "bf16" {
 		return errors.New("Splash kv_cache must be int8 or bf16")
 	}
-	if c.MaxMemoryBytes <= 0 || c.RequestTimeoutSeconds <= 0 {
+	if c.MaxMemoryBytes <= 0 || c.RequestTimeoutSeconds != nil && *c.RequestTimeoutSeconds <= 0 {
 		return errors.New("Splash requires positive memory and request timeout limits")
 	}
 	switch c.ReasoningEffort {
-	case "none", "low", "medium", "xhigh":
+	case "", "none", "minimal", "low", "medium", "high", "xhigh", "max":
 	default:
-		return errors.New("Splash reasoning_effort must be none, low, medium or xhigh")
+		return errors.New("Splash reasoning_effort must be none, minimal, low, medium, high, xhigh or max")
 	}
 	return nil
 }
@@ -61,6 +61,16 @@ func buildSplash(r Request) (Command, error) {
 	if err := c.SplashConfig.Validate(); err != nil {
 		return Command{}, err
 	}
+	if c.Adapter != "splash/v2" {
+		if c.RequestTimeoutSeconds == nil {
+			return Command{}, errors.New("Splash v1 requires an explicit request timeout")
+		}
+		switch c.ReasoningEffort {
+		case "", "none", "low", "medium", "xhigh":
+		default:
+			return Command{}, errors.New("Splash v1 reasoning_effort must be none, low, medium or xhigh")
+		}
+	}
 	common := r
 	common.ChatTemplatePath = "" // Applied to the derived tokenizer before serving.
 	if err := validateChatRequest(common, Splash, "gguf", []string{"text"}); err != nil {
@@ -69,7 +79,7 @@ func buildSplash(r Request) (Command, error) {
 	if r.Speculation != "dflash2" || r.SpeculativeTokens != 0 {
 		return Command{}, errors.New("Splash requires its DFlash2 sidecar; draft block size is engine-owned")
 	}
-	if (r.Thinking == "off") != (c.ReasoningEffort == "none") {
+	if c.ReasoningEffort != "" && (r.Thinking == "off") != (c.ReasoningEffort == "none") {
 		return Command{}, errors.New("Splash reasoning off and reasoning_effort none go together")
 	}
 	if r.Window > 262144 {
@@ -78,14 +88,14 @@ func buildSplash(r Request) (Command, error) {
 	if c.ModelID == "" || !filepath.IsAbs(c.AssemblyPath) || !filepath.IsAbs(c.StatePath) {
 		return Command{}, errors.New("Splash requires a model ID and absolute prepared-material/state paths")
 	}
-	if r.Sampling == nil {
-		return Command{}, errors.New("Splash requires explicit request defaults")
+	s := &SamplingDefaults{}
+	if r.Sampling != nil {
+		s = r.Sampling
 	}
-	s := r.Sampling
 	if err := s.Validate(); err != nil {
 		return Command{}, err
 	}
-	if s.Temperature > 2 || s.TopK < 1 || s.TopK > 32 || s.MinP != 0 || s.RepeatPenalty != 1 || s.PresencePenalty != 0 || s.Seed != nil && *s.Seed < 0 {
+	if s.Temperature != nil && *s.Temperature > 2 || s.TopK != nil && (*s.TopK < 1 || *s.TopK > 32) || nonNeutral(s.MinP, 0) || nonNeutral(s.RepeatPenalty, 1) || nonNeutral(s.PresencePenalty, 0) || s.Seed != nil && *s.Seed < 0 {
 		return Command{}, errors.New("Splash supports temperature up to 2, top_k 1–32, a nonnegative seed, and neutral penalties")
 	}
 	target, draft := filepath.Join(c.AssemblyPath, "target"), filepath.Join(c.AssemblyPath, "draft")
@@ -104,7 +114,14 @@ func buildSplash(r Request) (Command, error) {
 		"--tokenizer", filepath.Join(c.AssemblyPath, "tokenizer"), "--model", c.ModelID,
 		"--served-model-name", r.LayoutID, "--host", "127.0.0.1", "--port", "${PORT}",
 		"--max-memory", strconv.FormatInt(c.MaxMemoryBytes, 10), "--max-context", strconv.Itoa(r.Window),
-		"--kv-format", c.KVCache, "--default-reasoning-effort", c.ReasoningEffort)
+		"--kv-format", c.KVCache)
+	effort := c.ReasoningEffort
+	if r.Thinking == "off" {
+		effort = "none"
+	}
+	if effort != "" {
+		args = append(args, "--default-reasoning-effort", effort)
+	}
 	defaults := splashDefaults(*s)
 	if c.Adapter == "splash/v2" {
 		// 1.3 uses remaining context natively; an explicit preset cap is a
@@ -115,7 +132,10 @@ func buildSplash(r Request) (Command, error) {
 	} else {
 		args = append(args, "--max-new-tokens", strconv.Itoa(maxTokens))
 	}
-	args = append(args, "--request-timeout", strconv.Itoa(c.RequestTimeoutSeconds), "--no-webui")
+	if c.RequestTimeoutSeconds != nil {
+		args = append(args, "--request-timeout", strconv.Itoa(*c.RequestTimeoutSeconds))
+	}
+	args = append(args, "--no-webui")
 	var groups [][]commandWord
 	for _, arg := range args {
 		word := dataWord(arg)
@@ -147,9 +167,20 @@ func buildSplash(r Request) (Command, error) {
 
 // splashDefaults are Splash's request defaults; a seed only when one is set.
 func splashDefaults(s SamplingDefaults) map[string]any {
-	defaults := map[string]any{"temperature": s.Temperature, "top_k": s.TopK, "top_p": s.TopP}
+	defaults := map[string]any{}
+	if s.Temperature != nil {
+		defaults["temperature"] = *s.Temperature
+	}
+	if s.TopK != nil {
+		defaults["top_k"] = *s.TopK
+	}
+	if s.TopP != nil {
+		defaults["top_p"] = *s.TopP
+	}
 	if s.Seed != nil {
 		defaults["seed"] = *s.Seed
 	}
 	return defaults
 }
+
+func nonNeutral(value *float64, neutral float64) bool { return value != nil && *value != neutral }

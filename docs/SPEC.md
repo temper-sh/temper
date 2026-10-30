@@ -656,11 +656,16 @@ runtime-profile revision and rendered-config hash separately.
 Where the plurality lives was settled 2026-08-19: **placement is a mode fact,
 identity is a layout fact.** The reranker's `-ngl` differs by mode and stays a
 member flag, because offload does not change what the model produces. A
-different context cap, KV precision, MTP or thinking mode *does* change what it
-produces, so those make a second layout rather than a per-mode override — which
+different context cap, KV precision or MTP changes the runtime composition,
+so those make a second layout rather than a per-mode override — which
 is why the per-mode `tuning:` block was dropped. The removed
 `docs/design/manifest-schema.md` (git history) carried the line and the test
 cases.
+
+Reasoning is a request preference with a preset fallback. A harness may switch
+it where the selected engine and model/template support that control. It does
+not require another layout or belong in its display name. Capability and default
+are distinct; fixed-thinking models cannot promise an off switch.
 
 The current field-kit bridge serializes an exploratory runtime witness as a
 `field-kit-runtime-profile/v1` packet: exact packet, evidence and (when the

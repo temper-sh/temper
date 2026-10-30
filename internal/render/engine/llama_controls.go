@@ -17,7 +17,7 @@ func (c LlamaServerControls) Validate() error {
 	if c.CacheReuse < 0 || c.Threads < 0 || c.ThreadsBatch < 0 {
 		return errors.New("llama-server controls require nonnegative cache reuse and thread counts (zero uses engine defaults)")
 	}
-	if c.ReasoningEffort != "low" && c.ReasoningEffort != "medium" && c.ReasoningEffort != "high" && c.ReasoningEffort != "xhigh" {
+	if c.ReasoningEffort != "" && c.ReasoningEffort != "low" && c.ReasoningEffort != "medium" && c.ReasoningEffort != "high" && c.ReasoningEffort != "xhigh" {
 		return errors.New("llama-server reasoning effort must be low, medium, high or xhigh")
 	}
 	if c.Fit != "on" && c.Fit != "off" {
@@ -31,15 +31,17 @@ func (c LlamaServerControls) Validate() error {
 	return nil
 }
 
-// Validate refuses values that cannot be represented by the llama.cpp API.
+// Validate checks only supplied sampling overrides.
 func (s SamplingDefaults) Validate() error {
-	for _, value := range []float64{s.Temperature, s.TopP, s.MinP, s.RepeatPenalty, s.PresencePenalty} {
-		if math.IsNaN(value) || math.IsInf(value, 0) {
-			return errors.New("llama-server sampling values must be finite")
+	for _, v := range []*float64{s.Temperature, s.TopP, s.MinP, s.RepeatPenalty, s.PresencePenalty} {
+		if v != nil && (math.IsNaN(*v) || math.IsInf(*v, 0)) {
+			return errors.New("sampling values must be finite")
 		}
 	}
-	if s.Temperature < 0 || s.TopK < 0 || s.TopP <= 0 || s.TopP > 1 || s.MinP < 0 || s.MinP > 1 || s.RepeatPenalty <= 0 || s.Seed != nil && *s.Seed < 0 {
-		return errors.New("llama-server sampling defaults are out of range")
+	if s.Temperature != nil && *s.Temperature < 0 || s.TopK != nil && *s.TopK < 0 ||
+		s.TopP != nil && (*s.TopP <= 0 || *s.TopP > 1) || s.MinP != nil && (*s.MinP < 0 || *s.MinP > 1) ||
+		s.RepeatPenalty != nil && *s.RepeatPenalty <= 0 || s.Seed != nil && *s.Seed < 0 {
+		return errors.New("sampling defaults are out of range")
 	}
 	return nil
 }

@@ -95,6 +95,9 @@ func (d *presetDraft) fields(view catalog.View, memory int) []editField {
 }
 
 func parseField(f catalog.Field, text string) (any, error) {
+	if text == "" && f.Optional() {
+		return nil, nil
+	}
 	switch f.Type {
 	case catalog.FieldText:
 		if strings.ContainsAny(text, "\x00\x1b\r\n") {

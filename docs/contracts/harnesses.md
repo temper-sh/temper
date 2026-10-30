@@ -43,8 +43,15 @@ Existing generic `local` providers are never adopted.
 
 Models use their routed preset IDs, display names, per-slot context and text/image
 modalities. Non-chat interfaces are excluded. The router's `default` alias is
-not duplicated in the picker. Thinking remains controlled by the saved server
-preset; export does not introduce a client reasoning override. Output metadata
+not duplicated in the picker. Reasoning capability comes from the saved preset's `reasoning_capability`,
+independently of its on/off default. For reviewed switchable llama.cpp and
+vLLM presets, Pi/PiG's thinking selection sends
+`chat_template_kwargs.enable_thinking`; effort levels select on without
+inventing model-specific effort support. Splash and Kapitsa use
+`reasoning_effort` with off mapped to `none`. Callers that send no preference
+use the preset fallback. Always-thinking models retain their fixed behavior;
+non-thinking models do not advertise a switch. Older locks without capability
+metadata retain the previous export behavior until explicitly updated. Output metadata
 uses the explicit output default, or context capacity when it is omitted;
 uncapped presets suppress client token-limit defaults in request sampling
 parameters. Harness session/default-model selection, compaction and credentials
@@ -72,7 +79,8 @@ are retained.
 The `models` mapping supplies per-model `context_length` and `supports_vision`
 from saved chat presets. Automatic discovery stays enabled, so Hermes can also
 show the router's aliases and non-chat routes. Filtering those entries is
-deferred. Server presets continue to control thinking and output defaults;
+deferred. Explicit requests can override supported thinking controls; presets supply
+the fallback and output defaults;
 an existing global Hermes context override remains authoritative.
 
 Other providers, credentials, default models, auxiliary settings and unknown
@@ -121,3 +129,10 @@ Adapter references checked on 2026-10-20:
 [Hermes provider configuration](https://github.com/NousResearch/hermes-agent/blob/bd3cbe91a90097f9804f16ea5c1768f5cbaaf0b7/hermes_cli/config_providers.py),
 [Hermes model discovery](https://github.com/NousResearch/hermes-agent/blob/bd3cbe91a90097f9804f16ea5c1768f5cbaaf0b7/hermes_cli/model_switch.py),
 and [Hermes profile resolution](https://github.com/NousResearch/hermes-agent/blob/bd3cbe91a90097f9804f16ea5c1768f5cbaaf0b7/hermes_cli/main.py).
+
+Thinking transport references: [Pi request construction](https://github.com/earendil-works/pi/blob/26e05e64f0e64f4cbcc1e501fe3da3d4b64a4424/packages/ai/src/api/openai-completions.ts)
+and [PiG thinking-format parity](https://github.com/MichaelKinsy/PiG/blob/ccdc77713126d881573df5dc1e05ce4535c94d0f/ai/openai_completions_thinking_format_oracle_test.go).
+These exports require client versions supporting `chat-template` compatibility.
+Per-model `thinkingFormat`, `chatTemplateKwargs` and the off-level mapping are
+Temper-owned and refreshed on activation; unrelated compatibility fields and
+sampling choices remain user-owned. No harness session setting is changed.

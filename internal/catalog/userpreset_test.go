@@ -153,7 +153,7 @@ func TestForkLockDiffersFromItsOriginOnlyInItsChangesAndFollowsTheOrigin(t *test
 		t.Fatalf("fork changed %v, want %v", got, want)
 	}
 	p := forked.Records.Presets["qwen-cool"]
-	if p.RequestDefaults.Sampling.Temperature != 0.7 || *p.RequestDefaults.Sampling.Seed != 23 || p.Config().BatchTokens != 1024 || p.Config().Controls.Threads != 6 || p.Presentation.DisplayName != "Qwen, cooler" {
+	if *p.RequestDefaults.Sampling.Temperature != 0.7 || *p.RequestDefaults.Sampling.Seed != 23 || p.Config().BatchTokens != 1024 || p.Config().Controls.Threads != 6 || p.Presentation.DisplayName != "Qwen, cooler" {
 		t.Fatalf("fork lost a change: %+v", p)
 	}
 
@@ -165,13 +165,13 @@ func TestForkLockDiffersFromItsOriginOnlyInItsChangesAndFollowsTheOrigin(t *test
 		moved.Presets[id] = preset
 	}
 	next := moved.Presets[mtp]
-	next.RequestDefaults.Sampling.TopK = 40
+	next.RequestDefaults.Sampling.TopK = new(40)
 	next.Profiles = slices.Clone(next.Profiles)
 	next.Profiles[0].EngineConfig.BatchTokens = 768
 	moved.Presets[mtp] = next
 	followed, _ := compileUser(t, moved, "qwen-cool", fork)
 	p = followed.Records.Presets["qwen-cool"]
-	if p.RequestDefaults.Sampling.TopK != 40 || p.Config().BatchTokens != 1024 {
+	if *p.RequestDefaults.Sampling.TopK != 40 || p.Config().BatchTokens != 1024 {
 		t.Fatalf("fork stayed on the old origin or lost its value: top_k %d, batch %d", p.RequestDefaults.Sampling.TopK, p.Config().BatchTokens)
 	}
 }
@@ -296,7 +296,7 @@ func TestUserPresetRefusalsNameTheProblem(t *testing.T) {
 		"dotted key":      {`{"schema": "temper-preset/v1", "origin": "qwen3.8-27b-q4xl-mtp", "changes": {"request_defaults.sampling.temperature": 0.25}}`, "nest the names"},
 		"inner dotted":    {`{"schema": "temper-preset/v1", "origin": "qwen3.8-27b-q4xl-mtp", "changes": {"request_defaults": {"sampling.temperature": 0.25}}}`, "nest the names"},
 		"local name":      {`{"schema": "temper-preset/v1", "origin": "qwen3.8-27b-q4xl-mtp", "templates": {"mine": {"sources": [{"hub": "local"}], "files": [{"path": "a.jinja#b"}], "compatible_artifacts": ["qwen3.8-27b-q4xl"], "license": "own"}}}`, "plain file name"},
-		"removal":         {`{"schema": "temper-preset/v1", "origin": "qwen3.8-27b-q4xl-mtp", "changes": {"request_defaults": {"sampling": {"temperature": null}}}}`, "cannot be removed"},
+		"removal":         {`{"schema": "temper-preset/v1", "origin": "qwen3.8-27b-q4xl-mtp", "changes": {"request_defaults": {"reasoning": null}}}`, "cannot be removed"},
 		"engine rule":     {`{"schema": "temper-preset/v1", "origin": "qwen3.8-27b-q4xl-mtp", "changes": {"engine_config": {"microbatch_tokens": 99999}}}`, "ubatch must not exceed batch"},
 		"another model":   {`{"schema": "temper-preset/v1", "origin": "qwen3.8-27b-q4xl-mtp", "changes": {"artifact": "gemma-4-e2b-q4km"}}`, "a fork keeps its origin's model"},
 		"unknown origin":  {`{"schema": "temper-preset/v1", "origin": "qwen-9"}`, `origin "qwen-9" is not in this catalog`},

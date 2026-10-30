@@ -10,6 +10,23 @@ This is not a model-eval log, product evidence, or permission to change the
 skills repository. It creates no synthetic Temper work. A note may — and often
 should — conclude that no skill change is warranted.
 
+## Optional defaults and operator reasoning — 2026-10-30
+
+Data modeling separated model/template capability from the request fallback and
+kept absence, explicit zero, fork clearing and inheritance distinct. Existing
+locks and measurement snapshots retain explicit values. Source inspection of
+consumed templates found that Muse reads `reasoning_strength`, so accepting a
+`reasoning_effort` setting had not established its effect.
+
+Testing followed authoring through lock round trips, rendering and harness
+exports; failures cover unsupported penalties, legacy timeout behavior,
+unavailable origins and omitted memory reserves. Editor tests caught optional
+help text clipping a validation error at 80 columns; shorter help preserves the
+error and the existing save boundary. Full offline tests, vet and race checks
+pass. All 22 maintained catalog presets / 23 profiles compile in dry run without
+writes; no native inference or publication was performed. Existing craft guidance
+was sufficient; no skill change is proposed.
+
 ## Wizard compute prompt — 2026-10-28
 
 The existing Apply/Cancel boundary now owns CPU/GPU selection as well as

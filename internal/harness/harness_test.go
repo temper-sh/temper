@@ -231,8 +231,9 @@ func TestSurvivingModelsKeepUserSettingsWhileOwnedFieldsRefresh(t *testing.T) {
 	initial := map[string]any{"providers": map[string]any{id: map[string]any{
 		"name": "Temper (" + dir + ")", "apiKey": "MY_LOCAL_TOKEN", "headers": map[string]string{"User": "header"},
 		"models": []any{map[string]any{"id": "one", "baseUrl": "http://old/v1", "api": "old",
-			"custom": true, "compat": map[string]any{"custom": true, "supportsStore": true},
-			"samplingParams": map[string]any{"temperature": 0.4, "max_tokens": 999}}}}}}
+			"custom": true, "compat": map[string]any{"custom": true, "supportsStore": true, "thinkingFormat": "chat-template", "chatTemplateKwargs": map[string]any{"enable_thinking": true}},
+			"thinkingLevelMap": map[string]any{"off": "none", "high": "xhigh"},
+			"samplingParams":   map[string]any{"temperature": 0.4, "max_tokens": 999}}}}}}
 	raw, _ := json.Marshal(initial)
 	if err := os.WriteFile(path, raw, 0600); err != nil {
 		t.Fatal(err)
@@ -259,6 +260,9 @@ func TestSurvivingModelsKeepUserSettingsWhileOwnedFieldsRefresh(t *testing.T) {
 	}
 	p := doc.Providers[id]
 	m := p.Models[0]
+	if m["compat"].(map[string]any)["thinkingFormat"] != nil || m["compat"].(map[string]any)["chatTemplateKwargs"] != nil || m["thinkingLevelMap"].(map[string]any)["off"] != nil || m["thinkingLevelMap"].(map[string]any)["high"] != "xhigh" {
+		t.Fatal("stale thinking transport or lost user effort mapping", m)
+	}
 	if p.APIKey != "MY_LOCAL_TOKEN" || m["custom"] != true || m["baseUrl"] != nil || m["api"] != nil || m["compat"].(map[string]any)["custom"] != true || m["compat"].(map[string]any)["supportsStore"] != false || m["samplingParams"].(map[string]any)["temperature"] != 0.4 || m["samplingParams"].(map[string]any)["max_tokens"] != nil {
 		t.Fatalf("user settings lost or owned overrides stale: %s", raw)
 	}
@@ -364,5 +368,35 @@ func TestRefuseRedirectedTargets(t *testing.T) {
 	}
 	if _, err = harness.Prepare(dir, choices, "127.0.0.1:8080", nil); err == nil {
 		t.Fatal("retargeted saved path accepted")
+	}
+}
+
+func TestReasoningCapabilityIsIndependentOfTheSavedDefault(t *testing.T) {
+	raw, err := os.ReadFile("../testfixture/testdata/catalog.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, err := catalog.Parse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := "qwen3.8-27b-q4xl-mtp"
+	for _, setting := range []string{"on", "off"} {
+		p := d.Presets[id]
+		p.ReasoningCapability = "switchable"
+		p.RequestDefaults.Reasoning = setting
+		d.Presets[id] = p
+		l, err := catalog.CompilePreset(d, id, 0, 0, d.Runtime.Router.Target)
+		if err != nil {
+			t.Fatal(err)
+		}
+		models, err := harness.Models([]harness.Preset{{ID: "local", Name: "Local model", Lock: l}})
+		if err != nil || !models[0].Reasoning || models[0].Compat["thinkingFormat"] != "chat-template" {
+			t.Fatal(models, err)
+		}
+		kwargs := models[0].Compat["chatTemplateKwargs"].(map[string]any)
+		if kwargs["enable_thinking"].(map[string]string)["$var"] != "thinking.enabled" {
+			t.Fatal("export hard-coded a thinking preference", kwargs)
+		}
 	}
 }

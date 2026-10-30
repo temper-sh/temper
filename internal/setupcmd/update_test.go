@@ -169,8 +169,8 @@ func TestUpdateUsesAuthoredSourceAndKeepsItsLockWhenFileIsInvalidOrMissing(t *te
 			if form == "copy" {
 				wantOutput, wantTemperature = 4096, 0.7
 			}
-			if preset.UserPreset != "mine" || record.RequestDefaults.MaxOutputTokens != wantOutput || record.RequestDefaults.Sampling.Temperature != wantTemperature || preset.Lock.Records.Runtime.Router.Supply.Release.Version != "v263" {
-				t.Fatalf("update lost authored ownership: source=%q output=%d temperature=%g", preset.UserPreset, record.RequestDefaults.MaxOutputTokens, record.RequestDefaults.Sampling.Temperature)
+			if preset.UserPreset != "mine" || record.RequestDefaults.MaxOutputTokens != wantOutput || *record.RequestDefaults.Sampling.Temperature != wantTemperature || preset.Lock.Records.Runtime.Router.Supply.Release.Version != "v263" {
+				t.Fatalf("update lost authored ownership: source=%q output=%d temperature=%g", preset.UserPreset, record.RequestDefaults.MaxOutputTokens, *record.RequestDefaults.Sampling.Temperature)
 			}
 			if form == "copy" && preset.ForkBaseline != nil {
 				t.Fatal("independent copy acquired fork tracking")

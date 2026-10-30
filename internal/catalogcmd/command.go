@@ -107,6 +107,13 @@ func compile(ctx context.Context, args []string, stdout, stderr io.Writer, reade
 			d, warnings = loaded.Document, loaded.Warnings
 		}
 	}
+	if !user {
+		for _, item := range view.Unavailable {
+			if item.Kind == "preset" && item.ID == *preset {
+				return failed(stderr, fmt.Errorf("preset %q is unavailable: %s", *preset, item.Reason))
+			}
+		}
+	}
 	if !*jsonOutput {
 		for _, warning := range warnings {
 			fmt.Fprintf(stderr, "temper: warning: %s\n", warning)

@@ -87,7 +87,7 @@ func TestGuidedPresetsDefaultToMediumThinking(t *testing.T) {
 				if p.RequestDefaults != (catalog.RequestDefaults{}) {
 					t.Fatalf("%s carries generation defaults", id)
 				}
-			} else if p.RequestDefaults.Reasoning != "off" || p.RequestDefaults.Sampling.Temperature != 0 {
+			} else if p.RequestDefaults.Reasoning != "off" || *p.RequestDefaults.Sampling.Temperature != 0 {
 				t.Fatalf("%s must preserve its direct, greedy specialist interface", id)
 			}
 			continue

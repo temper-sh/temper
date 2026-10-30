@@ -169,7 +169,7 @@ and engine, plus Off where the engine permits it. Selecting a configuration
 sets its method, source and draft reference together. Draft-token tuning appears
 only when the engine exposes it. The editor couples engine-required values to
 the meaningful choice: Rapid reasoning retains/restores its known parser;
-Splash reasoning follows its effort selection; vLLM MTP uses one sequence and
+Splash thinking and effort stay consistent, with an optional effort fallback; vLLM MTP uses one sequence and
 no prefix cache. Other authored values remain intact when controls are hidden.
 
 ### Save and deletion boundary
@@ -266,7 +266,7 @@ and operational errors retain the draft for correction or copying to a new ID.
   the template, and every engine setting of the origin's engine.
 - Your value replaces the origin's. Removing an override restores inheritance.
   `request_defaults.sampling.seed: null` explicitly selects a random seed;
-  omission inherits and integer `0` is a fixed seed. Other fields reject `null`.
+  omission inherits and integer `0` is a fixed seed. Other optional defaults can also be cleared with `null`; required fields reject it.
   This explicit random override requires Temper 0.4.0.
 - Each compile starts from the newest origin. A catalog change to a setting you
   did not change reaches your preset; your own value wins where both changed.
@@ -451,3 +451,28 @@ fork, values per memory size in a fork, a record of where a copy came from,
 and engine records in user files.
 
 [Back to the command reference](README.md)
+
+## Optional defaults and operator reasoning
+
+A preset supplies request defaults, not a harness policy. Explicit request
+settings override defaults where the model/template and engine support them.
+Display names describe model/runtime choices rather than a thinking mode.
+`reasoning_capability` is optional: `switchable`, `always`, or `none` describes
+the selected model/template capability independently of `request_defaults.reasoning`.
+Omission means unreviewed capability; existing locks retain their prior behavior.
+An always-thinking model requires an on default; a non-thinking model requires off.
+
+Each sampling override, llama.cpp `reasoning_effort`, context checkpoints,
+prompt-cache RAM and checkpoint interval may be omitted. Omission delegates to
+the pinned engine; explicit zero retains its documented meaning. Splash v2 may
+omit its request timeout (no server deadline); v1 still requires a deadline.
+Splash effort may be omitted with an on default to use the model's default;
+off maps to `none` when effort is omitted. Conflicting explicit values refuse.
+Unsupported penalties may be absent or explicitly neutral.
+
+In a fork, an absent change inherits the origin. `null` clears an optional
+sampling setting, reasoning budget, reasoning effort, checkpoint setting or
+Splash v2 timeout. The editor's Engine default choice (or blank optional numeric
+input) clears the value; Reset removes the override and inherits again.
+Required resource settings still reject removal. Saved explicit values are
+preserved in locks; changing a default does not rewrite historical evidence.

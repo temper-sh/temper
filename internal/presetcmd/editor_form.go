@@ -35,13 +35,13 @@ func namedModes(path string) (labels, values []string) {
 	case "request_defaults.max_output_tokens":
 		return []string{"Remaining context", "Custom"}, []string{"0", "custom"}
 	case "request_defaults.reasoning_budget_tokens":
-		return []string{"Unrestricted", "No thinking", "Custom"}, []string{"-1", "0", "custom"}
+		return []string{"Engine default", "Unrestricted", "No thinking", "Custom"}, []string{"", "-1", "0", "custom"}
 	case "request_defaults.sampling.seed":
 		return []string{"Random", "Fixed"}, []string{"", "custom"}
 	case "engine_config.controls.threads", "engine_config.controls.threads_batch":
 		return []string{"Engine default", "Custom"}, []string{"0", "custom"}
 	case "engine_config.prompt_cache_ram_mib":
-		return []string{"Off", "Custom"}, []string{"0", "custom"}
+		return []string{"Engine default", "Off", "Custom"}, []string{"", "0", "custom"}
 	}
 	return nil, nil
 }
@@ -75,7 +75,7 @@ func controlOption(path, value string) string {
 		return "Extra high"
 	}
 	if value == "" {
-		return "Not set"
+		return "Engine default"
 	}
 	return strings.ToUpper(value[:1]) + value[1:]
 }
@@ -137,6 +137,9 @@ func (m *Editor) controls() []editorControl {
 		}[f.Path]; ok {
 			c.detail = help
 		}
+		if f.Optional() {
+			c.detail += " Blank: engine default."
+		}
 		if f.Path == "context_window_tokens" || strings.HasSuffix(f.Path, "_tokens") {
 			c.unit = "tokens"
 		}
@@ -158,7 +161,11 @@ func (m *Editor) controls() []editorControl {
 			}
 			c.selected = slices.Index(c.values, c.value)
 		} else if len(f.Choices) > 0 {
-			c.kind, c.values, c.selected = "choice", f.Choices, slices.Index(f.Choices, c.value)
+			c.kind, c.values = "choice", slices.Clone(f.Choices)
+			if f.Optional() {
+				c.values = append([]string{""}, c.values...)
+			}
+			c.selected = slices.Index(c.values, c.value)
 			for _, v := range c.values {
 				c.labels = append(c.labels, controlOption(f.Path, v))
 			}

@@ -51,24 +51,21 @@ func buildKapitsa(r Request) (Command, error) {
 	if r.Window > math.MaxInt32 || !filepath.IsAbs(r.ModelPath) || !filepath.IsAbs(r.DraftModelPath) || !filepath.IsAbs(r.Kapitsa.StatePath) || r.Speculation != "dflash2" || r.SpeculativeTokens != 0 || r.KVCache != "" {
 		return Command{}, errors.New("Kapitsa requires absolute target/draft/home paths, native context, engine-owned DFlash2 and FP16 KV")
 	}
-	if r.Sampling == nil {
-		return Command{}, errors.New("Kapitsa requires explicit request defaults")
+	s := &SamplingDefaults{}
+	if r.Sampling != nil {
+		s = r.Sampling
 	}
-	s := r.Sampling
 	if err := s.Validate(); err != nil {
 		return Command{}, err
 	}
-	if s.MinP != 0 || s.RepeatPenalty != 1 || s.PresencePenalty != 0 || s.Seed != nil && uint64(*s.Seed) > math.MaxUint32 {
+	if nonNeutral(s.MinP, 0) || nonNeutral(s.RepeatPenalty, 1) || nonNeutral(s.PresencePenalty, 0) || s.Seed != nil && uint64(*s.Seed) > math.MaxUint32 {
 		return Command{}, errors.New("Kapitsa supports neutral penalties/min_p and a 32-bit nonnegative seed")
 	}
 	c := r.Kapitsa
 	// Decimal GB, rendered from integer bytes without a binary floating-point
 	// conversion: 24 GiB is exactly 25.769803776 GB.
 	gb := fmt.Sprintf("%d.%09d", c.MaxMemoryBytes/1_000_000_000, c.MaxMemoryBytes%1_000_000_000)
-	defaults := map[string]any{"temperature": s.Temperature, "top_p": s.TopP, "top_k": s.TopK}
-	if s.Seed != nil {
-		defaults["seed"] = *s.Seed
-	}
+	defaults := splashDefaults(*s)
 	// Kapitsa otherwise imposes a 16,384-token default. A zero preset cap
 	// means remaining context; the engine stops at its context boundary.
 	maxTokens := r.MaxTokens

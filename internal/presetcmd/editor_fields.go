@@ -46,7 +46,7 @@ func (m *Editor) fieldsFor(page int) []editField {
 				f.Choices = append(f.Choices, string(device))
 			}
 		case "request_defaults.reasoning":
-			if splash || kind == "rapid-mlx/v1" && m.reasoningParser() == "" {
+			if p.ReasoningCapability == "always" || p.ReasoningCapability == "none" || kind == "rapid-mlx/v1" && m.reasoningParser() == "" {
 				continue
 			}
 		case "request_defaults.reasoning_budget_tokens", "engine_config.controls.reasoning_effort", "engine_config.controls.preserve_reasoning":
@@ -310,7 +310,26 @@ func (m *Editor) setEditorField(field catalog.Field, text string) error {
 			return err
 		}
 	}
-	if field.Path == "engine_config.reasoning_effort" && strings.HasPrefix(kind, "splash/") {
+	if field.Path == "request_defaults.reasoning" && strings.HasPrefix(kind, "splash/") {
+		var effort any
+		for _, current := range draft.fields(m.view, m.memory) {
+			if current.Path == "engine_config.reasoning_effort" {
+				effort = current.current
+				break
+			}
+		}
+		if text == "off" {
+			if err := draft.setValue("engine_config.reasoning_effort", "none", m.memory); err != nil {
+				return err
+			}
+		}
+		if text == "on" && effort == "none" {
+			if err := draft.setValue("engine_config.reasoning_effort", nil, m.memory); err != nil {
+				return err
+			}
+		}
+	}
+	if field.Path == "engine_config.reasoning_effort" && text != "" && strings.HasPrefix(kind, "splash/") {
 		reasoning := "on"
 		if text == "none" {
 			reasoning = "off"
@@ -334,6 +353,9 @@ func (m *Editor) resetEditorField(path string) error {
 	}
 	if path == "request_defaults.reasoning" && kind == "rapid-mlx/v1" {
 		paths = append(paths, "engine_config.rapid_mlx.reasoning_parser")
+	}
+	if path == "request_defaults.reasoning" && strings.HasPrefix(kind, "splash/") {
+		paths = append(paths, "engine_config.reasoning_effort")
 	}
 	if path == "engine_config.reasoning_effort" && strings.HasPrefix(kind, "splash/") {
 		paths = append(paths, "request_defaults.reasoning")

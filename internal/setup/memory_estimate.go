@@ -49,7 +49,11 @@ func estimateMemory(lock catalog.Lock, weights int64) (MemoryEstimate, error) {
 		}
 		m.CacheFormat, m.ParallelSlots = c.KVCache, c.Parallel
 		var err error
-		m.PromptCacheReserveBytes, err = modelmemory.Product(int64(c.PromptCacheRAMMiB), MiB)
+		if c.PromptCacheRAMMiB == nil {
+			m.Unknown = append(m.Unknown, "prompt-cache RAM: pinned engine default is not accounted")
+		} else {
+			m.PromptCacheReserveBytes, err = modelmemory.Product(int64(*c.PromptCacheRAMMiB), MiB)
+		}
 		if err != nil {
 			return m, err
 		}

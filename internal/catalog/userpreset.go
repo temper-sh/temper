@@ -420,8 +420,8 @@ func checkChanges(changes map[string]any, fields []Field, prefix string) error {
 
 func checkValue(f Field, value any) error {
 	if value == nil {
-		if f.Path == "request_defaults.sampling.seed" {
-			return nil // Explicit random seed; absence still inherits the origin.
+		if f.Optional() {
+			return nil // Clear the default; absence still inherits the origin.
 		}
 		return errors.New("cannot be removed: a fork only replaces values")
 	}

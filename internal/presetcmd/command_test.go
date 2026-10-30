@@ -132,7 +132,7 @@ func TestCopyFreezesAForkAndKeepsItsRecords(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if u.Fork() || u.Preset.RequestDefaults.Sampling.Temperature != 0.6 || len(u.Preset.Profiles) != 1 || u.Artifacts["qwen3.8-27b-q4xl"].Files == nil || u.Templates["froggeric-qwen38"].Files == nil {
+	if u.Fork() || *u.Preset.RequestDefaults.Sampling.Temperature != 0.6 || len(u.Preset.Profiles) != 1 || u.Artifacts["qwen3.8-27b-q4xl"].Files == nil || u.Templates["froggeric-qwen38"].Files == nil {
 		t.Fatalf("copy lost a value or a record: %s", raw)
 	}
 	// The copy holds the catalog's records unchanged, so nothing shadows a
@@ -222,5 +222,20 @@ func TestPlanReviewsTheCompiledPresetAndSavesNothing(t *testing.T) {
 	}
 	if _, diagnostics, code := run(t, c, root, "plan", "missing"); code == 0 || !strings.Contains(diagnostics, "there is no") {
 		t.Fatalf("plan of a missing preset: %d %s", code, diagnostics)
+	}
+}
+
+func TestCheckPreservesUnavailableOriginReason(t *testing.T) {
+	c, root := command(t)
+	if _, d, code := run(t, c, root, "fork", mtp, "mine"); code != 0 {
+		t.Fatal(d)
+	}
+	view, _ := c.Catalog(root)
+	delete(view.Document.Presets, mtp)
+	view.Unavailable = []catalog.Unavailable{{Kind: "preset", ID: mtp, Reason: "engine requires a newer Temper"}}
+	c.Catalog = func(string) (catalog.View, error) { return view, nil }
+	out, diagnostics, code := run(t, c, root, "check", "mine")
+	if code == 0 || !strings.Contains(out+diagnostics, "engine requires a newer Temper") {
+		t.Fatal("check lost the catalog refusal", code, out, diagnostics)
 	}
 }

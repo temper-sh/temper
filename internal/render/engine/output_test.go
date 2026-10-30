@@ -17,9 +17,9 @@ func TestSplashOutputDefaultsFollowTheSelectedFrontendContract(t *testing.T) {
 					Engine: engine.Splash, LayoutID: "qwen", ModelPath: "/temper/model.gguf",
 					ArtifactFormat: "gguf", Interface: engine.InterfaceChatCompletions,
 					Modalities: []string{"text"}, Window: 4096, MaxTokens: limit, Thinking: "off", Speculation: "dflash2",
-					Sampling: &engine.SamplingDefaults{Temperature: 1, TopK: 20, TopP: .95, RepeatPenalty: 1},
+					Sampling: &engine.SamplingDefaults{Temperature: new(float64(1)), TopK: new(20), TopP: new(float64(.95)), RepeatPenalty: new(float64(1))},
 					Splash: &engine.SplashTuning{Adapter: adapter, ModelID: "owner/qwen", AssemblyPath: "/temper/prepared", StatePath: "/temper/state",
-						SplashConfig: engine.SplashConfig{KVCache: "int8", MaxMemoryBytes: 24 << 30, ReasoningEffort: "none", RequestTimeoutSeconds: 600}},
+						SplashConfig: engine.SplashConfig{KVCache: "int8", MaxMemoryBytes: 24 << 30, ReasoningEffort: "none", RequestTimeoutSeconds: new(600)}},
 				}
 				command, err := engine.Build(request)
 				if err != nil {

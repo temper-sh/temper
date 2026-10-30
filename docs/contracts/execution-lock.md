@@ -282,8 +282,20 @@ MTP/DFlash. External DFlash uses 1–15 draft tokens; MTP uses 1–16. Target an
 material remain independent identities. These controls do not establish that an
 arbitrary pairing is correct or faster.
 
+A preset may declare `reasoning_capability` as `switchable`, `always` or `none`.
+It describes the selected model/template independently of its request fallback.
+The compiler rejects off defaults for `always` and on defaults for `none`.
+Omission retains compatibility with older locks; no capability is inferred from
+an on/off default for new harness control exports. Capability metadata does not
+change the executable identity or rewrite measurements.
+
 `llama-server/v1` exposes explicit cache, reasoning, context shift, fitting,
-thread, load-mode and sampling controls. `checkpoint_min_step` maps to
+thread, load-mode and sampling controls. Sampling overrides are individually
+optional; unset values emit no flags. Explicit zero temperature/top-k remains
+explicit. `reasoning_effort`, `context_checkpoints` and `prompt_cache_ram_mib`
+are optional too: absence uses the pinned engine default, while a supplied
+zero checkpoint/cache value disables that feature. Memory estimates mark an
+omitted prompt-cache reserve as unknown rather than counting it as zero. `checkpoint_min_step` maps to
 `--checkpoint-min-step`: omitted uses the engine default, zero removes the
 minimum, and negative values refuse. The sampling `seed` is optional: set, it
 maps to `--seed` for repeatable runs; omitted, the engine picks a random seed,
@@ -301,7 +313,11 @@ controls. The selected converter must preserve the model's full scoring head;
 being a GGUF file alone does not establish compatibility.
 
 Splash's distinct typed configuration owns KV precision, memory cap, reasoning
-and request timeout. It selects a target GGUF and an exact DFlash2 sidecar
+and optional request timeout. In `splash/v2`, absence means no server deadline;
+a supplied timeout must be positive. The legacy v1 adapter still requires an
+explicit timeout. Effort may be omitted for the model's default with reasoning
+on; off maps to effort `none` when omitted. Conflicting explicit values refuse. Unsupported sampling penalties can be absent
+or neutral, but non-neutral values refuse. It selects a target GGUF and an exact DFlash2 sidecar
 (`config.json` plus `model.safetensors`). The release-owned architecture mapping
 checks their compatibility. Preparation includes the sidecar automatically.
 `splash/v1` preserves the Splash 1.1 frontend and native argument contract for

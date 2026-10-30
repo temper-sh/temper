@@ -33,9 +33,9 @@ func document() catalog.Document {
 		Engines:   map[string]catalog.Engine{"llama-b10936": {Adapter: "llama-server/v1", Supply: supply("llama-cpp"), Interfaces: []string{"chat-completions"}, Modalities: []string{"text"}}},
 		Presets: map[string]catalog.Preset{"qwen-32k": {Artifact: "qwen-q4", Template: "template", Engine: "llama-b10936", Interface: "chat-completions", Modalities: []string{"text"},
 			Compute: catalog.ComputeGPU, ComputeOptions: []catalog.ComputeDevice{catalog.ComputeGPU, catalog.ComputeCPU},
-			RequestDefaults: catalog.RequestDefaults{MaxOutputTokens: 4096, Reasoning: "off", Sampling: engine.SamplingDefaults{Temperature: 0, TopK: 1, TopP: 1, MinP: 0, RepeatPenalty: 1, PresencePenalty: 0, Seed: seed(17)}},
+			RequestDefaults: catalog.RequestDefaults{MaxOutputTokens: 4096, Reasoning: "off", Sampling: engine.SamplingDefaults{Temperature: new(float64(0)), TopK: new(1), TopP: new(float64(1)), MinP: new(float64(0)), RepeatPenalty: new(float64(1)), PresencePenalty: new(float64(0)), Seed: seed(17)}},
 			Speculation:     catalog.Speculation{Method: "mtp", Source: "embedded", MaxDraftTokens: 3},
-			Profiles: []catalog.Profile{{MinMemoryGiB: 32, ContextWindowTokens: 32768, EngineConfig: catalog.EngineConfig{LlamaConfig: catalog.LlamaConfig{Kind: "llama-server/v1", Parallel: 1, KVCache: "q8", FlashAttention: "on", BatchTokens: 512, MicrobatchTokens: 512, ContextCheckpoints: 16, PromptCacheRAMMiB: 0, GPULayers: 99,
+			Profiles: []catalog.Profile{{MinMemoryGiB: 32, ContextWindowTokens: 32768, EngineConfig: catalog.EngineConfig{LlamaConfig: catalog.LlamaConfig{Kind: "llama-server/v1", Parallel: 1, KVCache: "q8", FlashAttention: "on", BatchTokens: 512, MicrobatchTokens: 512, ContextCheckpoints: new(16), PromptCacheRAMMiB: new(0), GPULayers: 99,
 				Controls: engine.LlamaServerControls{CacheReuse: 16, ReasoningEffort: "medium", PreserveReasoning: true, ContextShift: false, CachePrompt: true, Fit: "off", Threads: 4, ThreadsBatch: 4, LoadMode: "mmap"}}}}},
 			Presentation: catalog.PresetPresentation{DisplayName: "Qwen source work", Description: "A fixture preset.", Group: "other"}}},
 		Presentation: &catalog.Presentation{Groups: []catalog.Group{{ID: "other", DisplayName: "Other", Description: "Fixture presets."}}, FallbackGroup: "other", PresetOrder: []string{"qwen-32k"}},
@@ -190,11 +190,11 @@ func TestDerivedManifestRejectsInvalidControlsBeforeRuntimeEffects(t *testing.T)
 		t.Fatal(err)
 	}
 	layout := p.Manifest.Layouts["qwen-32k"]
-	layout.Sampling.TopP = 2
+	layout.Sampling.TopP = new(float64(2))
 	if err := p.Manifest.Validate(); err == nil || !strings.Contains(err.Error(), "sampling") {
 		t.Fatalf("manifest accepted invalid API sampling: %v", err)
 	}
-	layout.Sampling.TopP = 1
+	layout.Sampling.TopP = new(float64(1))
 	layout.Llama.Controls.LoadMode = "unknown"
 	if err := p.Manifest.Validate(); err == nil || !strings.Contains(err.Error(), "load mode") {
 		t.Fatalf("manifest accepted invalid loading controls: %v", err)
@@ -332,7 +332,7 @@ func TestDigestChangesFollowOwnedFacts(t *testing.T) {
 		}, true, true, true},
 		{"sampling", func(d *catalog.Document) {
 			l := d.Presets["qwen-32k"]
-			l.RequestDefaults.Sampling.Temperature = .7
+			l.RequestDefaults.Sampling.Temperature = new(float64(.7))
 			d.Presets["qwen-32k"] = l
 		}, false, true, true},
 		{"checkpoint spacing", func(d *catalog.Document) {
@@ -404,7 +404,7 @@ func TestRejectsUnexecutableGraphs(t *testing.T) {
 		}},
 		{"invalid sampling", func(d *catalog.Document) {
 			l := d.Presets["qwen-32k"]
-			l.RequestDefaults.Sampling.TopP = 2
+			l.RequestDefaults.Sampling.TopP = new(float64(2))
 			d.Presets["qwen-32k"] = l
 		}},
 	}

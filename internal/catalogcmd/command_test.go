@@ -116,3 +116,37 @@ func TestCompileSelectsTheProfileAMacOfThatMemoryUses(t *testing.T) {
 		}
 	}
 }
+
+func TestCompileReportsUnavailableReasonBeforeResolvingOrWriting(t *testing.T) {
+	raw, err := os.ReadFile("../testfixture/testdata/catalog.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	id := "qwen3.8-27b-q4xl-mtp"
+	doc["presets"].(map[string]any)[id].(map[string]any)["future_control"] = true
+	raw, _ = json.Marshal(doc)
+	dir := t.TempDir()
+	source := filepath.Join(dir, "catalog.json")
+	destination := filepath.Join(dir, "new", "lock.json")
+	if err := os.WriteFile(source, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, dry := range []bool{false, true} {
+		var out, diagnostics bytes.Buffer
+		args := []string{"catalog", "compile", "--catalog", source, "--preset", id, "--target", "darwin/arm64", "--out", destination}
+		if dry {
+			args = append(args, "--dry-run")
+		}
+		code := catalogcmd.Run(context.Background(), args, &out, &diagnostics)
+		if code == 0 || !strings.Contains(diagnostics.String(), "unavailable") || !strings.Contains(diagnostics.String(), "future_control") || strings.Contains(diagnostics.String(), "unknown preset") {
+			t.Fatal(code, diagnostics.String())
+		}
+		if _, err := os.Stat(filepath.Dir(destination)); !os.IsNotExist(err) {
+			t.Fatal("refusal wrote output", err)
+		}
+	}
+}

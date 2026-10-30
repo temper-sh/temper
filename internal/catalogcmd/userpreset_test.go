@@ -53,7 +53,7 @@ func TestCompileFindsUserPresetsInTheRootAndTheirFileWins(t *testing.T) {
 	if code != 0 || json.Unmarshal([]byte(out), &report) != nil || report["user_preset"] != true {
 		t.Fatalf("user preset did not compile from the root: %d %s", code, out)
 	}
-	if l.Preset != "qwen-cool" || l.Records.Presets["qwen-cool"].RequestDefaults.Sampling.Temperature != 0.6 {
+	if l.Preset != "qwen-cool" || *l.Records.Presets["qwen-cool"].RequestDefaults.Sampling.Temperature != 0.6 {
 		t.Fatal("the lock lost the user preset or its change")
 	}
 	// A file with a catalog preset's ID wins, with a warning.

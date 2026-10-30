@@ -230,3 +230,55 @@ func TestCopyOfUnsavedLocalTemplateKeepsItsSelectedBytes(t *testing.T) {
 		t.Fatal("copy also published its unsaved source")
 	}
 }
+
+func TestBlankOptionalSamplingClearsAndResetRestoresInheritance(t *testing.T) {
+	c, root := command(t)
+	if _, d, code := run(t, c, root, "fork", mtp, "mine"); code != 0 {
+		t.Fatal(d)
+	}
+	m := editor(t, c, root, "mine", false)
+	editorClick(t, m, "Sampling")
+	focusField(t, m, "Temperature")
+	typeText(m, "")
+	saveEditor(m)
+	view, _ := c.Catalog(root)
+	loaded, err := userpreset.Load(root, "mine", view)
+	if err != nil || loaded.Document.Presets["mine"].RequestDefaults.Sampling.Temperature != nil {
+		t.Fatal("blank optional value did not clear inherited sampling", err)
+	}
+	m = editor(t, c, root, "mine", false)
+	editorClick(t, m, "Sampling")
+	focusField(t, m, "Temperature")
+	m.Update(tea.KeyPressMsg{Code: 'r', Mod: tea.ModAlt})
+	saveEditor(m)
+	loaded, err = userpreset.Load(root, "mine", view)
+	if err != nil || loaded.Document.Presets["mine"].RequestDefaults.Sampling.Temperature == nil {
+		t.Fatal("Reset did not inherit origin", err)
+	}
+}
+
+func TestSplashThinkingSwitchDoesNotRequireAnEffort(t *testing.T) {
+	c, root := command(t)
+	if _, d, code := run(t, c, root, "fork", "qwen3.8-27b-q4xl-splash", "mine"); code != 0 {
+		t.Fatal(d)
+	}
+	m := editor(t, c, root, "mine", false)
+	m.Update(tea.WindowSizeMsg{Width: 112, Height: 40})
+	focusField(t, m, "Reasoning")
+	key(m, tea.KeyHome)
+	saveEditor(m)
+	view, _ := c.Catalog(root)
+	loaded, err := userpreset.Load(root, "mine", view)
+	if err != nil || loaded.Document.Presets["mine"].RequestDefaults.Reasoning != "off" {
+		t.Fatal("cannot switch off", err)
+	}
+	m = editor(t, c, root, "mine", false)
+	m.Update(tea.WindowSizeMsg{Width: 112, Height: 40})
+	focusField(t, m, "Reasoning")
+	key(m, tea.KeyEnd)
+	saveEditor(m)
+	loaded, err = userpreset.Load(root, "mine", view)
+	if err != nil || loaded.Document.Presets["mine"].RequestDefaults.Reasoning != "on" || loaded.Document.Presets["mine"].Config().Splash.ReasoningEffort != "" {
+		t.Fatal("switching on retained a disabling effort", err)
+	}
+}

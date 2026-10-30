@@ -150,6 +150,15 @@ type RequestDefaults struct {
 // empty reports that no generation default is set. A 0.1.0 lock writes every
 // field, so its zero seed counts as no seed.
 func (r RequestDefaults) empty() bool {
+	// Legacy locks serialized zero-valued numeric sampling even for rerankers.
+	for _, field := range []**float64{&r.Sampling.Temperature, &r.Sampling.TopP, &r.Sampling.MinP, &r.Sampling.RepeatPenalty, &r.Sampling.PresencePenalty} {
+		if *field != nil && **field == 0 {
+			*field = nil
+		}
+	}
+	if r.Sampling.TopK != nil && *r.Sampling.TopK == 0 {
+		r.Sampling.TopK = nil
+	}
 	if r.Sampling.Seed != nil && *r.Sampling.Seed == 0 {
 		r.Sampling.Seed = nil
 	}
@@ -170,8 +179,8 @@ type LlamaConfig struct {
 	FlashAttention     string                     `yaml:"flash_attention" json:"flash_attention"`
 	BatchTokens        int                        `yaml:"batch_tokens" json:"batch_tokens"`
 	MicrobatchTokens   int                        `yaml:"microbatch_tokens" json:"microbatch_tokens"`
-	ContextCheckpoints int                        `yaml:"context_checkpoints" json:"context_checkpoints"`
-	PromptCacheRAMMiB  int                        `yaml:"prompt_cache_ram_mib" json:"prompt_cache_ram_mib"`
+	ContextCheckpoints *int                       `yaml:"context_checkpoints,omitempty" json:"context_checkpoints,omitempty"`
+	PromptCacheRAMMiB  *int                       `yaml:"prompt_cache_ram_mib,omitempty" json:"prompt_cache_ram_mib,omitempty"`
 	GPULayers          int                        `yaml:"gpu_layers" json:"gpu_layers"`
 	Controls           engine.LlamaServerControls `yaml:"controls" json:"controls"`
 }
@@ -179,6 +188,7 @@ type LlamaConfig struct {
 // Preset is one exact execution: artifact, engine, template and settings.
 // Machine-dependent settings live only in its profiles.
 type Preset struct {
+	ReasoningCapability   string             `yaml:"reasoning_capability,omitempty" json:"reasoning_capability,omitempty"`
 	Artifact              string             `yaml:"artifact" json:"artifact"`
 	ProjectorArtifact     string             `yaml:"projector_artifact,omitempty" json:"projector_artifact,omitempty"`
 	Template              string             `yaml:"template,omitempty" json:"template,omitempty"`
@@ -508,6 +518,24 @@ func (e Engine) knownCapabilities() Engine {
 }
 
 func (d Document) validatePreset(id string, p Preset) error {
+	switch p.ReasoningCapability {
+	case "": // Older records have not declared capability.
+	case "switchable":
+		if p.Interface != engine.InterfaceChatCompletions {
+			return errors.New("reasoning capability requires a chat preset")
+		}
+	case "always":
+		if p.RequestDefaults.Reasoning != "on" {
+			return errors.New("always-thinking models require an on default")
+		}
+	case "none":
+		if p.RequestDefaults.Reasoning != "off" {
+			return errors.New("non-thinking models require an off default")
+		}
+	default:
+		return errors.New("reasoning_capability must be switchable, always or none")
+	}
+
 	if !idPattern.MatchString(id) {
 		return errors.New("needs a stable id")
 	}
@@ -662,7 +690,7 @@ func (l Preset) request(id string, profile Profile, a Artifact, modelPath, templ
 		Speculation: l.Speculation.Method, SpeculativeTokens: l.Speculation.MaxDraftTokens,
 		ChatTemplatePath: templatePath, NGL: &ngl, Sampling: &l.RequestDefaults.Sampling,
 		LlamaServer: &engine.LlamaServerTuning{Parallel: c.Parallel, FlashAttention: c.FlashAttention, Batch: c.BatchTokens, UBatch: c.MicrobatchTokens,
-			ContextCheckpoints: &c.ContextCheckpoints, PromptCacheRAMMiB: &c.PromptCacheRAMMiB, Controls: &c.Controls}}
+			ContextCheckpoints: c.ContextCheckpoints, PromptCacheRAMMiB: c.PromptCacheRAMMiB, Controls: &c.Controls}}
 	if l.ProjectorArtifact != "" {
 		r.ProjectorPath = "/projector.gguf"
 	}

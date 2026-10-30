@@ -243,7 +243,7 @@ func TestSplashRejectsMixedEngineFieldsAndMissingDraft(t *testing.T) {
 		},
 		func(d *catalog.Document) {
 			l := d.Presets[splashLayout]
-			l.RequestDefaults.Sampling.TopK = 33
+			l.RequestDefaults.Sampling.TopK = new(33)
 			d.Presets[splashLayout] = l
 		},
 		func(d *catalog.Document) {

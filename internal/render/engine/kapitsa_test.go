@@ -10,7 +10,7 @@ import (
 
 func kapitsaRequest() engine.Request {
 	return engine.Request{Engine: engine.Kapitsa, LayoutID: "qwen", ModelPath: "/owned model", DraftModelPath: "/owned draft", ArtifactFormat: "mlx-safetensors", Interface: engine.InterfaceChatCompletions, Modalities: []string{"text"}, Window: 98304, Thinking: "off", Speculation: "dflash2",
-		Sampling: &engine.SamplingDefaults{Temperature: 1, TopP: .95, TopK: 20, RepeatPenalty: 1, Seed: new(421)}, Kapitsa: &engine.KapitsaTuning{KapitsaConfig: engine.KapitsaConfig{Slots: 1, MaxMemoryBytes: 25769803776, PrefillChunkTokens: 1024, ANE: true}, StatePath: "/owned home"}}
+		Sampling: &engine.SamplingDefaults{Temperature: new(float64(1)), TopP: new(float64(.95)), TopK: new(20), RepeatPenalty: new(float64(1)), Seed: new(421)}, Kapitsa: &engine.KapitsaTuning{KapitsaConfig: engine.KapitsaConfig{Slots: 1, MaxMemoryBytes: 25769803776, PrefillChunkTokens: 1024, ANE: true}, StatePath: "/owned home"}}
 }
 
 func TestKapitsaUsesExactMaterialBudgetAndOfflineRequestDefaults(t *testing.T) {
@@ -53,7 +53,7 @@ func TestKapitsaRefusesImplicitOrUnsupportedExecution(t *testing.T) {
 		"chunk":                   func(r *engine.Request) { r.Kapitsa.PrefillChunkTokens = -1 },
 		"budget":                  func(r *engine.Request) { r.Kapitsa.MaxMemoryBytes = 0 },
 		"block":                   func(r *engine.Request) { r.SpeculativeTokens = 8 },
-		"penalty":                 func(r *engine.Request) { r.Sampling.RepeatPenalty = 1.1 },
+		"penalty":                 func(r *engine.Request) { r.Sampling.RepeatPenalty = new(float64(1.1)) },
 		"seed":                    func(r *engine.Request) { r.Sampling.Seed = new(int(1 << 32)) },
 		"native reasoning budget": func(r *engine.Request) { r.ReasoningBudgetTokens = new(1024) },
 	} {

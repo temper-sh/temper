@@ -132,15 +132,16 @@ type Preset struct {
 }
 
 type Model struct {
-	ID             string         `json:"id"`
-	Name           string         `json:"name"`
-	ContextWindow  int            `json:"contextWindow"`
-	MaxTokens      int            `json:"maxTokens"`
-	Input          []string       `json:"input"`
-	Reasoning      bool           `json:"reasoning"`
-	Cost           map[string]int `json:"cost"`
-	Compat         map[string]any `json:"compat"`
-	SamplingParams map[string]any `json:"samplingParams,omitempty"`
+	ID               string            `json:"id"`
+	Name             string            `json:"name"`
+	ContextWindow    int               `json:"contextWindow"`
+	MaxTokens        int               `json:"maxTokens"`
+	Input            []string          `json:"input"`
+	Reasoning        bool              `json:"reasoning"`
+	Cost             map[string]int    `json:"cost"`
+	Compat           map[string]any    `json:"compat"`
+	SamplingParams   map[string]any    `json:"samplingParams,omitempty"`
+	ThinkingLevelMap map[string]string `json:"thinkingLevelMap,omitempty"`
 }
 
 // Models uses saved execution facts, never a moving catalog or loaded-model list.
@@ -172,9 +173,24 @@ func Models(presets []Preset) ([]Model, error) {
 			limit = window
 			sampling = map[string]any{"max_tokens": nil, "max_completion_tokens": nil}
 		}
-		models = append(models, Model{ID: saved.ID, Name: saved.Name, ContextWindow: window, MaxTokens: limit, Input: input, Reasoning: p.RequestDefaults.Reasoning == "on",
+		reasoning := p.ReasoningCapability == "always" || p.ReasoningCapability == "switchable" || p.ReasoningCapability == "" && p.RequestDefaults.Reasoning == "on"
+		compat := map[string]any{"supportsStore": false, "supportsDeveloperRole": false, "supportsReasoningEffort": false, "maxTokensField": "max_tokens"}
+		var levels map[string]string
+		if p.ReasoningCapability == "switchable" {
+			switch p.Config().Kind {
+			case "llama-server/v1", "vllm-metal/v1":
+				compat["thinkingFormat"] = "chat-template"
+				kwargs := map[string]any{"enable_thinking": map[string]string{"$var": "thinking.enabled"}}
+				compat["chatTemplateKwargs"] = kwargs
+			case "splash/v1", "splash/v2", "kapitsa/v1":
+				compat["supportsReasoningEffort"] = true
+				compat["thinkingFormat"] = "openai"
+				levels = map[string]string{"off": "none"}
+			}
+		}
+		models = append(models, Model{ID: saved.ID, Name: saved.Name, ContextWindow: window, MaxTokens: limit, Input: input, Reasoning: reasoning, ThinkingLevelMap: levels,
 			Cost:           map[string]int{"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
-			Compat:         map[string]any{"supportsStore": false, "supportsDeveloperRole": false, "supportsReasoningEffort": false, "maxTokensField": "max_tokens"},
+			Compat:         compat,
 			SamplingParams: sampling})
 	}
 	slices.SortFunc(models, func(a, b Model) int { return strings.Compare(a.ID, b.ID) })

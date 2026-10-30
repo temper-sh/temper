@@ -323,7 +323,7 @@ func merge(raw []byte, root, base string, models []Model) ([]byte, error) {
 		delete(v, "baseUrl")
 		// Only the token defaults and these compatibility switches are ours.
 		// Preserve user-added settings within the same objects as well.
-		for _, key := range []string{"compat", "samplingParams", "cost"} {
+		for _, key := range []string{"compat", "samplingParams", "cost", "thinkingLevelMap"} {
 			old := map[string]json.RawMessage{}
 			if raw, ok := v[key]; ok {
 				var err error
@@ -331,6 +331,14 @@ func merge(raw []byte, root, base string, models []Model) ([]byte, error) {
 				if err != nil {
 					return nil, fmt.Errorf("model %s %s: %w", m.ID, key, err)
 				}
+			}
+			if key == "compat" {
+				for _, name := range []string{"thinkingFormat", "chatTemplateKwargs"} {
+					delete(old, name)
+				}
+			}
+			if key == "thinkingLevelMap" {
+				delete(old, "off")
 			}
 			if key == "samplingParams" {
 				delete(old, "max_tokens")

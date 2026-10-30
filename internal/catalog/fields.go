@@ -28,7 +28,7 @@ var presetFields = []Field{
 	{"template", FieldText, nil, "Chat template ID, or builtin for the template inside the weights."},
 	{"compute", FieldChoice, []string{"cpu", "gpu"}, "Device, one of the origin's compute options."},
 	{"context_window_tokens", FieldInteger, nil, "Total context in tokens, input and output, up to the preset's limit."},
-	{"request_defaults.reasoning", FieldChoice, []string{"on", "off"}, "Whether the model reasons before it answers."},
+	{"request_defaults.reasoning", FieldChoice, []string{"on", "off"}, "Default thinking mode; supported request settings override it."},
 	{"request_defaults.max_output_tokens", FieldInteger, nil, "Default output cap in tokens; 0 uses the remaining context."},
 	{"request_defaults.sampling.temperature", FieldNumber, nil, "Sampling temperature; 0 is greedy."},
 	{"request_defaults.sampling.top_k", FieldInteger, nil, "Sample from the k most likely tokens; 0 turns it off."},
@@ -68,7 +68,7 @@ var llamaFields = []Field{
 var splashFields = []Field{
 	{"kv_cache", FieldChoice, []string{"int8", "bf16"}, "Precision of the KV cache."},
 	{"max_memory_bytes", FieldInteger, nil, "Engine memory cap in bytes."},
-	{"reasoning_effort", FieldChoice, []string{"none", "low", "medium", "xhigh"}, "Default reasoning effort."},
+	{"reasoning_effort", FieldChoice, []string{"none", "minimal", "low", "medium", "high", "xhigh", "max"}, "Default reasoning effort."},
 	{"request_timeout_seconds", FieldInteger, nil, "Longest time one request may take."},
 }
 
@@ -128,6 +128,9 @@ func Fields(kind string) []Field {
 		result = append(result, Field{"request_defaults.reasoning_budget_tokens", FieldInteger, nil, "Default native thinking budget: -1 unrestricted, 0 immediate end, positive tokens; callers can override."})
 	}
 	for _, f := range engineFields[kind] {
+		if kind == "splash/v1" && f.Path == "reasoning_effort" {
+			f.Choices = []string{"none", "low", "medium", "xhigh"}
+		}
 		f.Path = "engine_config." + f.Path
 		result = append(result, f)
 	}
@@ -145,4 +148,20 @@ func field(fields []Field, path string) (Field, bool, bool) {
 		group = group || strings.HasPrefix(f.Path, path+".")
 	}
 	return Field{}, false, group
+}
+
+// Optional reports fields whose removal delegates to the pinned engine.
+// Fork null clears these values; an absent change continues to inherit.
+func (f Field) Optional() bool {
+	if strings.HasPrefix(f.Path, "request_defaults.sampling.") {
+		return true
+	}
+	switch f.Path {
+	case "request_defaults.reasoning_budget_tokens", "engine_config.context_checkpoints",
+		"engine_config.prompt_cache_ram_mib", "engine_config.controls.checkpoint_min_step",
+		"engine_config.controls.reasoning_effort", "engine_config.reasoning_effort",
+		"engine_config.request_timeout_seconds":
+		return true
+	}
+	return false
 }
