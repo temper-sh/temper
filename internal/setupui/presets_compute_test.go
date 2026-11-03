@@ -90,7 +90,7 @@ func TestContextEditRefreshesTheVisibleCacheEstimate(t *testing.T) {
 		t.Fatal("context edit left stale card memory", before, after, m.notice)
 	}
 	view := ansi.Strip(m.View().Content)
-	if !strings.Contains(view, setup.Size(after)) || !strings.Contains(view, "Total fit unknown") {
+	if !strings.Contains(view, setup.Size(after)) || !strings.Contains(view, "Memory estimate") || strings.Contains(view, "Total fit unknown") {
 		t.Fatal(view)
 	}
 }

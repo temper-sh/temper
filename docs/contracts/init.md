@@ -146,6 +146,65 @@ after restarting your Mac; it does not start automatically at login.
 
 ## Change your setup
 
+### Retired presets
+
+The wizard and `configure` show **Retired** only when a saved preset or a saved
+fork's catalog origin has an explicit retirement record. Cards show date, reason,
+recommended successor and affected layouts. **Keep using** leaves the selection
+unchanged. **Replace** and **Remove** open an Apply/Cancel review. Replacement
+uses successor defaults, or the existing selected successor without overwriting
+it; custom settings and source-file overrides are not silently transferred.
+The source file of an authored preset is retained.
+
+Replacement updates every affected layout's inclusion, startup and default
+reference, deduplicating an already-included successor. Removal clears those
+references explicitly. A missing, incompatible or unfit successor is unavailable
+with its reason. Review includes download/additional disk costs and settings
+changes. Retirement changes require installation/application, rather than a
+save-only action. Cancel and `--dry-run` change nothing.
+The successor has its own API model ID; clients using the retired ID must select
+it explicitly. Integrated harnesses receive the normal activation synchronization.
+Activation uses the existing router-readiness contract and preserves on-demand
+model loading; retirement does not add a model-quality or load-capacity test.
+
+The successor is prepared while the old configuration remains intact. A durable
+retirement intent then protects recovery across the configuration switch,
+activation and cleanup. Failure before the switch preserves the old selection;
+later failures retain resumable work. `configure --resume --prepare` resumes the
+pending retirement, including cleanup without repeating successful activation.
+Until activation succeeds, each resume prepares the reviewed selection again.
+Only material released by this retirement is cleaned; other presets and managed
+jobs retain their claims. Shared Hugging Face repositories are kept unless the
+user separately chooses named-file deletion across cached revisions,
+acknowledging possible use outside Temper. The wizard offers that one choice at
+Review, after listing each file and its size; a new review clears it. Other
+quant filenames are retained.
+Cleanup failure does not undo a successful replacement. When a notice is later
+removed from the catalog, the saved choice remains usable under Other.
+
+`configure` reads the stored catalog; `temper catalog update` refreshes notices.
+For scripting, get the revision with `temper configure --show --json`, then:
+
+```sh
+temper configure --replace-retired OLD_ID --revision REVISION --dry-run
+temper configure --replace-retired OLD_ID --revision REVISION --prepare
+```
+
+Use `--remove-retired OLD_ID` to remove without a successor. Both flags may be
+repeated. `--delete-retired-weights` separately opts into deleting the retired
+presets' unused named HF files across cached revisions; other quants and selected
+uses of the same filename remain protected. `--dry-run` lists those files and
+their sizes, and the result names the files actually deleted. The official HF client performs
+snapshot/blob accounting. No whole repository is deleted by retirement cleanup.
+The reviewed cache path and consent are retained for retries.
+
+`configure --resume --prepare --dry-run --json` inspects pending work without
+effects. `configure --discard-retirement` discards its remaining intent while
+keeping the currently saved selection and all remaining files; it does not
+restore the old selection after a switch. It works even when the intent cannot
+be read, for example after damage or a version change. A pending retirement blocks unrelated
+configuration saves until resumed or explicitly discarded.
+
 ```sh
 temper configure
 ```

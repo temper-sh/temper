@@ -117,3 +117,18 @@ Arithmetic references:
 and [GGML block layouts](https://github.com/ggml-org/llama.cpp/blob/b11396/ggml/src/ggml-common.h).
 The header reader follows the [GGUF specification](https://github.com/ggml-org/ggml/blob/master/docs/gguf.md).
 These support estimates, not guarantees across engine releases.
+
+## Wired-memory headroom advice
+
+When accounted GPU memory plus the OS allowance is within the current wired
+budget but leaves less headroom than Temper recommends, review labels the advice
+**Optional wired-memory headroom**. That allowance does not block preparation;
+other refusals still apply. The suggested increase comes from policy margins,
+not an observed failure or a guarantee of runtime fit. Existing measured memory
+and workload limits remain visible in the preset's memory assessment.
+
+The optional advice includes a copyable manual command to raise the allowance,
+along with instructions to record the previous value, verify Metal's effective
+budget, refresh machine facts and undo the change. Temper does not execute it.
+Actual over-budget selections retain explicit refusals and budget-exceeded
+wording. This distinction changes presentation only, not admission arithmetic.

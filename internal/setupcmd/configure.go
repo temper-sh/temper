@@ -39,6 +39,12 @@ func (c Command) Configure(ctx context.Context, args []string, in io.Reader, out
 	softwareChoice := f.String("software", "", "`stable|latest` software for every saved preset: the releases the catalog tested, or the newest")
 	customID := f.String("as", "", "`ID` save the one selected preset under this ID")
 	name := f.String("name", "", "`NAME` display name for the one selected preset")
+	discardRetirement := f.Bool("discard-retirement", false, "discard unfinished retirement intent; keep current choices and files")
+	deleteRetiredWeights := f.Bool("delete-retired-weights", false, "also delete unused named HF files across cached revisions; other applications may use them")
+	var replaceRetired, removeRetired stringsFlag
+	f.Var(&replaceRetired, "replace-retired", "`ID` saved retired preset to replace with its recommended successor; requires --prepare")
+	f.Var(&removeRetired, "remove-retired", "`ID` saved retired preset to remove from all layouts; requires --prepare")
+	var retirementChanges []setup.RetirementChange
 	var selected, removed, contexts, computes stringsFlag
 	f.Var(&selected, "preset", "`ID` catalog preset to select; repeat for several")
 	f.Var(&removed, "remove-preset", "`ID` saved preset to remove; no layout may use it")
@@ -85,7 +91,7 @@ func (c Command) Configure(ctx context.Context, args []string, in io.Reader, out
 		return fail(diagnostics, err)
 	}
 	if *show {
-		if len(selected)+len(removed)+len(contexts)+len(computes) > 0 || *file != "" || *prepare || *resume || *customID != "" || *name != "" {
+		if len(selected)+len(removed)+len(contexts)+len(computes)+len(replaceRetired)+len(removeRetired) > 0 || *file != "" || *prepare || *resume || *customID != "" || *name != "" || *discardRetirement || *deleteRetiredWeights {
 			return fail(diagnostics, errors.New("--show cannot be combined with edits"))
 		}
 		if *jsonOutput {
@@ -94,7 +100,40 @@ func (c Command) Configure(ctx context.Context, args []string, in io.Reader, out
 		renderConfiguration(out, current, rev)
 		return 0
 	}
-	scripted := len(selected)+len(removed) > 0 || *file != ""
+	retirementEdits := len(replaceRetired)+len(removeRetired) > 0
+	if retirementEdits && rev == "" {
+		return fail(diagnostics, errors.New("no saved configuration contains presets to retire"))
+	}
+	scripted := len(selected)+len(removed) > 0 || *file != "" || retirementEdits
+	if retirementEdits && (len(selected)+len(removed)+len(contexts)+len(computes) > 0 || *file != "" || *customID != "" || *name != "" || *softwareChoice != "") {
+		return fail(diagnostics, errors.New("retirement edits cannot be combined with other configuration edits"))
+	}
+	if *deleteRetiredWeights && !retirementEdits {
+		return fail(diagnostics, errors.New("--delete-retired-weights requires an explicit retirement edit; resume uses its saved consent"))
+	}
+	if retirementEdits && !*prepare && !*dry {
+		return fail(diagnostics, errors.New("retirement changes require --prepare; use --dry-run to review first"))
+	}
+	if *discardRetirement {
+		if scripted || *resume || *prepare || *deleteRetiredWeights || *softwareChoice != "" || *path != "" || *revision != "" || *customID != "" || *name != "" || len(contexts)+len(computes) > 0 {
+			return fail(diagnostics, errors.New("--discard-retirement cannot be combined with edits or installation"))
+		}
+		discarded, err := setup.DiscardRetirement(root, *dry)
+		if err != nil {
+			return fail(diagnostics, err)
+		}
+		return c.configurationOutput(out, diagnostics, map[string]any{"discarded": discarded, "dry_run": *dry, "selection_and_files_retained": true})
+	}
+	pending, err := setup.ReadRetirement(root)
+	if err != nil {
+		return fail(diagnostics, err)
+	}
+	if pending != nil {
+		if !*resume || !*prepare || scripted || *path != "" || *softwareChoice != "" || len(contexts)+len(computes) > 0 || *customID != "" || *name != "" {
+			return fail(diagnostics, errors.New("unfinished retirement; use configure --resume --prepare, or --discard-retirement to retain current choices and files"))
+		}
+		return c.resumeRetirement(ctx, root, pending, *dry, *jsonOutput, out, diagnostics)
+	}
 	if *resume && scripted {
 		return fail(diagnostics, errors.New("--resume uses saved exact inputs; omit edits"))
 	}
@@ -171,7 +210,7 @@ func (c Command) Configure(ctx context.Context, args []string, in io.Reader, out
 		software = *softwareChoice
 	}
 	resolutions := map[string]catalog.Resolution{}
-	if interactive || len(selected) > 0 || software != candidate.Software {
+	if interactive || len(selected) > 0 || retirementEdits || software != candidate.Software {
 		view, err := c.Catalog(ctx, root, *path, !*dry)
 		if err != nil {
 			return fail(diagnostics, err)
@@ -223,6 +262,7 @@ func (c Command) Configure(ctx context.Context, args []string, in io.Reader, out
 				}
 			}
 			input.Assess = func(lock catalog.Lock) (setup.PresetPlan, error) { return setup.Assess(lock, facts) }
+			input.RetiredFiles = c.reviewHFFiles
 			unavailableOption := func(id string, p catalog.PresetPresentation, reason string) setupui.PresetOption {
 				group, section := d.Placement(p)
 				o := setupui.PresetOption{ID: id, Name: nameOr(p.DisplayName, id), Description: p.Description, Tier: p.MemoryTier, Group: group.ID, Unavailable: reason}
@@ -272,8 +312,10 @@ func (c Command) Configure(ctx context.Context, args []string, in io.Reader, out
 					o := setupui.PresetOption{ID: id, Name: saved.Name, UserPreset: saved.UserPreset, ForkBaseline: saved.ForkBaseline, Choices: saved.Choices, Model: a.Presentation.ModelName, Weights: a.Presentation.WeightsName, Engine: e.Presentation.DisplayName, Description: p.Presentation.Description, Tier: p.Presentation.MemoryTier, Group: d.FallbackGroup(), Lock: saved.Lock, ModelBytes: one.ModelBytes, MemoryBytes: one.MemoryBytes, MemoryBasis: one.Memory.Basis, Unavailable: strings.Join(one.Refusals, "; "), Details: "Saved exact preset · catalog recommendation does not apply to customized settings"}
 					if index >= 0 {
 						o.Group, o.Section = input.Presets[index].Group, input.Presets[index].Section
+						o = retirementOption(root, saved, o, view)
 						input.Presets[index] = o
 					} else {
+						o = retirementOption(root, saved, o, view)
 						input.Presets = append(input.Presets, o)
 					}
 				}
@@ -303,7 +345,48 @@ func (c Command) Configure(ctx context.Context, args []string, in io.Reader, out
 				return 0
 			}
 			candidate = decision.Configuration
+			retirementChanges, *deleteRetiredWeights = decision.Retirements, decision.DeleteRetiredWeights
 			*prepare = decision.Action == "prepare"
+		} else if retirementEdits {
+			seen := map[string]bool{}
+			for _, edit := range []struct {
+				ids     []string
+				replace bool
+			}{{replaceRetired, true}, {removeRetired, false}} {
+				for _, id := range edit.ids {
+					saved, ok := candidate.Presets[id]
+					if !ok || seen[id] {
+						return fail(diagnostics, fmt.Errorf("retired selection %q is absent or repeated", id))
+					}
+					seen[id] = true
+					origin := retirementOrigin(root, saved)
+					if _, ok := d.RetiredPresets[origin]; !ok {
+						return fail(diagnostics, fmt.Errorf("preset %q is not explicitly retired", id))
+					}
+					target := ""
+					replacement := setup.Preset{}
+					if edit.replace {
+						target, err = d.Successor(origin)
+						if err != nil {
+							return fail(diagnostics, err)
+						}
+						if existing, ok := candidate.Presets[target]; ok {
+							replacement = existing
+						} else {
+							lock, err := build(target, setup.Choices{})
+							if err != nil {
+								return fail(diagnostics, err)
+							}
+							replacement = setup.RetirementPreset(lock, displayName(target, d.Presets[target]))
+						}
+					}
+					candidate, err = setup.ChangeRetired(candidate, id, target, replacement)
+					if err != nil {
+						return fail(diagnostics, err)
+					}
+					retirementChanges = append(retirementChanges, setup.RetirementChange{Preset: id, Successor: target})
+				}
+			}
 		} else {
 			values := func(args []string) (map[string]string, error) {
 				m := map[string]string{}
@@ -375,6 +458,9 @@ func (c Command) Configure(ctx context.Context, args []string, in io.Reader, out
 
 			printResolutions(diagnostics, resolutions)
 		}
+	}
+	if len(retirementChanges) > 0 {
+		return c.applyRetirement(ctx, root, current, candidate, rev, retirementChanges, *deleteRetiredWeights, *dry, *jsonOutput, out, diagnostics)
 	}
 	plan, err := preview(ctx, candidate)
 	if err != nil {
@@ -501,6 +587,13 @@ func nameOr(name, id string) string {
 
 // unavailableReason says why a preset is missing from a catalog view.
 func unavailableReason(view catalog.View, id, otherwise string) string {
+	if r, ok := view.Document.RetiredPresets[id]; ok {
+		reason := "retired on " + r.RetiredOn + ": " + r.Reason
+		if target, err := view.Document.Successor(id); err == nil {
+			reason += "; recommended successor " + target
+		}
+		return reason
+	}
 	for _, u := range view.Unavailable {
 		if u.Kind == "preset" && u.ID == id {
 			return u.Reason

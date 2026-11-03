@@ -34,7 +34,9 @@ type PresetOption struct {
 	// Choices are the user's saved settings for this preset.
 	Choices setup.Choices
 	// Lock is empty when the catalog preset cannot be built on this Temper.
-	Lock catalog.Lock
+	Lock                            catalog.Lock
+	Retirement                      *catalog.Retirement
+	Successor, SuccessorUnavailable string
 }
 
 // buildable reports whether the option has a lock to select or customize.
@@ -56,15 +58,28 @@ type PresetInput struct {
 	NewConfiguration bool
 	Assess           func(catalog.Lock) (setup.PresetPlan, error)
 	Harnesses        []harness.Option
+	// RetiredFiles lists the shared HF files that consent would let staged
+	// retirements delete. Nil offers no deletion.
+	RetiredFiles func(next setup.Configuration, retired map[string]setup.Preset) ([]SharedFile, error)
+}
+
+// SharedFile is one named shared-cache file shown before deletion consent.
+type SharedFile struct {
+	Name  string
+	Bytes int64
 }
 type PresetDecision struct {
-	Configuration setup.Configuration
-	Action        string
+	Configuration        setup.Configuration
+	Action               string
+	Retirements          []setup.RetirementChange
+	DeleteRetiredWeights bool
 }
 type compositionPreview struct {
-	Seq  int
-	Plan setup.Plan
-	Err  error
+	Seq      int
+	Plan     setup.Plan
+	Err      error
+	Files    []SharedFile
+	FilesErr error
 }
 
 type presetFocus = tui.FocusArea
@@ -79,32 +94,36 @@ const (
 // PresetModel holds a revocable draft. All sub-tabs operate on its one selected
 // map; layout membership never makes another selection behind the user's back.
 type PresetModel struct {
-	input          PresetInput
-	assessments    map[string]setup.PresetPlan
-	draft          setup.Configuration
-	ctx            context.Context
-	preview        func(context.Context, setup.Configuration) (setup.Plan, error)
-	page           int
-	group          string
-	cursor         int
-	step           int // Focused primary-navigation step.
-	focus          presetFocus
-	field          string
-	compute        catalog.ComputeDevice // Pending prompt choice; Apply publishes it to the draft.
-	text           textinput.Model
-	notice         string
-	plan           setup.Plan
-	loading        bool
-	reviewReady    bool
-	reviewErr      error
-	previewSeq     int
-	previewCancel  context.CancelFunc
-	action         int
-	width, height  int
-	view           viewport.Model
-	focusSelection bool
-	hitTargets     []hitTarget
-	Decision       PresetDecision
+	input                PresetInput
+	assessments          map[string]setup.PresetPlan
+	draft                setup.Configuration
+	ctx                  context.Context
+	preview              func(context.Context, setup.Configuration) (setup.Plan, error)
+	page                 int
+	group                string
+	cursor               int
+	step                 int // Focused primary-navigation step.
+	focus                presetFocus
+	field                string
+	compute              catalog.ComputeDevice // Pending prompt choice; Apply publishes it to the draft.
+	text                 textinput.Model
+	notice               string
+	plan                 setup.Plan
+	loading              bool
+	reviewReady          bool
+	reviewErr            error
+	previewSeq           int
+	previewCancel        context.CancelFunc
+	action               int
+	width, height        int
+	view                 viewport.Model
+	focusSelection       bool
+	hitTargets           []hitTarget
+	Decision             PresetDecision
+	retirements          []setup.RetirementChange
+	retiredFiles         []SharedFile
+	retiredFilesErr      error
+	deleteRetiredWeights bool // Consent covers only the listed retiredFiles; a new review clears it.
 }
 
 func NewPresetModel(ctx context.Context, input PresetInput, preview func(context.Context, setup.Configuration) (setup.Plan, error)) *PresetModel {
@@ -148,10 +167,22 @@ func (m *PresetModel) visible() []PresetOption {
 
 // groups are the tabs: the catalog's groups, or the built-in Other group.
 func (m *PresetModel) groups() []catalog.Group {
-	if len(m.input.Groups) == 0 {
-		return []catalog.Group{catalog.OtherGroup}
+	groups := []catalog.Group{}
+	for _, g := range m.input.Groups {
+		if g.ID != "retired" {
+			groups = append(groups, g)
+		}
 	}
-	return m.input.Groups
+	if len(groups) == 0 {
+		groups = append(groups, catalog.OtherGroup)
+	}
+	for _, p := range m.input.Presets {
+		if _, saved := m.input.Configuration.Presets[p.ID]; saved && p.Retirement != nil {
+			groups = append(groups, catalog.Group{ID: "retired", DisplayName: "Retired", Description: "Saved presets retired from the catalog. Keep using, replace with a recommended successor, or remove."})
+			break
+		}
+	}
+	return groups
 }
 
 func (m *PresetModel) currentGroup() catalog.Group {
@@ -248,6 +279,10 @@ func (m *PresetModel) toggleMember() {
 	if m.page == 0 {
 		p, ok := m.selectedOption()
 		if !ok {
+			return
+		}
+		if p.Retirement != nil {
+			m.beginRetirement("replace-retired")
 			return
 		}
 		if _, selected := m.draft.Presets[p.ID]; selected {

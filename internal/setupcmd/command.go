@@ -62,7 +62,8 @@ type Command struct {
 	Harnesses  func() ([]harness.Option, error)
 	Controller func(string, *managed.Job, managed.State) managed.Controller
 	// Remover releases software installations for temper cleanup.
-	Remover cleanup.Remover
+	Remover  cleanup.Remover
+	RemoveHF func(context.Context, string, hfcache.Entry, io.Writer) error
 }
 
 func New(detect func(context.Context) (machine.Facts, error), effects preset.Effects) Command {

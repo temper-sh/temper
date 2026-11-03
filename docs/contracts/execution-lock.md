@@ -28,6 +28,21 @@ Changing settings requires a new output path. Dry runs create no files.
 
 ## The catalog
 
+The optional top-level `retired_presets` map records retirement by permanent
+preset ID. Each record has `retired_on` (YYYY-MM-DD, effective publication date),
+a nonempty `reason`, and optional `successor` preset ID. Retired IDs cannot also
+be active presets. Successors may follow a retirement chain to an active choice;
+missing targets and cycles are rejected by the publisher. Records from
+different dates accumulate, and retained records keep their original date. A
+removed record remains in historical signed snapshots. Records carry no execution
+inputs and are not copied into execution locks. Older readers ignore this
+top-level addition and retain their saved exact presets under Other.
+
+Retirement does not authorize a replacement or deletion. A newer client may
+be unable to use a successor; that does not invalidate the retirement record.
+To reverse a retirement, remove its record and offer the ID again.
+Absence from the usable catalog alone never establishes retirement.
+
 `temper-catalog/v1` preserves existing field meanings and accepted records.
 Incompatible field or reader changes get `temper-catalog/v2` under a new URL.
 Optional output limits extend the accepted v1 records: existing positive
@@ -37,7 +52,7 @@ unavailable, while retaining their saved presets and limits.
 Top level: `schema`, `platform` (`apple-silicon`), `date` (`YYYY-MM-DD`, when
 the catalog content last changed; the publisher refuses a date before the
 previous catalog's or in the future), `runtime.router`, `artifacts`,
-`templates`, `engines`, `presets` and `presentation`.
+`templates`, `engines`, `presets`, optional `retired_presets` and `presentation`.
 
 - **Artifacts** pin model files: `sources` (each `hub`, `repo`, 40-character
   `revision`; Hugging Face is required, other hubs are download-only

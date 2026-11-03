@@ -139,6 +139,14 @@ func (d dependencies) presetEffects() preset.Effects {
 	return preset.Effects{Software: softwareOperations{d.newSoftware}, Fetch: d.fetchLayout}
 }
 
+// setupCommand gives configuration and cleanup verbs the same effects, so a
+// retirement can release the engine and router installations cleanup would.
+func (d dependencies) setupCommand() setupcmd.Command {
+	command := setupcmd.New(d.detectFacts, d.presetEffects())
+	command.CacheRoot, command.Remover = d.cacheRoot, softwareOperations{d.newSoftware}
+	return command
+}
+
 func runWithDependencies(ctx context.Context, arguments []string, stdout, stderr io.Writer, deps dependencies) int {
 	if len(arguments) == 0 {
 		usage(stderr)
@@ -158,8 +166,8 @@ func runWithDependencies(ctx context.Context, arguments []string, stdout, stderr
 		usage(stdout)
 		return 0
 	case "init", "configure", "update":
-		command := setupcmd.New(deps.detectFacts, deps.presetEffects())
-		command.Name, command.CacheRoot = arguments[0], deps.cacheRoot
+		command := deps.setupCommand()
+		command.Name = arguments[0]
 		if arguments[0] == "update" {
 			return command.Update(ctx, arguments[1:], stdout, stderr)
 		}
@@ -173,9 +181,7 @@ func runWithDependencies(ctx context.Context, arguments []string, stdout, stderr
 		}
 		return catalogcmd.Run(ctx, arguments, stdout, stderr)
 	case "cleanup":
-		command := setupcmd.New(deps.detectFacts, deps.presetEffects())
-		command.CacheRoot, command.Remover = deps.cacheRoot, softwareOperations{deps.newSoftware}
-		return command.Cleanup(ctx, arguments[1:], stdout, stderr)
+		return deps.setupCommand().Cleanup(ctx, arguments[1:], stdout, stderr)
 	case "layout", "start", "stop":
 		command := setupcmd.New(deps.detectFacts, deps.presetEffects())
 		command.Name = "layout"

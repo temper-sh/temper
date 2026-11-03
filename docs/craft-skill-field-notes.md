@@ -1021,3 +1021,53 @@ groups, occupied ports, persistent orphans, changed status bytes, interrupted
 recovery and clean repeats. A real local process/listener test and the packaged
 0.3.2 repair binary exercised the boundary without model inference. Full Go
 tests, vet and race checks pass. Existing craft guidance was sufficient.
+
+## Retired presets and successor migration — 2026-11-01
+
+No skills were loaded, following the owner's explicit instruction to evaluate
+unassisted behavior. The [retirement contract](contracts/init.md#retired-presets)
+separates catalog notices from saved execution, reviewed selection changes from
+effects, and shared-cache deletion consent from managed dependency cleanup.
+The latest batch replaces earlier notices; historical snapshots retain them.
+Offline failure-boundary tests cover interrupted switching, stale edits,
+activation/cleanup recovery and pinned consent. Real terminal review caught
+stale saved recommendation copy and misleading cross-engine version wording;
+both were corrected with regressions. A temporary offline HF-cache fixture
+confirmed file deletion spans cached revisions and preserves shared blobs.
+Full Go tests, vet and race checks pass; no live model migration was run.
+The separately recorded optional wired-memory advice proposal was outside that delivery.
+No skill change is proposed.
+
+## Optional wired-memory headroom advice — 2026-11-03
+
+No skills were loaded, following the owner's instruction. The
+[memory contract](contracts/memory-estimates.md#wired-memory-headroom-advice)
+now distinguishes optional policy headroom from actual budget refusals. Both
+cases retain the existing manual command and its verification/undo route when a
+safe increase is available. Regression checks cover within-budget advice,
+over-budget refusals and headroom without a safe increase. The real BaseQuant
+dry-run review retains its 24 → 25 GiB recommendation, allows preparation and
+leaves the saved configuration unchanged. Full Go tests, vet and race checks
+pass. Budget arithmetic and machine settings are unchanged; no skill change
+is proposed.
+
+## Retirement review fixes — 2026-11-03
+
+`reliable-effects` was loaded for these fixes, following the repository rule;
+the earlier unassisted entry is unchanged. An independent review of that
+delivery found recovery defects its tests could not reach. Configuration verbs
+lacked software removal, so a replacement that frees an engine or router could
+never finish cleanup and then blocked every save. A retry after the switch
+skipped preparation. An unreadable intent could not be discarded. Deletion
+consent named no files and was one switch shown per card. The publisher could
+not reverse a mistaken retirement. The fixes use one setup constructor, prepare
+before each activation retry, discard without interpreting the intent, take one
+Review consent after listing each file and size (also in `--dry-run`), and let a
+reviewed source edit remove a notice. The owner then clarified that "only the
+latest batch" meant no backfill in the first catalog with notices, not a
+lasting rule; notices now accumulate until a maintainer removes them. The
+skill's surface-first warning against turning policy into restrictions names
+that miss. Each fix has a regression; full Go tests, vet and race checks pass. The skill's "what happens twice?" and retry questions
+match the missed defects. Narrow proposed improvement: a retry route needs one
+test that reaches success from each failure state with the production wiring of
+every effect it uses, because injected fakes hid the missing remover.

@@ -157,6 +157,21 @@ func (m *PresetModel) presetContent(width int) screenBody {
 				mark, p.Name, lock = "[x]", selected.Name, selected.Lock
 			}
 			_, record := presetRecord(lock)
+			if p.Retirement != nil {
+				p.Description = "Retired " + p.Retirement.RetiredOn + ": " + p.Retirement.Reason
+				p.Details = "This saved selection stays until you explicitly replace or remove it."
+				if p.Successor != "" {
+					p.Description += "\nRecommended successor: " + p.Successor
+				} else {
+					p.Description += "\n" + p.SuccessorUnavailable
+				}
+				if refs := m.input.Configuration.References(p.ID); len(refs) > 0 {
+					p.Description += "\nLayouts: " + strings.Join(refs, ", ")
+				}
+				if _, selected := m.draft.Presets[p.ID]; !selected {
+					p.Description += "\nRetirement change staged; review before applying."
+				}
+			}
 			focused := m.focus == presetContentFocus && i == m.cursor
 			background := colorBackground
 			if focused {
@@ -169,7 +184,7 @@ func (m *PresetModel) presetContent(width int) screenBody {
 			}
 			details := metadata.Foreground(colorMuted).Render(label) + metadata.Foreground(presetColors.Accent).Render(tokenCount(record.Window())+" tokens")
 			if p.MemoryBytes > 0 {
-				label, limit := " · Memory estimate ", " · Total fit unknown"
+				label, limit := " · Memory estimate ", ""
 				if p.MemoryBasis == "measured" {
 					label, limit = " · Measured peak ", " · Observed workload"
 				}
@@ -273,6 +288,10 @@ func tokenCount(n int) string {
 }
 
 func (m *PresetModel) editContent(body *screenBody, width int) {
+	if m.field == "replace-retired" || m.field == "remove-retired" {
+		m.retirementContent(body, width)
+		return
+	}
 	title, detail := "Context window", "Total tokens for input and output. A larger window requires more memory."
 	if m.field == "compute" {
 		title, detail = "Compute device", "CPU uses system RAM. GPU also uses the wired-memory allowance."
@@ -389,7 +408,9 @@ func (m *PresetModel) presetFooter(width int) (string, []hitTarget) {
 	}
 	parts = append(parts, actions)
 	hints := []tui.Hint{{Key: "↑↓", Action: "choose"}, {Key: "Space", Action: "select"}, {Key: "Tab", Action: "controls"}, {Key: "q", Action: "cancel"}}
-	if m.field == "compute" && m.focus == presetContentFocus {
+	if m.field == "replace-retired" || m.field == "remove-retired" {
+		hints = []tui.Hint{{Key: "←→", Action: "actions"}, {Key: "Enter", Action: "activate"}, {Key: "PgUp/Dn", Action: "scroll"}, {Key: "Esc", Action: "cancel"}}
+	} else if m.field == "compute" && m.focus == presetContentFocus {
 		hints = []tui.Hint{{Key: "←→", Action: "choose"}, {Key: "Enter", Action: "apply"}, {Key: "Tab", Action: "actions"}, {Key: "Esc", Action: "cancel"}}
 	} else if m.field != "" {
 		hints = tui.InputHints(m.focus == presetFooterFocus)
@@ -397,6 +418,9 @@ func (m *PresetModel) presetFooter(width int) (string, []hitTarget) {
 		hints = tui.FocusHints(m.focus)
 	} else if m.page == presetReviewPage {
 		hints = []tui.Hint{{Key: "↑↓ / PgUp/Dn", Action: "scroll"}, {Key: "Tab", Action: "actions"}}
+		if len(m.retiredFiles) > 0 {
+			hints = append(hints, tui.Hint{Key: "w", Action: "HF files"})
+		}
 	}
 	parts = append(parts, tui.KeyHelp(hints, width))
 	return strings.Join(parts, "\n"), targets

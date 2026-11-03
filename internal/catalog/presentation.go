@@ -347,6 +347,9 @@ func (d Document) validatePresentation() error {
 	}
 	groups := map[string]Group{}
 	for _, g := range d.Presentation.Groups {
+		if g.ID == "retired" {
+			return fmt.Errorf("group id retired is reserved for installed retired presets")
+		}
 		if _, repeated := groups[g.ID]; repeated || strings.TrimSpace(g.DisplayName) == "" || strings.TrimSpace(g.Description) == "" {
 			return fmt.Errorf("group %q needs a unique id, a display_name and a description", g.ID)
 		}

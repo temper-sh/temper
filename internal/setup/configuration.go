@@ -200,6 +200,13 @@ func SaveConfiguration(ctx context.Context, root string, c Configuration, expect
 		}
 		previous, _ := old.Bytes()
 		changed := rev == "" || !bytes.Equal(raw, previous)
+		pending, err := ReadRetirement(root)
+		if err != nil {
+			return "", false, err
+		}
+		if changed && pending != nil && revision(raw) != pending.AfterRevision {
+			return "", false, errors.New("unfinished retirement protects the reviewed configuration; resume or discard it before editing")
+		}
 		if !changed {
 			return rev, false, nil
 		}

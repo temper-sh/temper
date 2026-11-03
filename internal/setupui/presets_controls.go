@@ -32,9 +32,23 @@ func (m *PresetModel) footerButtons() []presetButton {
 		if m.reviewReady && !m.loading && !m.plan.CanPrepare {
 			install = "Can't install yet"
 		}
+		shortAction := "Install"
+		if len(m.retirements) > 0 {
+			install, shortAction = "Apply retirement changes", "Apply"
+			if m.reviewReady && !m.loading && !m.plan.CanPrepare {
+				install = "Can't apply yet"
+			}
+		}
 		var buttons []presetButton
 		for i, label := range []string{install, "Save without installing", "Back", "Cancel"} {
-			buttons = append(buttons, presetButton{label, []string{"Install", "Save", "Back", "Cancel"}[i], m.actionAvailable(i), hitTarget{kind: hitReview, index: i}})
+			buttons = append(buttons, presetButton{label, []string{shortAction, "Save", "Back", "Cancel"}[i], m.actionAvailable(i), hitTarget{kind: hitReview, index: i}})
+		}
+		if len(m.retiredFiles) > 0 {
+			label, short := "w HF files: keep", "Keep HF"
+			if m.deleteRetiredWeights {
+				label, short = "w HF files: DELETE", "Delete HF"
+			}
+			buttons = append(buttons, button(label, short, "retired-weights", true))
 		}
 		if m.reviewErr != nil {
 			buttons = append(buttons, button("Retry check", "Retry", "retry", true))
@@ -56,6 +70,10 @@ func (m *PresetModel) footerButtons() []presetButton {
 	switch {
 	case m.page == 0:
 		p, _ := m.selectedOption()
+		if p.Retirement != nil {
+			_, installed := m.draft.Presets[p.ID]
+			return append(buttons, button("Keep using", "Keep", "keep-retired", installed), button("Replace", "Replace", "replace-retired", installed), button("Remove", "Remove", "remove-retired", installed))
+		}
 		lock := p.Lock
 		if selected, ok := m.draft.Presets[p.ID]; ok {
 			lock = selected.Lock
@@ -214,9 +232,21 @@ func (m *PresetModel) activateFocused() tea.Cmd {
 }
 
 func (m *PresetModel) activateShortcut(key string) tea.Cmd {
+	if key == "c" || key == "p" {
+		if p, ok := m.selectedOption(); ok && p.Retirement != nil {
+			if _, selected := m.draft.Presets[p.ID]; !selected {
+				m.notice = "Retirement change already staged. Review or cancel it before editing this preset."
+				return nil
+			}
+		}
+	}
 	switch key {
 	case "apply":
-		m.acceptEdit()
+		if m.field == "replace-retired" || m.field == "remove-retired" {
+			m.acceptRetirement()
+		} else {
+			m.acceptEdit()
+		}
 		if m.field != "" {
 			m.focusArea(presetContentFocus)
 		}
@@ -229,6 +259,14 @@ func (m *PresetModel) activateShortcut(key string) tea.Cmd {
 		return m.back()
 	case "retry":
 		return m.startPreview()
+	case "keep-retired":
+		m.notice = "Kept. Retirement does not change this installed selection."
+	case "replace-retired", "remove-retired":
+		m.beginRetirement(key)
+	case "retired-weights":
+		if m.page == presetReviewPage && len(m.retiredFiles) > 0 {
+			m.deleteRetiredWeights = !m.deleteRetiredWeights
+		}
 	case "c":
 		if p, ok := m.selectedOption(); m.page == 0 && ok {
 			lock := p.Lock

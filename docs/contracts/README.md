@@ -14,6 +14,7 @@ These pages explain individual commands and their exact behavior.
 | Connect Pi, PiG or Hermes to the active layout | [Harness integrations](harnesses.md) |
 | Understand estimated and unknown memory use | [Memory estimates](memory-estimates.md) |
 | Get the newest presets and software for your choices | [`temper update`](init.md#change-your-setup) |
+| Replace or remove a retired preset | [Retired presets](init.md#retired-presets) |
 | Update or roll back the stored catalog | [Catalog updates](../CATALOG.md) |
 | Manage presets and layouts in scripts | [Scripted configuration](layouts.md#script-preset-and-layout-changes) |
 

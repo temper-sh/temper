@@ -40,7 +40,11 @@ func (m *PresetModel) reviewSummary(body *screenBody, width int) {
 		for _, id := range slices.Sorted(maps.Keys(c.Layouts)) {
 			layouts = append(layouts, c.Layouts[id].Name)
 		}
-		lines = append(lines, "Layouts: "+strings.Join(layouts, ", ")+" · kept unchanged")
+		status := " · kept unchanged"
+		if len(m.retirements) > 0 {
+			status = " · retirement references updated"
+		}
+		lines = append(lines, "Layouts: "+strings.Join(layouts, ", ")+status)
 	}
 	var harnesses []string
 	options := m.harnessOptions()
@@ -59,6 +63,17 @@ func (m *PresetModel) reviewSummary(body *screenBody, width int) {
 		harnessNames = strings.Join(harnesses, ", ")
 	}
 	lines = append(lines, "Harnesses: "+harnessNames)
+	for _, change := range m.retirements {
+		line := "Remove " + change.Preset
+		if change.Successor != "" {
+			line = "Replace " + change.Preset + " → " + change.Successor
+		}
+		lines = append(lines, line)
+	}
+	if len(m.retirements) > 0 {
+		lines = append(lines, "Prepare replacement before switching; clean newly unused managed files after activation.")
+		lines = append(lines, m.retiredFileLines()...)
+	}
 	body.add(lipgloss.NewStyle().Foreground(colorText).Width(width).Render(strings.Join(lines, "\n")), false)
 	if len(unassigned) > 0 {
 		body.add(lipgloss.NewStyle().Foreground(colorWarn).Width(width).Render("Outside layouts: "+strings.Join(unassigned, ", ")+". Add with temper layout."), false)
@@ -127,4 +142,29 @@ func (m *PresetModel) reviewDownloads(body *screenBody, width int) {
 		content += "\n" + downloadTable(files, width)
 	}
 	body.add(content, false)
+}
+
+// retiredFileLines names each shared file before deletion consent, because
+// that deletion cannot be undone and may affect applications outside Temper.
+func (m *PresetModel) retiredFileLines() []string {
+	switch {
+	case m.loading:
+		return []string{"Checking shared HF files…"}
+	case m.retiredFilesErr != nil:
+		return []string{"Shared HF files kept: cannot list them (" + m.retiredFilesErr.Error() + ")."}
+	case len(m.retiredFiles) == 0:
+		return []string{"No unused shared HF files to delete."}
+	}
+	var total int64
+	for _, f := range m.retiredFiles {
+		total += f.Bytes
+	}
+	lines := []string{fmt.Sprintf("Unused shared HF files (%s); other applications may use them:", setup.Size(total))}
+	for _, f := range m.retiredFiles {
+		lines = append(lines, "  "+f.Name+" · "+setup.Size(f.Bytes))
+	}
+	if m.deleteRetiredWeights {
+		return append(lines, "DELETE these files across cached revisions (w to keep).")
+	}
+	return append(lines, "Keep these files (w to delete).")
 }

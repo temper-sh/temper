@@ -15,6 +15,7 @@ import (
 	"github.com/temper-sh/temper/internal/machine"
 	"github.com/temper-sh/temper/internal/software"
 	"github.com/temper-sh/temper/internal/software/adapter"
+	softwarelock "github.com/temper-sh/temper/internal/software/lockfile"
 
 	"github.com/temper-sh/temper/internal/softwarecmd"
 )
@@ -146,6 +147,20 @@ func TestRunDispatchesTheSoftwareCommand(t *testing.T) {
 	})
 	if exit != 0 || stderr.Len() != 0 || !strings.Contains(stdout.String(), "temper software install") {
 		t.Fatalf("exit = %d, stdout = %q, stderr = %q", exit, stdout.String(), stderr.String())
+	}
+}
+
+// A retirement that frees an engine or router can finish only when
+// configuration verbs reach the same software removal as cleanup.
+func TestSetupVerbsReleaseSoftwareThroughTheSoftwareCommand(t *testing.T) {
+	reached := errors.New("software command reached")
+	deps := dependencies{newSoftware: func() (softwarecmd.Command, error) { return softwarecmd.Command{}, reached }}
+	command := deps.setupCommand()
+	if command.Remover == nil {
+		t.Fatal("configuration verbs cannot release software installations")
+	}
+	if err := command.Remover.Remove(context.Background(), t.TempDir(), "installation", softwarelock.Document{}, io.Discard); !errors.Is(err, reached) {
+		t.Fatal(err)
 	}
 }
 

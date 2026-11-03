@@ -21,6 +21,7 @@ func (m *PresetModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.loading, m.reviewErr = false, msg.Err
 			m.reviewReady = msg.Err == nil
 			m.plan = msg.Plan
+			m.retiredFiles, m.retiredFilesErr = msg.Files, msg.FilesErr
 			m.view.GotoTop()
 			// Enter must never land on an install that cannot run.
 			if m.focus == presetFooterFocus && m.action == 0 && m.installRefused() {
@@ -127,6 +128,8 @@ func (m *PresetModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.activateShortcut(key)
 		case "c", "p":
 			return m, m.activateShortcut(key)
+		case "w":
+			return m, m.activateShortcut("retired-weights")
 		}
 		return m, nil
 	}
@@ -242,6 +245,8 @@ func (m *PresetModel) startPreview() tea.Cmd {
 		m.focusArea(presetFooterFocus)
 	}
 	m.notice = ""
+	// Deletion consent is given against the file list this review shows.
+	m.retiredFiles, m.retiredFilesErr, m.deleteRetiredWeights = nil, nil, false
 	m.view.GotoTop()
 	ctx, cancel := context.WithCancel(m.ctx)
 	m.previewCancel = cancel
@@ -249,15 +254,27 @@ func (m *PresetModel) startPreview() tea.Cmd {
 	// A cancelled preview may still finish after the user resumes editing.
 	raw, _ := m.draft.Bytes()
 	draft, _ := setup.ParseConfiguration(raw)
+	retired := map[string]setup.Preset{}
+	for _, change := range m.retirements {
+		retired[change.Preset] = m.input.Configuration.Presets[change.Preset]
+	}
+	list := m.input.RetiredFiles
 	return func() tea.Msg {
 		p, err := m.preview(ctx, draft)
-		return compositionPreview{Seq: seq, Plan: p, Err: err}
+		msg := compositionPreview{Seq: seq, Plan: p, Err: err}
+		if len(retired) > 0 && list != nil {
+			msg.Files, msg.FilesErr = list(draft, retired)
+		}
+		return msg
 	}
 }
 
 // Review actions: 0 install and start, 1 save without installing, 2 back,
 // 3 cancel.
 func (m *PresetModel) actionAvailable(index int) bool {
+	if index == 1 && len(m.retirements) > 0 {
+		return false
+	}
 	return index >= 2 || m.reviewReady && !m.loading && (index == 1 || m.plan.CanPrepare)
 }
 
@@ -271,6 +288,10 @@ func (m *PresetModel) finish() tea.Cmd {
 		return tea.Quit
 	}
 	if !m.actionAvailable(m.action) {
+		if m.action == 1 && len(m.retirements) > 0 {
+			m.notice = "Retirement changes require preparation and activation. Apply them, go Back, or Cancel."
+			return nil
+		}
 		m.notice = "Wait until the check finishes."
 		if m.reviewReady && m.action == 0 {
 			m.notice = "Installation is not possible yet; see the reasons above."
@@ -281,7 +302,7 @@ func (m *PresetModel) finish() tea.Cmd {
 	if m.action == 1 {
 		action = "save"
 	}
-	m.Decision = PresetDecision{Configuration: m.draft, Action: action}
+	m.Decision = PresetDecision{Configuration: m.draft, Action: action, Retirements: append([]setup.RetirementChange{}, m.retirements...), DeleteRetiredWeights: m.deleteRetiredWeights && len(m.retiredFiles) > 0}
 	return tea.Quit
 }
 

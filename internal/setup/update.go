@@ -54,9 +54,8 @@ func Changes(old, next catalog.Lock) []string {
 	po, pn := old.Records.Presets[old.Preset], next.Records.Presets[next.Preset]
 	eo, en := old.Records.Engines[po.Engine], next.Records.Engines[pn.Engine]
 	if po.Engine != pn.Engine {
-		add("engine %s → %s", po.Engine, pn.Engine)
-	}
-	if a, b := version(eo.Supply), version(en.Supply); a != b {
+		add("engine %s %s → %s %s", po.Engine, version(eo.Supply), pn.Engine, version(en.Supply))
+	} else if a, b := version(eo.Supply), version(en.Supply); a != b {
 		add("engine %s %s → %s", pn.Engine, a, b)
 	}
 	material := func(label, a, b string) {

@@ -44,15 +44,16 @@ var revisionPattern = regexp.MustCompile(`^[0-9a-f]{40}$`)
 var hashPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 type Document struct {
-	Schema       string              `yaml:"schema" json:"schema"`
-	Date         string              `yaml:"date" json:"date"`
-	Platform     string              `yaml:"platform" json:"platform"`
-	Runtime      Runtime             `yaml:"runtime" json:"runtime"`
-	Artifacts    map[string]Artifact `yaml:"artifacts" json:"artifacts"`
-	Templates    map[string]Template `yaml:"templates,omitempty" json:"templates,omitempty"`
-	Engines      map[string]Engine   `yaml:"engines" json:"engines"`
-	Presets      map[string]Preset   `yaml:"presets" json:"presets"`
-	Presentation *Presentation       `yaml:"presentation,omitempty" json:"presentation,omitempty"`
+	Schema         string                `yaml:"schema" json:"schema"`
+	Date           string                `yaml:"date" json:"date"`
+	Platform       string                `yaml:"platform" json:"platform"`
+	Runtime        Runtime               `yaml:"runtime" json:"runtime"`
+	Artifacts      map[string]Artifact   `yaml:"artifacts" json:"artifacts"`
+	Templates      map[string]Template   `yaml:"templates,omitempty" json:"templates,omitempty"`
+	Engines        map[string]Engine     `yaml:"engines" json:"engines"`
+	Presets        map[string]Preset     `yaml:"presets" json:"presets"`
+	RetiredPresets map[string]Retirement `yaml:"retired_presets,omitempty" json:"retired_presets,omitempty"`
+	Presentation   *Presentation         `yaml:"presentation,omitempty" json:"presentation,omitempty"`
 }
 
 type Runtime struct {
@@ -322,6 +323,11 @@ func (d *Document) normalize() {
 func (d Document) Validate() error {
 	if err := d.validateRecords(); err != nil {
 		return err
+	}
+	for id := range d.RetiredPresets {
+		if err := d.validateRetirement(id, func(id string) bool { _, ok := d.Presets[id]; return ok }); err != nil {
+			return fmt.Errorf("retired preset %q: %w", id, err)
+		}
 	}
 	for id, t := range d.Templates {
 		if t.local() {

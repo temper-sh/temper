@@ -33,6 +33,15 @@ translation, with language and evidence guidance in authored descriptions.
 [execution locks](contracts/execution-lock.md), and
 [configuration](contracts/layouts.md) own the current behavior.
 
+The catalog's optional dated retirement records accumulate until a maintainer
+removes them. Saved affected selections appear under Retired with explicit Keep,
+Replace and Remove actions; after removal they appear under Other without
+disabling installed presets.
+Replacement prepares before switching, retains recoverable intent through
+activation and targeted cleanup, and separately obtains consent for named shared
+HF file deletion. [Retired presets](contracts/init.md#retired-presets) owns the
+workflow and recovery contract. Catalog metadata alone authorizes no migration.
+
 Output defaults are optional. Chat presets without an explicit cap use remaining
 context for generation, including reasoning. Context capacity and output defaults
 are independent settings; a test's output reserve does not become a product limit.

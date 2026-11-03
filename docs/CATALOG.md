@@ -20,6 +20,13 @@ This updates the choices you can browse; your saved presets, installed models,
 and running layout stay unchanged. To also rebuild your saved presets from it,
 use `temper update`.
 
+A dated retirement notice recommends a successor without changing your saved
+selection. Notices stay in the catalog for a month or two after publication.
+Supported Temper versions show Retired in `configure` when one of your saved
+selections is affected; [replacement and removal](contracts/init.md#retired-presets)
+require explicit review. On older Temper versions, or after a notice is removed,
+the saved selection stays under Other and remains usable.
+
 To inspect the stored catalog snapshots:
 
 ```sh

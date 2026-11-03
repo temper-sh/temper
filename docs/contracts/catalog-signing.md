@@ -26,6 +26,16 @@ source; it is never rewritten.
 
 ## Publish
 
+The optional `retired_presets` metadata accumulates withdrawal notices. New
+withdrawals of offered IDs use the actual UTC publication day for `retired_on`
+and the catalog date, and retained notices keep their original date. The
+publisher verifies these date rules against the currently signed catalog before
+staging a change. Remove a notice in a reviewed source edit once it has been
+published for a month or two, or remove it and offer the ID again to reverse a
+mistaken retirement; the publisher does not enforce an age. Historical
+snapshots are unchanged. Retirement metadata is a recommendation, never consent
+to update an installed selection.
+
 ```text
 op read "$TEMPER_CATALOG_KEY_REF" | go run ./cmd/temper-catalog publish \
   --source ../temper-sh.github.io/catalog/sources/apple-silicon.json \

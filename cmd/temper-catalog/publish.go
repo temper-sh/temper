@@ -79,6 +79,7 @@ func publish(ctx context.Context, sourcePath, root string, dry bool, stdin io.Re
 	next := publication.Channel{Schema: publication.CurrentChannelSchema, Channel: distribution.Channel}
 	channelDir := filepath.Join(root, "channels", distribution.Channel)
 	previousDate := ""
+	var previous catalog.Document
 	if channel, err := readArtifact(channelDir, "channel.yaml", "channel.signature.yaml", catalogsource.MaxChannelBytes); err == nil {
 		verified, err := publication.VerifyChannel(distribution.Channel, channel.Data, channel.Signature, tool.Trust())
 		if err != nil {
@@ -90,9 +91,10 @@ func publish(ctx context.Context, sourcePath, root string, dry bool, stdin io.Re
 				result.status, result.sequence = "unchanged", next.Sequence
 				return result, nil
 			}
-			if previousDate, err = snapshotDate(filepath.Join(root, "snapshots", ref.SHA256, "catalog.json")); err != nil {
+			if previous, err = snapshotHeader(filepath.Join(root, "snapshots", ref.SHA256, "catalog.json"), ref.SHA256); err != nil {
 				return published{}, fmt.Errorf("current %s catalog: %w", d.Platform, err)
 			}
+			previousDate = previous.Date
 		} else if !errors.Is(err, publication.ErrNoPlatform) {
 			return published{}, fmt.Errorf("current channel: %w", err)
 		}
@@ -101,6 +103,15 @@ func publish(ctx context.Context, sourcePath, root string, dry bool, stdin io.Re
 	}
 	if today := now.UTC().Format(time.DateOnly); d.Date < previousDate || d.Date > today {
 		return published{}, fmt.Errorf("catalog date %s must be between the current catalog's %s and today %s (UTC)", d.Date, previousDate, today)
+	}
+	if err := d.CheckRetirementHistory(previous); err != nil {
+		return published{}, err
+	}
+	for id, r := range d.RetiredPresets {
+		_, wasOffered := previous.Presets[id]
+		if _, alreadyRetired := previous.RetiredPresets[id]; wasOffered && !alreadyRetired && r.RetiredOn != now.UTC().Format(time.DateOnly) {
+			return published{}, fmt.Errorf("new withdrawal %q must use today's effective publication date", id)
+		}
 	}
 	next.Sequence++
 	next, err = next.WithCatalog(d.Platform, publication.CatalogReference{Schema: catalog.Schema, SHA256: result.sha256, Locator: snapshotRoot + result.sha256 + "/"})
@@ -206,19 +217,29 @@ func publish(ctx context.Context, sourcePath, root string, dry bool, stdin io.Re
 	return result, nil
 }
 
-// snapshotDate reads only the date of a published catalog.
-func snapshotDate(path string) (string, error) {
+// snapshotHeader reads the publication facts whose history must survive changes.
+func snapshotHeader(path, expected string) (catalog.Document, error) {
 	raw, _, err := readRegularFile(path, catalogsource.MaxCatalogBytes, "published catalog")
 	if err != nil {
-		return "", err
+		return catalog.Document{}, err
+	}
+	sum := sha256.Sum256(raw)
+	if hex.EncodeToString(sum[:]) != expected {
+		return catalog.Document{}, errors.New("published catalog bytes do not match the signed channel digest")
 	}
 	var head struct {
-		Date string `json:"date"`
+		Date           string                        `json:"date"`
+		RetiredPresets map[string]catalog.Retirement `json:"retired_presets"`
+		Presets        map[string]json.RawMessage    `json:"presets"`
 	}
 	if err := json.Unmarshal(raw, &head); err != nil {
-		return "", err
+		return catalog.Document{}, err
 	}
-	return head.Date, nil
+	d := catalog.Document{Date: head.Date, RetiredPresets: head.RetiredPresets, Presets: map[string]catalog.Preset{}}
+	for id := range head.Presets {
+		d.Presets[id] = catalog.Preset{}
+	}
+	return d, nil
 }
 
 func readArtifact(dir, dataName, signatureName string, limit int64) (publication.SignedArtifact, error) {

@@ -33,15 +33,16 @@ type Unavailable struct {
 // a problem shared by every preset (header, platform, router) is an error.
 func Read(data []byte, client string) (View, error) {
 	var raw struct {
-		Schema       string               `yaml:"schema"`
-		Date         string               `yaml:"date"`
-		Platform     string               `yaml:"platform"`
-		Runtime      yaml.Node            `yaml:"runtime"`
-		Artifacts    map[string]yaml.Node `yaml:"artifacts"`
-		Templates    map[string]yaml.Node `yaml:"templates"`
-		Engines      map[string]yaml.Node `yaml:"engines"`
-		Presets      map[string]yaml.Node `yaml:"presets"`
-		Presentation *Presentation        `yaml:"presentation"`
+		Schema         string               `yaml:"schema"`
+		Date           string               `yaml:"date"`
+		Platform       string               `yaml:"platform"`
+		Runtime        yaml.Node            `yaml:"runtime"`
+		Artifacts      map[string]yaml.Node `yaml:"artifacts"`
+		Templates      map[string]yaml.Node `yaml:"templates"`
+		Engines        map[string]yaml.Node `yaml:"engines"`
+		Presets        map[string]yaml.Node `yaml:"presets"`
+		RetiredPresets map[string]yaml.Node `yaml:"retired_presets"`
+		Presentation   *Presentation        `yaml:"presentation"`
 	}
 	// Containers ignore unknown keys; records below are strict.
 	decoder := yaml.NewDecoder(bytes.NewReader(data))
@@ -200,6 +201,25 @@ func Read(data []byte, client string) (View, error) {
 			continue
 		}
 		d.Presets[id] = p
+	}
+	d.RetiredPresets = map[string]Retirement{}
+	for id, node := range raw.RetiredPresets {
+		var r Retirement
+		if err := decodeNode(&node, &r); err != nil {
+			unavailable("retired-preset", id, newerTemper(err))
+			continue
+		}
+		d.RetiredPresets[id] = r
+	}
+	invalid := map[string]string{}
+	for id := range d.RetiredPresets {
+		if err := d.validateRetirement(id, func(id string) bool { _, ok := raw.Presets[id]; return ok }); err != nil {
+			invalid[id] = err.Error()
+		}
+	}
+	for id, reason := range invalid {
+		unavailable("retired-preset", id, reason)
+		delete(d.RetiredPresets, id)
 	}
 	slices.SortFunc(view.Unavailable, func(a, b Unavailable) int {
 		if order := strings.Compare(a.Kind, b.Kind); order != 0 {

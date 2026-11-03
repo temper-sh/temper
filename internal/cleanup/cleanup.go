@@ -19,6 +19,7 @@ import (
 
 	"github.com/temper-sh/temper/internal/artifactset"
 	"github.com/temper-sh/temper/internal/catalog"
+	"github.com/temper-sh/temper/internal/hfcache"
 	"github.com/temper-sh/temper/internal/kapitsa"
 	"github.com/temper-sh/temper/internal/managed"
 	"github.com/temper-sh/temper/internal/preset"
@@ -59,9 +60,10 @@ type Repo struct {
 // Plan is what cleanup would do. Kept lists installations it cannot verify
 // and therefore leaves in place.
 type Plan struct {
-	Remove      []Item   `json:"remove"`
-	Kept        []string `json:"kept,omitempty"`
-	UnusedRepos []Repo   `json:"unused_hf_repos"`
+	Remove        []Item          `json:"remove"`
+	Kept          []string        `json:"kept,omitempty"`
+	UnusedRepos   []Repo          `json:"unused_hf_repos"`
+	UnusedHFFiles []hfcache.Entry `json:"unused_hf_files,omitempty"`
 }
 
 // Bytes is the total size Apply frees.

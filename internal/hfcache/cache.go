@@ -1,5 +1,6 @@
 // Package hfcache inspects the shared Hugging Face Hub cache and delegates
-// downloads to the official HF client. It never writes or prunes cache files.
+// downloads and explicitly consented file deletion to the official HF client.
+// It never edits the client's snapshot/blob accounting itself.
 package hfcache
 
 import (
@@ -13,7 +14,10 @@ import (
 )
 
 type Entry struct {
-	Repo, Revision, Name, SHA256 string
+	Repo     string `json:"repo"`
+	Revision string `json:"revision"`
+	Name     string `json:"name"`
+	SHA256   string `json:"sha256"`
 }
 
 type File struct {

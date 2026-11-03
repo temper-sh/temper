@@ -54,15 +54,21 @@ func wiredMemoryAdvice(requiredMiB int64, facts machine.Facts, prediction budget
 
 func (a WiredMemoryAdvice) Summary() string {
 	if a.SuggestedLimitMiB > 0 {
-		return fmt.Sprintf("Increase the wired-memory limit to %s (%d MiB) before running this setup.", Size(a.SuggestedLimitMiB*MiB), a.SuggestedLimitMiB)
+		if a.RequiredMiB <= a.LimitMiB {
+			return fmt.Sprintf("Optional: increase the wired-memory allowance from %s to %s (%d MiB) for additional headroom. The current wired-memory allowance does not block preparation.", Size(a.LimitMiB*MiB), Size(a.SuggestedLimitMiB*MiB), a.SuggestedLimitMiB)
+		}
+		return fmt.Sprintf("Accounted memory exceeds the current wired-memory allowance. Consider increasing it to %s (%d MiB), choosing a smaller model or reducing Context.", Size(a.SuggestedLimitMiB*MiB), a.SuggestedLimitMiB)
+	}
+	if a.RequiredMiB <= a.LimitMiB {
+		return "The current wired-memory allowance does not block preparation, but has less headroom than Temper recommends. There is too little room to suggest a higher allowance while reserving memory for macOS and other apps."
 	}
 	return "There is too little room to recommend a higher wired-memory limit while reserving memory for macOS and other apps. Choose a smaller model or reduce Context."
 }
 
 func (a WiredMemoryAdvice) Section() Section {
 	lines := []string{a.Summary(),
-		fmt.Sprintf("Accounted requirement: %s; current GPU budget: %s (Metal recommended working set).", Size(a.RequiredMiB*MiB), Size(a.LimitMiB*MiB)),
-		"Temper reserves at least 4 GiB and 15% of RAM for macOS and other apps. This is recommendation policy, not a macOS maximum.",
+		fmt.Sprintf("Accounted memory plus OS allowance: %s; current GPU budget: %s (Metal recommended working set).", Size(a.RequiredMiB*MiB), Size(a.LimitMiB*MiB)),
+		"Suggested limits leave at least 4 GiB and 15% of RAM for macOS and other apps. Headroom is recommendation policy, not a measured runtime requirement or a macOS maximum.",
 	}
 	if spare := a.LimitMiB - a.RequiredMiB; spare < 0 {
 		lines = append(lines, "The accounted memory exceeds the limit by "+Size(-spare*MiB)+".")
@@ -70,8 +76,12 @@ func (a WiredMemoryAdvice) Section() Section {
 		lines = append(lines, "Only "+Size(spare*MiB)+" remains below the wired limit.")
 	}
 	if a.SuggestedLimitMiB > 0 {
+		manual := "[manual] To increase the wired-memory allowance, open another Terminal and note the current value:"
+		if a.RequiredMiB <= a.LimitMiB {
+			manual = "[manual] Optional: increase the wired-memory allowance. In another Terminal, first note the current value:"
+		}
 		lines = append(lines,
-			"[manual] Open another Terminal and note the current value:",
+			manual,
 			"sysctl -n iogpu.wired_limit_mb",
 			"If that setting is available, run (requires your administrator password):",
 			fmt.Sprintf("sudo sysctl iogpu.wired_limit_mb=%d", a.SuggestedLimitMiB),
@@ -82,5 +92,9 @@ func (a WiredMemoryAdvice) Section() Section {
 		)
 	}
 	lines = append(lines, "Raising the limit adds no physical RAM. Catalog measurements or supported estimates are included, but unmeasured workloads and allocations remain; this recommendation does not establish runtime fit.")
-	return Section{Title: "Memory budget is tight", Lines: lines, Warning: true}
+	title := "Wired-memory budget exceeded"
+	if a.RequiredMiB <= a.LimitMiB {
+		title = "Optional wired-memory headroom"
+	}
+	return Section{Title: title, Lines: lines, Warning: true}
 }
