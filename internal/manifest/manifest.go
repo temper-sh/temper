@@ -52,6 +52,7 @@ type Layout struct {
 	DisplayName           string                   `yaml:"display_name"`
 	Model                 Model                    `yaml:"model"`
 	Engine                string                   `yaml:"engine"`
+	EngineVersion         string                   `yaml:"engine_version,omitempty"`
 	Interface             string                   `yaml:"interface,omitempty"`
 	Modalities            []string                 `yaml:"modalities,omitempty"`
 	Window                int                      `yaml:"window"`

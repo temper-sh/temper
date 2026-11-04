@@ -7,9 +7,58 @@ import (
 
 	"github.com/temper-sh/temper/internal/buildinfo"
 	"github.com/temper-sh/temper/internal/catalog"
+	"github.com/temper-sh/temper/internal/manifest"
 	"github.com/temper-sh/temper/internal/render"
 	"github.com/temper-sh/temper/internal/software"
+	"gopkg.in/yaml.v3"
 )
+
+func TestRapidPinnedVersionControlsFlagsAfterManifestExport(t *testing.T) {
+	for _, version := range []string{"0.15.4", "1.0.1"} {
+		t.Run(version, func(t *testing.T) {
+			document := qwenStudy(t)
+			supply := document.Engines["rapid-mlx"].Supply.Python
+			for i := range supply.Packages {
+				if supply.Packages[i].Name == supply.Root {
+					supply.Packages[i].Artifact.Locator = strings.ReplaceAll(supply.Packages[i].Artifact.Locator, supply.Packages[i].Version, version)
+					supply.Packages[i].Version = version
+				}
+			}
+			lock, err := catalog.CompilePreset(document, "rapid-mlx", 0, 0, software.Target{OS: "darwin", Arch: "arm64"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			projection, err := lock.Projections()
+			if err != nil {
+				t.Fatal(err)
+			}
+			raw, err := yaml.Marshal(projection.Manifest)
+			if err != nil {
+				t.Fatal(err)
+			}
+			projected, err := manifest.Parse(raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if projected.Layouts["rapid-mlx"].EngineVersion != version {
+				t.Fatal("export lost the pinned engine version")
+			}
+			bundle, err := render.Build(render.Inputs{StartPort: 10001, Manifest: projected, Lock: projection.Artifacts, Mode: "rapid-mlx", Root: t.TempDir()})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var rendered string
+			for _, artifact := range bundle.Artifacts {
+				rendered += string(artifact.Data)
+			}
+			for _, flag := range []string{"--context-length", "--disable-disk-caches"} {
+				if strings.Contains(rendered, flag) != (version == "1.0.1") {
+					t.Fatalf("%s not appropriate for pinned %s", flag, version)
+				}
+			}
+		})
+	}
+}
 
 func qwenStudy(t *testing.T) catalog.Document {
 	t.Helper()

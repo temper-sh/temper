@@ -10,13 +10,21 @@ func rapidMLXCommand(options rapidMLXOptions) (Command, error) {
 		{knownWord("--no-telemetry"), knownWord("serve"), dataWord(options.modelPath)},
 		{knownWord("--host"), knownWord("127.0.0.1"), knownWord("--port"), portWord()},
 		{knownWord("--served-model-name"), dataWord(options.layoutID)},
+	}
+	if options.contextLengthFlag {
+		groups = append(groups, []commandWord{knownWord("--context-length"), knownWord(strconv.Itoa(options.contextWindow))})
+	}
+	if options.disableDiskCachesFlag {
+		groups = append(groups, []commandWord{knownWord("--disable-disk-caches")})
+	}
+	groups = append(groups, [][]commandWord{
 		{knownWord("--max-tokens"), knownWord(strconv.Itoa(options.maxTokens))},
 		{knownWord("--max-num-seqs"), knownWord(strconv.Itoa(options.maxNumSeqs))},
 		{knownWord("--max-concurrent-requests"), knownWord(strconv.Itoa(options.maxConcurrentRequests))},
 		{knownWord("--prefill-batch-size"), knownWord(strconv.Itoa(options.prefillBatchSize))},
 		{knownWord("--completion-batch-size"), knownWord(strconv.Itoa(options.completionBatchSize))},
 		{knownWord("--gpu-memory-utilization"), knownWord(strconv.FormatFloat(options.gpuMemoryUtilization, 'g', -1, 64))},
-	}
+	}...)
 	if options.prefixCache == "on" {
 		groups = append(groups, []commandWord{knownWord("--enable-prefix-cache")})
 	} else {

@@ -6,6 +6,17 @@ workstream through the 1.0 release, record how the skills affected actual work
 and propose a narrow
 improvement only when the phase supplies evidence for it.
 
+## Runtime currency and Rapid context, 2026-11-04
+
+Unit design keeps version-sensitive CLI behavior in the Rapid adapter. Data
+modeling derives the render projection's engine version from the pinned Python
+package instead of adding an independently authored setting. Tests cover flag
+introduction boundaries and manifest export, while isolated native checks prove
+context refusal, streaming tools and owned shutdown. Repeated preparation
+preserves receipts, state timestamps and rendered generations. A harness-only
+model-name assertion was corrected to accept the upstream response contract;
+the original failure remains in scratch. Existing guidance was sufficient.
+
 This is not a model-eval log, product evidence, or permission to change the
 skills repository. It creates no synthetic Temper work. A note may — and often
 should — conclude that no skill change is warranted.

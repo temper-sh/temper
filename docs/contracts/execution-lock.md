@@ -88,6 +88,15 @@ file in Rapid's `--speculative-config` `model` field. No implicit alias or
 unmanaged download resolves the head. This does not prove target/head
 compatibility, activation, quality or acceleration; those require runtime evidence.
 Existing embedded-MTP selections keep their command meaning.
+
+For Rapid 0.15.5 and newer, the selected context window is passed to
+`--context-length` as well as router discovery metadata. Optional disk caches
+are disabled explicitly on 0.15.7 and newer; in-memory prefix caching still
+follows the preset. The render projection derives `engine_version` from the
+pinned Python root package. Older runtimes and legacy manifests without that
+version retain their previous launch behavior. Rapid requires an explicit
+output default independently of the context window.
+
 - **Version policy:** the router and engines may set `minimum_temper` and
   `exclude_versions`; presets may set `exclude_engine_versions`. A range uses
   `<`, `<=`, `>`, `>=` or `=` and a version; a comma joins at most one lower

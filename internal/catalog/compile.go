@@ -284,6 +284,15 @@ func (l Lock) projections() (Projections, error) {
 		if c.Python != nil {
 			m.Llama, m.Sampling = nil, nil
 			m.RapidMLX, m.VLLMMetal = c.Python.RapidMLX, c.Python.VLLMMetal
+			if m.RapidMLX != nil {
+				supply := d.Engines[layout.Engine].Supply.Python
+				for _, pkg := range supply.Packages {
+					if pkg.Name == supply.Root {
+						m.EngineVersion = pkg.Version
+						break
+					}
+				}
+			}
 		}
 		if c.CrispEmbed != nil {
 			m.Llama, m.Sampling = nil, nil

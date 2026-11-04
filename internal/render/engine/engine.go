@@ -27,6 +27,7 @@ const (
 type Request struct {
 	CrispEmbed            *CrispEmbedTuning
 	Engine                string
+	EngineVersion         string // Derived from the software pin; empty preserves legacy CLI behavior.
 	LayoutID              string
 	ModelPath             string
 	DraftModelPath        string

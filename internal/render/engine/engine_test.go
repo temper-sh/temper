@@ -121,6 +121,7 @@ func TestBuildMapsRapidMLXSemanticsToAnExactCommand(t *testing.T) {
 	cache := 0
 	request := engine.Request{
 		Engine: engine.RapidMLX, LayoutID: "glm-large", ModelPath: "/temper/model/glm",
+		EngineVersion:  "1.0.1",
 		ArtifactFormat: "mlx-safetensors", Interface: engine.InterfaceChatCompletions,
 		Modalities: []string{"text"}, Window: 131072, MaxTokens: 8192, Thinking: "off",
 		Speculation: "mtp", SpeculativeTokens: 3,
@@ -138,6 +139,8 @@ func TestBuildMapsRapidMLXSemanticsToAnExactCommand(t *testing.T) {
 		"rapid-mlx --no-telemetry serve '/temper/model/glm'",
 		"--host 127.0.0.1 --port ${PORT}",
 		"--served-model-name 'glm-large'",
+		"--context-length 131072",
+		"--disable-disk-caches",
 		"--max-tokens 8192",
 		"--max-num-seqs 2",
 		"--max-concurrent-requests 2",
@@ -167,6 +170,29 @@ func TestBuildMapsRapidMLXSemanticsToAnExactCommand(t *testing.T) {
 	}
 	if got := command.Runtime().DefaultParameters; !reflect.DeepEqual(got, map[string]any{"chat_template_kwargs": map[string]any{"enable_thinking": true}}) {
 		t.Fatalf("thinking defaults = %#v", got)
+	}
+	for _, test := range []struct {
+		version       string
+		context, disk bool
+	}{
+		{"", false, false},
+		{"0.15.4", false, false},
+		{"0.15.5", true, false},
+		{"0.15.6", true, false},
+		{"0.15.7", true, true},
+		{"0.16.5", true, true},
+	} {
+		t.Run("CLI compatibility "+test.version, func(t *testing.T) {
+			request.EngineVersion = test.version
+			command, err := engine.Build(request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			lines := strings.Join(command.Lines(), "\n")
+			if strings.Contains(lines, "--context-length") != test.context || strings.Contains(lines, "--disable-disk-caches") != test.disk {
+				t.Fatalf("unsupported flags for %q: %s", test.version, lines)
+			}
+		})
 	}
 }
 

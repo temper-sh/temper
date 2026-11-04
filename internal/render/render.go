@@ -309,6 +309,7 @@ func engineRequest(member resolvedMember) engine.Request {
 	return engine.Request{
 		CrispEmbed:            layout.CrispEmbed,
 		Engine:                layout.Engine,
+		EngineVersion:         layout.EngineVersion,
 		LayoutID:              member.ID,
 		ModelPath:             member.ModelPath,
 		DraftModelPath:        member.DraftPath,

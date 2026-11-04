@@ -3,6 +3,8 @@ package engine
 import (
 	"errors"
 	"fmt"
+
+	"github.com/Masterminds/semver/v3"
 )
 
 type rapidMLXOptions struct {
@@ -13,6 +15,8 @@ type rapidMLXOptions struct {
 	modelPath             string
 	draftModelPath        string
 	contextWindow         int
+	contextLengthFlag     bool
+	disableDiskCachesFlag bool
 	multimodal            bool
 	maxTokens             int
 	maxNumSeqs            int
@@ -35,12 +39,25 @@ func buildRapidMLX(request Request) (Command, error) {
 		return Command{}, err
 	}
 	tuning := *request.RapidMLX
+	var contextLengthFlag, disableDiskCachesFlag bool
+	if request.EngineVersion != "" {
+		version, err := semver.NewVersion(request.EngineVersion)
+		if err != nil {
+			return Command{}, fmt.Errorf("Rapid MLX engine version: %w", err)
+		}
+		// These flags first shipped in v0.15.5 and v0.15.7 respectively.
+		// Older exact locks retain their supported command line.
+		contextLengthFlag = !version.LessThan(semver.MustParse("0.15.5"))
+		disableDiskCachesFlag = !version.LessThan(semver.MustParse("0.15.7"))
+	}
 	return rapidMLXCommand(rapidMLXOptions{
 		toolCallParser: tuning.ToolCallParser, prefillStepSize: tuning.PrefillStepSize, requestTimeoutSeconds: tuning.RequestTimeoutSeconds,
 		layoutID:              request.LayoutID,
 		modelPath:             request.ModelPath,
 		draftModelPath:        request.DraftModelPath,
 		contextWindow:         request.Window,
+		contextLengthFlag:     contextLengthFlag,
+		disableDiskCachesFlag: disableDiskCachesFlag,
 		multimodal:            len(request.Modalities) == 2,
 		maxTokens:             request.MaxTokens,
 		maxNumSeqs:            tuning.MaxNumSeqs,
