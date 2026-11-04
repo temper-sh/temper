@@ -16,29 +16,10 @@ import (
 	"github.com/temper-sh/temper/internal/preset"
 	"github.com/temper-sh/temper/internal/setup"
 	"github.com/temper-sh/temper/internal/setupui"
-	"github.com/temper-sh/temper/internal/userpreset"
 )
 
-func retirementOrigin(root string, saved setup.Preset) string {
-	if saved.UserPreset == "" {
-		return saved.Lock.Preset
-	}
-	// The placed selection owns its origin even if its authoring file has
-	// since changed into a different fork or a copy without being applied.
-	if saved.ForkBaseline != nil {
-		return saved.ForkBaseline.Origin
-	}
-	// Read authored identity even if resolving its retired origin is impossible.
-	if raw, err := userpreset.Read(root, saved.UserPreset); err == nil {
-		if file, err := catalog.ParseUserPreset(saved.UserPreset, raw); err == nil {
-			return file.Origin
-		}
-	}
-	return setup.RetirementOrigin(saved)
-}
-
-func retirementOption(root string, saved setup.Preset, option setupui.PresetOption, view catalog.View) setupui.PresetOption {
-	origin := retirementOrigin(root, saved)
+func retirementOption(saved setup.Preset, option setupui.PresetOption, view catalog.View) setupui.PresetOption {
+	origin := setup.RetirementOrigin(saved)
 	if r, ok := view.Document.RetiredPresets[origin]; ok {
 		option.Retirement = &r
 		option.Group, option.Section = "retired", ""
@@ -124,6 +105,9 @@ func (c Command) applyRetirement(ctx context.Context, root string, current, next
 	}
 	// Do not hold the root lock across transport. The guarded commit checks the
 	// selection again after preparation, leaving old configuration recoverable.
+	if err = c.checkRetirementRemoval(ctx, state); err != nil {
+		return c.fail(diagnostics, fmt.Errorf("old selection retained; %w", err))
+	}
 	if err = c.prepareRetirement(ctx, root, state, diagnostics); err != nil {
 		return c.fail(diagnostics, fmt.Errorf("old selection retained; preparation incomplete: %w", err))
 	}
@@ -137,6 +121,24 @@ func (c Command) applyRetirement(ctx context.Context, root string, current, next
 		return c.retirementFailure(diagnostics, "configuration switch", err)
 	}
 	return c.completeRetirement(ctx, root, state, jsonOutput, out, diagnostics)
+}
+
+func (c Command) checkRetirementRemoval(ctx context.Context, state *setup.RetirementState) error {
+	if !state.DeleteWeights {
+		return nil
+	}
+	files, err := cleanup.ReviewHFFiles(state.Configuration, state.Retired, state.HFCache)
+	if err != nil {
+		return err
+	}
+	if len(files) == 0 {
+		return nil
+	}
+	check := c.CheckHFRemoval
+	if check == nil {
+		check = hfcache.CheckFileRemoval
+	}
+	return check(ctx)
 }
 
 func (c Command) prepareRetirement(ctx context.Context, root string, state *setup.RetirementState, out io.Writer) error {
@@ -170,6 +172,9 @@ func (c Command) resumeRetirement(ctx context.Context, root string, state *setup
 			return c.fail(diagnostics, err)
 		}
 		return c.configurationOutput(out, diagnostics, map[string]any{"schema": "temper-retirement-result/v1", "dry_run": true, "pending": true, "activated": state.Activated, "plan": plan, "changes": state.Changes, "delete_weights": state.DeleteWeights})
+	}
+	if err = c.checkRetirementRemoval(ctx, state); err != nil {
+		return c.retirementFailure(diagnostics, "shared weight deletion prerequisite", err)
 	}
 	if !state.Activated {
 		// Preparation is idempotent. Repeat it before every activation retry: a
@@ -260,15 +265,22 @@ func (c Command) completeRetirement(ctx context.Context, root string, state *set
 			remove = hfcache.RemoveFile
 		}
 		for _, file := range plan.UnusedHFFiles {
-			_, present, inspectErr := (hfcache.Cache{Root: cache}).Inspect(file)
+			files, inspectErr := (hfcache.Cache{Root: cache}).NamedFiles(file)
 			if inspectErr != nil {
 				return c.retirementFailure(diagnostics, "shared weight cleanup", inspectErr)
 			}
-			if !present {
+			if len(files) == 0 {
 				continue
 			}
 			if err = remove(ctx, cache, file, diagnostics); err != nil {
 				return c.retirementFailure(diagnostics, "shared weight cleanup", err)
+			}
+			remaining, err := (hfcache.Cache{Root: cache}).NamedFiles(file)
+			if err != nil {
+				return c.retirementFailure(diagnostics, "shared weight cleanup verification", err)
+			}
+			if len(remaining) > 0 {
+				return c.retirementFailure(diagnostics, "shared weight cleanup verification", fmt.Errorf("hf reported success but %s/%s remains in %d cached revisions", file.Repo, file.Name, len(remaining)))
 			}
 			deleted = append(deleted, file.Repo+"/"+file.Name)
 		}

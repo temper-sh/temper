@@ -64,6 +64,8 @@ type Command struct {
 	// Remover releases software installations for temper cleanup.
 	Remover  cleanup.Remover
 	RemoveHF func(context.Context, string, hfcache.Entry, io.Writer) error
+	// CheckHFRemoval reads named-file deletion support; nil uses the HF client.
+	CheckHFRemoval func(context.Context) error
 }
 
 func New(detect func(context.Context) (machine.Facts, error), effects preset.Effects) Command {

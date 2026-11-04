@@ -2,6 +2,7 @@ package setupui
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -29,6 +30,49 @@ func retiredEditor(t *testing.T) *PresetModel {
 	})
 	m.selectGroup("retired")
 	return m
+}
+
+func TestStagedRetirementKeepsItsSuccessorSelected(t *testing.T) {
+	for _, assigned := range []bool{true, false} {
+		t.Run(fmt.Sprint("assigned=", assigned), func(t *testing.T) {
+			m := retiredEditor(t)
+			if !assigned {
+				m.draft.Layouts = map[string]setup.Layout{}
+				m.input.Configuration.Layouts = map[string]setup.Layout{}
+			}
+			target := m.input.Presets[1]
+			m.activateShortcut("replace-retired")
+			m.activateShortcut("apply")
+			m.selectGroup(target.Group)
+			m.cursor = 0
+			if p, ok := m.selectedOption(); !ok || p.ID != target.ID {
+				t.Fatal("fixture did not select successor", p.ID)
+			}
+			m.toggleMember()
+			if _, selected := m.draft.Presets[target.ID]; !selected || !strings.Contains(m.notice, "staged replacement") {
+				t.Fatal("successor could be deselected", m.notice)
+			}
+			m.page = presetReviewPage
+			m.Update(m.startPreview()())
+			if m.reviewErr != nil || !m.reviewReady || len(m.retirements) != 1 {
+				t.Fatal("replacement no longer reviewable", m.reviewErr)
+			}
+		})
+	}
+}
+
+func TestInvalidDraftDoesNotReachPreview(t *testing.T) {
+	m := retiredEditor(t)
+	delete(m.draft.Presets, m.input.Presets[0].ID)
+	m.preview = func(context.Context, setup.Configuration) (setup.Plan, error) {
+		t.Fatal("invalid draft reached preview")
+		return setup.Plan{}, nil
+	}
+	m.page = presetReviewPage
+	m.Update(m.startPreview()())
+	if m.reviewErr == nil || m.actionAvailable(0) {
+		t.Fatal("invalid draft could be applied", m.reviewErr)
+	}
 }
 
 func TestRetiredTabRequiresAnExplicitlyRetiredSavedSelection(t *testing.T) {

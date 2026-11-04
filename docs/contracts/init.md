@@ -155,6 +155,9 @@ unchanged. **Replace** and **Remove** open an Apply/Cancel review. Replacement
 uses successor defaults, or the existing selected successor without overwriting
 it; custom settings and source-file overrides are not silently transferred.
 The source file of an authored preset is retained.
+Retirement identity comes from the saved selection's catalog ID or saved fork
+origin. Copies and older selections without saved origin information do not
+inherit retirement from an unapplied edit to their authoring file.
 
 Replacement updates every affected layout's inclusion, startup and default
 reference, deduplicating an already-included successor. Removal clears those
@@ -162,6 +165,8 @@ references explicitly. A missing, incompatible or unfit successor is unavailable
 with its reason. Review includes download/additional disk costs and settings
 changes. Retirement changes require installation/application, rather than a
 save-only action. Cancel and `--dry-run` change nothing.
+A staged replacement keeps its successor selected through Review; cancel setup
+to abandon that replacement. Invalid drafts are reported before preview.
 The successor has its own API model ID; clients using the retired ID must select
 it explicitly. Integrated harnesses receive the normal activation synchronization.
 Activation uses the existing router-readiness contract and preserves on-demand
@@ -177,8 +182,9 @@ Only material released by this retirement is cleaned; other presets and managed
 jobs retain their claims. Shared Hugging Face repositories are kept unless the
 user separately chooses named-file deletion across cached revisions,
 acknowledging possible use outside Temper. The wizard offers that one choice at
-Review, after listing each file and its size; a new review clears it. Other
-quant filenames are retained.
+Review, after listing each file and one cached copy's size; a new review clears
+it. Sizes are not promised disk savings: revisions can differ and other files
+can share their blobs. Other quant filenames are retained.
 Cleanup failure does not undo a successful replacement. When a notice is later
 removed from the catalog, the saved choice remains usable under Other.
 
@@ -197,6 +203,13 @@ uses of the same filename remain protected. `--dry-run` lists those files and
 their sizes, and the result names the files actually deleted. The official HF client performs
 snapshot/blob accounting. No whole repository is deleted by retirement cleanup.
 The reviewed cache path and consent are retained for retries.
+When deletion is chosen and matching files remain, applying or resuming first
+checks that the installed HF client advertises named-file deletion. An
+unsupported client is refused before preparation or switching; upgrade HF or
+keep the weights. Dry runs do not invoke this client check. After deletion,
+Temper verifies that the named path is absent from every cached revision before
+reporting success. A successful HF exit with files still present leaves cleanup
+pending. Shared blobs retained for another filename do not count as a failure.
 
 `configure --resume --prepare --dry-run --json` inspects pending work without
 effects. `configure --discard-retirement` discards its remaining intent while

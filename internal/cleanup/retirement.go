@@ -67,7 +67,8 @@ func Released(root string, current setup.Configuration, retired map[string]setup
 }
 
 // HFFile is a named shared-cache file a retirement may delete with consent.
-// Bytes counts the reviewed revision's copy; deletion spans cached revisions.
+// Bytes counts one cached revision's copy, not total reclaimable storage;
+// deletion spans cached revisions and HF retains blobs shared with other files.
 type HFFile struct {
 	hfcache.Entry
 	Bytes int64 `json:"bytes"`
@@ -82,12 +83,13 @@ func ReviewHFFiles(next setup.Configuration, retired map[string]setup.Preset, ca
 	}
 	var files []HFFile
 	for _, e := range releasedHFFiles(next, retired) {
-		file, present, err := (hfcache.Cache{Root: cache}).Inspect(e)
+		copies, err := (hfcache.Cache{Root: cache}).NamedFiles(e)
 		if err != nil {
 			return nil, err
 		}
-		if present {
-			files = append(files, HFFile{Entry: e, Bytes: file.Size})
+		if len(copies) > 0 {
+			// Show one copy's size, not a sum of potentially shared blobs.
+			files = append(files, HFFile{Entry: e, Bytes: copies[0].Size})
 		}
 	}
 	return files, nil

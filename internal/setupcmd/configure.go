@@ -312,10 +312,10 @@ func (c Command) Configure(ctx context.Context, args []string, in io.Reader, out
 					o := setupui.PresetOption{ID: id, Name: saved.Name, UserPreset: saved.UserPreset, ForkBaseline: saved.ForkBaseline, Choices: saved.Choices, Model: a.Presentation.ModelName, Weights: a.Presentation.WeightsName, Engine: e.Presentation.DisplayName, Description: p.Presentation.Description, Tier: p.Presentation.MemoryTier, Group: d.FallbackGroup(), Lock: saved.Lock, ModelBytes: one.ModelBytes, MemoryBytes: one.MemoryBytes, MemoryBasis: one.Memory.Basis, Unavailable: strings.Join(one.Refusals, "; "), Details: "Saved exact preset · catalog recommendation does not apply to customized settings"}
 					if index >= 0 {
 						o.Group, o.Section = input.Presets[index].Group, input.Presets[index].Section
-						o = retirementOption(root, saved, o, view)
+						o = retirementOption(saved, o, view)
 						input.Presets[index] = o
 					} else {
-						o = retirementOption(root, saved, o, view)
+						o = retirementOption(saved, o, view)
 						input.Presets = append(input.Presets, o)
 					}
 				}
@@ -359,7 +359,7 @@ func (c Command) Configure(ctx context.Context, args []string, in io.Reader, out
 						return fail(diagnostics, fmt.Errorf("retired selection %q is absent or repeated", id))
 					}
 					seen[id] = true
-					origin := retirementOrigin(root, saved)
+					origin := setup.RetirementOrigin(saved)
 					if _, ok := d.RetiredPresets[origin]; !ok {
 						return fail(diagnostics, fmt.Errorf("preset %q is not explicitly retired", id))
 					}

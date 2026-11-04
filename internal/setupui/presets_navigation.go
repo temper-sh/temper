@@ -252,8 +252,14 @@ func (m *PresetModel) startPreview() tea.Cmd {
 	m.previewCancel = cancel
 	seq := m.previewSeq
 	// A cancelled preview may still finish after the user resumes editing.
-	raw, _ := m.draft.Bytes()
-	draft, _ := setup.ParseConfiguration(raw)
+	raw, err := m.draft.Bytes()
+	if err != nil {
+		return func() tea.Msg { return compositionPreview{Seq: seq, Err: err} }
+	}
+	draft, err := setup.ParseConfiguration(raw)
+	if err != nil {
+		return func() tea.Msg { return compositionPreview{Seq: seq, Err: err} }
+	}
 	retired := map[string]setup.Preset{}
 	for _, change := range m.retirements {
 		retired[change.Preset] = m.input.Configuration.Presets[change.Preset]

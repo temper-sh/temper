@@ -1082,3 +1082,20 @@ that miss. Each fix has a regression; full Go tests, vet and race checks pass. T
 match the missed defects. Narrow proposed improvement: a retry route needs one
 test that reaches success from each failure state with the production wiring of
 every effect it uses, because injected fakes hid the missing remover.
+
+## Retirement edge-case repair — 2026-11-04
+
+Applied `reliable-effects`, `testing` and `unit-design`. The
+[retirement contract](contracts/init.md#retired-presets) now binds retirement
+identity to saved provenance, protects staged successors and checks the HF
+deletion prerequisite before switching. A successful client exit is insufficient:
+the named file must disappear from all cached revisions; shared blobs may remain.
+Regression tests exposed invalid draft handling and unapplied origin changes.
+The existing first-setup tests caught an overly broad draft-reference guard;
+the fix was narrowed to retirement dependencies. Tests cover unsupported-client
+refusal, cancellation, dry runs, no-op/partial deletion and successful recovery
+without reactivation. A disposable cache exercised real HF 2.2.0 with spaces,
+literal percent characters, Unicode, multiple revisions, clean repeats and
+shared blobs. Full Go tests, vet, race, formatting and documentation checks pass.
+The tests-and-effects guidance was useful at the observable completion boundary;
+no skill change is proposed. Stopped-root activation policy remains unchanged.

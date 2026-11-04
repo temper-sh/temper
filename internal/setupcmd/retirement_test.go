@@ -16,6 +16,7 @@ import (
 	"github.com/temper-sh/temper/internal/managed"
 	"github.com/temper-sh/temper/internal/manifest"
 	"github.com/temper-sh/temper/internal/setup"
+	"github.com/temper-sh/temper/internal/setupui"
 	"github.com/temper-sh/temper/internal/userpreset"
 )
 
@@ -23,6 +24,7 @@ func retirementFixture(t *testing.T) (Command, string, string, *[]string) {
 	t.Helper()
 	started := &[]string{}
 	c := installableCommand(t, started, nil)
+	c.CheckHFRemoval = func(context.Context) error { return nil }
 	root := filepath.Join(t.TempDir(), "root")
 	if code, _, diagnostic := configureRun(c, "--root", root, "--preset", compactLayout, "--json"); code != 0 {
 		t.Fatal(diagnostic)
@@ -407,7 +409,7 @@ func TestRetirementForkIdentityAndAuthoredFileSurviveReplacement(t *testing.T) {
 	}
 	current, rev, _ := setup.ReadConfiguration(root)
 	delete(current.Presets, compactLayout)
-	current.Presets["my-helper"] = setup.Preset{Name: "Mine", UserPreset: "my-helper", Lock: lock}
+	current.Presets["my-helper"] = setup.Preset{Name: "Mine", UserPreset: "my-helper", Lock: lock, ForkBaseline: setup.CaptureForkBaseline(file, doc, 8)}
 	l := current.Layouts["work"]
 	l.Presets = []string{"my-helper"}
 	l.Startup = []string{"my-helper"}
@@ -435,7 +437,7 @@ func TestRetirementForkIdentityAndAuthoredFileSurviveReplacement(t *testing.T) {
 	copyFile := catalog.CopyOf(lock, "Independent copy")
 	writeLayoutPreset(t, root, "independent", copyFile)
 	saved := setup.Preset{UserPreset: "independent", Lock: lock}
-	if retirementOrigin(root, saved) != "" {
+	if setup.RetirementOrigin(saved) != "" {
 		t.Fatal("independent copy inherited retirement by weight similarity")
 	}
 }
@@ -462,6 +464,15 @@ func removeFixtureHF(cache string, entry hfcache.Entry) error {
 	file, present, err := (hfcache.Cache{Root: cache}).Inspect(entry)
 	if err != nil || !present {
 		return err
+	}
+	snapshots, err := (hfcache.Cache{Root: cache}).NamedFiles(entry)
+	if err != nil {
+		return err
+	}
+	for _, snapshot := range snapshots {
+		if err := os.Remove(snapshot.Path); err != nil {
+			return err
+		}
 	}
 	return os.Remove(file.Path)
 }
@@ -537,12 +548,154 @@ func TestRetirementNoticeDoesNotAutomaticallyReplaceASavedPreset(t *testing.T) {
 	}
 }
 
+func TestRetirementChecksHFDeletionBeforeChangingSelection(t *testing.T) {
+	c, root, cache, started := retirementFixture(t)
+	before, rev, err := setup.ReadConfiguration(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.CheckHFRemoval = func(context.Context) error { return errors.New("upgrade hf for named-file deletion") }
+	c.RemoveHF = func(ctx context.Context, actual string, file hfcache.Entry, out io.Writer) error {
+		return removeFixtureHF(actual, file)
+	}
+	code, _, diagnostic := configureRun(c, retirementArgs(t, root, "--prepare", "--delete-retired-weights")...)
+	if code == 0 || !strings.Contains(diagnostic, "upgrade hf") {
+		t.Fatal(code, diagnostic)
+	}
+	after, afterRev, err := setup.ReadConfiguration(root)
+	if err != nil || afterRev != rev || len(after.Presets) != len(before.Presets) || len(*started) != 0 {
+		t.Fatal("unsupported client changed selection", err)
+	}
+	if state, err := setup.ReadRetirement(root); err != nil || state != nil {
+		t.Fatal("unsupported client created intent", state, err)
+	}
+	artifact := guidedCatalog(t).Artifacts[guidedCatalog(t).Presets[compactLayout].Artifact]
+	entry := hfcache.Entry{Repo: artifact.HuggingFace().Repo, Revision: artifact.HuggingFace().Revision, Name: artifact.Files[0].Path, SHA256: artifact.Files[0].SHA256}
+	if files, err := (hfcache.Cache{Root: cache}).NamedFiles(entry); err != nil || len(files) != 1 {
+		t.Fatal("unsupported client lost cached files", files, err)
+	}
+	c.CheckHFRemoval = func(context.Context) error { return nil }
+	if code, _, diagnostic := configureRun(c, retirementArgs(t, root, "--prepare", "--delete-retired-weights")...); code != 0 {
+		t.Fatal(diagnostic)
+	}
+	if len(*started) != 1 {
+		t.Fatal("retry did not complete", *started)
+	}
+}
+
+func TestRetirementVerifiesDeletionAcrossRevisionsAndResumes(t *testing.T) {
+	c, root, cache, started := retirementFixture(t)
+	artifact := guidedCatalog(t).Artifacts[guidedCatalog(t).Presets[compactLayout].Artifact]
+	entry := hfcache.Entry{Repo: artifact.HuggingFace().Repo, Revision: artifact.HuggingFace().Revision, Name: artifact.Files[0].Path, SHA256: artifact.Files[0].SHA256}
+	other := filepath.Join(cache, "models--"+strings.ReplaceAll(entry.Repo, "/", "--"), "snapshots", strings.Repeat("e", 40), entry.Name)
+	if err := os.MkdirAll(filepath.Dir(other), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(other, []byte("another revision"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	c.RemoveHF = func(context.Context, string, hfcache.Entry, io.Writer) error {
+		// A client returning zero after deleting only the reviewed revision
+		// has not fulfilled cross-revision consent.
+		path := filepath.Join(cache, "models--"+strings.ReplaceAll(entry.Repo, "/", "--"), "snapshots", entry.Revision, entry.Name)
+		return os.Remove(path)
+	}
+	code, output, diagnostic := configureRun(c, retirementArgs(t, root, "--prepare", "--delete-retired-weights", "--json")...)
+	if code == 0 || strings.Contains(output, "deleted_hf_files") || !strings.Contains(diagnostic, "remains in 1 cached revisions") {
+		t.Fatal(code, output, diagnostic)
+	}
+	state, err := setup.ReadRetirement(root)
+	if err != nil || state == nil || !state.Activated {
+		t.Fatal("lost recovery state", state, err)
+	}
+	c.CheckHFRemoval = func(context.Context) error { return errors.New("upgrade hf") }
+	if code, _, diagnostic := configureRun(c, "--root", root, "--resume", "--prepare"); code == 0 || !strings.Contains(diagnostic, "upgrade hf") {
+		t.Fatal(code, diagnostic)
+	}
+	if _, err := os.Stat(other); err != nil {
+		t.Fatal("failed prerequisite changed cache", err)
+	}
+	c.CheckHFRemoval = func(context.Context) error { return nil }
+	c.RemoveHF = func(context.Context, string, hfcache.Entry, io.Writer) error { return os.Remove(other) }
+	if code, _, diagnostic := configureRun(c, "--root", root, "--resume", "--prepare"); code != 0 {
+		t.Fatal(diagnostic)
+	}
+	if state, err := setup.ReadRetirement(root); state != nil || err != nil || len(*started) != 1 {
+		t.Fatal("retry did not finish without reactivation", state, err, *started)
+	}
+	if files, err := (hfcache.Cache{Root: cache}).NamedFiles(entry); err != nil || len(files) != 0 {
+		t.Fatal(files, err)
+	}
+}
+
+func TestRetirementRejectsHFNoOpSuccessThroughTheDefaultAdapter(t *testing.T) {
+	c, root, cache, started := retirementFixture(t)
+	dir := t.TempDir()
+	script := "#!/bin/sh\nif [ \"$*\" = 'cache rm --help' ]; then printf '%s\\n' 'hf:// URIs (repo or file)'; fi\nexit 0\n"
+	if err := os.WriteFile(filepath.Join(dir, "hf"), []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+	c.CheckHFRemoval, c.RemoveHF = nil, nil
+	code, output, diagnostic := configureRun(c, retirementArgs(t, root, "--prepare", "--delete-retired-weights", "--json")...)
+	if code == 0 || strings.Contains(output, "deleted_hf_files") || !strings.Contains(diagnostic, "hf reported success but") {
+		t.Fatal(code, output, diagnostic)
+	}
+	state, err := setup.ReadRetirement(root)
+	if err != nil || state == nil || !state.Activated {
+		t.Fatal(state, err)
+	}
+	c.RemoveHF = func(_ context.Context, actual string, file hfcache.Entry, _ io.Writer) error {
+		if actual != cache {
+			t.Fatal("retry changed cache")
+		}
+		return removeFixtureHF(actual, file)
+	}
+	if code, _, diagnostic := configureRun(c, "--root", root, "--resume", "--prepare"); code != 0 {
+		t.Fatal(diagnostic)
+	}
+	if state, err := setup.ReadRetirement(root); state != nil || err != nil || len(*started) != 1 {
+		t.Fatal(state, err, *started)
+	}
+}
+
+func TestRetirementDryRunAndKeptWeightsDoNotRequireHFDeletion(t *testing.T) {
+	for _, flags := range [][]string{{"--dry-run", "--delete-retired-weights"}, {"--prepare"}} {
+		t.Run(strings.Join(flags, " "), func(t *testing.T) {
+			c, root, _, _ := retirementFixture(t)
+			c.CheckHFRemoval = func(context.Context) error { t.Fatal("checked deletion without applying deletion consent"); return nil }
+			if code, _, diagnostic := configureRun(c, retirementArgs(t, root, flags...)...); code != 0 {
+				t.Fatal(diagnostic)
+			}
+		})
+	}
+}
+
+func TestRetirementNeverBorrowsAnUnappliedAuthoringOrigin(t *testing.T) {
+	for _, origin := range []string{compactLayout, extraction, ""} {
+		t.Run("authored-origin="+origin, func(t *testing.T) {
+			c, root, _, _ := retirementFixture(t)
+			if origin != "" {
+				writeLayoutPreset(t, root, "untracked", catalog.UserPreset{Schema: catalog.UserPresetSchema, Origin: origin, Name: "Unapplied fork"})
+			}
+			view, err := c.Catalog(context.Background(), root, "", false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			saved := setup.Preset{UserPreset: "untracked"}
+			if got := retirementOption(saved, setupui.PresetOption{ID: "untracked"}, view); got.Retirement != nil {
+				t.Fatal("unapplied authoring file retired a saved selection", got.Retirement)
+			}
+		})
+	}
+}
+
 func TestRetirementUsesTheInstalledForkOriginBeforeMovingAuthoringState(t *testing.T) {
 	_, root, _, _ := retirementFixture(t)
 	file := catalog.UserPreset{Schema: catalog.UserPresetSchema, Origin: extraction, Name: "Changed authoring origin"}
 	writeLayoutPreset(t, root, "changed-fork", file)
 	saved := setup.Preset{UserPreset: "changed-fork", ForkBaseline: &setup.ForkBaseline{Origin: compactLayout, Values: map[string]json.RawMessage{}}}
-	if origin := retirementOrigin(root, saved); origin != compactLayout {
+	if origin := setup.RetirementOrigin(saved); origin != compactLayout {
 		t.Fatal("moving authoring state hid the installed retirement", origin)
 	}
 }

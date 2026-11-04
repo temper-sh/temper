@@ -73,6 +73,73 @@ func TestCacheLocationFollowsHFConventions(t *testing.T) {
 	}
 }
 
+func TestNamedFilesTrackAllRevisionsWithoutClaimingSharedBlobs(t *testing.T) {
+	cache := hfcache.Cache{Root: t.TempDir()}
+	e := entry("shared weights")
+	e.Name = "weights/model space%20.gguf"
+	blob, first := paths(cache.Root, e)
+	put(t, blob, "shared weights")
+	pointer(t, first, blob)
+	other := e
+	other.Revision = strings.Repeat("c", 40)
+	_, second := paths(cache.Root, other)
+	pointer(t, second, blob)
+	other.Name = "weights/keep.gguf"
+	_, kept := paths(cache.Root, other)
+	pointer(t, kept, blob)
+	files, err := cache.NamedFiles(e)
+	if err != nil || len(files) != 2 || files[0].Path != first || files[1].Path != second {
+		t.Fatal(files, err)
+	}
+	for _, f := range files {
+		if f.Size != int64(len("shared weights")) {
+			t.Fatal("reported link length as file size", f)
+		}
+	}
+	if err := os.Remove(first); err != nil {
+		t.Fatal(err)
+	}
+	files, err = cache.NamedFiles(e)
+	if err != nil || len(files) != 1 || files[0].Path != second {
+		t.Fatal("missed another revision", files, err)
+	}
+	if err := os.Remove(second); err != nil {
+		t.Fatal(err)
+	}
+	files, err = cache.NamedFiles(e)
+	if err != nil || len(files) != 0 {
+		t.Fatal("shared blob treated as undeleted filename", files, err)
+	}
+	if data, err := os.ReadFile(kept); err != nil || string(data) != "shared weights" {
+		t.Fatal("inspection damaged shared content", err)
+	}
+}
+
+func TestNamedFilesRefusesUnverifiableCachePaths(t *testing.T) {
+	for _, kind := range []string{"dangling", "outside", "directory"} {
+		t.Run(kind, func(t *testing.T) {
+			cache := hfcache.Cache{Root: t.TempDir()}
+			e := entry("weights")
+			_, snapshot := paths(cache.Root, e)
+			switch kind {
+			case "dangling":
+				pointer(t, snapshot, filepath.Join(cache.Root, "missing"))
+			case "outside":
+				outside := filepath.Join(t.TempDir(), "weights")
+				put(t, outside, "weights")
+				pointer(t, snapshot, outside)
+			case "directory":
+				if err := os.MkdirAll(snapshot, 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if files, err := cache.NamedFiles(e); err == nil {
+				t.Fatal("unverifiable cache counted as deleted", files)
+			}
+		})
+	}
+}
+
 func TestInspectHFCacheLayoutsWithoutMutating(t *testing.T) {
 	for _, layout := range []string{"snapshot", "regular snapshot", "shared xet blob", "blob without snapshot", "absent"} {
 		t.Run(layout, func(t *testing.T) {

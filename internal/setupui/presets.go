@@ -286,6 +286,12 @@ func (m *PresetModel) toggleMember() {
 			return
 		}
 		if _, selected := m.draft.Presets[p.ID]; selected {
+			for _, change := range m.retirements {
+				if change.Successor == p.ID {
+					m.notice = "Required by the staged replacement of " + change.Preset + ". Cancel this setup to keep the original choices."
+					return
+				}
+			}
 			if refs := m.input.Configuration.References(p.ID); len(refs) > 0 {
 				var names []string
 				for _, id := range refs {
