@@ -196,9 +196,11 @@ integrations · 4. workflow-mode bindings · 5. per-layout engine and tuning ·
 The bucket axes — RAM × chip generation × memory bandwidth — select a
 *starting* combination (a prior, not a SKU). The wizard proposes it; the
 probe witnesses it; the witnessed combination is what the machine runs.
-The wall model (fraction × Metal device memory + co-tenants + OS floor ≤
-wired limit) is the arithmetic the tool uses to gate proposals before any
-measurement, and `gpu-budget` output is always labeled a *prediction*.
+Setup admission compares accounted memory (an applicable catalog
+measurement, otherwise an estimate) plus the OS allowance with physical RAM
+and, for GPU presets, the live Metal wired limit. It is a scheduling
+allowance, never a fit guarantee; [memory accounting](contracts/memory-estimates.md)
+owns the arithmetic.
 
 The wizard writes the first three dimensions from explicit choices. A mode
 template proposes the fourth through seventh, clipped to those choices. The
@@ -703,7 +705,7 @@ review without qualification or product-lifecycle transitions.
 A mode is a **world**: which layouts are served and resident, which tools are
 exposed, which harnesses are wired, and what the harness settings derive to.
 A mode switch rebuilds that world. It cannot install or activate anything
-outside the wizard set. The wall model is mode-relative: unloading a large
+outside the wizard set. Memory admission is mode-relative: unloading a large
 foreground model returns its allocation to the pool, so a specialist
 placement that is illegal beside that resident foreground may be legal
 without it.
@@ -725,8 +727,8 @@ the old helper posture changed who owns the foreground model, which is what a
 mode is. Two
 consequences of collapsing them, both good: the witness cost stops multiplying
 by mode (there are two resource configurations to soak, not four, and tool
-narrowing needs a permissions test rather than a resource witness), and the
-wall model has two answers instead of a per-mode table.
+narrowing needs a permissions test rather than a resource witness), and
+memory admission has two answers instead of a per-mode table.
 
 Modes are deliberately not a fixed list. A machine that can host several large
 models may want more than one `local` world; the schema does not care, and the
@@ -1044,8 +1046,8 @@ reach the same standard before an installable tool is offered with those claims.
 - No daemon beyond llama-swap; no background updaters; no phoning home.
   (`temper start/stop` controls llama-swap's launchd job; temper itself
   stays a CLI, and the idle-watcher lives in harnesses, never here.)
-- No Linux/Windows in v1 (the measurements are Apple-Silicon-specific;
-  the wall model doubly so). This limits released target adapters and
+- No Linux/Windows in v1 (the measurements and the Metal memory budget are
+  Apple-Silicon-specific). This limits released target adapters and
   qualification evidence, not the catalog/lock vocabulary or installer
   boundary; future platforms add adapters rather than a second workflow.
 
@@ -1057,7 +1059,8 @@ reach the same standard before an installable tool is offered with those claims.
 - **Native manifest + lock + resolve/fetch/apply/update/check**, complete
   2026-08-20; rendering, pin management, exact artifact materialization,
   receipt/full-hash admission, and the resident wall-model prediction execute
-  in Go with no Bash runtime dependency.
+  in Go with no Bash runtime dependency. The wall model was retired in 0.5.1:
+  setup never projected the resident holder it required.
 - **Software supply and Field Kit host:** preserve exact installation and
   experiment execution, simplify authored source records, and offer latest
   software plus applicable tested fallbacks under explicit version requirements.

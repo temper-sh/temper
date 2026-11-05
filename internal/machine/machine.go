@@ -99,19 +99,6 @@ func (f Facts) Validate() error {
 	return nil
 }
 
-// Budget projects the canonical packet facts into the wall-model value.
-func (f Facts) Budget() (budget.Machine, error) {
-	if err := f.Validate(); err != nil {
-		return budget.Machine{}, err
-	}
-	return budget.Machine{
-		PhysicalMiB:   f.PhysicalMemoryBytes / bytesPerMiB,
-		DeviceMiB:     f.MetalDeviceMemoryMiB,
-		WiredLimitMiB: f.WiredLimitMiB,
-		WiredSource:   f.WiredLimitSource,
-	}, nil
-}
-
 // DetectFacts reads the exact, non-identifying macOS hardware and memory scope
 // required for a Field Kit binding without changing machine state.
 func DetectFacts(ctx context.Context) (Facts, error) {

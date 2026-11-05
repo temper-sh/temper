@@ -58,7 +58,7 @@ identity, and a named file or heading link.
 
 The short form of that mapping:
 
-- Every unit is a **pure computation** (render, wall-model arithmetic,
+- Every unit is a **pure computation** (render, memory arithmetic,
   diffs), a **read** (hardware detection, service status, upstream
   resolution, lease state), or a **side effect** (writing lock/configs,
   launchctl kick, downloads) — never an undeclared mix. CLI verbs are

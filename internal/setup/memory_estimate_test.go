@@ -101,7 +101,7 @@ func TestSplashCeilingDoesNotRefuseThePresetAtTheMetalLimit(t *testing.T) {
 	got, err := setup.Assess(l, observed)
 	cap := l.Records.Presets[l.Preset].Config().Splash.MaxMemoryBytes
 	if err != nil || len(got.Refusals) != 0 || got.Memory.Basis != "estimated" || got.Memory.KVCacheBytes != nil ||
-		got.Memory.EngineLimitBytes != cap || got.Memory.EngineEnvelopeBytes != 0 || got.MemoryBytes != got.ModelBytes {
+		got.Memory.EngineLimitBytes != cap || got.MemoryBytes != got.ModelBytes {
 		t.Fatal("Splash ceiling became a required allocation", got.Memory, got.Refusals, err)
 	}
 }

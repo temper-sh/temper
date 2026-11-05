@@ -34,12 +34,11 @@ func (p Plan) MarshalJSON() ([]byte, error) {
 					Compute                  catalog.ComputeDevice `json:"compute"`
 					ModelBytes               int64                 `json:"model_bytes"`
 					RuntimeDiskEstimateBytes int64                 `json:"runtime_disk_estimate_bytes,omitempty"`
-					Memory                   budget.Prediction     `json:"memory_prediction"`
 					Estimate                 MemoryEstimate        `json:"memory_estimate"`
 					MemoryBytes              int64                 `json:"memory_bytes"`
 					WiredMemory              *WiredMemoryAdvice    `json:"wired_memory_advice,omitempty"`
 					Refusals                 []string              `json:"refusals,omitempty"`
-				}{selected.Name, selected.Lock.Records.Presets[selected.Lock.Preset].Compute, m.ModelBytes, m.RuntimeDiskEstimateBytes, m.Budget, m.Memory, m.MemoryBytes, m.WiredMemory, m.Refusals}
+				}{selected.Name, selected.Lock.Records.Presets[selected.Lock.Preset].Compute, m.ModelBytes, m.RuntimeDiskEstimateBytes, m.Memory, m.MemoryBytes, m.WiredMemory, m.Refusals}
 				break
 			}
 		}

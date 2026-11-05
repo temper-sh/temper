@@ -4,7 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/temper-sh/temper/internal/budget"
 	"github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/setup"
 )
@@ -26,22 +25,5 @@ func TestProjectorCountsTowardMemoryAdmission(t *testing.T) {
 	}
 	if plan.ModelBytes != 8<<30 || !strings.Contains(strings.Join(plan.Refusals, "; "), "estimated memory and OS allowance need 9.00 GiB") {
 		t.Fatalf("projector admission: bytes=%d, refusals=%v", plan.ModelBytes, plan.Refusals)
-	}
-}
-
-func TestResidentCrispEmbedDoesNotConsumeGPUAllowance(t *testing.T) {
-	lock := selectedLock(t, catalogDocument(t), "ettin-reranker-150m-q8-crispembed")
-	p, err := lock.Projections()
-	if err != nil {
-		t.Fatal(err)
-	}
-	mode := p.Manifest.Modes[lock.Preset]
-	mode.Members.Resident, mode.Members.OnDemand = mode.Members.OnDemand, nil
-	prediction, err := setup.PredictBudget(p.Manifest, mode, budget.Machine{PhysicalMiB: 8192, DeviceMiB: 4096, WiredLimitMiB: 128, WiredSource: budget.WiredSourceMetal}, map[string]int64{lock.Preset: 1 << 30})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if prediction.Status != budget.StatusNotApplicable {
-		t.Fatalf("CPU reranker charged to GPU budget: %+v", prediction)
 	}
 }

@@ -87,8 +87,8 @@ func TestCompactMainIsEligibleAtPredictedSmallMemoryWalls(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !plan.CanPrepare || len(plan.Refusals) != 0 || plan.Presets[0].Budget.Status != budget.StatusNotApplicable {
-				t.Fatalf("compact plan at %d GiB: can_prepare=%v, wall=%s, refusals=%v", gib, plan.CanPrepare, plan.Presets[0].Budget.Status, plan.Refusals)
+			if !plan.CanPrepare || len(plan.Refusals) != 0 {
+				t.Fatalf("compact plan at %d GiB: can_prepare=%v, refusals=%v", gib, plan.CanPrepare, plan.Refusals)
 			}
 		})
 	}

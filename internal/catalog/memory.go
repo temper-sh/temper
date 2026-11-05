@@ -29,7 +29,8 @@ type MemoryMeasurement struct {
 }
 
 // MemoryMachine records the tested machine class, not a personal machine ID.
-// Measurements are used on the same chip/RAM/Metal-budget class only.
+// Measurements are used on the same chip and RAM. The live Metal budget must
+// match, or be larger when the execution cannot allocate beyond the recorded one.
 type MemoryMachine struct {
 	Chip                string `yaml:"chip" json:"chip"`
 	PhysicalMemoryBytes int64  `yaml:"physical_memory_bytes" json:"physical_memory_bytes"`
@@ -99,11 +100,34 @@ func (m MemoryMeasurement) Applicable(l Lock, facts machine.Facts) (bool, string
 	if !reflect.DeepEqual(m.Execution, l.MemoryExecution()) {
 		return false, "recorded memory measurement uses different weights, engine or runtime settings"
 	}
-	if m.Machine.Chip != facts.Chip || m.Machine.PhysicalMemoryBytes != facts.PhysicalMemoryBytes ||
-		m.Machine.MetalMemoryMiB != facts.MetalDeviceMemoryMiB {
+	if m.Machine.Chip != facts.Chip || m.Machine.PhysicalMemoryBytes != facts.PhysicalMemoryBytes {
 		return false, "recorded memory measurement uses a different chip or memory capacity"
 	}
+	recorded, live := m.Machine.MetalMemoryMiB, facts.MetalDeviceMemoryMiB
+	if live != recorded && (live < recorded || !m.Execution.boundedWithinMetal(recorded)) {
+		return false, "recorded memory measurement uses a different Metal memory budget"
+	}
 	return true, ""
+}
+
+// boundedWithinMetal reports whether this execution's allocation cannot grow
+// when Metal offers more than budgetMiB. llama-server without fit sizes its
+// buffers from its configuration. Splash and Kapitsa stop at their own memory
+// ceiling, so a ceiling within the recorded budget binds first. llama-server
+// fit, fraction-based Python engines and other engines size from the budget
+// or are not characterized, so they need the recorded budget exactly.
+func (e MemoryExecution) boundedWithinMetal(budgetMiB int64) bool {
+	c := e.EngineConfig
+	switch {
+	case c.Kapitsa != nil:
+		return c.Kapitsa.MaxMemoryBytes <= budgetMiB<<20
+	case c.Splash != nil:
+		return c.Splash.MaxMemoryBytes <= budgetMiB<<20
+	case c.Python != nil || c.CrispEmbed != nil:
+		return false
+	default:
+		return c.Kind == "llama-server/v1" && c.Controls.Fit == "off"
+	}
 }
 
 func (m MemoryMeasurement) validate() error {

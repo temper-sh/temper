@@ -166,9 +166,6 @@ func overviewMemory(memory setup.MemoryEstimate, width int) string {
 	if memory.PromptCacheReserveBytes > 0 {
 		rows = append(rows, tui.FieldRow{Label: "Prompt cache", Value: setup.Size(memory.PromptCacheReserveBytes), Detail: "Configured RAM cap, not observed allocation."})
 	}
-	if memory.EngineEnvelopeBytes > 0 {
-		rows = append(rows, tui.FieldRow{Label: "Engine envelope", Value: setup.Size(memory.EngineEnvelopeBytes), Detail: "Includes weights/cache; not added to them."})
-	}
 	if memory.EngineLimitBytes > 0 {
 		rows = append(rows, tui.FieldRow{Label: "Engine limit", Value: setup.Size(memory.EngineLimitBytes), Detail: "A ceiling, not a required allocation."})
 	}

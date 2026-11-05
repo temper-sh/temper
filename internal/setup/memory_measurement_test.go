@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/temper-sh/temper/internal/budget"
 	"github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/machine"
 	"github.com/temper-sh/temper/internal/setup"
@@ -52,7 +51,7 @@ func TestMoEPlacementDoesNotInventPhysicalSavingsOrWiredAdvice(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if after.MemoryBytes != before.MemoryBytes || after.WiredMemory != nil || after.Budget.Status != budget.StatusUnavailable || !strings.Contains(strings.Join(after.Memory.Unknown, " "), "CPU/GPU") {
+	if after.MemoryBytes != before.MemoryBytes || after.WiredMemory != nil || !strings.Contains(strings.Join(after.Memory.Unknown, " "), "CPU/GPU") {
 		t.Fatalf("mixed placement invented memory savings or GPU fit: before=%+v after=%+v", before, after)
 	}
 	observed.WiredLimitMiB = 1
@@ -158,6 +157,79 @@ func TestMeasurementMismatchFallsBackWithTheReason(t *testing.T) {
 				t.Fatal("stale measurement used or fallback unexplained", got.Memory, err)
 			}
 		})
+	}
+}
+
+// A measurement taken under a lowered Metal budget (here the 24 GiB
+// iogpu.wired_limit_mb override) still describes the footprint at the larger
+// macOS default (25,559 MiB on an M5 with 32 GiB) when the engine cannot
+// allocate beyond the recorded budget. Engines that size from the budget, or
+// whose behavior is not characterized, still need the exact recorded budget.
+func TestMeasurementFromASmallerMetalBudgetAppliesOnlyWhenTheEngineCannotGrow(t *testing.T) {
+	const recordedMiB, liveMiB = 24576, 25559
+	splashWithCeiling := func(t *testing.T, ceiling int64) catalog.Lock {
+		l := selectedLock(t, catalogDocument(t), "qwen3.8-27b-q4xl-splash")
+		p := l.Records.Presets[l.Preset]
+		splash := *p.Profiles[0].EngineConfig.Splash
+		splash.MaxMemoryBytes = ceiling
+		p.Profiles[0].EngineConfig.Splash = &splash
+		l.Records.Presets[l.Preset] = p
+		return l
+	}
+	scenarios := []struct {
+		name    string
+		lock    func(*testing.T) catalog.Lock
+		applies bool
+	}{
+		{"llama-server without fit", func(t *testing.T) catalog.Lock { return attentionLock(t, 4096, catalog.ComputeGPU) }, true},
+		{"llama-server with fit", func(t *testing.T) catalog.Lock {
+			l := attentionLock(t, 4096, catalog.ComputeGPU)
+			p := l.Records.Presets[l.Preset]
+			p.Profiles[0].EngineConfig.Controls.Fit = "on"
+			l.Records.Presets[l.Preset] = p
+			return l
+		}, false},
+		{"Splash ceiling at the recorded budget", func(t *testing.T) catalog.Lock { return splashWithCeiling(t, recordedMiB<<20) }, true},
+		{"Splash ceiling above the recorded budget", func(t *testing.T) catalog.Lock { return splashWithCeiling(t, (recordedMiB+1)<<20) }, false},
+		{"Kapitsa ceiling within the recorded budget", func(t *testing.T) catalog.Lock {
+			return selectedLock(t, testfixture.KapitsaCatalog(t), "qwen3.8-27b-mlx4-kapitsa")
+		}, true},
+		{"Rapid MLX GPU fraction", func(t *testing.T) catalog.Lock { return selectedLock(t, studyCatalog(t), "rapid-mlx") }, false},
+	}
+	for _, scenario := range scenarios {
+		t.Run(scenario.name, func(t *testing.T) {
+			recorded := facts(32)
+			recorded.Chip = "Apple M5"
+			recorded.MetalDeviceMemoryMiB, recorded.WiredLimitMiB = recordedMiB, recordedMiB
+			l := withMemoryMeasurement(scenario.lock(t), recorded, 8<<30)
+			live := recorded
+			live.MetalDeviceMemoryMiB, live.WiredLimitMiB = liveMiB, liveMiB
+			got, err := setup.Assess(l, live)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if scenario.applies {
+				if got.Memory.Basis != "measured" || got.MemoryBytes != 8<<30 {
+					t.Fatal("bounded footprint lost its measurement at a larger Metal budget", got.Memory)
+				}
+				return
+			}
+			if got.Memory.Basis != "estimated" || !strings.Contains(got.Memory.FallbackReason, "Metal memory budget") {
+				t.Fatal("measurement applied to an engine that can grow with the Metal budget", got.Memory)
+			}
+		})
+	}
+}
+
+func TestMeasurementFromALargerMetalBudgetDoesNotApply(t *testing.T) {
+	recorded := facts(32)
+	l := withMemoryMeasurement(attentionLock(t, 4096, catalog.ComputeGPU), recorded, 8<<30)
+	live := recorded
+	live.MetalDeviceMemoryMiB--
+	live.WiredLimitMiB = live.MetalDeviceMemoryMiB
+	got, err := setup.Assess(l, live)
+	if err != nil || got.Memory.Basis != "estimated" || !strings.Contains(got.Memory.FallbackReason, "Metal memory budget") {
+		t.Fatal("measurement applied below its recorded Metal budget", got.Memory, err)
 	}
 }
 

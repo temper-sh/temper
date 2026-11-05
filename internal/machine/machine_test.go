@@ -108,13 +108,6 @@ func TestDetectFactsReturnsCanonicalFieldKitMachineScope(t *testing.T) {
 	if facts.WiredLimitMiB != 24576 || facts.WiredLimitSource != budget.WiredSourceMetal || facts.WiredLimitOverrideMiB == nil || *facts.WiredLimitOverrideMiB != 24576 {
 		t.Fatalf("facts wired limit = %#v", facts)
 	}
-	memory, err := facts.Budget()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if memory != (budget.Machine{PhysicalMiB: 32768, DeviceMiB: 24576, WiredLimitMiB: 24576, WiredSource: budget.WiredSourceMetal}) {
-		t.Fatalf("Budget() = %#v", memory)
-	}
 }
 
 func TestDetectTargetReturnsTheExactMacOSTarget(t *testing.T) {

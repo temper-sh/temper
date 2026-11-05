@@ -34,7 +34,10 @@ type Document struct {
 }
 
 type Defaults struct {
-	TTL                  int     `yaml:"ttl"`
+	TTL int `yaml:"ttl"`
+	// GPUMemoryUtilization remains a required, validated manifest field so
+	// existing manifests stay valid. No current planning or engine reads it;
+	// Python engines take their fraction from layout tuning.
 	GPUMemoryUtilization float64 `yaml:"gpu_memory_utilization"`
 }
 

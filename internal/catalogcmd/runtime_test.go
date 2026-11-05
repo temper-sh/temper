@@ -28,7 +28,6 @@ import (
 	"github.com/temper-sh/temper/internal/manifest"
 	"github.com/temper-sh/temper/internal/probecmd"
 	"github.com/temper-sh/temper/internal/render"
-	"github.com/temper-sh/temper/internal/setup"
 	"github.com/temper-sh/temper/internal/software"
 	"github.com/temper-sh/temper/internal/software/adapter"
 	"github.com/temper-sh/temper/internal/software/adapter/upstreamrelease"
@@ -58,11 +57,6 @@ func TestUtilityExecutionKeepsHelperAvailableWithoutLocalForeground(t *testing.T
 	mode := projection.Manifest.Modes[utilityPreset]
 	if !mode.ExternalForeground || mode.Foreground != "" || len(mode.Members.Resident) != 0 || len(mode.Members.OnDemand) != 1 || mode.Members.OnDemand[0].Layout != utilityPreset {
 		t.Fatalf("utility projection selected a local foreground: %+v", mode)
-	}
-	prediction, err := setup.PredictBudget(projection.Manifest, mode,
-		budget.Machine{PhysicalMiB: 32768, DeviceMiB: 24576, WiredLimitMiB: 24576, WiredSource: budget.WiredSourceMetal}, map[string]int64{})
-	if err != nil || prediction.Status != budget.StatusNotApplicable || prediction.Holder != "" {
-		t.Fatalf("helper-only resident budget: %+v %v", prediction, err)
 	}
 }
 

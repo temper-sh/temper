@@ -52,7 +52,6 @@ type PresetPlan struct {
 	// MemoryBytes is the selected measured peak or fallback estimate for admission.
 	MemoryBytes int64              `json:"memory_bytes"`
 	Memory      MemoryEstimate     `json:"memory_estimate"`
-	Budget      budget.Prediction  `json:"memory_prediction"`
 	WiredMemory *WiredMemoryAdvice `json:"wired_memory_advice,omitempty"`
 	Refusals    []string           `json:"refusals,omitempty"`
 }
@@ -87,20 +86,18 @@ func Assess(locked catalog.Lock, facts machine.Facts) (PresetPlan, error) {
 	if err := locked.Validate(); err != nil {
 		return PresetPlan{}, err
 	}
-	observed, err := facts.Budget()
-	if err != nil {
+	if err := facts.Validate(); err != nil {
 		return PresetPlan{}, err
 	}
 	result := PresetPlan{Preset: locked.Preset, Lock: locked}
 	if !locked.Target.Matches(facts.Target) {
 		result.Refusals = append(result.Refusals, "configuration does not support this operating system or architecture")
 	}
-	projection, err := locked.Projections()
+	_, err := locked.Projections()
 	if err != nil {
 		return PresetPlan{}, err
 	}
-	modelBytes := make(map[string]int64)
-	for id, layout := range locked.Records.Presets {
+	for _, layout := range locked.Records.Presets {
 		if layout.Config().Kapitsa != nil {
 			if err := engine.KapitsaCompatibility(facts.Chip, facts.Target.DistributionVersion); err != nil {
 				result.Refusals = append(result.Refusals, err.Error())
@@ -129,7 +126,6 @@ func Assess(locked catalog.Lock, facts machine.Facts) (PresetPlan, error) {
 				return PresetPlan{}, err
 			}
 		}
-		modelBytes[id] = size
 		if err := add(&result.ModelBytes, size); err != nil {
 			return PresetPlan{}, err
 		}
@@ -144,7 +140,6 @@ func Assess(locked catalog.Lock, facts machine.Facts) (PresetPlan, error) {
 				AccountedBytes: measurement.PeakBytes,
 				Unknown:        []string{"memory outside the measured workload", measurement.Limitations},
 			}
-			result.Budget = budget.Prediction{Status: budget.StatusNotApplicable, Reason: "using the applicable catalog memory measurement"}
 		} else {
 			fallbackReason = reason
 		}
@@ -155,21 +150,13 @@ func Assess(locked catalog.Lock, facts machine.Facts) (PresetPlan, error) {
 			return PresetPlan{}, err
 		}
 		result.Memory.FallbackReason = fallbackReason
-		mode := projection.Manifest.Modes[locked.Preset]
-		result.Budget, err = PredictBudget(projection.Manifest, mode, observed, modelBytes)
-		if err != nil {
-			return PresetPlan{}, err
-		}
-		if result.Budget.RequiredMiB > 0 {
-			result.Memory.EngineEnvelopeBytes = max(int64(0), (result.Budget.RequiredMiB-budget.OSFloorMiB)*MiB)
-		}
 		core := result.ModelBytes
 		if result.Memory.KVCacheBytes != nil {
 			if err = add(&core, *result.Memory.KVCacheBytes); err != nil {
 				return PresetPlan{}, err
 			}
 		}
-		result.Memory.AccountedBytes = max(core, result.Memory.EngineEnvelopeBytes)
+		result.Memory.AccountedBytes = core
 		if err = add(&result.Memory.AccountedBytes, result.Memory.PromptCacheReserveBytes); err != nil {
 			return PresetPlan{}, err
 		}
@@ -184,12 +171,6 @@ func Assess(locked catalog.Lock, facts machine.Facts) (PresetPlan, error) {
 		result.Refusals = append(result.Refusals, fmt.Sprintf("%s memory and OS allowance need %s; this machine has %s", result.Memory.Basis, Size(minimum), Size(facts.PhysicalMemoryBytes)))
 	}
 	gpuMinimum := int64(0)
-	mixedPlacement := p.Config().Kind == "llama-server/v1" && p.Config().Controls.CPUMoELayers > 0
-	if mixedPlacement {
-		result.Budget.Status = budget.StatusUnavailable
-		result.Budget.Reason = "MoE CPU/GPU split is unknown; numeric allocation is the conservative whole-model allowance, not a GPU requirement"
-		result.Budget.HasSuggestion = false
-	}
 	if p.Compute == catalog.ComputeGPU && predictableGPUFootprint(p) {
 		gpuMinimum = result.MemoryBytes - result.Memory.PromptCacheReserveBytes
 		if err := add(&gpuMinimum, budget.OSFloorMiB*MiB); err != nil {
@@ -200,15 +181,12 @@ func Assess(locked catalog.Lock, facts machine.Facts) (PresetPlan, error) {
 			result.Refusals = append(result.Refusals, fmt.Sprintf("%s GPU memory and OS allowance exceed the %s wired-memory limit", result.Memory.Basis, Size(facts.WiredLimitMiB*MiB)))
 		}
 	}
-	if result.Budget.Status == budget.StatusExceeded {
-		result.Refusals = append(result.Refusals, fmt.Sprintf("configured memory allocation exceeds the %s wired-memory limit (prediction)", Size(result.Budget.WiredLimitMiB*MiB)))
-	}
 	gpuMinimumMiB := gpuMinimum / MiB
 	if gpuMinimum%MiB != 0 {
 		gpuMinimumMiB++
 	}
 	if predictableGPUFootprint(p) {
-		result.WiredMemory = wiredMemoryAdvice(max(gpuMinimumMiB, result.Budget.RequiredMiB), facts, result.Budget)
+		result.WiredMemory = wiredMemoryAdvice(gpuMinimumMiB, facts)
 	}
 	return result, nil
 }

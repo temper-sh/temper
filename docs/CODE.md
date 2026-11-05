@@ -274,7 +274,7 @@ separate [bounded smoke](design/managed-layout-smoke.md).
 | `internal/render` | Pure construction of the complete llama-swap configuration bundle and runtime requirements |
 | `internal/render/engine` | Closed pure engine-launch family, including llama chat/vision/reranking and CPU CrispEmbed reranking; typed adapters and safe llama-swap shell serialization |
 | `internal/runtimeconfig` | Canonical generation-owned, receipt-resolved executable requirements shared by render and serving |
-| `internal/budget` | Pure resident-wall arithmetic |
+| `internal/budget` | Shared machine memory budget values and the OS allowance |
 | `internal/machine` | Read-only host target, hardware, and memory facts |
 | `internal/datadir` | Validation of the explicit isolated Temper root boundary |
 

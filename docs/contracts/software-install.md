@@ -534,8 +534,8 @@ fields. The optional sysctl override records configuration separately; an
 unavailable override is omitted and never triggers a guessed default.
 Machine facts accept only observed `live-metal` budgets. Pre-release predicted
 memory sources are rejected. Metal's performance budget is not a hard maximum
-for system overrides; the [wall-model design](../design/wall-model.md) owns that
-distinction.
+for system overrides; [memory accounting](memory-estimates.md#machine-memory-budget)
+owns that distinction.
 
 The top-level installation list is ordered input, not a set that Temper sorts.
 Every installation ID is unique. A required receipt must occur earlier in that

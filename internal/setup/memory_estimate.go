@@ -21,7 +21,6 @@ type MemoryEstimate struct {
 	CacheFormat             string                     `json:"cache_format,omitempty"`
 	KVCacheBytes            *int64                     `json:"kv_cache_bytes"`
 	PromptCacheReserveBytes int64                      `json:"prompt_cache_reserve_bytes"`
-	EngineEnvelopeBytes     int64                      `json:"engine_envelope_bytes"`
 	EngineLimitBytes        int64                      `json:"engine_limit_bytes,omitempty"`
 	AccountedBytes          int64                      `json:"accounted_bytes"`
 	Unknown                 []string                   `json:"unknown"`
@@ -112,9 +111,6 @@ func (m MemoryEstimate) Lines() []string {
 	lines = append(lines, fmt.Sprintf("KV/context cache: %s; context %d tokens, %d parallel slot(s), format %s.", cache, m.ContextTokens, m.ParallelSlots, format))
 	if m.PromptCacheReserveBytes > 0 {
 		lines = append(lines, "Prompt-cache RAM reserve: "+Size(m.PromptCacheReserveBytes)+" configured cap, not observed allocation.")
-	}
-	if m.EngineEnvelopeBytes > 0 {
-		lines = append(lines, "Engine allocation envelope: "+Size(m.EngineEnvelopeBytes)+"; includes weights/cache and is not added to them.")
 	}
 	if m.EngineLimitBytes > 0 {
 		lines = append(lines, "Engine memory limit: "+Size(m.EngineLimitBytes)+"; a ceiling, not a required allocation.")

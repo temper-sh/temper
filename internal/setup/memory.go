@@ -3,7 +3,6 @@ package setup
 import (
 	"fmt"
 
-	"github.com/temper-sh/temper/internal/budget"
 	"github.com/temper-sh/temper/internal/machine"
 )
 
@@ -17,9 +16,9 @@ type WiredMemoryAdvice struct {
 	SuggestedLimitMiB int64  `json:"suggested_limit_mib,omitempty"`
 }
 
-func wiredMemoryAdvice(requiredMiB int64, facts machine.Facts, prediction budget.Prediction) *WiredMemoryAdvice {
-	// Leave a visible margin above the existing admission prediction. This is
-	// advisory policy; it is not an estimate of KV cache or engine overhead.
+func wiredMemoryAdvice(requiredMiB int64, facts machine.Facts) *WiredMemoryAdvice {
+	// Leave a visible margin above accounted GPU memory. This is advisory
+	// policy; it is not an estimate of KV cache or engine overhead.
 	margin := max(int64(2048), (facts.WiredLimitMiB+9)/10)
 	if requiredMiB == 0 || facts.WiredLimitMiB-requiredMiB >= margin {
 		return nil
@@ -36,14 +35,7 @@ func wiredMemoryAdvice(requiredMiB int64, facts machine.Facts, prediction budget
 		target := max(requiredMiB+2048, (requiredMiB*10+8)/9)
 		target = (target + 1023) / 1024 * 1024
 		for ; target > a.LimitMiB && target <= ceiling; target += 1024 {
-			proposedRequired := requiredMiB
-			if prediction.Holder != "" {
-				// The fraction envelope grows with the new Metal budget too.
-				// Keep the fixed model/OS lower bound and account for that growth
-				// before recommending a value that would still be too tight.
-				proposedRequired = max(proposedRequired, int64(prediction.Utilization*float64(target))+prediction.CoTenantsMiB+prediction.OSFloorMiB)
-			}
-			if target-proposedRequired >= max(int64(2048), (target+9)/10) {
+			if target-requiredMiB >= max(int64(2048), (target+9)/10) {
 				a.SuggestedLimitMiB = target
 				break
 			}

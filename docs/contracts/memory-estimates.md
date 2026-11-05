@@ -31,8 +31,19 @@ preset. Changing engine binaries/version, weights, draft, projector, placement,
 context, batch/cache settings or speculation invalidates applicability.
 The original measurement stays readable. Names and download locations do not
 change applicability. Request sampling is described by the workload; OS is
-retained as provenance. Chip, physical memory and Metal budget must match the
-observed machine.
+retained as provenance. Chip and physical memory must match the observed
+machine. The live Metal budget must equal the recorded one, or be larger when
+the execution cannot allocate beyond the recorded budget:
+
+- llama-server with `fit: off`, which sizes its buffers from configuration;
+- Splash or Kapitsa whose own memory ceiling is within the recorded budget,
+  so that ceiling binds first.
+
+llama-server `fit: on`, fraction-based Python engines and other engines size
+from the Metal budget or are not characterized, so they need the recorded
+budget exactly. A measurement never applies under a smaller live budget. This
+lets a measurement taken under a lowered `iogpu.wired_limit_mb` serve the same
+machine at its larger macOS default.
 
 When applicable, `memory_estimate.basis` and `status` are `measured`,
 `measurement` contains the observation, and `memory_bytes` uses its peak without
@@ -49,11 +60,9 @@ it; publish sources carrying measurements only with compatible Temper support.
 ## Estimation fallback
 
 The report separates model-file bytes (a weight-storage proxy), estimated KV
-payload, configured prompt-cache reserve and engine allocation envelopes.
-Without an applicable measurement, `memory_bytes` is the accounted estimate:
-the larger of weights plus estimated KV and the engine envelope, plus any
-separate host prompt-cache reserve. An envelope already includes weights/cache;
-it is never added to them. The OS allowance is added
+payload and configured prompt-cache reserve. Without an applicable
+measurement, `memory_bytes` is the accounted estimate: weights plus estimated
+KV, plus any separate host prompt-cache reserve. The OS allowance is added
 once at machine/layout admission. File size is not resident memory, and none
 of these fields is a measurement of loaded or peak memory.
 
@@ -88,8 +97,8 @@ reported as currently allocated memory.
 
 Unknowns name their reason: missing geometry, hybrid/recurrent or sliding-window
 state, speculative decoding, vision work buffers, and engine behavior without a
-supported estimator. Python allocation envelopes remain visible; their caches
-are not inferred from a llama formula or added again to the envelope. Splash's
+supported estimator. Python engines' GPU-fraction allocation is not modeled;
+their caches remain unknown and are not inferred from a llama formula. Splash's
 `max_memory_bytes` is shown separately as `engine_limit_bytes`: it is an upper
 allocation limit, not a required allocation. It does not increase the estimate
 or cause refusal merely because it equals the Metal budget. Graphs, allocator
@@ -117,6 +126,22 @@ Arithmetic references:
 and [GGML block layouts](https://github.com/ggml-org/llama.cpp/blob/b11396/ggml/src/ggml-common.h).
 The header reader follows the [GGUF specification](https://github.com/ggml-org/ggml/blob/master/docs/gguf.md).
 These support estimates, not guarantees across engine releases.
+
+## Machine memory budget
+
+The macOS adapter reads `MTLDevice.recommendedMaxWorkingSetSize` from the
+system Metal framework on every check and floors it to MiB. That one reading
+supplies both the Metal device budget and the wired limit (`live-metal`). It
+already reflects an active `iogpu.wired_limit_mb` override; machine facts
+record the raw override separately, where zero means none. If Metal cannot
+report a usable budget, detection fails rather than substituting a percentage
+of RAM. Apple's value is a working-set budget for good performance, not a hard
+maximum accepted by the override.
+
+The 1,024 MiB OS allowance is admission policy, not a measurement. GPU presets
+are admitted when accounted GPU memory plus that allowance is within the live
+wired limit. Layouts compare their summed selections with the same limit less
+one allowance.
 
 ## Wired-memory headroom advice
 

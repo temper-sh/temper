@@ -1099,3 +1099,19 @@ literal percent characters, Unicode, multiple revisions, clean repeats and
 shared blobs. Full Go tests, vet, race, formatting and documentation checks pass.
 The tests-and-effects guidance was useful at the observable completion boundary;
 no skill change is proposed. Stopped-root activation policy remains unchanged.
+
+## Metal budget matching and wall-model removal — 2026-11-05
+
+Applied `testing` and `unit-design`. Two defects hid behind green tests. The
+wall model's tests called it with hand-built resident modes that setup never
+produces: every preset is projected as an on-demand member, so the production
+path always returned `not-applicable`. Its fixtures also used a Metal device
+budget different from the wired limit, which machine facts reject. Measurement
+tests recorded and observed the same Metal budget, so the real case — measured
+under a lowered `iogpu.wired_limit_mb`, used at the larger macOS default — was
+never exercised. The new applicability tests run through `setup.Assess` with
+the override and default values and fail against the old rule. Full Go tests,
+vet and race pass; all 22 stable presets plan from the fixed build. Narrow
+proposed improvement, repeating the retirement note's lesson: a pure unit fed
+by a projection needs at least one test whose input comes from the production
+projection, so an unreachable unit becomes visible.
