@@ -3,13 +3,13 @@
 class Temper < Formula
   desc "Install and manage reproducible local AI configurations"
   homepage "https://github.com/temper-sh/temper"
-  url "https://github.com/temper-sh/temper/archive/refs/tags/v0.5.1.tar.gz"
-  sha256 "f79f5c27359a1070768194430bb2df43a77fc6be56b094201ddde0540416aba4"
+  url "https://github.com/temper-sh/temper/archive/refs/tags/v0.6.0.tar.gz"
+  sha256 "433917547698b6442a3cca5e96a65934c772cc2afeb2900fa2824aa36c30357a"
   license "0BSD"
 
   bottle do
-    root_url "https://github.com/temper-sh/temper/releases/download/v0.5.1"
-    sha256 cellar: :any_skip_relocation, arm64_sequoia: "6285238dd18b692529b560cac3d263362079f7a8b97776712d79228e92da007e"
+    root_url "https://github.com/temper-sh/temper/releases/download/v0.6.0"
+    sha256 cellar: :any_skip_relocation, arm64_sequoia: "94b6cfcb9993e2abbd87e243bea44e2dfe237199a63ee8fae86aa815c58f191d"
   end
 
   depends_on "go" => :build
