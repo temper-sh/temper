@@ -237,7 +237,7 @@ func TestRetirementReviewNamesSharedFilesBeforeDeletionConsent(t *testing.T) {
 	}
 	review := func() string {
 		body := screenBody{focusStart: -1}
-		m.reviewSummary(&body, 100)
+		m.reviewRetirements(&body, 100)
 		return ansi.Strip(strings.Join(body.blocks, "\n"))
 	}
 	for _, want := range []string{"org/model/model-Q4.gguf · 3.00 GiB", "org/model/mmproj.gguf · 1.00 GiB", "other applications may use them", "Keep these files"} {

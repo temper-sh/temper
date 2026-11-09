@@ -95,7 +95,7 @@ func (m *LayoutModel) pageExplanation(width int) string {
 	case m.mode == "confirm":
 		title, explanation = "Confirm the change", "Choose whether to keep your current choices or apply the change described below."
 	case m.mode == "review":
-		title, explanation = "Review this layout", "Check its presets, loading choices and memory needs. Save keeps the layout; activate it to use the changes."
+		title, explanation = "Review this layout", "Check its presets, loading choices and memory needs. If this layout is running, it restarts with the saved changes when you close the editor."
 		if m.dry {
 			explanation = "Check its presets, loading choices and memory needs. Check save validates the changes without saving them."
 		}
@@ -311,7 +311,7 @@ func (m *LayoutModel) body(width int) (string, int, int, []tui.Target, []tui.Tar
 			add("Memory check unavailable: "+m.assessmentError, tui.Warning, false)
 		}
 		blank()
-		add("Save changes this layout. Activate it when ready to use the changes.", tui.Muted, false)
+		add("Save changes this layout. If it is running, it restarts with them when you close the editor.", tui.Muted, false)
 	} else if m.page == 1 {
 		return m.settingsBody(width)
 	} else {

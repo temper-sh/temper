@@ -40,8 +40,8 @@ not copied into a user's root or silently treated as fixed execution input.
 Memory guidance uses applicable workload/counter observations and otherwise
 marks unsupported context, workspace and ANE-service accounting as unknown.
 The engine allowance is a ceiling, never a minimum RAM requirement. Process
-footprint is not the Metal allocation counter, so it does not justify a wired
-limit refusal or sysctl recommendation. Historical evidence stays unchanged
+footprint is not the Metal allocation counter, so it does not justify a GPU
+memory refusal. Historical evidence stays unchanged
 when software, weights, placement or profile settings change.
 
 The catalog preset requires Temper 0.4.0. Its pinned native release,

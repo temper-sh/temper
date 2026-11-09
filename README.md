@@ -75,8 +75,9 @@ for small models.
 
 Use [`temper layout`](docs/contracts/layouts.md#standalone-layout-editor) to
 choose which of your saved presets belong to each layout, what loads at
-startup, and when idle models unload. Saving a layout keeps it ready for your
-next explicit activation.
+startup, and when idle models unload. When you save changes to the running
+layout and close the editor, Temper waits for active requests to finish, then
+restarts it with those changes. A stopped layout stays stopped.
 
 Use [`temper preset`](docs/contracts/user-presets.md) to fork a catalog preset
 or make an independent copy, then edit its settings, weights or template.

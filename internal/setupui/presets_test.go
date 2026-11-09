@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/setup"
 )
@@ -115,8 +116,8 @@ func TestFirstSetupRebuildsDefaultAfterChangingSelection(t *testing.T) {
 	}
 }
 
-func TestExistingConfigurationKeepsItsLayoutsWhenPresetsChange(t *testing.T) {
-	for _, state := range []string{"custom Default", "no Default", "no layouts"} {
+func TestExistingConfigurationWithoutDefaultKeepsItsLayoutsWhenPresetsChange(t *testing.T) {
+	for _, state := range []string{"no Default", "no layouts"} {
 		t.Run(state, func(t *testing.T) {
 			input := presetEditor(t).input
 			input.NewConfiguration = false
@@ -125,9 +126,6 @@ func TestExistingConfigurationKeepsItsLayoutsWhenPresetsChange(t *testing.T) {
 			input.Configuration.Layouts = map[string]setup.Layout{}
 			if state != "no layouts" {
 				input.Configuration.Layouts["writing"] = setup.Layout{Name: "Writing desk", Presets: []string{saved.ID}, Startup: []string{saved.ID}, Default: saved.ID, IdleSeconds: 60}
-			}
-			if state == "custom Default" {
-				input.Configuration.Layouts["default"] = setup.Layout{Name: "My own layout", Presets: []string{saved.ID}, Startup: []string{}, IdleSeconds: 600}
 			}
 			before, _ := input.Configuration.Bytes()
 			m := NewPresetModel(context.Background(), input, func(_ context.Context, c setup.Configuration) (setup.Plan, error) {
@@ -150,6 +148,104 @@ func TestExistingConfigurationKeepsItsLayoutsWhenPresetsChange(t *testing.T) {
 				t.Fatal("draft changed the caller's configuration")
 			}
 		})
+	}
+}
+
+// A rerun adds presets newly selected in this session to the Default layout as
+// on-demand members, so a new model is usable without the layout editor. When
+// other layouts exist, Review asks with a switch in its content (on by
+// default). Other layouts, Default's startup and default choices, and presets
+// saved earlier outside layouts are unchanged.
+func TestRerunAddsNewPresetsToDefaultUnlessTurnedOff(t *testing.T) {
+	input := presetEditor(t, "qwen3.8-27b-q4xl-splash", "qwen3.5-4b-q4km-off", "gemma-4-e2b-q4km-off").input
+	input.NewConfiguration = false
+	added, _ := NewPresetModel(context.Background(), input, nil).selectedOption()
+	var others []PresetOption
+	for _, p := range input.Presets {
+		if p.ID != added.ID && p.buildable() {
+			others = append(others, p)
+		}
+	}
+	kept, outside := others[0], others[1]
+	input.Configuration.Presets[kept.ID] = setup.Preset{Name: kept.Name, Lock: kept.Lock}
+	input.Configuration.Presets[outside.ID] = setup.Preset{Name: outside.Name, Lock: outside.Lock}
+	input.Configuration.Layouts = map[string]setup.Layout{
+		"default": {Name: "My own layout", Presets: []string{kept.ID}, Startup: []string{kept.ID}, Default: kept.ID, IdleSeconds: 600},
+		"writing": {Name: "Writing desk", Presets: []string{kept.ID}, Startup: []string{}, IdleSeconds: 60},
+	}
+	before, _ := input.Configuration.Bytes()
+	m := NewPresetModel(context.Background(), input, func(_ context.Context, c setup.Configuration) (setup.Plan, error) {
+		return setup.Plan{Configuration: &c, CanPrepare: true}, nil
+	})
+	editorKey(m, ' ') // the cursor starts on the first preset
+	m.advance()
+	preview := m.advance()
+	m.Update(preview())
+
+	want := input.Configuration.Layouts["default"]
+	want.Presets = []string{kept.ID, added.ID}
+	if got := m.plan.Configuration.Layouts; !reflect.DeepEqual(got["default"], want) || !reflect.DeepEqual(got["writing"], input.Configuration.Layouts["writing"]) {
+		t.Fatalf("Review did not check Default with only the new preset added: %+v", got)
+	}
+	m.width, m.height = 200, 80
+	view := strings.Join(strings.Fields(ansi.Strip(m.View().Content)), " ")
+	if !strings.Contains(view, "[x] Add the new model to layout “My own layout”") || !strings.Contains(view, added.Name) || strings.Contains(view, "Add to My own layout:") {
+		t.Fatal("Review does not ask in its content whether Default gains the new preset", view)
+	}
+	m.action = 1
+	m.finish()
+	if !reflect.DeepEqual(m.Decision.Configuration.Layouts["default"], want) {
+		t.Fatalf("saved Default differs from the reviewed one: %+v", m.Decision.Configuration.Layouts["default"])
+	}
+
+	m.Decision = PresetDecision{}
+	m.focusArea(presetContentFocus)
+	_, preview = m.Update(tea.KeyPressMsg{Code: ' ', Text: " "})
+	if preview == nil {
+		t.Fatal("turning the addition off did not check the layouts again")
+	}
+	m.Update(preview())
+	if !reflect.DeepEqual(m.plan.Configuration.Layouts, input.Configuration.Layouts) {
+		t.Fatalf("turned-off addition still changed layouts: %+v", m.plan.Configuration.Layouts)
+	}
+	if view = strings.Join(strings.Fields(ansi.Strip(m.View().Content)), " "); !strings.Contains(view, "[ ] Add the new model to layout “My own layout”") {
+		t.Fatal("switch does not show the turned-off choice", view)
+	}
+	m.action = 1
+	m.finish()
+	if m.Decision.Action != "save" || !reflect.DeepEqual(m.Decision.Configuration.Layouts, input.Configuration.Layouts) || len(m.Decision.Configuration.Presets) != 3 {
+		t.Fatal("turned-off addition did not save the new preset outside layouts", m.Decision.Configuration.Layouts)
+	}
+	after, _ := input.Configuration.Bytes()
+	if string(before) != string(after) {
+		t.Fatal("draft changed the caller's configuration")
+	}
+}
+
+// With Default as the only layout, new presets join it without a question:
+// the wizard has no layout concept to explain.
+func TestRerunWithOnlyDefaultAddsNewPresetsWithoutAsking(t *testing.T) {
+	input := presetEditor(t, "qwen3.8-27b-q4xl-splash", "qwen3.5-4b-q4km-off").input
+	input.NewConfiguration = false
+	added, _ := NewPresetModel(context.Background(), input, nil).selectedOption()
+	kept := input.Presets[0]
+	if kept.ID == added.ID {
+		kept = input.Presets[1]
+	}
+	input.Configuration.Presets[kept.ID] = setup.Preset{Name: kept.Name, Lock: kept.Lock}
+	input.Configuration.Layouts = setup.StarterLayouts([]string{kept.ID})
+	m := NewPresetModel(context.Background(), input, func(_ context.Context, c setup.Configuration) (setup.Plan, error) {
+		return setup.Plan{Configuration: &c, CanPrepare: true}, nil
+	})
+	editorKey(m, ' ')
+	m.advance()
+	m.Update(m.advance()())
+	m.width, m.height = 200, 80
+	if got := m.plan.Configuration.Layouts["default"].Presets; !reflect.DeepEqual(got, []string{kept.ID, added.ID}) {
+		t.Fatalf("Default did not gain the new preset: %v", got)
+	}
+	if view := ansi.Strip(m.View().Content); strings.Contains(view, "layout") {
+		t.Fatalf("Review mentions layouts with Default alone:\n%s", view)
 	}
 }
 

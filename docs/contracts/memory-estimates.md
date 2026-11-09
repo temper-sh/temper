@@ -113,8 +113,8 @@ selection. Unknown components alone do not prevent installation or activation.
 
 MoE `cpu_moe_layers` keeps whole-model physical accounting unchanged; available
 metadata does not establish the CPU/GPU split. Kapitsa's measured process
-footprint also does not establish Metal allocation. These cases suppress wired
-refusals and wired-limit advice derived from the whole-process total. Layouts
+footprint also does not establish Metal allocation. These cases suppress GPU
+memory refusals derived from the whole-process total. Layouts
 retain physical startup admission and report `memory_incomplete`; `all_fit`
 stays false while the GPU split is unknown, so on-demand scheduling remains
 exclusive. [Kapitsa's contract](kapitsa.md) describes its separate engine ceiling
@@ -143,17 +143,17 @@ are admitted when accounted GPU memory plus that allowance is within the live
 wired limit. Layouts compare their summed selections with the same limit less
 one allowance.
 
-## Wired-memory headroom advice
+## When a model does not fit
 
-When accounted GPU memory plus the OS allowance is within the current wired
-budget but leaves less headroom than Temper recommends, review labels the advice
-**Optional wired-memory headroom**. That allowance does not block preparation;
-other refusals still apply. The suggested increase comes from policy margins,
-not an observed failure or a guarantee of runtime fit. Existing measured memory
-and workload limits remain visible in the preset's memory assessment.
+A refusal names the preset, what it needs and what the Mac allows, then the
+choice the user can make: "<preset> needs about X of GPU memory, but macOS
+lets the GPU use Y on this Mac. Choose a smaller model or a shorter Context."
+RAM refusals say "of memory including macOS" and name the Mac's RAM. Memory
+that fits, however tightly, produces no message.
 
-The optional advice includes a copyable manual command to raise the allowance,
-along with instructions to record the previous value, verify Metal's effective
-budget, refresh machine facts and undo the change. Temper does not execute it.
-Actual over-budget selections retain explicit refusals and budget-exceeded
-wording. This distinction changes presentation only, not admission arithmetic.
+Temper never suggests changing `iogpu.wired_limit_mb`. On current macOS the
+default GPU budget is already most of RAM (25,559 MiB on an Apple M5 with
+32 GiB under macOS 26.7.2), and Temper's earlier advice could add at most the
+smaller of RAM − 4 GiB and 85% of RAM, about 2 GiB there and nothing on a
+16 GiB Mac. An administrator may still change the override; Temper reads the
+effective budget on every check, so the change applies without other steps.

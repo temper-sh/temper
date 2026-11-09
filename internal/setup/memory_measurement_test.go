@@ -19,7 +19,7 @@ func TestKapitsaMeasurementUsesWorkloadFootprintWithoutTreatingItAsWiredAllocati
 	f.MetalDeviceMemoryMiB = 24576
 	f.WiredLimitMiB = 24576
 	p, err := setup.Assess(l, f)
-	if err != nil || len(p.Refusals) != 0 || p.Memory.Basis != "measured" || p.MemoryBytes != 25761248456 || p.WiredMemory != nil {
+	if err != nil || len(p.Refusals) != 0 || p.Memory.Basis != "measured" || p.MemoryBytes != 25761248456 {
 		t.Fatalf("measured memory misrepresented: %+v %v", p.Memory, err)
 	}
 	c := setup.EmptyConfiguration()
@@ -51,7 +51,7 @@ func TestMoEPlacementDoesNotInventPhysicalSavingsOrWiredAdvice(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if after.MemoryBytes != before.MemoryBytes || after.WiredMemory != nil || !strings.Contains(strings.Join(after.Memory.Unknown, " "), "CPU/GPU") {
+	if after.MemoryBytes != before.MemoryBytes || !strings.Contains(strings.Join(after.Memory.Unknown, " "), "CPU/GPU") {
 		t.Fatalf("mixed placement invented memory savings or GPU fit: before=%+v after=%+v", before, after)
 	}
 	observed.WiredLimitMiB = 1

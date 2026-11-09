@@ -18,7 +18,9 @@ is editable through a separate Apply/Cancel prompt, like Context, only when
 both devices are offered and the preset is included.
 Cards show selectable compute before Context on one settings line, omit fixed
 GPU labels, and retain CPU only. Rerankers omit the repeated interface label.
-The preset card names custom chat templates; template changes belong in the preset editor.
+Cards show one plain memory figure and the download size; chat templates and
+measurement records belong in the preset editor (changed 2026-11-06 after a
+new-user session).
 The chosen device is retained in the exact lock and shared across layouts.
 CPU weights count against RAM; GPU weights also count against
 the wired-memory allowance when that split can be estimated. MoE CPU-layer
@@ -62,8 +64,10 @@ owns navigation, reset/conversion, weights/template lookup and save/delete behav
 exact presets. It owns membership, preload, default routing, idle timeout and
 layout names. First placement captures an exact lock and its authoring source
 in the configuration; existing locks remain unchanged. Reviewed saves use the
-source and configuration revision guards and leave the running generation
-unchanged. The [layout-editor contract](contracts/layouts.md#standalone-layout-editor)
+source and configuration revision guards. Closing the editor applies saved
+serving changes to the running layout, waiting for active requests before
+restarting; a stopped layout stays stopped.
+The [layout-editor contract](contracts/layouts.md#standalone-layout-editor)
 owns its draft, review and deletion behavior.
 Full updates report changes to catalog fields a saved fork overrides while
 preserving the overrides. The saved comparison baseline and failure behavior
@@ -119,9 +123,10 @@ per-run limits and engine controls. [Distribution](contracts/catalog-distributio
 owns signed catalog updates and verified offline rollback. The independent
 manifest workflow accepts v1 only.
 
-Guided setup uses `~/.temper` by default. Presets → Layouts → Review and prepare
-replaces the modes-first screen flow. Saving and preparing remain separate from explicit managed
-activation. Tools and harness integrations still require their own implemented
+Guided setup uses `~/.temper` by default. Presets → Harnesses → Review selects
+and prepares models; the layout editor owns composition. Save without installing
+records choices. Install and start prepares their files and starts the selected
+layout. Tools and harness integrations still require their own implemented
 catalog and rendering paths; the editors do not invent them.
 
 The 2026-09-22 Field Kit simplification adds direct execution-lock consumption

@@ -24,10 +24,12 @@ disabled with the reason, for example "needs Temper
 
 Check the model license, hardware requirements and memory guidance beside your choice.
 [Compare the available presets](https://temper-sh.github.io/catalog/) if you need help.
-Memory figures are estimates unless a matching measurement is shown.
-The size at the top right of each preset card is the total size of its model files.
-The memory review separates weights, supported context-cache estimates and
-unknown allocations. A weights-only estimate does not establish runtime fit.
+Presets are grouped by size, named by the Macs each size is meant for. Each
+card shows its download size at the top right and one memory figure:
+"Memory X, measured" when a matching measurement applies, otherwise
+"Memory at least X", because an estimate counts only the model files and any
+supported context-cache estimate. The measurement record and chat template
+appear in the preset editor, not on the card.
 See [Memory estimates](memory-estimates.md) for supported caches and limits.
 
 The underlined license follows the description inline and links to an explanation
@@ -97,11 +99,17 @@ for ownership, directory overrides, deselection and retry behavior.
 
 ## Review and install
 
-**Review** confirms selected models and harnesses, layout availability,
-download/disk totals and a short memory assessment. Software totals include every
+**Review** shows selected harnesses, download size, disk need and free space,
+and every file the installation needs with its state. It omits model memory
+evidence, which belongs to the preset screens; a selection that does not fit
+appears as a warning. Software rows show the engine name and version. Software
+totals include every
 artifact in each exact installation closure, including managed CPython, wheels
-and source archives. Identical closures share one installation; verified receipts
-and read-only provider inspection credit existing native and Python installations.
+and source archives. Identical closures share one installation. An exact
+installation receipt credits an existing native or Python installation; Review
+reads receipts only and never re-hashes installed engines, so it stays quick
+while a model is running. Preparation verifies the installed files before use
+and reinstalls a damaged installation.
 Python disk estimates reserve the runtime's 2 GiB extraction limit and four times
 each package's compressed size (at least its declared source size), with two
 expanded copies for build/install staging, plus retained downloads. These are
@@ -223,10 +231,14 @@ temper configure
 ```
 
 The same three-step wizard lets you select presets and harness integrations.
-Reopening it preserves every existing layout, including its membership,
-preload, default-model and idle choices. It does not recreate a missing Default.
-Review names models outside layouts; place them
-with `temper layout`. Referenced presets cannot be deselected until their
+Reopening it preserves every existing layout, including its preload,
+default-model and idle choices. It does not recreate a missing Default. When
+Default exists, models newly selected in this run are added to it as on-demand
+members, so they are available after installation. With Default alone this
+needs no question; when other layouts exist, Review shows a switch, on by
+default, that keeps the new models out of Default. Other layouts and models
+saved earlier outside layouts are unchanged. Without Default, Review notes that
+new models are not in a layout yet; place them with `temper layout`. Referenced presets cannot be deselected until their
 memberships are changed in the layout editor; the wizard names those layouts.
 During an unsaved first setup, returning to Presets updates the initial Default
 to match the selections. Cancel and dry runs save nothing. Scripted
@@ -321,9 +333,10 @@ native runtime cache under the Temper root on first use.
 |---|---|
 | Preparation was interrupted | Run `temper configure --resume --prepare`. It reuses your saved choices and completed downloads. Missing files still need network access. |
 | HF cache files were removed or changed | Run `temper configure --resume --prepare` to download missing files and verify the cache again. |
-| A model does not fit | Choose a smaller preset, reduce context, or load fewer models on activation. An unknown estimate is not a measured fit. |
+| A model does not fit | Choose a smaller preset or a shorter Context. An unknown estimate is not a measured fit. Advanced: an administrator can change `iogpu.wired_limit_mb`; Temper reads the new GPU limit on its next check and never suggests a value. |
 | First Splash startup takes a long time | Its first run builds an additional weight cache. Allow time and disk space for conversion; a short client timeout may expire first. |
-| Switching or stopping is refused | Let active requests finish, close apps holding connections, then retry. |
+| Switching waits for a request | Activation and Install restart the layout when the current request finishes. Press Ctrl-C to stop waiting; nothing changes, and `temper layout activate ID` applies it later. |
+| Stopping is refused | Let active requests finish, then retry. Apps that only keep a connection open do not block stopping. |
 | The service crashed | Retry `temper layout activate default` to recover the saved layout. If Temper cannot verify process ownership, keep the reported details for diagnosis. The router log is `~/.temper/managed/logs/router.log`. |
 | The HF cache moved | Run `temper configure --resume --prepare`. Temper links the models from the cache you configure now; it never writes into the old one. A cache on a disconnected disk is refused until you connect it. |
 | The Temper folder was moved or copied | `layout stop` prints the `launchctl bootout` command that stops the old job. A folder cannot move; start again with `temper init`. |

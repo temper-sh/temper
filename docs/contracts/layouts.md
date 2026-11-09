@@ -7,8 +7,13 @@ loading or default model alias. Returning to Presets before saving updates that
 initial composition when you continue.
 
 Existing configurations keep every layout and its explicit settings, including
-an edited or absent Default. Newly selected presets remain outside those layouts
-until placed through `temper layout`; review identifies them. Referenced presets
+an edited or absent Default. When Default exists, presets newly selected in the
+wizard are added to it as on-demand members. When other layouts exist, Review
+asks with a switch in its content, on by default; with Default alone it does not
+ask. Default's startup, default-model and idle choices are unchanged, and other
+layouts never change. Without Default, or with the switch off, new presets stay
+outside layouts until placed through `temper layout`; Review notes this only
+when there is no Default. Presets saved earlier outside layouts stay there. Referenced presets
 cannot be deselected in the wizard: it names the affected layouts and directs
 membership changes to the standalone layout editor. `temper layout` owns adding,
 renaming and removing layouts, membership, startup loading and default routing.
@@ -57,7 +62,9 @@ The same editor is used by `init` and interactive `configure`. Saves serialize
 cooperating writers, check the revision, fsync a staged file and atomically
 rename it. Incomplete temporary files are not current state. A canceled or dry
 save never writes. Pre-preset configurations must be recreated from explicit current choices.
-Saved exact locks support offline resume. Editing and saving never activates.
+Saved exact locks support offline resume. Scripted saves and the preset editor's
+Save without installing do not activate. Closing the layout editor applies
+saved serving changes to an already running layout as described below.
 If the first configuration saves but the initial selection write fails, Temper
 reports that partial result and names `temper layout activate default` as the
 recovery action. The saved configuration remains available for preparation.
@@ -75,9 +82,22 @@ while preserving the successful service state; repeat activation to repair it.
 `temper layout activate ID`, `layout status` and `layout stop` operate on one
 active layout per root. Activation uses prepared exact inputs. Desired state is
 separate from current observations; a failed effect remains pending and the
-same command reconciles it. Layout edits, renames and deletion do not change a
-running generation. Stop and transitions refuse active requests or uncertain
-ownership. There is no force or automatic draining operation. Idle unload and
+same command reconciles it. Saving in the layout editor does not change a
+running generation; when the editor closes, a running layout whose saved
+membership, settings or presets changed is restarted through activation, which
+also synchronizes harness files. Renaming or deleting a running layout, or
+editing another layout, restarts nothing; a stopped root stays stopped.
+Interactive transitions wait for active requests to finish before restarting,
+saying so and accepting Ctrl-C, which leaves activation unchanged. With
+`--json`, and for stop, active requests refuse the transition. Requests in
+progress come from the router's in-flight snapshot, read again just before
+Temper pauses the router and sends SIGTERM. Idle client connections, such as
+keep-alive or a browser's event stream, do not block: the pinned router
+(llama-swap v269) closes them at shutdown, lets requests in progress finish
+within 30 seconds, then stops its engines. A request sent in the same instant
+as the stop can receive a closed connection. Recheck this shutdown behavior
+when the router pin changes. Uncertain ownership always refuses. There is no
+force or request-interrupting operation. Idle unload and
 later demand loading are normal; experiment `execution serve` retains fixed
 process lifetimes. All commands accept `--root`; mutating commands accept
 `--dry-run`. They say in plain words which layout runs, its base URL, its
@@ -112,9 +132,10 @@ An engine launch writes its PID, process group, start identity, exact executable
 and argv before exec replaces the launcher. Recorded groups permit cleanup after
 router exit; PID reuse ends the old lifetime and never authorizes a signal to
 the new process. Unknown children or changed commands refuse recovery. Stop
-records a router hold before SIGSTOP, checks accepted TCP connections, queues
-TERM and resumes that exact router. This closes the request-admission race;
-idle keepalives can conservatively block stop. Interrupted holds resume only on
+records a router hold, rechecks in-flight requests immediately before SIGSTOP,
+verifies the held process identities, queues TERM and resumes that exact router.
+The pinned router closes idle connections and drains requests admitted in the
+small interval between the activity check and pause. Interrupted holds resume only on
 the next mutation. There is no force signal or background recovery agent.
 
 Memory admission uses an applicable catalog measurement before falling back to
@@ -193,9 +214,10 @@ writing and retains the draft as unsaved.
 
 Delete confirms the named layout before saving its removal. It preserves all
 selected presets, exact locks, integrations, material and other layouts. Deleting
-or editing a running layout leaves its running generation intact; activation and
-stop remain explicit commands. This editor does not introduce a remembered
-current-layout selection while stopped.
+or renaming a running layout leaves its running generation intact. After the
+editor closes, saved membership, settings or preset changes restart the running
+layout and synchronize harness files, waiting for active requests first. A
+stopped root stays stopped and retains its remembered selection.
 
 ## Script preset and layout changes
 

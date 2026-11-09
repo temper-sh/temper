@@ -252,7 +252,7 @@ func (m *PresetModel) startPreview() tea.Cmd {
 	m.previewCancel = cancel
 	seq := m.previewSeq
 	// A cancelled preview may still finish after the user resumes editing.
-	raw, err := m.draft.Bytes()
+	raw, err := m.reviewDraft().Bytes()
 	if err != nil {
 		return func() tea.Msg { return compositionPreview{Seq: seq, Err: err} }
 	}
@@ -308,7 +308,7 @@ func (m *PresetModel) finish() tea.Cmd {
 	if m.action == 1 {
 		action = "save"
 	}
-	m.Decision = PresetDecision{Configuration: m.draft, Action: action, Retirements: append([]setup.RetirementChange{}, m.retirements...), DeleteRetiredWeights: m.deleteRetiredWeights && len(m.retiredFiles) > 0}
+	m.Decision = PresetDecision{Configuration: m.reviewDraft(), Action: action, Retirements: append([]setup.RetirementChange{}, m.retirements...), DeleteRetiredWeights: m.deleteRetiredWeights && len(m.retiredFiles) > 0}
 	return tea.Quit
 }
 

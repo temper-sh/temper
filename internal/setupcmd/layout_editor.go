@@ -8,10 +8,12 @@ import (
 	"io"
 	"maps"
 	"os"
+	"reflect"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/term"
+	"github.com/temper-sh/temper/internal/managed"
 	"github.com/temper-sh/temper/internal/setup"
 	"github.com/temper-sh/temper/internal/setupui"
 )
@@ -101,7 +103,7 @@ func (c Command) editLayouts(ctx context.Context, args []string, out, diagnostic
 	f.StringVar(&options.Root, "root", "", "Temper folder (default ~/.temper)")
 	f.BoolVar(&options.DryRun, "dry-run", false, "review without saving or deleting layouts")
 	f.Usage = func() {
-		fmt.Fprintln(diagnostics, "Usage: temper layout [--root PATH] [--dry-run]\n       temper layout edit ID [options]\nCompose layouts from saved presets. Save is explicit; activation is separate.")
+		fmt.Fprintln(diagnostics, "Usage: temper layout [--root PATH] [--dry-run]\n       temper layout edit ID [options]\nCompose layouts from saved presets. Save is explicit; when the editor closes,\nthe running layout restarts with its saved changes.")
 		f.PrintDefaults()
 	}
 	if err := f.Parse(args); err != nil {
@@ -120,14 +122,84 @@ func (c Command) editLayouts(ctx context.Context, args []string, out, diagnostic
 		fmt.Fprintln(diagnostics, "The layout editor needs terminal input and output. For scripts, use temper configure --show --json and temper configure --file FILE --revision REVISION.")
 		return 2
 	}
+	home := ""
+	if options.Root == "" {
+		var err error
+		if home, err = c.Home(); err != nil {
+			return c.fail(diagnostics, err)
+		}
+	}
+	root, err := setup.Root(options.Root, home)
+	if err != nil {
+		return c.fail(diagnostics, err)
+	}
+	options.Root = root
+	before, _, err := setup.ReadConfiguration(root)
+	if err != nil {
+		return c.fail(diagnostics, err)
+	}
 	m, err := c.NewLayoutEditor(ctx, options)
 	if err != nil {
 		return c.fail(diagnostics, err)
 	}
-	defer m.Close()
 	_, err = tea.NewProgram(m, tea.WithInput(c.Input), tea.WithOutput(out), tea.WithContext(ctx)).Run()
+	m.Close()
 	if err != nil && ctx.Err() == nil {
 		return c.fail(diagnostics, err)
 	}
+	if options.DryRun || ctx.Err() != nil {
+		return 0
+	}
+	if !c.applyEditedLayout(ctx, root, before, out) {
+		return 1
+	}
 	return 0
+}
+
+// applyEditedLayout restarts the running layout when the editor saved a change
+// to what it serves, so saving is enough to use it. Harness files, such as
+// Pi's models.json, follow that restart. A restart waits for active requests.
+// A stopped root stays stopped; a deleted running layout keeps serving until
+// it is stopped or another layout is activated.
+func (c Command) applyEditedLayout(ctx context.Context, root string, before setup.Configuration, out io.Writer) bool {
+	state, err := (managed.FileStore{Root: root}).Read()
+	job := knownJob(state)
+	if err != nil || job == nil {
+		return true
+	}
+	after, _, err := setup.ReadConfiguration(root)
+	if err != nil {
+		fmt.Fprintf(out, "Saved layouts could not be read to apply them: %v\nApply with: temper layout activate %s\n", err, job.Layout)
+		return false
+	}
+	layout, ok := after.Layouts[job.Layout]
+	if !ok || servesSame(before, after, job.Layout) {
+		return true
+	}
+	fmt.Fprintf(out, "Applying saved changes to the running layout %s.\n", layout.Name)
+	prior, status, err := c.start(ctx, root, job.Layout, waitNotice(out, false))
+	if status != nil {
+		c.renderLayoutResult(out, root, "activate", job.Layout, false, prior, *status)
+	}
+	if err != nil {
+		fmt.Fprintf(out, "Layout %s was not restarted: %v\nApply later with: temper layout activate %s\n", layout.Name, err, job.Layout)
+		return false
+	}
+	return true
+}
+
+// servesSame reports whether a layout serves the same models with the same
+// settings in two configurations. A rename alone does not unload models.
+func servesSame(before, after setup.Configuration, id string) bool {
+	old, next := before.Layouts[id], after.Layouts[id]
+	old.Name, next.Name = "", ""
+	if !reflect.DeepEqual(old, next) {
+		return false
+	}
+	for _, preset := range after.Layouts[id].Presets {
+		if !reflect.DeepEqual(before.Presets[preset], after.Presets[preset]) {
+			return false
+		}
+	}
+	return true
 }

@@ -84,7 +84,7 @@ func TestStudyPlansEveryNativeAndPythonArtifactWithoutWriting(t *testing.T) {
 
 // Exercise the real provider, receipt, and planning boundary. The only doubles
 // are artifact transport and environment installation; no Python runs.
-func TestPlanCreditsOnlyVerifiedPythonEnvironmentAndLeavesItUntouched(t *testing.T) {
+func TestPlanCreditsRecordedPythonEnvironmentWithoutReadingIt(t *testing.T) {
 	ctx := context.Background()
 	d := studyCatalog(t)
 	supply := d.Engines["rapid-mlx"].Supply.Python
@@ -222,9 +222,27 @@ func TestPlanCreditsOnlyVerifiedPythonEnvironmentAndLeavesItUntouched(t *testing
 		}
 		break
 	}
-	if installed, err := preset.Installed(ctx, root, selected); installed || err == nil {
-		t.Fatal("drifted environment received reuse credit")
+	// Review planning reads receipts only, so a running engine's files are never
+	// re-hashed. Preparation verifies with Installed, which catches the drift.
+	if err := material.InspectPresetSoftware(ctx, []catalog.Lock{lock}); err != nil {
+		t.Fatal("review planning read installed files:", err)
 	}
+	if plan, err = buildPlan(root, facts(64), 1<<40, []catalog.Lock{lock}, material); err != nil || rapidDownloads(plan) != 0 {
+		t.Fatal("recorded environment lost its review credit", err)
+	}
+	if installed, err := preset.Installed(ctx, root, selected); installed || err == nil {
+		t.Fatal("drifted environment received preparation credit")
+	}
+}
+
+func rapidDownloads(plan setup.Plan) int {
+	n := 0
+	for _, item := range plan.RemainingDownloads {
+		if item.Kind == "software" && strings.Contains(item.Name, "/rapid-mlx/") {
+			n++
+		}
+	}
+	return n
 }
 
 type memoryArtifacts map[string][]byte

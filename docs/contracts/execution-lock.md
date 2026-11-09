@@ -280,6 +280,10 @@ the preset's choices.
 
 Preset `description` and optional `assessment_url` are edited with
 `catalog describe --preset ID`. `--if-empty` preserves existing authored copy.
+An edit changes only that preset's description and an explicitly supplied
+assessment URL. JSON/YAML authoring retains unrelated values and absent optional
+fields; parsing defaults are not written back. Formatting may change. Dry runs
+write nothing, and repeating an unchanged edit leaves the file untouched.
 
 ## Engine contracts
 

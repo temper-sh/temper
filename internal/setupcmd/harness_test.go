@@ -78,11 +78,11 @@ func TestActivationPublishesOnlyAfterReadinessAndRetryDoesNotRestart(t *testing.
 				}
 			}
 			job := &managed.Job{Generation: "test", Layout: "work"}
-			preview, err := reconcileLayout(context.Background(), store, controller, job, true, prepare())
+			preview, err := reconcileLayout(context.Background(), store, controller, job, true, prepare(), nil)
 			if err != nil || preview.Integrations[0].Status != "pending" || controller.starts != 0 || store.writes != 0 {
 				t.Fatal("dry run caused effects", preview, err)
 			}
-			failed, err := reconcileLayout(context.Background(), store, controller, job, false, prepare())
+			failed, err := reconcileLayout(context.Background(), store, controller, job, false, prepare(), nil)
 			if err == nil || failed.Integrations[0].Status != "not-applied" {
 				t.Fatal("unready service published harness", failed, err)
 			}
@@ -99,16 +99,16 @@ func TestActivationPublishesOnlyAfterReadinessAndRetryDoesNotRestart(t *testing.
 			if err := os.WriteFile(path, []byte(`{"user":"edit"}`), 0600); err != nil {
 				t.Fatal(err)
 			}
-			partial, err := reconcileLayout(context.Background(), store, controller, job, false, plan)
+			partial, err := reconcileLayout(context.Background(), store, controller, job, false, plan, nil)
 			if err == nil || !partial.Observed.Ready || partial.Integrations[0].Status != "failed" || !strings.Contains(err.Error(), "layout is running") {
 				t.Fatal("partial success not reported", partial, err)
 			}
-			repaired, err := reconcileLayout(context.Background(), store, controller, job, false, prepare())
+			repaired, err := reconcileLayout(context.Background(), store, controller, job, false, prepare(), nil)
 			if err != nil || repaired.Integrations[0].Status != "updated" || controller.starts != 1 || controller.stops != 0 {
 				t.Fatal(repaired, err)
 			}
 			first, _ := os.Stat(path)
-			clean, err := reconcileLayout(context.Background(), store, controller, job, false, prepare())
+			clean, err := reconcileLayout(context.Background(), store, controller, job, false, prepare(), nil)
 			after, _ := os.Stat(path)
 			if err != nil || clean.Integrations[0].Status != "unchanged" || controller.starts != 1 || !first.ModTime().Equal(after.ModTime()) {
 				t.Fatal("retry restarted or rewrote unchanged state", clean, err)
@@ -146,7 +146,7 @@ func TestMalformedHarnessRefusesBeforeServiceOrMachineWork(t *testing.T) {
 				return nil
 			}
 			resolved, _ := setup.Root(root, "")
-			_, status, err := c.activate(context.Background(), resolved, "default", "", false)
+			_, status, err := c.activate(context.Background(), resolved, "default", "", false, nil)
 			if err == nil || status != nil || !strings.Contains(err.Error(), "harness preflight") {
 				t.Fatal("malformed destination accepted", status, err)
 			}

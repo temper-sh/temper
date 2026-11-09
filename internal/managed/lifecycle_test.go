@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 )
 
 type memoryStore struct {
@@ -30,6 +31,9 @@ type jobController struct {
 	busy                         bool
 	starts, stops, recoveries    int
 	failStart, failStop, unknown bool
+	// busyFor observations report active requests; stopBusy Stop calls refuse
+	// a request that arrived after the last observation.
+	busyFor, stopBusy int
 }
 
 func (c *jobController) Recover(context.Context, []Job) error { c.recoveries++; return nil }
@@ -42,7 +46,11 @@ func (c *jobController) Observe(_ context.Context, known []Job) (Observation, er
 	}
 	for _, j := range known {
 		if j.Generation == c.job.Generation {
-			return Observation{Exists: true, Ready: true, PID: 123, Generation: j.Generation, Busy: c.busy}, nil
+			busy := c.busy || c.busyFor > 0
+			if c.busyFor > 0 {
+				c.busyFor--
+			}
+			return Observation{Exists: true, Ready: true, PID: 123, Generation: j.Generation, Busy: busy}, nil
 		}
 	}
 	return Observation{}, errors.New("unrecognized generation")
@@ -57,6 +65,11 @@ func (c *jobController) Start(_ context.Context, j Job) error {
 	return nil
 }
 func (c *jobController) Stop(_ context.Context, j Job) error {
+	if c.stopBusy > 0 {
+		c.stopBusy--
+		c.busyFor = 2
+		return busyError("active requests prevent stopping")
+	}
 	c.stops++
 	c.job = nil
 	if c.failStop {
@@ -129,6 +142,54 @@ func TestBusyUnknownAndDryTransitionsHaveNoJobEffects(t *testing.T) {
 				t.Fatal("dry run performed recovery")
 			}
 		})
+	}
+}
+
+// A waiting transition restarts between requests: it never interrupts active
+// work, and it applies the change once the router is idle.
+func TestWaitingTransitionRestartsAfterActiveRequestsFinish(t *testing.T) {
+	defer func(previous time.Duration) { idlePoll = previous }(idlePoll)
+	idlePoll = time.Millisecond
+	for _, race := range []string{"busy when observed", "request arrives before stop"} {
+		t.Run(race, func(t *testing.T) {
+			old := Job{Layout: "default", Generation: "old"}
+			next := Job{Layout: "default", Generation: "new"}
+			s := &memoryStore{state: State{Schema: StateSchema, Desired: &old, Current: &old}}
+			c := &jobController{job: &old}
+			if race == "busy when observed" {
+				c.busyFor = 3
+			} else {
+				c.stopBusy = 1
+			}
+			announcements := 0
+			status, err := ReconcileWhenIdle(context.Background(), s, c, &next, func(Observation) { announcements++ })
+			if err != nil || status.State.Current == nil || status.State.Current.Generation != "new" {
+				t.Fatal("waiting transition did not apply the change", status, err)
+			}
+			if c.stops != 1 || c.starts != 1 || c.busyFor != 0 {
+				t.Fatalf("restart happened during active work: stops=%d starts=%d busy observations left=%d", c.stops, c.starts, c.busyFor)
+			}
+			if race == "busy when observed" && announcements != 1 {
+				t.Fatalf("waiting announced %d times", announcements)
+			}
+		})
+	}
+}
+
+func TestCancellingAWaitingTransitionChangesNothing(t *testing.T) {
+	defer func(previous time.Duration) { idlePoll = previous }(idlePoll)
+	idlePoll = time.Millisecond
+	old := Job{Layout: "default", Generation: "old"}
+	next := Job{Layout: "default", Generation: "new"}
+	s := &memoryStore{state: State{Schema: StateSchema, Desired: &old, Current: &old}}
+	c := &jobController{job: &old, busy: true}
+	ctx, cancel := context.WithCancel(context.Background())
+	_, err := ReconcileWhenIdle(ctx, s, c, &next, func(Observation) { cancel() })
+	if !errors.Is(err, context.Canceled) || s.writes != 0 || c.starts+c.stops != 0 {
+		t.Fatal("cancelled wait changed activation", err, s.writes, c.starts, c.stops)
+	}
+	if _, err := Reconcile(context.Background(), s, c, &next, false); !errors.Is(err, ErrBusy) {
+		t.Fatal("refusing transition does not report ErrBusy:", err)
 	}
 }
 

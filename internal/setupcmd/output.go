@@ -49,6 +49,9 @@ func renderLayout(out io.Writer, r layoutReport) {
 			fmt.Fprintln(out, "No layout is running.")
 		case r.Dry:
 			fmt.Fprintf(out, "Dry run: would stop layout %s. Nothing changed.\n", layoutName(r.Before))
+		case r.Status.Error != "":
+			// A refused or incomplete stop must never read as a success.
+			fmt.Fprintf(out, "Layout %s did not stop.\n", layoutName(r.Before))
 		default:
 			fmt.Fprintf(out, "Stopped layout %s.\n", layoutName(r.Before))
 		}

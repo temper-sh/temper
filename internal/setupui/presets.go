@@ -124,6 +124,7 @@ type PresetModel struct {
 	retiredFiles         []SharedFile
 	retiredFilesErr      error
 	deleteRetiredWeights bool // Consent covers only the listed retiredFiles; a new review clears it.
+	keepDefault          bool // Rerun: leave newly selected presets outside Default.
 }
 
 func NewPresetModel(ctx context.Context, input PresetInput, preview func(context.Context, setup.Configuration) (setup.Plan, error)) *PresetModel {

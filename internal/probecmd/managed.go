@@ -186,10 +186,13 @@ func (r managedInspector) snapshot(pid int, router string, args []string, listen
 	return result, err
 }
 
-// QuiesceManaged temporarily freezes only the verified router while checking
-// its accepted TCP connections. A connection is conservatively treated as work,
-// including idle keepalive. Children remain running. The caller must always
-// release the hold; no engine or unrelated group is signaled here.
+// QuiesceManaged temporarily freezes only the verified router, so it reads no
+// new request while the caller delivers SIGTERM. Idle client connections, such
+// as keep-alive or a browser's event stream, are not work: the pinned router's
+// shutdown closes them, lets requests in progress finish, then stops engines.
+// The caller checks requests in progress before calling. Children remain
+// running. The caller must always release the hold; no engine or unrelated
+// group is signaled here.
 func QuiesceManaged(captured ManagedIdentity, listen string) (func() error, error) {
 	listener, err := netip.ParseAddrPort(listen)
 	if err != nil || !listener.Addr().IsLoopback() || listener.Port() == 0 {
@@ -210,7 +213,7 @@ func QuiesceManaged(captured ManagedIdentity, listen string) (func() error, erro
 		return ResumeManaged(captured)
 	}
 	// Signal delivery is not the stopped-state observation. Wait for the hold
-	// before inspecting sockets, otherwise accept could race the final read.
+	// before returning, otherwise the router could still read a request.
 	held := false
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
@@ -233,68 +236,7 @@ func QuiesceManaged(captured ManagedIdentity, listen string) (func() error, erro
 		_ = release()
 		return nil, errors.New("router hold was not observed; transition refused")
 	}
-	raw, err := systemRead("/usr/sbin/lsof", "-nP", "-a", "-p", strconv.Itoa(pid), "-iTCP", "-sTCP:ESTABLISHED", "-Fpn")
-	if err != nil {
-		var exit interface{ ExitCode() int }
-		if !errors.As(err, &exit) || exit.ExitCode() != 1 || len(raw) != 0 {
-			_ = release()
-			return nil, fmt.Errorf("cannot prove router idle: %w", err)
-		}
-	}
-	accepted, err := managedAcceptedConnections(raw, pid, listener)
-	if err != nil {
-		_ = release()
-		return nil, fmt.Errorf("cannot prove router idle: %w", err)
-	}
-	if accepted {
-		_ = release()
-		return nil, errors.New("router has accepted connections; close idle clients and retry after active work finishes")
-	}
 	return release, nil
-}
-
-// lsof reports local->remote endpoints for both accepted clients and outgoing
-// engine connections. Only a local endpoint on the router listener is accepted
-// client work. Idle outgoing keepalives must not prevent an idle shutdown.
-func managedAcceptedConnections(raw []byte, pid int, listener netip.AddrPort) (bool, error) {
-	if len(raw) == 0 {
-		return false, nil
-	}
-	process, pending, sockets, accepted := false, false, 0, false
-	invalid := errors.New("unexpected established-socket observation")
-	for _, line := range strings.Split(strings.TrimSuffix(string(raw), "\n"), "\n") {
-		if len(line) < 2 {
-			return false, invalid
-		}
-		switch line[0] {
-		case 'p':
-			if process || line[1:] != strconv.Itoa(pid) {
-				return false, invalid
-			}
-			process = true
-		case 'f':
-			if _, err := strconv.ParseUint(line[1:], 10, 32); err != nil || !process || pending {
-				return false, invalid
-			}
-			pending = true
-		case 'n':
-			local, remote, ok := strings.Cut(line[1:], "->")
-			from, err := netip.ParseAddrPort(local)
-			_, peerErr := netip.ParseAddrPort(remote)
-			if !pending || !ok || err != nil || peerErr != nil || from.Port() == 0 || from.Addr().Unmap() != listener.Addr().Unmap() {
-				return false, invalid
-			}
-			accepted = accepted || from.Port() == listener.Port()
-			sockets++
-			pending = false
-		default:
-			return false, invalid
-		}
-	}
-	if !process || pending || sockets == 0 {
-		return false, invalid
-	}
-	return accepted, nil
 }
 
 func ManagedListenerClosed(listen string) bool { return listenerClosed(listen) }

@@ -56,8 +56,8 @@ func TestMeasuredCardFallsBackAfterContextEditAndRecoversAtTestedContext(t *test
 		basis   string
 		label   string
 	}{
-		{window / 2, "estimated", "Memory estimate"},
-		{window, "measured", "Measured peak"},
+		{window / 2, "estimated", "Memory at least"},
+		{window, "measured", "Memory " + setup.Size(20<<30) + ", measured"},
 	} {
 		setWizardContext(m, fmt.Sprint(step.context))
 		visible := m.visible()[0]
@@ -90,7 +90,7 @@ func TestContextEditRefreshesTheVisibleCacheEstimate(t *testing.T) {
 		t.Fatal("context edit left stale card memory", before, after, m.notice)
 	}
 	view := ansi.Strip(m.View().Content)
-	if !strings.Contains(view, setup.Size(after)) || !strings.Contains(view, "Memory estimate") || strings.Contains(view, "Total fit unknown") {
+	if !strings.Contains(view, setup.Size(after)) || !strings.Contains(view, "Memory at least") || strings.Contains(view, "Total fit unknown") {
 		t.Fatal(view)
 	}
 }

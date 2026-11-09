@@ -97,7 +97,7 @@ func (c Command) Layout(ctx context.Context, args []string, out, diagnostics io.
 	var status *LayoutStatus
 	switch operation {
 	case "activate", "start":
-		before, status, err = c.activate(ctx, root, id, *listen, *dry)
+		before, status, err = c.activate(ctx, root, id, *listen, *dry, waitNotice(out, *jsonOutput || *dry))
 	case "status":
 		before, status, err = c.layoutStatus(ctx, root)
 	default:
@@ -168,11 +168,22 @@ func (c Command) controller(root string, job *managed.Job, state managed.State) 
 	return controllerFor(root, job, state)
 }
 
+// waitNotice tells a person that a restart waits for the request the running
+// layout is answering. Scripts (JSON output) keep the immediate refusal.
+func waitNotice(out io.Writer, quiet bool) func(managed.Observation) {
+	if quiet {
+		return nil
+	}
+	return func(managed.Observation) {
+		fmt.Fprintln(out, "The running layout is answering a request. It restarts with the changes when the request finishes; press Ctrl-C to stop waiting.")
+	}
+}
+
 // activate renders one saved layout and reconciles the managed router to it.
 // Without listen it keeps the running layout's listener, else 127.0.0.1:8080.
 // before is the job known before the change; a refusal before reconciling
 // returns no status.
-func (c Command) activate(ctx context.Context, root, id, listen string, dry bool) (*managed.Job, *LayoutStatus, error) {
+func (c Command) activate(ctx context.Context, root, id, listen string, dry bool, waiting func(managed.Observation)) (*managed.Job, *LayoutStatus, error) {
 	store := managed.FileStore{Root: root}
 	state, err := store.Read()
 	if err != nil {
@@ -311,7 +322,7 @@ func (c Command) activate(ctx context.Context, root, id, listen string, dry bool
 			}
 		}
 	}
-	result, err := reconcileLayout(ctx, store, controller, desired, dry, integrations)
+	result, err := reconcileLayout(ctx, store, controller, desired, dry, integrations, waiting)
 	if !dry && result.Observed.Ready && result.State.Current != nil && result.State.Current.Generation == desired.Generation {
 		// Only this job's launcher copy is in use now, including when a harness
 		// synchronization failed after the service became ready.
@@ -320,8 +331,16 @@ func (c Command) activate(ctx context.Context, root, id, listen string, dry bool
 	return before, &result, err
 }
 
-func reconcileLayout(ctx context.Context, store managed.Store, controller managed.Controller, desired *managed.Job, dry bool, integrations harness.Plan) (LayoutStatus, error) {
-	status, err := managed.Reconcile(ctx, store, controller, desired, dry)
+// reconcileLayout applies desired. With waiting, active requests delay the
+// restart until they finish instead of refusing it.
+func reconcileLayout(ctx context.Context, store managed.Store, controller managed.Controller, desired *managed.Job, dry bool, integrations harness.Plan, waiting func(managed.Observation)) (LayoutStatus, error) {
+	var status managed.Status
+	var err error
+	if waiting != nil && !dry {
+		status, err = managed.ReconcileWhenIdle(ctx, store, controller, desired, waiting)
+	} else {
+		status, err = managed.Reconcile(ctx, store, controller, desired, dry)
+	}
 	result := LayoutStatus{Status: status, Integrations: integrations.Results()}
 	if err == nil && !dry {
 		result.Integrations, err = integrations.Publish(ctx)

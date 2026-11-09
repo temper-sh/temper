@@ -3,6 +3,7 @@ package catalogcmd
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -42,6 +43,90 @@ func describeRun(ctx context.Context, args ...string) (int, string, string) {
 	var out, diagnostics bytes.Buffer
 	code := Run(ctx, append([]string{"catalog", "describe"}, args...), &out, &diagnostics)
 	return code, out.String(), diagnostics.String()
+}
+
+func TestDescriptionEditPreservesAuthoredFields(t *testing.T) {
+	for _, format := range []string{"json", "yaml"} {
+		for _, link := range []struct {
+			name string
+			args []string
+		}{
+			{name: "description only"},
+			{name: "set link", args: []string{"--assessment-url", "https://example.test/assessment"}},
+			{name: "clear link", args: []string{"--assessment-url", ""}},
+		} {
+			t.Run(format+"/"+link.name, func(t *testing.T) {
+				path, original := descriptionCatalog(t, "json")
+				var expected map[string]any
+				if err := yaml.Unmarshal(original, &expected); err != nil {
+					t.Fatal(err)
+				}
+				presets := expected["presets"].(map[string]any)
+				selected := presets["qwen3.5-4b-q4km-off"].(map[string]any)
+				delete(selected, "speculation")
+				presentation := selected["presentation"].(map[string]any)
+				presentation["assessment_url"] = "https://example.test/original"
+				// Preserve explicit null, empty objects, absent defaults and integer
+				// values beyond float64's exact range on unrelated executions.
+				reranker := presets["ettin-reranker-150m-q8-crispembed"].(map[string]any)
+				delete(reranker, "request_defaults")
+				other := presets["qwen3.8-27b-q4xl-mtp"].(map[string]any)
+				sampling := other["request_defaults"].(map[string]any)["sampling"].(map[string]any)
+				sampling["seed"] = int64(9007199254740993)
+				sampling["top_k"] = nil
+				var err error
+				if format == "json" {
+					original, err = json.Marshal(expected)
+				} else {
+					original, err = yaml.Marshal(expected)
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, original, 0o600); err != nil {
+					t.Fatal(err)
+				}
+				const description = "An edited description."
+				args := append([]string{"--catalog", path, "--preset", "qwen3.5-4b-q4km-off", "--description", description}, link.args...)
+				if code, _, diag := describeRun(context.Background(), append(args, "--dry-run")...); code != 0 {
+					t.Fatal(diag)
+				}
+				unchanged, _ := os.ReadFile(path)
+				if !bytes.Equal(unchanged, original) {
+					t.Fatal("dry run changed authoring")
+				}
+				if code, _, diag := describeRun(context.Background(), args...); code != 0 {
+					t.Fatal(diag)
+				}
+				written, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var actual map[string]any
+				if err := yaml.Unmarshal(written, &actual); err != nil {
+					t.Fatal(err)
+				}
+				presentation["description"] = description
+				if len(link.args) > 0 {
+					presentation["assessment_url"] = link.args[1]
+				}
+				// JSON comparison ignores Go's int/int64 decoding choice, while
+				// retaining exact numbers, nulls, missing fields and array order.
+				want, _ := json.Marshal(expected)
+				got, _ := json.Marshal(actual)
+				if !bytes.Equal(got, want) {
+					t.Fatal("description edit changed unrelated authored fields")
+				}
+				if code, out, diag := describeRun(context.Background(), args...); code != 0 || !strings.Contains(out, "is unchanged") {
+					t.Fatalf("repeat: %d %s %s", code, out, diag)
+				}
+				again, _ := os.ReadFile(path)
+				if !bytes.Equal(again, written) {
+					t.Fatal("unchanged edit rewrote authoring")
+				}
+			})
+		}
+	}
 }
 
 func TestDescriptionEditIsAtomicSecondRunCleanAndPreservesExecution(t *testing.T) {

@@ -223,6 +223,9 @@ func (m *PresetModel) activateFocused() tea.Cmd {
 		if m.field != "" {
 			return m.activateShortcut("apply")
 		}
+		if m.page == presetReviewPage && m.defaultChoiceShown() {
+			return m.activateShortcut("default-additions")
+		}
 		if m.page != presetReviewPage && m.cursor < m.count() {
 			m.focusSelection = true
 			m.toggleMember()
@@ -266,6 +269,12 @@ func (m *PresetModel) activateShortcut(key string) tea.Cmd {
 	case "retired-weights":
 		if m.page == presetReviewPage && len(m.retiredFiles) > 0 {
 			m.deleteRetiredWeights = !m.deleteRetiredWeights
+		}
+	case "default-additions":
+		if m.page == presetReviewPage && m.defaultChoiceShown() {
+			m.keepDefault = !m.keepDefault
+			// Membership changes layout memory admission, so check again.
+			return m.startPreview()
 		}
 	case "c":
 		if p, ok := m.selectedOption(); m.page == 0 && ok {

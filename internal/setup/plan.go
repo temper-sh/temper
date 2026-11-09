@@ -50,10 +50,9 @@ type PresetPlan struct {
 	Lock                     catalog.Lock `json:"-"`
 	ModelBytes               int64        `json:"model_bytes"`
 	// MemoryBytes is the selected measured peak or fallback estimate for admission.
-	MemoryBytes int64              `json:"memory_bytes"`
-	Memory      MemoryEstimate     `json:"memory_estimate"`
-	WiredMemory *WiredMemoryAdvice `json:"wired_memory_advice,omitempty"`
-	Refusals    []string           `json:"refusals,omitempty"`
+	MemoryBytes int64          `json:"memory_bytes"`
+	Memory      MemoryEstimate `json:"memory_estimate"`
+	Refusals    []string       `json:"refusals,omitempty"`
 }
 
 type Plan struct {
@@ -168,7 +167,7 @@ func Assess(locked catalog.Lock, facts machine.Facts) (PresetPlan, error) {
 	}
 	if minimum > facts.PhysicalMemoryBytes {
 		result.Memory.Status = "exceeds-budget"
-		result.Refusals = append(result.Refusals, fmt.Sprintf("%s memory and OS allowance need %s; this machine has %s", result.Memory.Basis, Size(minimum), Size(facts.PhysicalMemoryBytes)))
+		result.Refusals = append(result.Refusals, fmt.Sprintf("needs about %s of memory including macOS, but this Mac has %s. Choose a smaller model or a shorter Context.", Size(minimum), Size(facts.PhysicalMemoryBytes)))
 	}
 	gpuMinimum := int64(0)
 	if p.Compute == catalog.ComputeGPU && predictableGPUFootprint(p) {
@@ -178,15 +177,10 @@ func Assess(locked catalog.Lock, facts machine.Facts) (PresetPlan, error) {
 		}
 		if gpuMinimum > facts.WiredLimitMiB*MiB {
 			result.Memory.Status = "exceeds-budget"
-			result.Refusals = append(result.Refusals, fmt.Sprintf("%s GPU memory and OS allowance exceed the %s wired-memory limit", result.Memory.Basis, Size(facts.WiredLimitMiB*MiB)))
+			// The live Metal budget already reflects any administrator override;
+			// Temper never suggests changing it.
+			result.Refusals = append(result.Refusals, fmt.Sprintf("needs about %s of GPU memory, but macOS lets the GPU use %s on this Mac. Choose a smaller model or a shorter Context.", Size(gpuMinimum), Size(facts.WiredLimitMiB*MiB)))
 		}
-	}
-	gpuMinimumMiB := gpuMinimum / MiB
-	if gpuMinimum%MiB != 0 {
-		gpuMinimumMiB++
-	}
-	if predictableGPUFootprint(p) {
-		result.WiredMemory = wiredMemoryAdvice(gpuMinimumMiB, facts)
 	}
 	return result, nil
 }
@@ -226,8 +220,12 @@ func build(root string, facts machine.Facts, freeBytes int64, locks []catalog.Lo
 			return Plan{}, err
 		}
 		plan.Presets = append(plan.Presets, mode)
+		label := locked.Records.Presets[locked.Preset].Presentation.DisplayName
+		if label == "" {
+			label = mode.Preset
+		}
 		for _, refusal := range mode.Refusals {
-			plan.Refusals = append(plan.Refusals, mode.Preset+": "+refusal)
+			plan.Refusals = append(plan.Refusals, label+" "+refusal)
 		}
 		projection, err := locked.Projections()
 		if err != nil {
@@ -321,7 +319,7 @@ func build(root string, facts machine.Facts, freeBytes int64, locks []catalog.Lo
 		return Plan{}, err
 	}
 	if plan.RemainingDiskBytes > freeBytes {
-		plan.Refusals = append(plan.Refusals, fmt.Sprintf("remaining-install disk allowance is %s; %s is free", Size(plan.RemainingDiskBytes), Size(freeBytes)))
+		plan.Refusals = append(plan.Refusals, fmt.Sprintf("Not enough disk space: installation needs %s, and %s is free.", Size(plan.RemainingDiskBytes), Size(freeBytes)))
 	}
 	if material.client != nil && slices.ContainsFunc(plan.RemainingDownloads, func(d Download) bool { return d.Kind == "model" }) {
 		plan.Refusals = append(plan.Refusals, material.client.Error())

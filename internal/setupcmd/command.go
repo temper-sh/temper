@@ -135,7 +135,7 @@ func newSoftwareResolver() SoftwareResolver {
 	}
 }
 
-func (c Command) start(ctx context.Context, root, layout string) (*managed.Job, *LayoutStatus, error) {
+func (c Command) start(ctx context.Context, root, layout string, waiting func(managed.Observation)) (*managed.Job, *LayoutStatus, error) {
 	if c.Start != nil {
 		before, status, err := c.Start(ctx, root, layout)
 		if status == nil {
@@ -143,7 +143,7 @@ func (c Command) start(ctx context.Context, root, layout string) (*managed.Job, 
 		}
 		return before, &LayoutStatus{Status: *status}, err
 	}
-	return c.activate(ctx, root, layout, "", false)
+	return c.activate(ctx, root, layout, "", false, waiting)
 }
 
 // layoutToStart picks the layout an install starts: the one the root runs
@@ -185,7 +185,7 @@ func (c Command) startAfterInstall(ctx context.Context, root string, configurati
 		}
 		return true
 	}
-	before, status, err := c.start(ctx, root, id)
+	before, status, err := c.start(ctx, root, id, waitNotice(out, jsonOutput))
 	started := map[string]any{"id": id}
 	if status != nil {
 		started["status"] = status
@@ -216,7 +216,7 @@ func (c Command) restartAfterUpdate(ctx context.Context, root string, configurat
 	if _, ok := configuration.Layouts[job.Layout]; !ok {
 		return true
 	}
-	before, status, err := c.start(ctx, root, job.Layout)
+	before, status, err := c.start(ctx, root, job.Layout, waitNotice(out, jsonOutput))
 	restarted := map[string]any{"id": job.Layout}
 	if status != nil {
 		restarted["status"] = status

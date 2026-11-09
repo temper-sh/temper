@@ -95,18 +95,37 @@ type Effects struct {
 	Fetch    fetch.Func
 }
 
+// Recorded reports whether this exact closure has an installation receipt.
+// It reads only the receipt and never hashes installed files, so planning
+// stays fast while an engine is running. Preparation still verifies with
+// Installed and activation with Verify; a damaged installation is reinstalled
+// there.
+func Recorded(root string, set Installation) (bool, error) {
+	_, recorded, err := exactReceipt(root, set)
+	return recorded, err
+}
+
+func exactReceipt(root string, set Installation) (receiptstore.Snapshot, bool, error) {
+	snapshot, err := receiptstore.Read(root, set.ID)
+	if err != nil || !snapshot.Exists() {
+		return snapshot, false, err
+	}
+	installation := installplan.Installation{ID: set.ID, Root: root}
+	if err = snapshot.Document.ValidateAgainst(set.Lock, installation); err != nil {
+		return snapshot, false, err
+	}
+	return snapshot, true, nil
+}
+
 // Installed credits only an exact receipt and provider observation. The zero
 // inspectors have no transport or installer, so this admission cannot download
 // or execute Python.
 func Installed(ctx context.Context, root string, set Installation) (bool, error) {
-	snapshot, err := receiptstore.Read(root, set.ID)
-	if err != nil || !snapshot.Exists() {
+	snapshot, recorded, err := exactReceipt(root, set)
+	if err != nil || !recorded {
 		return false, err
 	}
 	installation := installplan.Installation{ID: set.ID, Root: root}
-	if err = snapshot.Document.ValidateAgainst(set.Lock, installation); err != nil {
-		return false, err
-	}
 	var inspector adapter.StateInspector
 	rootUnit := set.Lock.Units[set.Lock.Selections[set.Package].RootUnit]
 	switch rootUnit.Adapter {

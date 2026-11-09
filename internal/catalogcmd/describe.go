@@ -3,7 +3,6 @@ package catalogcmd
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -14,7 +13,6 @@ import (
 
 	"github.com/temper-sh/temper/internal/catalog"
 	"github.com/temper-sh/temper/internal/software/catalogsource"
-	"gopkg.in/yaml.v3"
 )
 
 // describe edits an explicit authoring file. It neither publishes a catalog nor
@@ -78,13 +76,7 @@ func describe(ctx context.Context, args []string, out, diagnostics io.Writer) in
 	before, after := d.Presets[id], edited.Presets[id]
 	changed := before.Presentation.Description != after.Presentation.Description || before.Presentation.AssessmentURL != after.Presentation.AssessmentURL
 	if changed && !*dry {
-		var candidate []byte
-		if json.Valid(raw) {
-			candidate, err = json.MarshalIndent(edited, "", "  ")
-			candidate = append(candidate, '\n')
-		} else {
-			candidate, err = yaml.Marshal(edited)
-		}
+		candidate, err := descriptionSource(raw, id, after.Presentation.Description, assessmentURL)
 		if err != nil {
 			return failed(diagnostics, err)
 		}

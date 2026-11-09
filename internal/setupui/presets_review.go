@@ -2,67 +2,112 @@ package setupui
 
 import (
 	"fmt"
-	"maps"
-	"slices"
+	"path"
 	"strings"
 
 	"charm.land/lipgloss/v2"
 	"github.com/temper-sh/temper/internal/setup"
 )
 
-// Review confirms choices and cost. Preset tuning and layout settings belong
-// to their editors; the wizard does not repeat those forms as review tables.
-func (m *PresetModel) reviewSummary(body *screenBody, width int) {
-	c := m.plan.Configuration
-	if c == nil {
+// Review answers what will be installed and whether it fits on disk. Model
+// choice, memory evidence and layout composition belong to their own screens;
+// refusals and memory problems still appear as warnings above this content.
+
+// reviewDefaultChoice asks whether newly selected models join Default. It is
+// asked only when other layouts exist; with Default alone they join without a
+// question, because the wizard has no layout concept to explain.
+func (m *PresetModel) reviewDefaultChoice(body *screenBody, width int) {
+	if !m.defaultChoiceShown() {
 		return
 	}
-	var names, unassigned []string
-	for _, id := range slices.Sorted(maps.Keys(c.Presets)) {
-		name := c.Presets[id].Name
-		names = append(names, name)
-		if len(c.References(id)) == 0 {
-			unassigned = append(unassigned, name)
-		}
+	additions := m.defaultAdditions()
+	noun := "model"
+	if len(additions) > 1 {
+		noun = "models"
 	}
-	models := "None selected"
-	if len(names) > 0 {
-		models = strings.Join(names, ", ")
+	mark := "[x]"
+	if m.keepDefault {
+		mark = "[ ]"
 	}
-	lines := []string{"Models: " + models}
-	switch {
-	case m.input.NewConfiguration:
-		lines = append(lines, "Default layout · models load on demand")
-	case len(c.Layouts) == 0:
-		lines = append(lines, "No layout · create one with temper layout")
-	default:
-		var layouts []string
-		for _, id := range slices.Sorted(maps.Keys(c.Layouts)) {
-			layouts = append(layouts, c.Layouts[id].Name)
-		}
-		status := " · kept unchanged"
-		if len(m.retirements) > 0 {
-			status = " · retirement references updated"
-		}
-		lines = append(lines, "Layouts: "+strings.Join(layouts, ", ")+status)
-	}
+	name := m.defaultName()
+	focused := m.focus == presetContentFocus
+	card := optionCard(Option{
+		Name:        fmt.Sprintf("Add the new %s to layout “%s”", noun, name),
+		Description: m.presetNames(additions),
+		Details:     fmt.Sprintf("Apps that use “%s” can use it after installation. Your other layouts stay as they are. Press Space to change.", name),
+	}, mark, focused, width, layoutColors)
+	top := body.addCard(card, focused)
+	body.targets = append(body.targets, hitTarget{kind: hitShortcut, key: "default-additions", y: top, width: width, height: lipgloss.Height(card)})
+}
+
+// defaultChoiceShown is true on a rerun that adds models while other layouts
+// exist besides Default.
+func (m *PresetModel) defaultChoiceShown() bool {
+	return len(m.defaultAdditions()) > 0 && len(m.draft.Layouts) > 1
+}
+
+// reviewFacts lists what this screen decides as aligned rows.
+func (m *PresetModel) reviewFacts(body *screenBody, width int) {
+	plan := m.plan
 	var harnesses []string
 	options := m.harnessOptions()
-	for _, selected := range c.Integrations {
-		name := selected.ID
-		for _, option := range options {
-			if option.ID == selected.ID {
-				name = option.Name
-				break
+	if c := plan.Configuration; c != nil {
+		for _, selected := range c.Integrations {
+			name := selected.ID
+			for _, option := range options {
+				if option.ID == selected.ID {
+					name = option.Name
+					break
+				}
 			}
+			harnesses = append(harnesses, name)
 		}
-		harnesses = append(harnesses, name)
 	}
 	harnessNames := "None"
 	if len(harnesses) > 0 {
 		harnessNames = strings.Join(harnesses, ", ")
 	}
-	lines = append(lines, "Harnesses: "+harnessNames)
+	rows := [][2]string{
+		{"Harnesses", harnessNames},
+		{"Download", setup.DownloadSize(plan.RemainingDownloadBytes)},
+		{"Disk", setup.DownloadSize(plan.RemainingDiskBytes) + " needed · " + setup.Size(plan.FreeDiskBytes) + " free"},
+	}
+	if cache := plan.HFCache; cache != nil && !cache.SharedFilesystem {
+		rows = append(rows, [2]string{"Model cache", setup.DownloadSize(cache.RemainingDiskBytes) + " needed · " + setup.Size(cache.FreeDiskBytes) + " free"})
+	}
+	var firstStart int64
+	for _, preset := range plan.Presets {
+		firstStart += preset.RuntimeDiskEstimateBytes
+	}
+	if firstStart > 0 {
+		rows = append(rows, [2]string{"First start", "Splash builds a cache of about " + setup.Size(firstStart) + "; keep another 2 GiB free."})
+	}
+	body.add(factRows(rows, width), false)
+}
+
+// factRows renders label/value pairs with the values in one aligned column.
+func factRows(rows [][2]string, width int) string {
+	labelWidth := 0
+	for _, row := range rows {
+		labelWidth = max(labelWidth, lipgloss.Width(row[0]))
+	}
+	labelWidth += 2
+	label := lipgloss.NewStyle().Foreground(colorMuted).Width(labelWidth)
+	value := lipgloss.NewStyle().Foreground(colorText).Width(max(1, width-labelWidth))
+	lines := make([]string, 0, len(rows))
+	for _, row := range rows {
+		lines = append(lines, lipgloss.JoinHorizontal(lipgloss.Top, label.Render(row[0]), value.Render(row[1])))
+	}
+	return strings.Join(lines, "\n")
+}
+
+// reviewRetirements states each staged retirement action and, before deletion
+// consent, the shared files it could delete.
+func (m *PresetModel) reviewRetirements(body *screenBody, width int) {
+	if len(m.retirements) == 0 {
+		return
+	}
+	var lines []string
 	for _, change := range m.retirements {
 		line := "Remove " + change.Preset
 		if change.Successor != "" {
@@ -70,78 +115,45 @@ func (m *PresetModel) reviewSummary(body *screenBody, width int) {
 		}
 		lines = append(lines, line)
 	}
-	if len(m.retirements) > 0 {
-		lines = append(lines, "Prepare replacement before switching; clean newly unused managed files after activation.")
-		lines = append(lines, m.retiredFileLines()...)
+	lines = append(lines, "Prepare replacement before switching; clean newly unused managed files after activation.")
+	lines = append(lines, m.retiredFileLines()...)
+	body.add(infoBlock("Retired presets", lines, width), false)
+}
+
+// reviewFiles shows every file the installation needs and whether it is
+// already present. Software rows use their engine name and version.
+func (m *PresetModel) reviewFiles(body *screenBody, width int) {
+	var files []Download
+	for _, file := range m.plan.Downloads {
+		name := file.Name
+		if file.Kind == "software" {
+			name = path.Base(name)
+		}
+		files = append(files, Download{File: name, Size: setup.DownloadSize(file.Bytes), Status: file.Action()})
 	}
-	body.add(lipgloss.NewStyle().Foreground(colorText).Width(width).Render(strings.Join(lines, "\n")), false)
-	if len(unassigned) > 0 {
-		body.add(lipgloss.NewStyle().Foreground(colorWarn).Width(width).Render("Outside layouts: "+strings.Join(unassigned, ", ")+". Add with temper layout."), false)
+	if len(files) > 0 {
+		body.add(downloadTable(files, width), false)
 	}
 }
 
-func (m *PresetModel) reviewMemory(body *screenBody, width int) {
-	if len(m.plan.Presets) == 0 {
-		if m.plan.Configuration != nil && len(m.plan.Configuration.Presets) > 0 {
-			body.add(lipgloss.NewStyle().Foreground(colorMuted).Render("Memory: not assessed."), false)
-		}
+// reviewLayoutGap is the one layout note Review keeps: without a Default
+// layout, newly selected models would otherwise be unusable without notice.
+func (m *PresetModel) reviewLayoutGap(body *screenBody, width int) {
+	if m.input.NewConfiguration {
 		return
 	}
-	largest := m.plan.Presets[0]
-	for _, preset := range m.plan.Presets[1:] {
-		if preset.MemoryBytes > largest.MemoryBytes {
-			largest = preset
+	if _, ok := m.draft.Layouts[defaultLayout]; ok {
+		return
+	}
+	var outside []string
+	for _, id := range m.presetIDs() {
+		if _, saved := m.input.Configuration.Presets[id]; !saved && len(m.draft.References(id)) == 0 {
+			outside = append(outside, id)
 		}
 	}
-	var lines []string
-	if len(m.plan.Presets) > 1 {
-		_, preset := presetRecord(largest.Lock)
-		lines = append(lines, "Largest memory allowance: "+preset.Presentation.DisplayName)
+	if len(outside) > 0 {
+		body.add(infoBlock("Not in a layout yet", []string{m.presetNames(outside) + ". Add new models to a layout with temper layout to use them."}, width), false)
 	}
-	if largest.Memory.Basis == "measured" && largest.Memory.Measurement != nil {
-		// A measured value needs its counter, workload and limits to remain
-		// meaningful. Reuse the assessment's wording rather than imply total RAM.
-		lines = append(lines, largest.Memory.Lines()[:3]...)
-	} else {
-		_, preset := presetRecord(largest.Lock)
-		lines = append(lines, fmt.Sprintf("Memory estimate: %s accounted at %s context tokens.", setup.Size(largest.MemoryBytes), tokenCount(preset.Window())),
-			"Total runtime fit unknown; some allocations remain unmeasured.")
-	}
-	for _, layout := range m.plan.Layouts {
-		if layout.StartupBytes > 0 {
-			lines = append(lines, layout.Layout.Name+": "+setup.Size(layout.StartupBytes)+" accounted at startup.")
-		}
-		if !layout.AllFit && len(layout.Layout.Presets) > 1 {
-			lines = append(lines, layout.Layout.Name+": models swap on demand.")
-		}
-	}
-	body.add(lipgloss.NewStyle().Foreground(colorMuted).Width(width).Render(strings.Join(lines, "\n")), false)
-}
-
-func (m *PresetModel) reviewDownloads(body *screenBody, width int) {
-	plan := m.plan
-	title := "Downloads · " + setup.DownloadSize(plan.RemainingDownloadBytes)
-	lines := []string{"Disk: " + setup.DownloadSize(plan.RemainingDiskBytes) + " needed · " + setup.Size(plan.FreeDiskBytes) + " free"}
-	if cache := plan.HFCache; cache != nil && !cache.SharedFilesystem {
-		lines = append(lines, "Model cache: "+setup.DownloadSize(cache.RemainingDiskBytes)+" needed · "+setup.Size(cache.FreeDiskBytes)+" free")
-	}
-	var firstStart int64
-	for _, preset := range plan.Presets {
-		firstStart += preset.RuntimeDiskEstimateBytes
-	}
-	if firstStart > 0 {
-		lines = append(lines, "Splash first-start cache: about "+setup.Size(firstStart)+" extra disk; keep another 2 GiB free.")
-	}
-	var files []Download
-	for _, file := range plan.Downloads {
-		files = append(files, Download{File: file.Name, Size: setup.DownloadSize(file.Bytes), Status: file.Action()})
-	}
-	content := lipgloss.NewStyle().Foreground(colorText).Bold(true).Width(width).Render(title) + "\n" +
-		lipgloss.NewStyle().Foreground(colorText).Width(width).Render(strings.Join(lines, "\n"))
-	if len(files) > 0 {
-		content += "\n" + downloadTable(files, width)
-	}
-	body.add(content, false)
 }
 
 // retiredFileLines names each shared file before deletion consent, because

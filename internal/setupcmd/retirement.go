@@ -198,7 +198,7 @@ func (c Command) completeRetirement(ctx context.Context, root string, state *set
 	if !state.Activated {
 		layout := layoutToStart(root, state.Configuration)
 		if layout != "" && len(state.Configuration.Layouts[layout].Presets) > 0 {
-			_, status, startErr := c.start(ctx, root, layout)
+			_, status, startErr := c.start(ctx, root, layout, nil)
 			if startErr != nil {
 				return c.retirementFailure(diagnostics, "activation", startErr)
 			}

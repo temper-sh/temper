@@ -30,6 +30,8 @@ func TestRenderLayoutTellsWhereAndWhatIsRunning(t *testing.T) {
 			[]string{"Dry run: would start layout Default", "Nothing changed."}, []string{"Models"}},
 		{"nothing to stop", layoutReport{Operation: "stop"}, []string{"No layout is running."}, nil},
 		{"stop", layoutReport{Operation: "stop", Before: job}, []string{"Stopped layout Default."}, nil},
+		{"refused stop", layoutReport{Operation: "stop", Before: job, Status: managed.Status{State: managed.State{Current: job}, Error: "active requests prevent stopping"}},
+			[]string{"Layout Default did not stop.", "Problem: active requests prevent stopping"}, []string{"Stopped"}},
 		{"no layout yet", layoutReport{Operation: "status", Saved: []string{"default"}},
 			[]string{"No layout is running.", "temper layout activate default"}, nil},
 		{"stopped job", layoutReport{Operation: "status", Status: managed.Status{State: managed.State{Current: job}}},

@@ -6,6 +6,26 @@ workstream through the 1.0 release, record how the skills affected actual work
 and propose a narrow
 improvement only when the phase supplies evidence for it.
 
+## Description editing and port-test isolation — 2026-11-09
+
+Testing separated the real owned-listener refusal from range traversal, removing
+an assumption about an unreserved adjacent port. Unit design supplied a private
+observation seam without changing the public port-check behavior. The authoring
+regression compares unnormalized source data: typed round trips had hidden
+injected defaults. Reliable-effects guidance kept validation, atomic replacement,
+the concurrent-edit guard and clean reruns intact while changing only source
+serialization. JSON/YAML regressions fail before the fix and pass afterward;
+full offline Go tests, vet and race checks pass. No skill amendment is proposed.
+
+Native verification then exercised the five inherited lifecycle checks with
+cached E2B/Qwen3.5 4B weights in a disposable root. Real terminal input proved
+editor apply and configure Review; byte snapshots covered cancellation, and
+open keep-alive/SSE clients covered shutdown. All passed; the first stream's
+observed duration grounded the shorter subsequent overlap allowance. Retained
+commands and outputs are in `.scratch/0.6.0-native/`. This is lifecycle evidence,
+not model qualification. Stale README/contract claims were reconciled with the
+observed behavior. Existing guidance was sufficient.
+
 ## Runtime currency and Rapid context, 2026-11-04
 
 Unit design keeps version-sensitive CLI behavior in the Rapid adapter. Data
@@ -1052,7 +1072,7 @@ No skill change is proposed.
 ## Optional wired-memory headroom advice — 2026-11-03
 
 No skills were loaded, following the owner's instruction. The
-[memory contract](contracts/memory-estimates.md#wired-memory-headroom-advice)
+[memory contract](contracts/memory-estimates.md#when-a-model-does-not-fit)
 now distinguishes optional policy headroom from actual budget refusals. Both
 cases retain the existing manual command and its verification/undo route when a
 safe increase is available. Regression checks cover within-budget advice,

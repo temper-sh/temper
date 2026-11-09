@@ -357,9 +357,12 @@ func TestPresetCardsScrollWithoutMovingControlsOrSnappingBack(t *testing.T) {
 func TestPresetReviewShowsDownloadsAndKeepsActionsVisibleWhileScrolling(t *testing.T) {
 	m := populatedPresetEditor(t)
 	m.page = presetReviewPage
+	for i := 0; i < 12; i++ {
+		m.plan.Downloads = append(m.plan.Downloads, setup.Download{Name: fmt.Sprintf("part-%02d.safetensors", i), Bytes: 1 << 30, Kind: "model"})
+	}
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	view := ansi.Strip(m.View().Content)
-	if !strings.Contains(view, "Downloads · 0 B") || !strings.Contains(view, "On install") || !strings.Contains(view, "Cached in Hugging Face") {
+	if !strings.Contains(view, "Download ") || !strings.Contains(view, "On install") || !strings.Contains(view, "Cached in Hugging Face") {
 		t.Fatalf("file details and cache status are not visible on arrival:\n%s", view)
 	}
 	for i := 0; i < 100; i++ {
@@ -500,24 +503,38 @@ func TestWizardFooterKeepsFocusedActionsVisibleAndClickableAfterResize(t *testin
 	}
 }
 
-func TestWizardReviewExplainsInitialAndExistingLayoutAvailability(t *testing.T) {
-	for _, fresh := range []bool{true, false} {
-		m := populatedPresetEditor(t)
-		m.input.NewConfiguration = fresh
-		m.page = presetReviewPage
-		if !fresh {
-			layout := m.draft.Layouts["default"]
-			layout.Presets = layout.Presets[:1]
-			m.draft.Layouts["default"] = layout
-		}
-		body := m.presetContent(76)
-		text := strings.Join(strings.Fields(ansi.Strip(strings.Join(body.blocks, "\n"))), " ")
-		if fresh && (!strings.Contains(text, "Default layout") || !strings.Contains(text, "load on demand")) {
-			t.Fatalf("first setup does not explain on-demand behavior:\n%s", text)
-		}
-		if !fresh && (!strings.Contains(text, "kept unchanged") || !strings.Contains(text, "Outside layouts") || !strings.Contains(text, "temper layout")) {
-			t.Fatalf("rerun does not explain preserved layouts or unassigned presets:\n%s", text)
-		}
+// Review does not explain layouts: the wizard has no layout editor. The only
+// layout note is for new models that would otherwise be unusable because the
+// configuration has no Default layout.
+func TestWizardReviewMentionsLayoutsOnlyWhenNewModelsHaveNone(t *testing.T) {
+	for _, state := range []string{"first setup", "saved outside layouts", "no Default"} {
+		t.Run(state, func(t *testing.T) {
+			m := populatedPresetEditor(t)
+			m.page = presetReviewPage
+			if state != "first setup" {
+				m.input.NewConfiguration = false
+			}
+			switch state {
+			case "saved outside layouts":
+				for id, p := range m.draft.Presets {
+					m.input.Configuration.Presets[id] = p
+				}
+				layout := m.draft.Layouts["default"]
+				layout.Presets = layout.Presets[:1]
+				m.draft.Layouts["default"] = layout
+			case "no Default":
+				m.draft.Layouts = map[string]setup.Layout{}
+			}
+			body := m.presetContent(76)
+			text := strings.Join(strings.Fields(ansi.Strip(strings.Join(body.blocks, "\n"))), " ")
+			gap := strings.Contains(text, "Not in a layout yet") && strings.Contains(text, "temper layout")
+			if gap != (state == "no Default") {
+				t.Fatalf("layout note shown=%v for %s:\n%s", gap, state, text)
+			}
+			if state != "no Default" && strings.Contains(strings.ToLower(text), "layout") {
+				t.Fatalf("review explains layouts for %s:\n%s", state, text)
+			}
+		})
 	}
 }
 
@@ -526,4 +543,31 @@ func clickPresetText(t *testing.T, m *PresetModel, label string) tea.Cmd {
 	x, y := textPosition(t, m.View().Content, label)
 	_, cmd := m.Update(tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft})
 	return cmd
+}
+
+// Preset cards use words a new user can act on: the download size, one memory
+// figure and the size class. Measurement records and chat templates stay in
+// the preset editor.
+func TestPresetCardsUsePlainWords(t *testing.T) {
+	m := presetEditor(t, "qwen3.8-27b-q4xl-splash", "qwen3.5-4b-q4km-off")
+	for i := range m.input.Presets {
+		p := &m.input.Presets[i]
+		p.Group, p.Tier, p.ModelBytes, p.MemoryBytes, p.MemoryBasis = "general", "S", 3<<30, 4<<30, "estimated"
+		if i == 0 {
+			p.MemoryBasis = "measured"
+		}
+	}
+	m.group = "general"
+	m.width, m.height = 120, 80
+	view := strings.Join(strings.Fields(ansi.Strip(m.View().Content)), " ")
+	for _, want := range []string{"Size S · for Macs with 16–32 GB of memory", "3.00 GiB download", "Memory 4.00 GiB, measured", "Memory at least 4.00 GiB"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("cards omit %q:\n%s", want, view)
+		}
+	}
+	for _, jargon := range []string{"Observed workload", "Measured peak", "Memory estimate", "estimated placement", "Template "} {
+		if strings.Contains(view, jargon) {
+			t.Errorf("cards still show %q:\n%s", jargon, view)
+		}
+	}
 }

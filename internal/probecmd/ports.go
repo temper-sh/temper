@@ -10,11 +10,15 @@ import (
 // one of its engine ports, and names that process. Each root has its own
 // block, so this finds another program, or two roots whose blocks collide.
 func EnginePortsFree(start, count int) error {
+	return enginePortsFree(start, count, listenerClosed, portHolder)
+}
+
+func enginePortsFree(start, count int, closed func(string) bool, holder func(int) string) error {
 	for port := start; port < start+count; port++ {
-		if listenerClosed("127.0.0.1:" + strconv.Itoa(port)) {
+		if closed("127.0.0.1:" + strconv.Itoa(port)) {
 			continue
 		}
-		return fmt.Errorf("engine port %d of this Temper folder is in use by %s; stop it and try again", port, portHolder(port))
+		return fmt.Errorf("engine port %d of this Temper folder is in use by %s; stop it and try again", port, holder(port))
 	}
 	return nil
 }

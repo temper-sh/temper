@@ -67,7 +67,7 @@ func TestPythonGPUPresetsAreChargedAgainstWiredMemory(t *testing.T) {
 			observed := facts(64)
 			observed.MetalDeviceMemoryMiB, observed.WiredLimitMiB = 8192, 8192
 			plan, err := setup.Assess(selectedLock(t, d, id), observed)
-			if err != nil || !strings.Contains(strings.Join(plan.Refusals, "; "), "wired-memory limit") {
+			if err != nil || !strings.Contains(strings.Join(plan.Refusals, "; "), "of GPU memory") {
 				t.Fatalf("GPU weights escaped the wired allowance: %+v %v", plan, err)
 			}
 		})

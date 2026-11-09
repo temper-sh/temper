@@ -35,6 +35,9 @@ func (m *Material) InspectDownloadClient(check func() error) {
 	m.client = check()
 }
 
+// InspectPresetSoftware credits software closures with an exact installation
+// receipt. It reads receipts only; preparation verifies installed files before
+// use, so a review never re-hashes engines and runtimes.
 func (m *Material) InspectPresetSoftware(ctx context.Context, locks []catalog.Lock) error {
 	m.software = map[string]bool{}
 	for _, lock := range locks {
@@ -46,11 +49,14 @@ func (m *Material) InspectPresetSoftware(ctx context.Context, locks []catalog.Lo
 			if _, seen := m.software[set.ID]; seen {
 				continue
 			}
-			installed, err := preset.Installed(ctx, m.root, set)
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			recorded, err := preset.Recorded(m.root, set)
 			if err != nil {
 				return err
 			}
-			m.software[set.ID] = installed
+			m.software[set.ID] = recorded
 		}
 	}
 	return nil

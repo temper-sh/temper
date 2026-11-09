@@ -5,41 +5,13 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"net/netip"
 	"os"
 	"os/exec"
 	"runtime"
-	"strings"
 	"syscall"
 	"testing"
 	"time"
 )
-
-func TestManagedAcceptedConnections(t *testing.T) {
-	for _, tc := range []struct {
-		name, raw         string
-		accepted, invalid bool
-	}{
-		{"none", "", false, false},
-		{"outgoing", "p123\nf11\nn127.0.0.1:52356->127.0.0.1:12433\n", false, false},
-		{"incoming", "p123\nf11\nn127.0.0.1:18090->127.0.0.1:52356\n", true, false},
-		{"both", "p123\nf11\nn127.0.0.1:52356->127.0.0.1:12433\nf12\nn127.0.0.1:18090->127.0.0.1:52357\n", true, false},
-		{"mapped", "p123\nf11\nn[::ffff:127.0.0.1]:18090->[::ffff:127.0.0.1]:52357\n", true, false},
-		{"wrong-pid", "p124\nf11\nn127.0.0.1:52356->127.0.0.1:12433\n", false, true},
-		{"unknown-field", "p123\nx11\n", false, true},
-		{"missing-socket", "p123\nf11\n", false, true},
-		{"missing-fd", "p123\nn127.0.0.1:52356->127.0.0.1:12433\n", false, true},
-		{"wrong-local", "p123\nf11\nn192.0.2.1:52356->127.0.0.1:12433\n", false, true},
-		{"malformed-peer", "p123\nf11\nn127.0.0.1:52356->unknown\n", false, true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			got, err := managedAcceptedConnections([]byte(tc.raw), 123, netip.MustParseAddrPort("127.0.0.1:18090"))
-			if got != tc.accepted || (err != nil) != tc.invalid {
-				t.Fatal(got, err)
-			}
-		})
-	}
-}
 
 // Disposable socket helper: no launchd, model, or inference. The parent owns
 // this lifetime and tests real lsof endpoints and SIGSTOP/SIGCONT behavior.
@@ -73,7 +45,7 @@ func TestManagedSocketProcess(t *testing.T) {
 	}
 }
 
-func TestManagedQuiesceDistinguishesRealIncomingAndOutgoingSockets(t *testing.T) {
+func TestManagedQuiesceHoldsTheRouterWithIdleClientConnections(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("macOS kernel/lsof observation")
 	}
@@ -141,13 +113,32 @@ func TestManagedQuiesceDistinguishesRealIncomingAndOutgoingSockets(t *testing.T)
 	if line, err := bufio.NewReader(incoming).ReadString('\n'); err != nil || line != "accepted\n" {
 		t.Fatal(line, err)
 	}
-	if release, err := QuiesceManaged(identity, listen); release != nil || err == nil || !strings.Contains(err.Error(), "accepted connections") {
-		t.Fatal("incoming client did not refuse", err)
+	// The client is this test process: the refusal names the app to close.
+	// An idle client connection is not work: the router's own shutdown closes
+	// it. The hold still freezes the router until release.
+	release, err = QuiesceManaged(identity, listen)
+	if err != nil {
+		t.Fatal("idle client refused quiesce", err)
 	}
 	if _, err := fmt.Fprintln(stdin, "ping"); err != nil {
 		t.Fatal(err)
 	}
-	if !scanner.Scan() || scanner.Text() != "alive" {
-		t.Fatal("refusal left router suspended")
+	answered := make(chan bool, 1)
+	go func() { answered <- scanner.Scan() && scanner.Text() == "alive" }()
+	select {
+	case <-answered:
+		t.Fatal("held router kept running")
+	case <-time.After(300 * time.Millisecond):
+	}
+	if err := release(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case ok := <-answered:
+		if !ok {
+			t.Fatal("released router did not resume")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("release left router suspended")
 	}
 }

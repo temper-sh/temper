@@ -36,9 +36,8 @@ func (p Plan) MarshalJSON() ([]byte, error) {
 					RuntimeDiskEstimateBytes int64                 `json:"runtime_disk_estimate_bytes,omitempty"`
 					Estimate                 MemoryEstimate        `json:"memory_estimate"`
 					MemoryBytes              int64                 `json:"memory_bytes"`
-					WiredMemory              *WiredMemoryAdvice    `json:"wired_memory_advice,omitempty"`
 					Refusals                 []string              `json:"refusals,omitempty"`
-				}{selected.Name, selected.Lock.Records.Presets[selected.Lock.Preset].Compute, m.ModelBytes, m.RuntimeDiskEstimateBytes, m.Memory, m.MemoryBytes, m.WiredMemory, m.Refusals}
+				}{selected.Name, selected.Lock.Records.Presets[selected.Lock.Preset].Compute, m.ModelBytes, m.RuntimeDiskEstimateBytes, m.Memory, m.MemoryBytes, m.Refusals}
 				break
 			}
 		}
@@ -194,11 +193,6 @@ func (p Plan) configurationSections() []Section {
 			lines = append(lines, "Competing on-demand models use exclusive swapping; a request finishes before eviction.")
 		}
 		sections = append(sections, Section{Title: "Layout · " + l.Layout.Name, Lines: lines})
-	}
-	for _, m := range p.Presets {
-		if m.WiredMemory != nil {
-			sections = append(sections, m.WiredMemory.Section())
-		}
 	}
 	harnesses := []string{"None selected. Harness files will not be changed."}
 	if len(p.Configuration.Integrations) > 0 {

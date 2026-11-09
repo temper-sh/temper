@@ -98,7 +98,7 @@ func (m *PresetModel) pageExplanation(width int) string {
 	case m.page == presetHarnessPage:
 		title, explanation = "Connect your harnesses", "Choose which apps receive this root’s active models."
 	case m.page == presetReviewPage:
-		title, explanation = "Review your setup", "Check models, apps and downloads, then install or save for later."
+		title, explanation = "Review your setup", "Check what will be downloaded, then install or save for later."
 	}
 	return tui.PageExplanation(title, explanation, width)
 }
@@ -143,10 +143,7 @@ func (m *PresetModel) presetContent(width int) screenBody {
 					lipgloss.NewStyle().Foreground(colorMuted).Width(width).Render(section.Description), false)
 			}
 			if i == 0 || newTask || p.Tier != rows[i-1].Tier || (p.Unavailable == "") != (rows[i-1].Unavailable == "") {
-				group := catalog.MemoryTier(p.Tier).Label()
-				if p.Tier != "" {
-					group += " · estimated placement"
-				}
+				group := tierHeading(catalog.MemoryTier(p.Tier))
 				if p.Unavailable != "" {
 					group = "Unavailable on this machine · " + group
 				}
@@ -184,18 +181,13 @@ func (m *PresetModel) presetContent(width int) screenBody {
 			}
 			details := metadata.Foreground(colorMuted).Render(label) + metadata.Foreground(presetColors.Accent).Render(tokenCount(record.Window())+" tokens")
 			if p.MemoryBytes > 0 {
-				label, limit := " · Memory estimate ", ""
+				// One plain memory figure. The measurement record and the chat
+				// template stay in the preset editor, where their context exists.
+				label, basis := " · Memory at least ", ""
 				if p.MemoryBasis == "measured" {
-					label, limit = " · Measured peak ", " · Observed workload"
+					label, basis = " · Memory ", ", measured"
 				}
-				details += metadata.Foreground(colorMuted).Render(label) + metadata.Foreground(presetColors.Accent).Render(setup.Size(p.MemoryBytes)) + metadata.Foreground(colorMuted).Render(limit)
-			}
-			if template := record.TemplateID(); record.Interface == "chat-completions" && template != catalog.BuiltinTemplate {
-				name := lock.Records.Templates[template].Presentation.DisplayName
-				if name == "" {
-					name = template
-				}
-				details += metadata.Foreground(colorMuted).Render(" · Template ") + metadata.Foreground(presetColors.Name[1]).Render(name)
+				details += metadata.Foreground(colorMuted).Render(label) + metadata.Foreground(presetColors.Accent).Render(setup.Size(p.MemoryBytes)) + metadata.Foreground(colorMuted).Render(basis)
 			}
 			compute := ""
 			if len(record.ComputeOptions) > 1 {
@@ -226,7 +218,7 @@ func (m *PresetModel) presetContent(width int) screenBody {
 			}
 			size := ""
 			if p.ModelBytes > 0 {
-				size = setup.Size(p.ModelBytes)
+				size = setup.Size(p.ModelBytes) + " download"
 			}
 			card := optionCard(Option{Name: p.heading(background), Size: size, Description: description,
 				Details: details, AssessmentURL: p.AssessmentURL, DisabledReason: p.Unavailable}, mark, focused, width, presetColors)
@@ -356,7 +348,7 @@ func (m *PresetModel) editContent(body *screenBody, width int) {
 
 func (m *PresetModel) reviewContent(body *screenBody, width int) {
 	if m.loading {
-		body.add(infoBlock("Checking your setup…", []string{"Resolving exact presets, downloads and machine limits."}, width), false)
+		body.add(infoBlock("Checking your setup…", []string{"Looking up downloads and disk space."}, width), false)
 		return
 	}
 	if m.reviewErr != nil {
@@ -372,9 +364,11 @@ func (m *PresetModel) reviewContent(body *screenBody, width int) {
 			body.add(warningBlock(section.Title, section.Lines, width), false)
 		}
 	}
-	m.reviewSummary(body, width)
-	m.reviewDownloads(body, width)
-	m.reviewMemory(body, width)
+	m.reviewDefaultChoice(body, width)
+	m.reviewFacts(body, width)
+	m.reviewRetirements(body, width)
+	m.reviewFiles(body, width)
+	m.reviewLayoutGap(body, width)
 }
 
 func (m *PresetModel) presetFooter(width int) (string, []hitTarget) {
@@ -421,7 +415,20 @@ func (m *PresetModel) presetFooter(width int) (string, []hitTarget) {
 		if len(m.retiredFiles) > 0 {
 			hints = append(hints, tui.Hint{Key: "w", Action: "HF files"})
 		}
+		if m.defaultChoiceShown() {
+			hints = append(hints, tui.Hint{Key: "Space", Action: "change"})
+		}
 	}
 	parts = append(parts, tui.KeyHelp(hints, width))
 	return strings.Join(parts, "\n"), targets
+}
+
+// tierHeading names a catalog size class by the Macs it is meant for.
+func tierHeading(t catalog.MemoryTier) string {
+	size, machines, ok := strings.Cut(t.Label(), " · ")
+	if !ok || t == "" {
+		return "Size not specified"
+	}
+	machines = strings.TrimPrefix(machines, ">")
+	return "Size " + size + " · for Macs with " + machines + " of memory"
 }

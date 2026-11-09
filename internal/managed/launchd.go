@@ -249,7 +249,7 @@ func (l Launchd) Stop(ctx context.Context, j Job) error {
 		return nil
 	}
 	if o.Busy {
-		return errors.New("active requests prevent stopping")
+		return busyError("active requests prevent stopping")
 	}
 	if o.PID != 0 {
 		before, err := probecmd.ObserveManaged(o.PID, j.Router, j.Arguments(), j.Listen, j.commands())
@@ -271,6 +271,17 @@ func (l Launchd) Stop(ctx context.Context, j Job) error {
 			}
 		}
 		defer func() { _ = l.Recover(context.WithoutCancel(ctx), []Job{j}) }()
+		// Ask the router again just before the pause, so a request that started
+		// after the first observation still refuses the stop.
+		if o.Ready {
+			busy, err := readActivity(ctx, j.Listen)
+			if err != nil {
+				return err
+			}
+			if busy {
+				return busyError("active requests prevent stopping")
+			}
+		}
 		release, err := probecmd.QuiesceManaged(routerIdentity, j.Listen)
 		if err != nil {
 			return err
