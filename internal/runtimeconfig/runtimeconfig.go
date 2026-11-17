@@ -10,7 +10,9 @@ import (
 	"io"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -21,6 +23,7 @@ var packagePattern = regexp.MustCompile(`^[a-z0-9]+(?:[.-][a-z0-9]+)*$`)
 type Requirement struct {
 	Role               string   `json:"role,omitempty"`
 	Arguments          []string `json:"arguments,omitempty"`
+	RelaunchArguments  []string `json:"relaunch_arguments,omitempty"`
 	Package            string   `json:"package"`
 	RelativeExecutable string   `json:"relative_executable"`
 }
@@ -85,6 +88,14 @@ func (d Document) Validate() error {
 		if !safeRelativePath(requirement.RelativeExecutable) {
 			return fmt.Errorf("runtime requirement %d executable %q is not a safe relative path", index, requirement.RelativeExecutable)
 		}
+		if len(requirement.RelaunchArguments) > 0 {
+			if requirement.Package != "splash" || requirement.Role != "engine" {
+				return errors.New("relaunch arguments require the selected Splash native engine")
+			}
+			if err := ValidateSplashRelaunch(requirement.Arguments, requirement.RelaunchArguments); err != nil {
+				return err
+			}
+		}
 		if requirement.Package == "splash" {
 			if !(requirement.Role == "frontend" && requirement.RelativeExecutable == "python/bin/python3.13" || requirement.Role == "engine" && requirement.RelativeExecutable == "engine/splash") || len(requirement.Arguments) == 0 {
 				return errors.New("Splash requires its exact frontend and native command identities")
@@ -136,6 +147,26 @@ func (d Document) Validate() error {
 	}
 	if !hasRouter {
 		return errors.New("runtime requirements must include the exact llama-swap router")
+	}
+	return nil
+}
+
+// ValidateSplashRelaunch checks the one alternate invocation Splash's frontend
+// produces for a fixed context. It grants no argument wildcard or new executable.
+func ValidateSplashRelaunch(initial, relaunch []string) error {
+	if len(relaunch) == 0 {
+		return nil
+	}
+	if len(initial) < 5 || initial[0] != "serve-native" || !filepath.IsAbs(initial[1]) {
+		return errors.New("Splash relaunch requires a source-directory native command")
+	}
+	context, err := strconv.Atoi(initial[2])
+	if err != nil || context <= 0 || strconv.Itoa(context) != initial[2] {
+		return errors.New("Splash relaunch requires an explicit positive context")
+	}
+	if len(relaunch) != len(initial)+2 || !slices.Equal(relaunch[:len(initial)], initial) ||
+		relaunch[len(initial)] != "--relaunch-context" || relaunch[len(initial)+1] != initial[2] {
+		return errors.New("Splash relaunch differs from the selected command and context")
 	}
 	return nil
 }

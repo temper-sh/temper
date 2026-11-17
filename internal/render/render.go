@@ -30,6 +30,9 @@ type Inputs struct {
 	Lock     lockfile.Document
 	Mode     string
 	Root     string
+	// SplashModels contains verified outputs of the release's local preparation.
+	// Omit for pure compilation/preview before preparation exists.
+	SplashModels map[string]string
 	// StartPort is the first engine port of Root's block (datadir.StartPort).
 	StartPort int
 }
@@ -76,7 +79,7 @@ func Build(inputs Inputs) (Bundle, error) {
 	if err != nil {
 		return Bundle{}, err
 	}
-	resolved, err := resolveMembers(inputs.Manifest, inputs.Lock, mode, inputs.Root)
+	resolved, err := resolveMembers(inputs.Manifest, inputs.Lock, mode, inputs.Root, inputs.SplashModels)
 	if err != nil {
 		return Bundle{}, err
 	}
@@ -114,7 +117,7 @@ type resolvedMember struct {
 	Kapitsa         *engine.KapitsaTuning
 }
 
-func resolveMembers(document manifest.Document, lock lockfile.Document, mode manifest.Mode, root string) ([]resolvedMember, error) {
+func resolveMembers(document manifest.Document, lock lockfile.Document, mode manifest.Mode, root string, splashModels map[string]string) ([]resolvedMember, error) {
 	var resolved []resolvedMember
 	placements := []struct {
 		name    string
@@ -154,6 +157,9 @@ func resolveMembers(document manifest.Document, lock lockfile.Document, mode man
 			}
 			if layout.Splash != nil {
 				assembly, state := splash.Paths(root, member.Layout, entry.Digest(), layout.Splash.SoftwareSHA256)
+				if prepared := splashModels[member.Layout]; prepared != "" {
+					assembly = prepared
+				}
 				item.Splash = &engine.SplashTuning{SplashConfig: layout.Splash.SplashConfig, Adapter: layout.Splash.Adapter, ModelID: layout.Model.Repo, AssemblyPath: assembly, StatePath: state}
 			}
 			if layout.Kapitsa != nil {
@@ -384,7 +390,7 @@ func renderRuntimeRequirements(requirements []engine.RuntimeRequirement) ([]byte
 	converted := make([]runtimeconfig.Requirement, 0, len(requirements))
 	for _, requirement := range requirements {
 		converted = append(converted, runtimeconfig.Requirement{
-			Package: requirement.Package, RelativeExecutable: requirement.RelativeExecutable, Role: requirement.Role, Arguments: requirement.Arguments,
+			Package: requirement.Package, RelativeExecutable: requirement.RelativeExecutable, Role: requirement.Role, Arguments: requirement.Arguments, RelaunchArguments: requirement.RelaunchArguments,
 		})
 	}
 	data, err := runtimeconfig.Marshal(runtimeconfig.Document{

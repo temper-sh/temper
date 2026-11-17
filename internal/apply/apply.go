@@ -55,13 +55,18 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	if err := verifySelectedArtifactSets(root, options.Mode, document, locked); err != nil {
 		return Result{}, err
 	}
+	prepared, err := splash.PreparedModels(root, options.Mode, document, locked)
+	if err != nil {
+		return Result{}, err
+	}
 
 	bundle, err := render.Build(render.Inputs{
-		Manifest:  document,
-		Lock:      locked,
-		Mode:      options.Mode,
-		Root:      root,
-		StartPort: datadir.StartPort(root),
+		Manifest:     document,
+		Lock:         locked,
+		Mode:         options.Mode,
+		Root:         root,
+		StartPort:    datadir.StartPort(root),
+		SplashModels: prepared,
 	})
 	if err != nil {
 		return Result{}, err

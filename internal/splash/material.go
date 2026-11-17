@@ -21,6 +21,7 @@ import (
 	"github.com/temper-sh/temper/internal/artifactset"
 	"github.com/temper-sh/temper/internal/lockfile"
 	"github.com/temper-sh/temper/internal/manifest"
+	"github.com/temper-sh/temper/internal/render/engine"
 )
 
 // MetadataProgram delegates GGUF interpretation and draft compatibility to the
@@ -54,6 +55,7 @@ type Material struct {
 	root, path, key, state          string
 	set                             artifactset.Set
 	modelRepo, draftRepo, patchPath string
+	local                           bool
 }
 
 type record struct {
@@ -77,6 +79,10 @@ func New(root, id string, layout manifest.Layout, entry lockfile.Entry, patches 
 	}
 	path, state := Paths(root, id, entry.Digest(), layout.Splash.SoftwareSHA256)
 	m := Material{root: root, path: path, key: filepath.Base(path), state: state, set: set, modelRepo: entry.Repo, draftRepo: entry.Draft.Repo}
+	m.local, err = engine.SplashLocalPreparation(layout.EngineVersion)
+	if err != nil {
+		return Material{}, err
+	}
 	if layout.ChatTemplate != "" {
 		m.patchPath = filepath.Join(set.Path(), "patches", layout.ChatTemplate, patches[layout.ChatTemplate].File)
 	}
@@ -90,6 +96,10 @@ func (m Material) links() map[string]string {
 // Verify hashes only the small derived files; cache-backed weights are admitted
 // by the source artifact set. The caller can additionally audit that set's bytes.
 func (m Material) Verify() error {
+	if m.local {
+		_, err := m.localRecord()
+		return err
+	}
 	if err := m.set.Verify(); err != nil {
 		return err
 	}
@@ -178,6 +188,9 @@ type DeriveFunc func(context.Context, string, string, string, string) (map[strin
 // Prepare publishes one complete assembly, or leaves the previous state intact.
 // A present but changed assembly is refused, never repaired in place.
 func (m Material) Prepare(ctx context.Context, python string, derive DeriveFunc) error {
+	if m.local {
+		return m.prepareLocal(ctx, python)
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -352,7 +365,11 @@ func directories(root, target string, create bool) ([]string, error) {
 // PrepareState establishes writable cache/home roots immediately before serve.
 // Refuse symlinked parents instead of redirecting native effects outside root.
 func (m Material) PrepareState() error {
-	for _, name := range []string{"home", "weights"} {
+	names := []string{"home"}
+	if !m.local {
+		names = append(names, "weights")
+	}
+	for _, name := range names {
 		if _, err := directories(m.root, filepath.Join(m.state, name), true); err != nil {
 			return err
 		}

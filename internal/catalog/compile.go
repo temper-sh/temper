@@ -313,6 +313,7 @@ func (l Lock) projections() (Projections, error) {
 		}
 		if c.Splash != nil {
 			m.Llama = nil
+			m.EngineVersion = d.Engines[layout.Engine].Supply.Release.Version
 			m.Splash = &manifest.SplashTuning{SplashConfig: c.Splash.SplashConfig, SoftwareSHA256: d.Engines[layout.Engine].Supply.Release.Artifact.SHA256}
 			if c.Kind != "splash/v1" {
 				m.Splash.Adapter = c.Kind

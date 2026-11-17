@@ -18,9 +18,14 @@ import (
 )
 
 func fixture(t *testing.T) Material {
+	return fixtureVersion(t, "")
+}
+
+func fixtureVersion(t *testing.T, version string) Material {
 	t.Helper()
 	sum := func(data string) string { h := sha256.Sum256([]byte(data)); return hex.EncodeToString(h[:]) }
 	layout := manifest.Layout{Model: manifest.Model{Repo: "owner/target", Format: "gguf", Files: []string{"nested/model.gguf"}}, Draft: &manifest.Model{Repo: "owner/draft", Format: "safetensors", Files: []string{"config.json", "model.safetensors"}}, ChatTemplate: "frog", Splash: &manifest.SplashTuning{SoftwareSHA256: strings.Repeat("a", 64)}}
+	layout.EngineVersion = version
 	entry := lockfile.Entry{Repo: layout.Model.Repo, Revision: strings.Repeat("b", 40), Files: []lockfile.File{{Name: "nested/model.gguf", SHA256: sum("target")}}, Patches: []lockfile.Patch{{Name: "frog", SHA256: sum("Frog template")}}, Draft: &lockfile.Model{Repo: "owner/draft", Revision: strings.Repeat("c", 40), Files: []lockfile.File{{Name: "config.json", SHA256: sum("config")}, {Name: "model.safetensors", SHA256: sum("draft")}}}}
 	patches := map[string]manifest.Patch{"frog": {File: "chat.jinja"}}
 	m, err := New(t.TempDir(), "qwen", layout, entry, patches)

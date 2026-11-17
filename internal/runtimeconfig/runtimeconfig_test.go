@@ -1,11 +1,54 @@
 package runtimeconfig_test
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/temper-sh/temper/internal/runtimeconfig"
 )
+
+func TestSplashRelaunchRoundTripAllowsOnlyTheExactFixedContextCommand(t *testing.T) {
+	initial := []string{"serve-native", "/prepared", "32768", "25769803776", "0", "--kv-format", "bf16"}
+	relaunch := append(slices.Clone(initial), "--relaunch-context", "32768")
+	for _, scenario := range []string{"valid", "context", "target", "extra", "automatic context", "frontend", "other package"} {
+		t.Run(scenario, func(t *testing.T) {
+			r := runtimeconfig.Requirement{Package: "splash", RelativeExecutable: "engine/splash", Role: "engine", Arguments: slices.Clone(initial), RelaunchArguments: slices.Clone(relaunch)}
+			switch scenario {
+			case "context":
+				r.RelaunchArguments[len(relaunch)-1] = "16384"
+			case "target":
+				r.RelaunchArguments[1] = "/other"
+			case "extra":
+				r.RelaunchArguments = append(r.RelaunchArguments, "--arbitrary")
+			case "automatic context":
+				r.Arguments[2], r.RelaunchArguments[2], r.RelaunchArguments[len(relaunch)-1] = "0", "0", "0"
+			case "frontend":
+				r.Role = "frontend"
+			case "other package":
+				r.Package = "vllm-metal"
+			}
+			d := runtimeconfig.Document{Schema: runtimeconfig.SchemaV1, Requirements: []runtimeconfig.Requirement{
+				{Package: "llama-swap", RelativeExecutable: "llama-swap"}, r,
+				{Package: "splash", RelativeExecutable: "python/bin/python3.13", Role: "frontend", Arguments: []string{"bootstrap"}},
+			}}
+			raw, err := runtimeconfig.Marshal(d)
+			if scenario != "valid" {
+				if err == nil {
+					t.Fatal("invalid relaunch authority serialized")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			parsed, err := runtimeconfig.Parse(raw)
+			if err != nil || !slices.Equal(parsed.Requirements[1].RelaunchArguments, relaunch) {
+				t.Fatal("relaunch authority changed in round trip", parsed, err)
+			}
+		})
+	}
+}
 
 func TestCanonicalRoundTrip(t *testing.T) {
 	document := runtimeconfig.Document{

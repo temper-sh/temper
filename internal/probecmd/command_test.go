@@ -398,6 +398,23 @@ func TestSplashPlanResolvesBothProcessesFromOneExactRelease(t *testing.T) {
 	if err != nil || preparedPython != frontend {
 		t.Fatal(preparedPython, err)
 	}
+	// The modern release carries a second exact argv for a native relaunch.
+	if len(inv.EngineRelaunchArguments) != 0 {
+		t.Fatal("legacy selection acquired relaunch authority")
+	}
+	requirements.Requirements[1].Arguments = []string{"serve-native", "/prepared", "32768", "25769803776", "0"}
+	requirements.Requirements[1].RelaunchArguments = []string{"serve-native", "/prepared", "32768", "25769803776", "0", "--relaunch-context", "32768"}
+	raw, err = runtimeconfig.Marshal(requirements)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(f.root, "rendered", "generations", f.generation, "runtime", "requirements.json"), raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	inv, err = probecmd.Plan(probecmd.Options{Root: f.root, Installation: "field-kit-qwen", SoftwareLock: softwareLock(t, f.lockPath), Generation: f.generation, Listen: "127.0.0.1:18080"})
+	if err != nil || strings.Join(inv.EngineRelaunchArguments, "|") != strings.Join(requirements.Requirements[1].RelaunchArguments, "|") {
+		t.Fatal("plan lost the selected relaunch command", inv, err)
+	}
 }
 
 // softwareLock reads the fixture lock at call time; tests edit it in place.

@@ -17,6 +17,71 @@ import (
 
 const splashLayout = "qwen3.8-27b-q4xl-splash"
 
+func TestSplash17ProjectsReleaseAndRendersBothProcessesAtPreparedPath(t *testing.T) {
+	doc := splashCatalog(t)
+	p := doc.Presets[splashLayout]
+	e := doc.Engines[p.Engine]
+	e.Adapter = "splash/v2"
+	e.Supply.Release.Version = "1.7.0"
+	e.Supply.Release.Artifact.Locator = "https://github.com/incoai/splash/releases/download/1.7.0/splash-1.7.0-arm64-macos26.tar.gz"
+	e.Supply.Release.Artifact.ArchiveRoot = "splash-1.7.0-arm64-macos26"
+	doc.Engines[p.Engine] = e
+	for i := range p.Profiles {
+		p.Profiles[i].EngineConfig.Kind = "splash/v2"
+		p.Profiles[i].EngineConfig.Splash.Kind = "splash/v2"
+	}
+	doc.Presets[splashLayout] = p
+	locked := compileSplash(t, doc)
+	raw, _ := json.Marshal(locked)
+	var round catalog.Lock
+	if err := json.Unmarshal(raw, &round); err != nil {
+		t.Fatal(err)
+	}
+	projection, err := round.Projections()
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, _ := yaml.Marshal(projection.Manifest)
+	m, err := manifest.Parse(encoded)
+	if err != nil || m.Layouts[splashLayout].EngineVersion != "1.7.0" {
+		t.Fatal("release lost through lock/manifest projection", err)
+	}
+	prepared := "/temper path/prepared/splash/selection/models/.resolved/exact"
+	inputs := render.Inputs{StartPort: 10001, Manifest: m, Lock: projection.Artifacts, Mode: locked.Preset, Root: "/temper path", SplashModels: map[string]string{splashLayout: prepared}}
+	bundle, err := render.Build(inputs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	commands, err := render.Commands(inputs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, artifact := range bundle.Artifacts {
+		if artifact.Path != "runtime/requirements.json" {
+			continue
+		}
+		r, err := runtimeconfig.Parse(artifact.Data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, requirement := range r.Requirements {
+			if requirement.Role != "engine" && requirement.Role != "frontend" {
+				continue
+			}
+			if !slices.Contains(requirement.Arguments, prepared) || slices.Contains(requirement.Arguments, "--tokenizer") {
+				t.Fatal("requirements did not bind prepared directory", requirement)
+			}
+			if requirement.Role == "frontend" {
+				if !slices.Contains(requirement.Arguments, "--chat-template-file") || !slices.Equal(requirement.Arguments, commands[splashLayout].Runtime().Requirement.Arguments) {
+					t.Fatal("managed and execution frontend arguments differ", requirement)
+				}
+			} else if !slices.Equal(requirement.RelaunchArguments, commands[splashLayout].Runtime().AdditionalRequirements[0].RelaunchArguments) || len(requirement.RelaunchArguments) == 0 {
+				t.Fatal("render generation lost the exact relaunch identity", requirement)
+			}
+		}
+	}
+}
+
 func TestSplashSourceAdapterSurvivesLockAndManifestRoundTrips(t *testing.T) {
 	doc := splashCatalog(t)
 	legacy := compileSplash(t, doc)

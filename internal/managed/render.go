@@ -23,14 +23,17 @@ import (
 	"github.com/temper-sh/temper/internal/render/engine"
 	"github.com/temper-sh/temper/internal/runtimeconfig"
 	"github.com/temper-sh/temper/internal/setup"
+	"github.com/temper-sh/temper/internal/splash"
 	"gopkg.in/yaml.v3"
 )
 
 type Process struct {
-	Role      string   `json:"role"`
-	Path      string   `json:"path"`
-	Arguments []string `json:"arguments"`
-	Record    string   `json:"record,omitempty"`
+	Role              string   `json:"role"`
+	Path              string   `json:"path"`
+	Arguments         []string `json:"arguments"`
+	RelaunchArguments []string `json:"relaunch_arguments,omitempty"`
+	Parent            string   `json:"parent,omitempty"`
+	Record            string   `json:"record,omitempty"`
 }
 type Job struct {
 	Layout         string    `json:"layout"`
@@ -117,7 +120,11 @@ func Render(root, listen string, c setup.Configuration, l setup.LayoutPlan, reso
 		if err != nil {
 			return Rendered{}, err
 		}
-		commands, err := render.Commands(render.Inputs{Root: root, Mode: lock.Preset, Manifest: p.Manifest, Lock: p.Artifacts})
+		prepared, err := splash.PreparedModels(root, lock.Preset, p.Manifest, p.Artifacts)
+		if err != nil {
+			return Rendered{}, err
+		}
+		commands, err := render.Commands(render.Inputs{Root: root, Mode: lock.Preset, Manifest: p.Manifest, Lock: p.Artifacts, SplashModels: prepared})
 		if err != nil {
 			return Rendered{}, err
 		}
@@ -158,7 +165,11 @@ func Render(root, listen string, c setup.Configuration, l setup.LayoutPlan, reso
 				if err != nil {
 					return Rendered{}, err
 				}
-				processes = append(processes, Process{Role: id + "/" + r.Role, Path: path, Arguments: r.Arguments})
+				child := Process{Role: id + "/" + r.Role, Path: path, Arguments: r.Arguments, RelaunchArguments: r.RelaunchArguments}
+				if len(r.RelaunchArguments) > 0 {
+					child.Parent = id
+				}
+				processes = append(processes, child)
 			}
 		}
 	}
@@ -242,6 +253,25 @@ func (j Job) Validate(root string) error {
 		for _, arg := range p.Arguments {
 			if strings.ContainsRune(arg, '\x00') {
 				return errors.New("invalid managed argument")
+			}
+		}
+		if len(p.RelaunchArguments) > 0 {
+			if p.Parent == "" || p.Role != p.Parent+"/engine" || p.Record != "" {
+				return errors.New("managed relaunch requires a native child and selected frontend")
+			}
+			if err := runtimeconfig.ValidateSplashRelaunch(p.Arguments, p.RelaunchArguments); err != nil {
+				return err
+			}
+		}
+		if p.Parent != "" {
+			parents := 0
+			for _, parent := range j.Processes {
+				if parent.Role == p.Parent && parent.Record != "" && parent.Parent == "" && parent.Path != p.Path {
+					parents++
+				}
+			}
+			if parents != 1 {
+				return errors.New("managed child requires one selected frontend")
 			}
 		}
 		if p.Record != "" {

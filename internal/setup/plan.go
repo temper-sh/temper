@@ -119,10 +119,16 @@ func Assess(locked catalog.Lock, facts machine.Facts) (PresetPlan, error) {
 			if err := engine.SplashCompatibility(facts.Chip, facts.Target.DistributionVersion); err != nil {
 				result.Refusals = append(result.Refusals, err.Error())
 			}
-			// A planning estimate for the additional native copy, not an installed-size
-			// fact. Splash admits exact missing files and its 2 GiB reserve at startup.
-			if err := add(&result.RuntimeDiskEstimateBytes, size); err != nil {
+			local, err := engine.SplashLocalPreparation(locked.Records.Engines[layout.Engine].Supply.Release.Version)
+			if err != nil {
 				return PresetPlan{}, err
+			}
+			if !local {
+				// Legacy first-start cache estimate, not installed size. Current
+				// Splash reads source weights directly and has no additional copy.
+				if err := add(&result.RuntimeDiskEstimateBytes, size); err != nil {
+					return PresetPlan{}, err
+				}
 			}
 		}
 		if err := add(&result.ModelBytes, size); err != nil {

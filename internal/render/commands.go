@@ -12,7 +12,7 @@ func Commands(inputs Inputs) (map[string]engine.Command, error) {
 	if err != nil {
 		return nil, err
 	}
-	members, err := resolveMembers(inputs.Manifest, inputs.Lock, mode, inputs.Root)
+	members, err := resolveMembers(inputs.Manifest, inputs.Lock, mode, inputs.Root, inputs.SplashModels)
 	if err != nil {
 		return nil, err
 	}

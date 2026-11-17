@@ -70,28 +70,35 @@ CPU threads and `/health/ready`. The runtime binds its exact executable and
 arguments as the engine role, just as for llama.cpp. It uses the fixed sequence
 limit declared by the selected encoder and has no generation controls.
 
-For Splash 1.1.0, `prepare` installs the complete prebuilt release, including its
-Python interpreter and Metal kernels. It fetches the locked target and DFlash2
-files, verifies the software, and invokes that interpreter only to derive GGUF
-metadata and validate the sidecar's architecture. It writes the native source descriptor, preserves the derived Qwen tokenization,
-applies the selected chat template, and atomically publishes an immutable assembly.
-Source weights remain in the HF cache and the assembly uses symbolic
-references through the verified artifact set. Derived files have a receipt
-bound to the source artifact set and exact software archive. A changed assembly is refused. Apply,
-check, render and serve verify the prepared assembly. Preparation never starts
-inference or the native engine.
+Splash preparation installs the complete prebuilt release, including its
+Python interpreter and Metal kernels, and fetches the locked target and DFlash2
+files. Saved 1.1 and 1.3 executions keep their metadata derivation and assembled
+tokenizer contract. For Splash 1.7 and later 1.x releases, the bundled
+interpreter calls the public `install.local.prepare_local_model` API with an
+explicit local target, draft and private preparation directory. Splash owns the
+directory format and header-only architecture checks; Temper records its returned
+directory and verifies its small files and symbolic references before rendering.
+Both frontend and native process identities bind that exact directory. The
+selected template is passed separately through `--chat-template-file`.
+
+Source weights remain in the HF cache, referenced through the verified artifact
+set. Prepared-file receipts bind the source artifact set and exact software
+archive. A changed admitted preparation is refused. An interrupted 1.7 preparation
+without a receipt can resume under an exclusive preparation lock; a clean second
+run verifies the receipt without invoking Python. Apply, check, render and serve
+verify the preparation. Preparation can execute the release's header-only
+`model-check` command; it never starts a server or runs inference.
 
 Splash serving requires Apple M3 or newer and macOS 26.4 or later. The
 `server/server.py` frontend runs from the receipted bundled Python and starts the
 receipted `engine/splash` with local paths. No mutable launcher or model resolver
 runs. Splash startup and request diagnostics are forwarded through the router.
-The frontend's home and native weight cache are under the explicit Temper
-root. Request sampling defaults are set by llama-swap only when omitted, preserving
-client overrides. The first start may convert weights: setup discloses a separate
-cache-space estimate, and Splash checks its exact missing-cache requirement plus
-2 GiB free before conversion. This cache is retained with model artifacts when an
-installation's software is removed. The 24 GiB catalog memory ceiling is a runtime
-setting, not evidence that every context window fits.
+The frontend's home is under the explicit Temper root. Request sampling defaults
+are set by llama-swap only when omitted, preserving client overrides. Splash 1.7
+reads source weights directly: Temper supplies no obsolete weight-cache setting
+or additional weight-copy disk estimate. Saved legacy selections retain their
+cache behavior. The 24 GiB catalog memory ceiling is a runtime setting, not
+evidence that every context window fits.
 
 `--dry-run` validates the lock and arguments without writes, downloads or process
 effects. Preparation dry run describes the operation; it does not promise that
@@ -120,6 +127,14 @@ Splash also exposes a `frontend` role. Both Splash processes must match exact
 receipted executable paths and rendered argument vectors; the native engine
 must originate from that frontend. A changed or restarted frontend ends the
 supervised session, as does a changed or restarted native engine.
+For Splash 1.7, the rendered native requirement also records exact
+`relaunch_arguments`: the initial command plus `--relaunch-context` and the
+selected context. The explicit context is what the first engine must serve or
+fail startup; subsequent launches ask for that first context. A verified native
+replacement invalidates the experiment, including a startup retry using the
+initial argv, but its identity is retained for shutdown. The complete process
+boundary must verify before cleanup gains that authority. A different command,
+parent, reused PID or extra engine remains an ownership refusal.
 Rapid MLX binds the exact receipted interpreter, console script and rendered
 arguments as its `engine`. Its `crash-log` helper must use that interpreter,
 the reviewed 0.15.2 helper script digest and one non-standard file descriptor,

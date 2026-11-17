@@ -1135,3 +1135,44 @@ vet and race pass; all 22 stable presets plan from the fixed build. Narrow
 proposed improvement, repeating the retirement note's lesson: a pure unit fed
 by a projection needs at least one test whose input comes from the production
 projection, so an unreachable unit becomes visible.
+
+## Splash 1.7 preparation — 2026-11-17
+
+Applied `unit-design`, `reliable-effects`, `data-modeling` and `testing`.
+The release's public local preparation API owns its directory format; Temper
+owns source admission, a small-file integrity receipt and exact process paths.
+Preparation has a distinct commit point, refuses admitted drift and can resume
+unfinished upstream work. Tests cover retries, cancellation, concurrent-writer
+refusal, path boundaries, selected-mode isolation, release projection and both
+process argument lists. The exact release also passed header-only preparation,
+tokenizer/template loading and argument comparison without starting inference.
+The owner also selected the automatic native recovery fix. The rendered selection
+owns one exact relaunch argv and direct frontend relationship. A fixed-process
+experiment fails on restart while retaining the verified replacement for cleanup;
+managed recovery captures its actual lifetime. Review caught the shutdown case
+where a captured child outlives its frontend: only that exact lifetime can retain
+ownership after reparenting. Command, parent, PID reuse, duplicates, serialization
+and captured-orphan cases are covered offline. A model-free macOS process test
+replaces the native child in its frontend's group, verifies experiment failure
+and proves shutdown of every captured lifetime. The released command builder
+matches both rendered argv vectors. Full Go tests, vet and race pass.
+The public-boundary and failure-state guidance was useful; no skill change is
+proposed. Contracts: [execution preparation and supervision](contracts/execution-runtime.md),
+[managed layouts](contracts/layouts.md).
+
+Native verification after the owner lifted the inference pause exercised cached
+Qwen UD 3.1/DFlash2/Frog at 114,681 context: chat/tool streaming, a tool-result
+follow-up, cancellation and verified shutdown pass. A real native restart fails
+the fixed-process experiment while proving cleanup; an isolated managed layout
+recovers, serves and stops cleanly. Model-free ownership tests and real runtime
+behavior establish different claims, and both are retained in their owning
+records. The workspace backlog records the loaded/peak counters, scope and
+remaining completed-work comparison. No further product fix was required.
+
+The llama.cpp 1.0 assessment confirmed the existing binary-release boundary:
+the semantic library release points to numbered build `b12359`. Full archive
+installation, all 20 current profile argument lists and focused native
+chat/tool/schema/reranking checks pass. Temper does not consume the removed C
+API. No speculative version migration or optional new-engine controls were
+added. Measured process footprint is explicitly incomplete for mapped Metal
+weights; it does not become a fit claim. No skill change is proposed.

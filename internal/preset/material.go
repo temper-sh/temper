@@ -256,7 +256,11 @@ func Render(root string, lock catalog.Lock) (render.Bundle, error) {
 	if err != nil {
 		return render.Bundle{}, err
 	}
-	return render.Build(render.Inputs{Root: root, StartPort: datadir.StartPort(root), Mode: lock.Preset, Manifest: p.Manifest, Lock: p.Artifacts})
+	prepared, err := splash.PreparedModels(root, lock.Preset, p.Manifest, p.Artifacts)
+	if err != nil {
+		return render.Bundle{}, err
+	}
+	return render.Build(render.Inputs{Root: root, StartPort: datadir.StartPort(root), Mode: lock.Preset, Manifest: p.Manifest, Lock: p.Artifacts, SplashModels: prepared})
 }
 
 func PrepareState(root string, lock catalog.Lock) error {

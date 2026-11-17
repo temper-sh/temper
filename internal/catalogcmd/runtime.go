@@ -151,7 +151,11 @@ func Runtime(ctx context.Context, args []string, stdout, stderr io.Writer, effec
 		if err := supervision.Validate(); err != nil {
 			return failed(stderr, err)
 		}
-		bundle, err := render.Build(render.Inputs{Manifest: p.Manifest, Lock: p.Artifacts, Mode: l.Preset, Root: resolved, StartPort: datadir.StartPort(resolved)})
+		prepared, err := splash.PreparedModels(resolved, l.Preset, p.Manifest, p.Artifacts)
+		if err != nil {
+			return failed(stderr, err)
+		}
+		bundle, err := render.Build(render.Inputs{Manifest: p.Manifest, Lock: p.Artifacts, Mode: l.Preset, Root: resolved, StartPort: datadir.StartPort(resolved), SplashModels: prepared})
 		if err != nil {
 			return failed(stderr, err)
 		}

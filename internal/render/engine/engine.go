@@ -138,6 +138,7 @@ type RuntimeRequirement struct {
 	RelativeExecutable string   `json:"relative_executable"`
 	Role               string   `json:"role,omitempty"`
 	Arguments          []string `json:"arguments,omitempty"`
+	RelaunchArguments  []string `json:"relaunch_arguments,omitempty"`
 }
 
 // Runtime describes supervisor metadata which is not part of shell command
@@ -170,9 +171,11 @@ func (c Command) Runtime() Runtime {
 	runtime := c.runtime
 	runtime.Environment = append([]EnvironmentAssignment(nil), c.runtime.Environment...)
 	runtime.Requirement.Arguments = append([]string(nil), runtime.Requirement.Arguments...)
+	runtime.Requirement.RelaunchArguments = append([]string(nil), runtime.Requirement.RelaunchArguments...)
 	runtime.AdditionalRequirements = append([]RuntimeRequirement(nil), runtime.AdditionalRequirements...)
 	for i := range runtime.AdditionalRequirements {
 		runtime.AdditionalRequirements[i].Arguments = append([]string(nil), runtime.AdditionalRequirements[i].Arguments...)
+		runtime.AdditionalRequirements[i].RelaunchArguments = append([]string(nil), runtime.AdditionalRequirements[i].RelaunchArguments...)
 	}
 	runtime.DefaultParameters = maps.Clone(runtime.DefaultParameters)
 	return runtime

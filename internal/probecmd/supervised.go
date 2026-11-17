@@ -88,6 +88,10 @@ func (p processRow) exited() bool {
 var errCommandUnavailable = errors.New("owned process command temporarily unavailable")
 var errUnverifiedOrphan = errors.New("untracked orphan in owned process group")
 
+// The replacement is owned, but a fixed-process experiment is invalid. Unlike
+// an ownership failure, this permits shutdown of the fully verified boundary.
+var errEngineRestarted = errors.New("engine process restarted")
+
 func parseRows(raw string) ([]processRow, error) {
 	var rows []processRow
 	for _, line := range strings.Split(strings.TrimSpace(raw), "\n") {
@@ -215,6 +219,7 @@ func processBoundary(rows []processRow, group int, known map[int]processRow) (ma
 // role identities and group memberships never silently rebind.
 func members(rows []processRow, group int, invocation Invocation, known map[int]processRow) ([]processRow, []ProcessIdentity, error) {
 	var found []processRow
+	restarted := false
 	roles := []ProcessIdentity{}
 	roleIDs := map[string]bool{}
 	descendants, groups := processBoundary(rows, group, known)
@@ -297,10 +302,15 @@ func members(rows []processRow, group int, invocation Invocation, known map[int]
 				role = "crash-log"
 				break
 			}
-			if invocation.EngineArguments != nil && !exactArguments(row.arguments, invocation.EngineArguments) {
+			relaunch := len(invocation.EngineRelaunchArguments) > 0 && exactArguments(row.arguments, invocation.EngineRelaunchArguments)
+			if invocation.EngineArguments != nil && !exactArguments(row.arguments, invocation.EngineArguments) && !relaunch {
 				return nil, nil, errors.New("native engine command differs from rendered selection")
 			}
-			if invocation.FrontendPath != "" && !tracked {
+			// A launch shell isn't prior evidence that this native child belonged
+			// to the frontend. Only a bound native lifetime may be reparented.
+			boundNative := tracked && prior.executable == invocation.EnginePath &&
+				(exactArguments(prior.arguments, invocation.EngineArguments) || len(invocation.EngineRelaunchArguments) > 0 && exactArguments(prior.arguments, invocation.EngineRelaunchArguments))
+			if invocation.FrontendPath != "" && !boundNative {
 				parentOK := false
 				for _, parent := range rows {
 					if parent.pid == row.ppid && parent.executable == invocation.FrontendPath && exactArguments(parent.arguments, invocation.FrontendArguments) {
@@ -311,6 +321,7 @@ func members(rows []processRow, group int, invocation Invocation, known map[int]
 					return nil, nil, errors.New("Splash native engine is not owned by the selected frontend")
 				}
 			}
+			restarted = restarted || relaunch
 			role = "engine"
 		case isLaunchShell(row.executable):
 		case routerInspection(row, rows, group, invocation, known):
@@ -338,7 +349,10 @@ func members(rows []processRow, group int, invocation Invocation, known map[int]
 					}
 				}
 				if prior.executable == row.executable && prior.pid != row.pid && priorRole == role {
-					return nil, nil, fmt.Errorf("%s process restarted", role)
+					if role != "engine" || len(invocation.EngineRelaunchArguments) == 0 {
+						return nil, nil, fmt.Errorf("%s process restarted", role)
+					}
+					restarted = true
 				}
 			}
 			roleIDs[role] = true
@@ -350,6 +364,9 @@ func members(rows []processRow, group int, invocation Invocation, known map[int]
 		known[row.pid] = row
 	}
 	sort.Slice(roles, func(i, j int) bool { return roles[i].ID < roles[j].ID })
+	if restarted {
+		return found, roles, errEngineRestarted
+	}
 	return found, roles, nil
 }
 
@@ -613,7 +630,7 @@ running:
 func shutdownGroup(group int, invocation Invocation, known map[int]processRow, grace time.Duration) error {
 	verified := func() (present bool, liveGroups []int, err error) {
 		owned, _, err := readMembers(group, invocation, known)
-		if err != nil {
+		if err != nil && !errors.Is(err, errEngineRestarted) {
 			return false, nil, err
 		}
 		_, groups := processBoundary(nil, group, known)

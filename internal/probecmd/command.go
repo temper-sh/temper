@@ -30,17 +30,18 @@ var generationPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 // Invocation is the complete, validated foreground process boundary.
 type Invocation struct {
 	// EnginePort is the port the router gives the served preset's engine.
-	EnginePort            int
-	PythonMultiprocessing bool
-	PythonCrashLogSHA256  string
-	Path                  string
-	Arguments             []string
-	Environment           []string
-	EnginePath            string
-	EngineArguments       []string
-	FrontendPath          string
-	FrontendArguments     []string
-	Supervision           *Supervision
+	EnginePort              int
+	PythonMultiprocessing   bool
+	PythonCrashLogSHA256    string
+	Path                    string
+	Arguments               []string
+	Environment             []string
+	EnginePath              string
+	EngineArguments         []string
+	EngineRelaunchArguments []string
+	FrontendPath            string
+	FrontendArguments       []string
+	Supervision             *Supervision
 }
 
 // Runner is deliberately narrower than os/exec so command tests can prove
@@ -105,6 +106,7 @@ func Plan(options Options) (Invocation, error) {
 	enginePath := ""
 	frontendPath := ""
 	var engineArguments, frontendArguments []string
+	var engineRelaunchArguments []string
 	pythonMultiprocessing := false
 	pythonCrashLogSHA256 := ""
 	var executableDirectories []string
@@ -155,6 +157,7 @@ func Plan(options Options) (Invocation, error) {
 				frontendPath, frontendArguments = executable, args
 			} else {
 				enginePath, engineArguments = executable, args
+				engineRelaunchArguments = append([]string(nil), requirement.RelaunchArguments...)
 			}
 		}
 	}
@@ -170,7 +173,8 @@ func Plan(options Options) (Invocation, error) {
 		Path:                  router,
 		EnginePath:            enginePath,
 		EngineArguments:       engineArguments, FrontendPath: frontendPath, FrontendArguments: frontendArguments,
-		Arguments: []string{"--config", config, "--listen", options.Listen},
+		EngineRelaunchArguments: engineRelaunchArguments,
+		Arguments:               []string{"--config", config, "--listen", options.Listen},
 		Environment: []string{
 			"PATH=" + strings.Join(append(executableDirectories, "/usr/bin", "/bin", "/usr/sbin", "/sbin"), string(os.PathListSeparator)),
 		},

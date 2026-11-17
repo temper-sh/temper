@@ -16,6 +16,9 @@ import (
 type ManagedCommand struct {
 	ID, Path  string
 	Arguments []string
+	// Parent names the selected command that must directly own a new child.
+	Parent            string
+	RelaunchArguments []string
 	// The exact owned launcher is a retryable exec transition, never a process
 	// that observation or recovery may adopt as the final engine.
 	LauncherPath      string
@@ -63,6 +66,28 @@ func managedArguments(actual string, expected []string) bool {
 		}
 	}
 	return true
+}
+
+func (c ManagedCommand) accepts(arguments string) bool {
+	return managedArguments(arguments, c.Arguments) ||
+		len(c.RelaunchArguments) > 0 && exactArguments(arguments, c.RelaunchArguments)
+}
+
+func managedParent(row processRow, rows []processRow, child ManagedCommand, commands []ManagedCommand) bool {
+	if child.Parent == "" {
+		return true
+	}
+	for _, parent := range rows {
+		if parent.pid != row.ppid || parent.exited() {
+			continue
+		}
+		for _, command := range commands {
+			if command.ID == child.Parent && command.Path == parent.executable && managedArguments(parent.arguments, command.Arguments) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // ObserveManaged verifies current ancestry, kernel executable and argv. It has
@@ -146,6 +171,7 @@ func (r managedInspector) snapshot(pid int, router string, args []string, listen
 		owned = append(owned, row)
 	}
 	var result ManagedObservation
+	children := map[string]bool{}
 	for _, row := range owned {
 		role := ""
 		if row.pid == pid {
@@ -162,7 +188,14 @@ func (r managedInspector) snapshot(pid int, router string, args []string, listen
 				if managedLaunching(row, c) {
 					return ManagedObservation{}, errManagedExec
 				}
-				if row.executable == c.Path && managedArguments(row.arguments, c.Arguments) {
+				if row.executable == c.Path && c.accepts(row.arguments) {
+					if !managedParent(row, owned, c, commands) {
+						return result, errors.New("managed native child is not owned by its selected frontend")
+					}
+					if c.Parent != "" && children[c.ID] {
+						return result, errors.New("multiple managed native children for one frontend")
+					}
+					children[c.ID] = true
 					role = c.ID
 					break
 				}
@@ -249,7 +282,7 @@ func ManagedIdentityAllowed(identity ManagedIdentity, commands []ManagedCommand)
 		return false
 	}
 	for _, c := range commands {
-		if c.ID == identity.ID && c.Path == identity.Path && managedArguments(identity.Arguments, c.Arguments) {
+		if c.ID == identity.ID && c.Path == identity.Path && c.accepts(identity.Arguments) {
 			return true
 		}
 	}
@@ -277,14 +310,16 @@ func CaptureManagedLaunch(id, path string, args []string) (ManagedIdentity, erro
 // ObserveManagedLoads follows a durably recorded engine process group even
 // after the router exits. PID reuse proves the old lifetime ended. Unknown
 // group members refuse recovery; they never acquire signaling authority.
-func ObserveManagedLoads(roots []ManagedIdentity, commands []ManagedCommand) ([]ManagedIdentity, error) {
+// Captured shutdown identities preserve a verified child's lifetime after its
+// frontend exits; they never authorize a replacement without that frontend.
+func ObserveManagedLoads(roots []ManagedIdentity, commands []ManagedCommand, captured []ManagedIdentity) ([]ManagedIdentity, error) {
 	deadline := time.Now().Add(2 * time.Second)
 	for {
 		rows, err := readRows()
 		if err != nil {
 			return nil, err
 		}
-		observed, err := observeManagedLoads(rows, roots, commands, processExecutable, processArguments)
+		observed, err := observeManagedLoads(rows, roots, commands, captured, processExecutable, processArguments)
 		if !errors.Is(err, errManagedExec) || !time.Now().Before(deadline) {
 			return observed, err
 		}
@@ -292,9 +327,10 @@ func ObserveManagedLoads(roots []ManagedIdentity, commands []ManagedCommand) ([]
 	}
 }
 
-func observeManagedLoads(rows []processRow, roots []ManagedIdentity, commands []ManagedCommand, executable, arguments func(int) (string, error)) ([]ManagedIdentity, error) {
+func observeManagedLoads(rows []processRow, roots []ManagedIdentity, commands []ManagedCommand, captured []ManagedIdentity, executable, arguments func(int) (string, error)) ([]ManagedIdentity, error) {
 	var result []ManagedIdentity
 	seen := map[int]bool{}
+	children := map[string]bool{}
 	for _, root := range roots {
 		reused := false
 		for _, r := range rows {
@@ -307,6 +343,7 @@ func observeManagedLoads(rows []processRow, roots []ManagedIdentity, commands []
 		}
 		descendants, groups := processBoundary(rows, root.PID, map[int]processRow{})
 		groups[root.PGID] = true
+		var owned []processRow
 		for _, r := range rows {
 			if seen[r.pid] || (!descendants[r.pid] && !groups[r.pgid]) {
 				continue
@@ -322,13 +359,25 @@ func observeManagedLoads(rows []processRow, roots []ManagedIdentity, commands []
 			if err != nil {
 				return nil, err
 			}
+			r.executable, r.arguments = path, args
+			owned = append(owned, r)
+		}
+		for _, r := range owned {
+			path, args := r.executable, r.arguments
 			role := ""
 			for _, c := range commands {
 				if r.pid == root.PID && r.pgid == root.PGID && c.ID == root.ID && c.Path == root.Path && managedArguments(root.Arguments, c.Arguments) &&
 					managedLaunching(processRow{executable: path, arguments: args}, c) {
 					return nil, errManagedExec
 				}
-				if (c.ID == root.ID || strings.HasPrefix(c.ID, root.ID+"/")) && path == c.Path && managedArguments(args, c.Arguments) {
+				if (c.ID == root.ID || strings.HasPrefix(c.ID, root.ID+"/")) && path == c.Path && c.accepts(args) {
+					if !managedParent(r, owned, c, commands) && !capturedManagedChild(r, c.ID, captured) {
+						return nil, errors.New("recorded native child is not owned by its selected frontend")
+					}
+					if c.Parent != "" && children[c.ID] {
+						return nil, errors.New("multiple recorded native children for one frontend")
+					}
+					children[c.ID] = true
 					role = c.ID
 					break
 				}
@@ -341,6 +390,18 @@ func observeManagedLoads(rows []processRow, roots []ManagedIdentity, commands []
 		}
 	}
 	return result, nil
+}
+
+// A previously captured child can outlive its frontend. Only that exact kernel
+// lifetime and command retain ownership; a new child still needs its parent.
+func capturedManagedChild(row processRow, role string, captured []ManagedIdentity) bool {
+	for _, identity := range captured {
+		if identity.ID == role && identity.PID == row.pid && identity.PGID == row.pgid && identity.Started == row.started &&
+			identity.Path == row.executable && identity.Arguments == row.arguments {
+			return true
+		}
+	}
+	return false
 }
 
 // ReapManaged acts only on a captured owned identity with matching kernel start

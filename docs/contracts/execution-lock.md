@@ -349,11 +349,18 @@ or neutral, but non-neutral values refuse. It selects a target GGUF and an exact
 (`config.json` plus `model.safetensors`). The release-owned architecture mapping
 checks their compatibility. Preparation includes the sidecar automatically.
 `splash/v1` preserves the Splash 1.1 frontend and native argument contract for
-saved executions. `splash/v2` uses Splash 1.3.2's single source-assembly root and
-package frontend, with native metadata-only target/draft validation. Its SSD
-prefix cache is disabled explicitly; ANE prefill and FP32 recurrent state use
-the selected release's defaults. Omitted output limits use remaining context;
-an explicit limit becomes a router request default that clients can override.
+saved executions. `splash/v2` uses a single prepared model directory and package
+frontend, with native metadata-only target/draft validation. The software release
+version selects its preparation and launch contract: 1.3.2 retains the assembled
+tokenizer override; 1.7 and later 1.x use the public local preparation API and
+explicit `--chat-template-file`. The intervening 1.4–1.6 interfaces and other major
+versions are refused. Empty manifest engine versions retain legacy behavior.
+Its SSD prefix cache is disabled and FP32 live recurrent state is explicit.
+Activation arithmetic, cached recurrent-state precision and speculative
+verification use the selected release's defaults, so a release change needs new
+quality, latency and memory evidence. Omitted output limits use remaining
+context; an explicit limit becomes a router request default that clients can
+override.
 
 The frozen test catalogs in `internal/testfixture/testdata/` exercise these
 contracts. Results and the cited studies own capability claims.

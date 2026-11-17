@@ -2,8 +2,11 @@ package engine
 
 import (
 	"errors"
+	"fmt"
 	"path/filepath"
 	"strconv"
+
+	semver "github.com/Masterminds/semver/v3"
 )
 
 const SplashPython = "python/bin/python3.13"
@@ -38,6 +41,22 @@ func ValidateSplashAdapter(adapter string) error {
 	return nil
 }
 
+// SplashLocalPreparation identifies the release-owned local preparation API.
+// Empty versions preserve the launch contract of existing manifests.
+func SplashLocalPreparation(version string) (bool, error) {
+	if version == "" {
+		return false, nil
+	}
+	v, err := semver.NewVersion(version)
+	if err != nil {
+		return false, fmt.Errorf("Splash engine version: %w", err)
+	}
+	if v.Major() != 1 {
+		return false, errors.New("unsupported Splash major version; this adapter supports Splash 1.x")
+	}
+	return !v.LessThan(semver.MustParse("1.7.0")), nil
+}
+
 func (c SplashConfig) Validate() error {
 	if c.KVCache != "int8" && c.KVCache != "bf16" {
 		return errors.New("Splash kv_cache must be int8 or bf16")
@@ -55,6 +74,19 @@ func (c SplashConfig) Validate() error {
 
 func buildSplash(r Request) (Command, error) {
 	c := r.Splash
+	local, err := SplashLocalPreparation(r.EngineVersion)
+	if err != nil {
+		return Command{}, err
+	}
+	if local && c.Adapter != "splash/v2" {
+		return Command{}, errors.New("Splash 1.7 or newer requires the splash/v2 adapter")
+	}
+	if !local && r.EngineVersion != "" {
+		v, _ := semver.NewVersion(r.EngineVersion)
+		if !v.LessThan(semver.MustParse("1.4.0")) {
+			return Command{}, errors.New("Splash 1.4–1.6 removed the tokenizer override; use 1.3.2 or 1.7 or newer")
+		}
+	}
 	if err := ValidateSplashAdapter(c.Adapter); err != nil {
 		return Command{}, err
 	}
@@ -72,7 +104,7 @@ func buildSplash(r Request) (Command, error) {
 		}
 	}
 	common := r
-	common.ChatTemplatePath = "" // Applied to the derived tokenizer before serving.
+	common.ChatTemplatePath = "" // Legacy: prepared tokenizer. 1.7+: explicit option below.
 	if err := validateChatRequest(common, Splash, "gguf", []string{"text"}); err != nil {
 		return Command{}, err
 	}
@@ -110,8 +142,17 @@ func buildSplash(r Request) (Command, error) {
 		// it deliberately. ANE prefill and fp32 recurrent state are 1.3 defaults.
 		args = []string{"-I", "-B", "-u", "-c", SplashSourceBootstrap, c.AssemblyPath, "--max-cache-disk", "0", "--state-format", "fp32"}
 	}
-	args = append(args,
-		"--tokenizer", filepath.Join(c.AssemblyPath, "tokenizer"), "--model", c.ModelID,
+	if local {
+		if r.ChatTemplatePath != "" {
+			if err := validateCommandData(r.ChatTemplatePath); err != nil {
+				return Command{}, err
+			}
+			args = append(args, "--chat-template-file", r.ChatTemplatePath)
+		}
+	} else {
+		args = append(args, "--tokenizer", filepath.Join(c.AssemblyPath, "tokenizer"))
+	}
+	args = append(args, "--model", c.ModelID,
 		"--served-model-name", r.LayoutID, "--host", "127.0.0.1", "--port", "${PORT}",
 		"--max-memory", strconv.FormatInt(c.MaxMemoryBytes, 10), "--max-context", strconv.Itoa(r.Window),
 		"--kv-format", c.KVCache)
@@ -151,16 +192,23 @@ func buildSplash(r Request) (Command, error) {
 	if c.KVCache != "int8" {
 		nativeArgs = append(nativeArgs, "--kv-format", c.KVCache)
 	}
+	var relaunchArgs []string
+	if local {
+		// With explicit --max-context, the first engine either serves that
+		// context or fails startup. Every relaunch asks for that first context.
+		relaunchArgs = append(append([]string(nil), nativeArgs...), "--relaunch-context", strconv.Itoa(r.Window))
+	}
+	environment := []EnvironmentAssignment{{Name: "HOME", Value: filepath.Join(c.StatePath, "home")}}
+	if !local {
+		// Retained for saved releases. Current Splash no longer uses a weight cache.
+		environment = append(environment, EnvironmentAssignment{Name: "SPLASH_WEIGHT_CACHE", Value: filepath.Join(c.StatePath, "weights")})
+	}
+	environment = append(environment, EnvironmentAssignment{Name: "PYTHONDONTWRITEBYTECODE", Value: "1"}, EnvironmentAssignment{Name: "SPLASH_CRASH_TRACE", Value: "0"})
 	return commandFromLaunch(launchSpec{executable: knownWord("python3.13"), argumentGroups: groups}, Runtime{
 		Requirement:            RuntimeRequirement{Package: Splash, RelativeExecutable: SplashPython, Role: "frontend", Arguments: args},
-		AdditionalRequirements: []RuntimeRequirement{{Package: Splash, RelativeExecutable: SplashNative, Role: "engine", Arguments: nativeArgs}},
-		Environment: offlineEnvironment(
-			EnvironmentAssignment{Name: "HOME", Value: filepath.Join(c.StatePath, "home")},
-			EnvironmentAssignment{Name: "SPLASH_WEIGHT_CACHE", Value: filepath.Join(c.StatePath, "weights")},
-			EnvironmentAssignment{Name: "PYTHONDONTWRITEBYTECODE", Value: "1"},
-			EnvironmentAssignment{Name: "SPLASH_CRASH_TRACE", Value: "0"},
-		),
-		CheckEndpoint: "/health", UseModelName: r.LayoutID, ContextWindow: r.Window,
+		AdditionalRequirements: []RuntimeRequirement{{Package: Splash, RelativeExecutable: SplashNative, Role: "engine", Arguments: nativeArgs, RelaunchArguments: relaunchArgs}},
+		Environment:            offlineEnvironment(environment...),
+		CheckEndpoint:          "/health", UseModelName: r.LayoutID, ContextWindow: r.Window,
 		DefaultParameters: defaults,
 	})
 }

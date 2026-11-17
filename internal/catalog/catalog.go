@@ -646,7 +646,11 @@ func (d Document) validatePreset(id string, p Preset) error {
 		return errors.New("requires none or embedded mtp speculation")
 	}
 	for _, profile := range p.Profiles {
-		if _, err := engine.Build(p.request(id, profile, a, "/model.gguf", "/template.jinja")); err != nil {
+		request := p.request(id, profile, a, "/model.gguf", "/template.jinja")
+		if e.Family() == engine.Splash && e.Supply.Release != nil {
+			request.EngineVersion = e.Supply.Release.Version
+		}
+		if _, err := engine.Build(request); err != nil {
 			return err
 		}
 	}

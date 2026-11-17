@@ -138,6 +138,16 @@ The pinned router closes idle connections and drains requests admitted in the
 small interval between the activity check and pause. Interrupted holds resume only on
 the next mutation. There is no force signal or background recovery agent.
 
+Splash 1.7 may replace its native child under the selected frontend. Its frozen
+job binds the initial and relaunch argument vectors, including the same prepared
+model directory and the first engine's explicit context. Observation and recovery
+require the exact executable and command, one native child and its direct selected
+frontend parent. Captured shutdown identities retain authority after the frontend
+exits only while PID, start time, process group, executable and argv still match.
+An unobserved orphan is refused. A native restart invalidates a
+[fixed-process experiment](execution-runtime.md), while a managed layout can
+continue serving through that owned replacement.
+
 Memory admission uses an applicable catalog measurement before falling back to
 weight-file proxies, supported KV estimates, cache reserves and engine allocation
 envelopes. [The shared assessment](memory-estimates.md) identifies the basis,

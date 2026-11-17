@@ -55,7 +55,7 @@ func TestManagedLauncherRecordsBeforeExecAndAllowsReload(t *testing.T) {
 		for time.Now().Before(deadline) {
 			captured, _, err = readIdentity(filepath.Join(filepath.Dir(path), "process.json"))
 			if err == nil && captured.PID == cmd.Process.Pid {
-				found, e := probecmd.ObserveManagedLoads([]probecmd.ManagedIdentity{captured}, []probecmd.ManagedCommand{{ID: p.Role, Path: p.Path, Arguments: p.Arguments}})
+				found, e := probecmd.ObserveManagedLoads([]probecmd.ManagedIdentity{captured}, []probecmd.ManagedCommand{{ID: p.Role, Path: p.Path, Arguments: p.Arguments}}, nil)
 				if e == nil && len(found) == 1 {
 					break
 				}

@@ -113,7 +113,7 @@ func readIdentity(path string) (probecmd.ManagedIdentity, bool, error) {
 func (j Job) commands() []probecmd.ManagedCommand {
 	commands := []probecmd.ManagedCommand{{ID: "router", Path: j.Router, Arguments: j.Arguments()}}
 	for _, p := range j.Processes {
-		c := probecmd.ManagedCommand{ID: p.Role, Path: p.Path, Arguments: p.Arguments}
+		c := probecmd.ManagedCommand{ID: p.Role, Path: p.Path, Arguments: p.Arguments, RelaunchArguments: p.RelaunchArguments, Parent: p.Parent}
 		if p.Record != "" {
 			c.LauncherPath = j.Launcher
 			c.LauncherArguments = []string{"internal-managed-exec", filepath.Join(filepath.Dir(p.Record), "launch.json"), "${PORT}"}
@@ -141,7 +141,11 @@ func (j Job) loaded() ([]probecmd.ManagedIdentity, error) {
 		}
 		roots = append(roots, identity)
 	}
-	return probecmd.ObserveManagedLoads(roots, j.commands())
+	captured, err := readShutdown(j)
+	if err != nil {
+		return nil, err
+	}
+	return probecmd.ObserveManagedLoads(roots, j.commands(), captured)
 }
 
 // ExecLaunch is internal to generated commands, never a second supervisor. The

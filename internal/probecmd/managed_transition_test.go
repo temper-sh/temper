@@ -76,7 +76,7 @@ func TestRecordedEngineDuringExecNeverGrantsLauncherSignalAuthority(t *testing.T
 	root := ManagedIdentity{ProcessIdentity: ProcessIdentity{ID: "engine", PID: 100, PGID: 100, Started: "same"}, Path: "/engine", Arguments: "/engine\x00--port\x0012433"}
 	row := processRow{pid: 100, pgid: 100, started: "same", state: "S"}
 	args := "/owned/temper\x00internal-managed-exec\x00/owned/launch.json\x0012433"
-	got, err := observeManagedLoads([]processRow{row}, []ManagedIdentity{root}, []ManagedCommand{command}, func(int) (string, error) { return command.LauncherPath, nil }, func(int) (string, error) { return args, nil })
+	got, err := observeManagedLoads([]processRow{row}, []ManagedIdentity{root}, []ManagedCommand{command}, nil, func(int) (string, error) { return command.LauncherPath, nil }, func(int) (string, error) { return args, nil })
 	if !errors.Is(err, errManagedExec) || len(got) != 0 {
 		t.Fatal(got, err)
 	}

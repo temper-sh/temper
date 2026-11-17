@@ -106,7 +106,7 @@ func TestManagedRecoveryFollowsRecordedGroupsAndNeverAdoptsReusedPIDs(t *testing
 					return s, nil
 				}
 			}
-			got, err := observeManagedLoads(rows, []ManagedIdentity{root}, commands, read(paths), read(args))
+			got, err := observeManagedLoads(rows, []ManagedIdentity{root}, commands, nil, read(paths), read(args))
 			if scenario == "unknown" || scenario == "wrong-argv" {
 				if err == nil {
 					t.Fatal("unrelated process became recovery authority")
