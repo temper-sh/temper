@@ -1176,3 +1176,15 @@ chat/tool/schema/reranking checks pass. Temper does not consume the removed C
 API. No speculative version migration or optional new-engine controls were
 added. Measured process footprint is explicitly incomplete for mapped Metal
 weights; it does not become a fit claim. No skill change is proposed.
+
+## Finder metadata tolerance — 2026-11-17
+
+Applied `testing` and `unit-design`. A filesystem regression first reproduced
+the malformed-set refusal after Finder added `.DS_Store`. The exception stays
+inside artifact shape verification, after declared-file lookup, and accepts
+only unlisted regular files with that name. Public inspection tests cover
+unchanged model size, receipt and metadata across repeated reads; declared-file
+hash checks and symlink/directory/other-hidden-file refusals stay effective.
+Full Go tests, vet, race, formatting and changed-document links pass. The
+existing filesystem boundary and black-box tests were sufficient; no new
+abstraction or skill change was needed.

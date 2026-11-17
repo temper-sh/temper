@@ -440,6 +440,11 @@ func verifyShape(target string, files map[string]Record) error {
 		}
 		record, ok := files[name]
 		if !ok {
+			// Finder metadata is incidental only when it is an unlisted regular
+			// file. Selected files and every other entry retain their checks.
+			if entry.Name() == ".DS_Store" && entry.Type().IsRegular() {
+				return nil
+			}
 			return fmt.Errorf("unexpected file %q", name)
 		}
 		info, err := entry.Info()

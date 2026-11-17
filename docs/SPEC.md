@@ -944,6 +944,11 @@ must be reverified. No additional storage-location control is provided yet.
 Temper never prunes the shared HF cache; the setup preview budgets that
 cache's filesystem separately from the Temper root.
 
+Artifact verification tolerates unlisted regular `.DS_Store` files in valid
+artifact directories. It leaves them untouched. Declared files still receive
+all integrity checks; symlinks, unexpected directories and other extra files
+receive no metadata exception.
+
 Pi keeps its own configuration in its existing Pi home. Temper may stage Pi
 integration output beneath its root, while the live files stay in Pi's expected
 location. An explicitly selected integration manages its reviewed configuration

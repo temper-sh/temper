@@ -42,6 +42,69 @@ func TestInspectReturnsTheAdmittedModelSize(t *testing.T) {
 	}
 }
 
+func TestInspectIgnoresIncidentalFinderMetadataWithoutChangingTheSet(t *testing.T) {
+	set, data := fixtureSet(t, t.TempDir())
+	materialize(t, set, data)
+	want, err := set.InspectContent(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	receiptPath := filepath.Join(set.Path(), "receipt.json")
+	receipt, err := os.ReadFile(receiptPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, directory := range []string{".", "model", "model/nested", "patches/stable-template"} {
+		path := filepath.Join(set.Path(), directory, ".DS_Store")
+		if err := os.WriteFile(path, []byte("Finder metadata"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for range 2 {
+		got, err := set.Inspect()
+		if err != nil || got != want {
+			t.Fatalf("Inspect() = %#v, %v; want %#v", got, err, want)
+		}
+		got, err = set.InspectContent(context.Background())
+		if err != nil || got != want {
+			t.Fatalf("InspectContent() = %#v, %v; want %#v", got, err, want)
+		}
+	}
+	after, err := os.ReadFile(receiptPath)
+	if err != nil || string(after) != string(receipt) {
+		t.Fatalf("inspection changed receipt: %v", err)
+	}
+	for _, directory := range []string{".", "model", "model/nested", "patches/stable-template"} {
+		metadata, err := os.ReadFile(filepath.Join(set.Path(), directory, ".DS_Store"))
+		if err != nil || string(metadata) != "Finder metadata" {
+			t.Fatalf("inspection changed metadata in %s: %v", directory, err)
+		}
+	}
+}
+
+func TestInspectContentVerifiesASelectedFileNamedDSStore(t *testing.T) {
+	data := map[string][]byte{"model/.DS_Store": []byte("weights")}
+	entry := lockfile.Entry{
+		Repo: "owner/model", Revision: strings.Repeat("1", 40), Resolved: "2026-11-17",
+		Files: []lockfile.File{{Name: ".DS_Store", SHA256: hash(data["model/.DS_Store"])}},
+	}
+	layout := manifest.Layout{Model: manifest.Model{Repo: "owner/model", Format: "gguf", Files: []string{".DS_Store"}}}
+	set, err := artifactset.New(t.TempDir(), "coder", layout, entry, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	materialize(t, set, data)
+	if _, err := set.InspectContent(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(set.ModelPath(), []byte("changed"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := set.InspectContent(context.Background()); !errors.Is(err, artifactset.ErrContentMismatch) {
+		t.Fatalf("InspectContent() error = %v, want ErrContentMismatch", err)
+	}
+}
+
 func TestSnapshotSetPassesTheWholeModelDirectoryAndSumsEveryFile(t *testing.T) {
 	root := t.TempDir()
 	data := map[string][]byte{
@@ -175,6 +238,33 @@ func TestVerifyRefusesReceiptOrTreeDrift(t *testing.T) {
 				}
 			},
 			message: "unexpected file",
+		},
+		{
+			name: "other hidden file",
+			mutate: func(t *testing.T, set artifactset.Set) {
+				if err := os.WriteFile(filepath.Join(set.Path(), ".hidden"), []byte("extra"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			},
+			message: "unexpected file",
+		},
+		{
+			name: "Finder metadata symlink",
+			mutate: func(t *testing.T, set artifactset.Set) {
+				if err := os.Symlink(set.ModelPath(), filepath.Join(set.Path(), ".DS_Store")); err != nil {
+					t.Fatal(err)
+				}
+			},
+			message: "unexpected file",
+		},
+		{
+			name: "Finder metadata directory",
+			mutate: func(t *testing.T, set artifactset.Set) {
+				if err := os.Mkdir(filepath.Join(set.Path(), ".DS_Store"), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			},
+			message: "unexpected directory",
 		},
 		{
 			name: "symlinked data file",

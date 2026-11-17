@@ -25,8 +25,9 @@ Keep the Temper root on APFS when model storage is exFAT. Existing artifact sets
 form an owned directory of links to only the declared, verified model and draft
 files; the source cache and weights stay unchanged. AppleDouble files cannot be
 declared as model material, and unexpected files in the engine's view fail
-verification before startup. Missing or redirected cache files require normal
-preparation/verification, never an implicit engine download.
+verification before startup, except unlisted regular `.DS_Store` metadata.
+Missing or redirected cache files require normal preparation/verification,
+never an implicit engine download.
 
 The writable home is `ROOT/runtime/kapitsa/<identity>`, derived from preset,
 artifact-set and software identities. It is created immediately before serving,
